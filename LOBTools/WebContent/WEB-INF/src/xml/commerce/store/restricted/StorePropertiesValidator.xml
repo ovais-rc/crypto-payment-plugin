@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		<p>The <code>cmc/store/StorePropertiesValidator</code> class is a validator used to update the specified updatedProperty from the valueProperty value.  
+		All defalutProperty values will be set to false except the 	currently selected one.  The updateProperty value with the corresponding defaultProperty 
+		set to "true", will be updated with the corresponding valueProperty value.</p>
+		<p>The following example demonstrates the declaration of this validator.
+		
+		@START_CODE
+			<StorePropertiesValidator
+				package="cmc/store"
+				validatorId="stoPropertiesValidator" 
+				objectPath="StoreCurrency" 
+				defaultPropertyName="default"
+				updatedPropertyName="defaultCurrency"
+				valuePropertyName="currency"/>
+		@END_CODE
+		</p>
+	 -->	
+	<Validator classDefinition="true" definitionName="cmc/store/StorePropertiesValidator">
+		<!--- 
+			The name of the property which you want to update. This is a required attribute.
+		-->
+		<variable name="updatedPropertyName" type="string" value=""/>	
+		<!--- 
+			The name of the default property. This is a required attribute.
+		-->
+		<variable name="defaultPropertyName" type="string" value=""/>		
+		<!--- 
+			The name of the value property which you want to pull for the update property. This is a required attribute.
+		-->
+		<variable name="valuePropertyName" type="string" value=""/>	
+		<!--- 
+			The object path that describes the child objects. This is a required attribute.
+		-->
+		<variable name="objectPath" type="string"/>		
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			var updateProperty = o.parentObject.getProperty(this.updatedPropertyName);
+			var siblings = o.parentObject.getObjects(this.objectPath);
+			if (siblings == null || siblings.length <= 0) {
+				return;
+			}
+			var objectProperty = o.getProperty(this.defaultPropertyName);
+			if (objectProperty.dirty && objectProperty.value == "true") {
+				for (var i = 0; i < siblings.length; ++i) {
+					var defaultProperty = siblings[i].getProperty(this.defaultPropertyName);
+					if (siblings[i] != o) {
+						if (defaultProperty.value != "false") {
+							defaultProperty.change("false");
+						}
+					}
+				}
+				updateProperty.change(o.getPropertyValue(this.valuePropertyName));
+			}
+			else if (objectProperty.dirty && objectProperty.value == "false") {
+				for (var i = 0; i < siblings.length; ++i) {
+					var defaultProperty = siblings[i].getProperty(this.defaultPropertyName);
+					if (defaultProperty.value == "true") {
+						break;
+					}
+				}
+			}
+			else {
+				for (var i = 0; i < siblings.length; ++i) {
+					var defaultProperty = siblings[i].getProperty(this.defaultPropertyName);
+					if (defaultProperty.value == "true") {
+						var valueProperty = siblings[i].getProperty(this.valuePropertyName);
+						if (valueProperty.dirty && valueProperty.value != updateProperty.value) {
+							updateProperty.change(valueProperty.value);
+						}
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+	</Validator>
+	
+	
+	<!---
+		<p>The <code>cmc/store/StoreDefaultPropertyValidator</code> class is a validator used to update the specified updatedProperty from the valueProperty value.  
+		It will make sure that the updateProperty will be set to empty when none of the property values equal the expected propertyValueList.</p>
+		<p>The following example demonstrates the declaration of this validator.
+		
+		@START_CODE
+			<StoreDefaultPropertyValidator 
+				package="cmc/store" 
+				validatorId="stoDefaultValueForLanguageValidator"  
+				objectPath="StoreCurrency" 
+				propertyName="default" 
+				propertyValues="true" 
+				updatedPropertyName="defaultCurrency"/>
+		@END_CODE
+		</p>
+	 -->	
+	<RequiredSpecificValueForChildObjectPropertyValidator classDefinition="true" definitionName="cmc/store/StoreDefaultPropertyValidator">
+		
+		<!--- 
+			The name of the property which you want to update. This is a required attribute.
+		-->
+		<variable name="updatedPropertyName" type="string" value=""/>	
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (this.isEnabled(o)) {
+				var noDefaultValueStr = "";
+				var childObjects = o.getObjects(this.objectPath);
+				if (childObjects == null || childObjects.length <= 0) {
+					return;
+				}
+				for (var i = 0; i < childObjects.length; ++i) {
+					var childObject = childObjects[i];
+					var property = childObject.getProperty(this.propertyName);
+					for (var j = 0; j < this.propertyValueList.length; ++j) {
+						if (property.value == this.propertyValueList[j]) {
+							return;
+						}
+					}
+				}
+				var updateProperty = o.getProperty(this.updatedPropertyName);
+				updateProperty.change(noDefaultValueStr);
+			}
+			]]>
+		</method>
+	</RequiredSpecificValueForChildObjectPropertyValidator>
+</Definitions>

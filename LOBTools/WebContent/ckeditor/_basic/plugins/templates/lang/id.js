@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","id",{button:"Templat",emptyListMsg:"(tidak ada templat yang diatur)",insertOption:"Ganti konten yang sebenarnya",options:"Opsi Templat",selectPromptMsg:"Pilih templat yang akan dibuka di editor",title:"Templat Konten"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","sk",{keystrokeForContextMenu:"Ak chcete zobraziť viac možností, stlačte kláves Ctrl a kliknite pravým tlačidlom myši",keystrokeForContextMenuMac:"Ak chcete zobraziť viac možností, stlačte kláves Cmd a kliknite pravým tlačidlom myši"});

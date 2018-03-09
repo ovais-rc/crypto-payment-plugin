@@ -1,0 +1,186 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN Content_UI.jspf -->
+
+<%-- Add this javascript only for text editor widget for tab title slot --%>
+<c:if test="${contentFormatMap[key] == 'Text' && tabNumber != null}">
+	<script>
+		$(document).ready(function(){
+			wcTopic.subscribe("FacetCount_updated", function(data){
+				console.log(data);
+                var totalCount = data['totalCount'];
+                var totalContentCount = data['totalContentCount'];
+                var searchTabProdCountDiv = byId('searchTabProdCount');
+                var searchTabContentCountDiv = byId('searchTabContentCount');
+                if(searchTabProdCountDiv != null) {
+                    searchTabProdCountDiv.innerHTML = totalCount;
+                }
+                if(searchTabContentCountDiv != null) {
+                    searchTabContentCountDiv.innerHTML = totalContentCount;
+                }
+			});
+		});
+	</script>
+</c:if>
+
+<c:set var="contentUrl" value="${contentUrlMap[key]}"/>
+
+<c:set var="contentAssetPath" value="${contentAssetPathMap[key]}"/>
+
+<%-- If you see either blank spot or broken image icon shows up in the E-marketing spot for attachment, 
+	 double check the path of the attachment (ie.content of variable contentImageMap[key]) and see if 
+	 it contains special characters such as # and ;. 
+	 
+	 If there are special characters in attachment name, please replace them before sending it to the server
+	 examples: 
+	 <c:set var="imageMap_key" value="${fn:replace(contentImageMap[key], ';', '%3B')}"/>
+	 <c:set var="imageMap_key" value="${fn:replace(imageMap_key, '#', '%23')}"/>
+	 <img id="contentImage_${key}${widgetSuffix}" src="<c:out value='${imageMap_key}'/>" alt="<c:out value='${imageMap_key}'/>"/>
+--%>
+<div class="${contentFormatMap[key] == 'File' ? 'left_espot centered' : 'left_espot'}">
+	
+	<c:choose>
+		
+		<c:when test="${contentFormatMap[key] == 'File' && contentTypeMap[key] == 'image'}">
+			<c:choose>
+				<c:when test="${!empty contentUrl}">
+					<a id="contentLink_${key}${widgetSuffix}" href="${contentUrl}" title="${contentDescriptionMap[key]}">
+						<img id="contentImage_${key}${widgetSuffix}" src="${contentImageMap[key]}" alt="${contentDescriptionMap[key]}"/>
+					</a>
+				</c:when>
+				<c:when test="${contentImageAreaInputMap[key] == 'Area' && !empty contentImageAreaMap[key]}">
+					<img id="contentImage_${key}${widgetSuffix}"
+						src="${contentImageMap[key]}"
+						alt="${contentDescriptionMap[key]}"
+						usemap="#${contentImageAreaNameMap[key]}"/>
+					<map name="${contentImageAreaNameMap[key]}">
+						<c:forEach var="contentImageArea" items="${contentImageAreaMap[key]}">
+							<area shape="${contentImageArea.value.shape}"
+								coords="${contentImageArea.value.coordinates}"
+								href="${contentImageArea.value.url}"
+								title="${contentImageArea.value.title}"
+								target="${contentImageArea.value.target}"
+								alt="${!empty contentImageArea.value.altText ? contentImageArea.value.altText : contentImageArea.value.title}"/>
+						</c:forEach>
+					</map>
+				</c:when>
+				<c:when test="${contentImageAreaInputMap[key] == 'Source'}">
+					<img id="contentImage_${key}${widgetSuffix}"
+						src="${contentImageMap[key]}"
+						alt="${contentDescriptionMap[key]}"
+						usemap="#${contentImageAreaNameMap[key]}"/>
+					${contentImageAreaSourceMap[key]}
+				</c:when>
+				<c:otherwise>
+					<img id="contentImage_${key}${widgetSuffix}" src="${contentImageMap[key]}" alt="${contentDescriptionMap[key]}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		
+		<c:when test="${contentFormatMap[key] == 'File' && contentTypeMap[key] == 'application'}">
+			<c:choose>
+				<c:when test="${contentFlashMap[key]}">
+					<c:set var="widthAttr"><c:if test="${!empty param.adWidth}"> width="${param.adWidth}"</c:if></c:set>
+					<c:set var="heightAttr"><c:if test="${!empty param.adHeight}"> height="${param.adHeight}"</c:if></c:set>
+					<object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000"${widthAttr}${heightAttr} alt="${contentDescriptionMap[key]}" tabindex="-1">
+						<param name="movie" value="<c:out value="${contentUrl}"/>"/>
+						<param name="pluginurl" value="http://www.macromedia.com/go/getflashplayer"/>
+						<param name="quality" value="high"/>
+						<param name="wmode" value="transparent"/>
+						<param name="bgcolor" value="#ffffff"/>
+						<c:if test="${!empty baseObjectPath}">
+							<param name="base" value="<c:out value="${baseObjectPath}"/>"/>
+						</c:if>
+						<!--[if !IE]>-->
+						<embed src="${contentUrl}"${widthAttr}${heightAttr}
+							type="application/x-shockwave-flash"
+							pluginspage="http://www.macromedia.com/go/getflashplayer"
+							quality="high"
+							wmode="transparent"
+							bgcolor="#ffffff">
+						</embed>
+						<!--<![endif]-->
+					</object>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${!empty displayAllSupportedContent && displayAllSupportedContent eq 'true' && ! empty contentAssetPath}">
+						<c:set var="url_parts" value="${fn:split(contentAssetPath, '/')}" />
+						<c:set var="fileType_parts" value="${fn:split(url_parts[fn:length(url_parts)-1], '.')}" />
+						<c:set var="fileType" value="${fn:toLowerCase(fileType_parts[fn:length(fileType_parts)-1])}" />
+									
+						<c:set var="attachmentType" value="default"/>
+						<c:if test="${not empty fileType}">	
+							<c:if test="${fileType eq 'gif'|| fileType eq 'jpeg'|| fileType eq 'jpg'|| fileType eq 'jpe'|| fileType eq 'png'|| fileType eq 'ps'}">
+								<c:set var="attachmentType" value="image"/>
+							</c:if>
+							<c:if test="${fileType eq 'txt'|| fileType eq 'text'|| fileType eq 'csv'|| fileType eq 'vsd'|| fileType eq 'msg'}">
+								<c:set var="attachmentType" value="text"/>
+							</c:if>
+							<c:if test="${fileType eq 'pdf'}">
+								<c:set var="attachmentType" value="pdf"/>
+							</c:if>
+							<c:if test="${fileType eq 'postscript'|| fileType eq 'msword'|| fileType eq 'doc'|| fileType eq 'docx'|| fileType eq 'rtf'|| fileType eq 'odt'}">
+								<c:set var="attachmentType" value="doc"/>
+							</c:if>
+							<c:if test="${fileType eq 'vnd.ms-powerpoint'|| fileType eq 'ppt'|| fileType eq 'pptx'|| fileType eq 'odp'}">
+								<c:set var="attachmentType" value="presentation"/>
+							</c:if>
+							<c:if test="${fileType eq 'vnd.ms-excel'|| fileType eq 'xls'|| fileType eq 'xlsx'|| fileType eq 'ods'}">
+								<c:set var="attachmentType" value="spreadsheet"/>
+							</c:if>
+							<c:if test="${fileType eq 'wav'|| fileType eq 'ra'|| fileType eq 'x-pn-realaudio-plugin'}">
+								<c:set var="attachmentType" value="audio"/>
+							</c:if>
+							<c:if test="${fileType eq 'mpg'|| fileType eq 'mp4'|| fileType eq 'mov'|| fileType eq 'avi'|| fileType eq 'qt'|| fileType eq 'rpm'|| fileType eq 'swf'|| fileType eq 'movie' }">
+								<c:set var="attachmentType" value="video"/>
+							</c:if>
+							<c:if test="${fileType eq 'x-gzip'|| fileType eq 'zip'|| fileType eq 'rar'|| fileType eq 'tar'|| fileType eq 'gtar'|| fileType eq 'x-tar'|| fileType eq 'jar'|| fileType eq 'class'}">
+								<c:set var="attachmentType" value="archive"/>
+							</c:if>
+						</c:if>
+						<c:set var="attchImage" value="${jspStoreImgDir}${env_vfileColor}${attachmentType}_icon.png" />
+						<a id="contentLink_${key}${widgetSuffix}" href="${contentAssetPath}" title="${contentDescriptionMap[key]}">${contentTextMap[key]}
+							<img src="${attchImage}" alt="${contentDescriptionMap[key]}"/>${contentDescriptionMap[key]}
+						</a>
+					</c:if>
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		
+		<c:when test="${contentFormatMap[key] == 'Text'}">
+			<c:choose>
+				<c:when test="${!empty contentUrl}">
+					<a id="contentLink_${key}${widgetSuffix}" href="${contentUrl}" title="${contentDescriptionMap[key]}">${contentTextMap[key]}</a>
+				</c:when>
+				<c:otherwise>
+					${contentTextMap[key]}
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		
+	</c:choose>
+	
+	<c:if test="${!empty contentClickToEditURLMap[key]}">
+		<div class="editManagedContent">
+			<c:set var="contentClickToEditURL"><wcf:out value="${contentClickToEditURLMap[key]}" escapeFormat="js"/></c:set>
+			<a id="EditManagedContent_${key}${widgetSuffix}" href="#" onclick="parent.callManagementCenter('${contentClickToEditURL}')">
+				<wcst:message key="Click2Edit_managed_content"  bundle="${previewText}"/>
+			</a>
+		</div>
+	</c:if>
+	
+</div>
+
+<!-- END Content_UI.jspf -->

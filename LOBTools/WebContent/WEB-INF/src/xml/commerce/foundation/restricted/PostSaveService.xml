@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>	
+	<!---
+		<p>A post save service is a service that is triggered automatically after an object is {@link cmc/foundation/UpdateService saved} 
+		or {@link cmc/foundation/CreateService created} successfully. It is not triggered at any other time. 
+		
+		<p>This service might be used to trigger an action or do clean up work on the server. For example, 
+		activation of Customer Segments is modeled as a post save service so that customer segments are activated automatically when they are 
+		saved. This means that the business user does not have to understand the concept of having active and inactive customer segments. 
+		
+		<p>The post save service can be only be declared as a child of a {@link cmc/foundation/PrimaryObjectDefinition primary object definition}. An instance of
+		{@link cmc/foundation/ServiceParam}	should be declared as a child of this service for each parameter the service requires be passed in. 
+		
+		<p>If the post save service executes without exception, the user will see the same message that would be seen upon success of the 
+		{@link cmc/foundation/CreateService create} or {@link cmc/foundation/UpdateService update} services in the message console. If the post save service call fails, the error message 
+		returned by the URL displays in the message logger and the object will stay dirty even if the save or create was successful. When the 
+		object is saved again this service will be called. 		
+
+		<p>The following example demonstrates the declaration of a post save service.
+		The service includes one explicitly declared service parameter that sends
+		a parameter called "customerSegmentName". The parameter value is retrieved from the
+		object property named "customerSegmentName". 
+			
+		@START_CODE
+		<PostSaveService url="/cmc/ActivateCustomerSegment">
+			<ServiceParam name="customerSegmentName" propertyName="customerSegmentName"/>
+		</PostSaveService>
+		@END_CODE
+		
+		<p>The successful response from a post save service must be an XML document
+		that has "object" as the name of the root element. If the response document includes
+		properties, then the properties will be applied to the client side representation
+		of the business object.  Post save services do not typically need to return
+		updated property values. A property is only required if	the post save service causes a change 
+		to the value of one	of the object properties. The following sample demonstrates the expected format
+		for a successful response. It includes an updated value for the property named
+		"active".
+			
+		@START_CODE
+		<object>
+			<active>true</active>
+		</object>
+		@END_CODE
+		
+		<p>If the request is not successful, then the response must be an XML document
+		that has "errors" as the name of the root element. For 
+		more information on "errors" and their usages including examples, refer to the documentation for 
+		{@link cmc/foundation/UpdateService}.			
+	-->
+	<Service abortEmptyTransactions="true" classDefinition="true" definitionName="cmc/foundation/PostSaveService" transactionService="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			@keywords private
+			Initialize the service and set the parent.postSaveService to this
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.parent.primary) {
+				this.parent.postSaveService = this;
+			}
+			else {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/PostSaveService", "init", "cmc/foundation/PostSaveService can only be declared as children of a primary object but " + this.parent.name + " is not defined as a primary object.");
+				}
+			}
+			]]>
+		</method>	
+		
+		<!---
+			@keywords private
+			This method is called when this post save service completed successfully.			
+			
+			@param cmc/foundation/ModelObject requestParent: the object on which this update service was performed
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			if (ServiceTransactionUtil.Singleton.isLastTransactionInGroup(requestParent.transaction)) {
+				var objectDisplayName = requestParent.openGroupObject.objectDisplayName;
+				var objectDefinitionDisplayName = requestParent.openGroupObject.objectDefinition.displayName;
+				var successMessage;
+				if (objectDisplayName == objectDefinitionDisplayName || typeof (objectDefinitionDisplayName) == 'undefined' || objectDefinitionDisplayName == null) {
+					successMessage = foundationResources.Singleton.replaceValues("saveServiceForSingletonObjectSuccessful", [objectDisplayName]);
+				}
+				else {
+					successMessage = foundationResources.Singleton.replaceValues("saveServiceForOpenGroupObjectSuccessful", [objectDefinitionDisplayName, objectDisplayName]);
+				}
+				MessageLogger.Singleton.logStatus(successMessage);
+			}
+			]]>
+		</method>	
+		
+		<!---
+			@keywords private
+			Initialize the service transaction object for this request.
+			@param Object transaction: the transaction object
+		-->
+		<method args="transaction" name="initializeTransaction">
+			<![CDATA[
+			transaction.o.setVariable("postSaveTransaction", transaction);
+			]]>
+		</method>
+	</Service>
+</Definitions>

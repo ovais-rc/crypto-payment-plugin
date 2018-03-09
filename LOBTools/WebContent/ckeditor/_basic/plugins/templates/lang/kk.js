@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","kk",{button:"Үлгілер",emptyListMsg:"(Еш үлгі анықталмады)",insertOption:"Нақты мазмұндарлы орналастыру",options:"Үлгі параметрлері",selectPromptMsg:"Өңдегіште ашылатын үлгіні таңдау",title:"Мазмұн үлгілері"});

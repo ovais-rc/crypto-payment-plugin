@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("showblocks","iw",{toolbar:"הצגת חטיבות"});

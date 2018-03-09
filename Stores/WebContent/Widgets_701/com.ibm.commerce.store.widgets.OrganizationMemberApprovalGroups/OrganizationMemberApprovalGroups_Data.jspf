@@ -1,0 +1,113 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%
+	//Check if orgEntityId is present in request parameter. When this widget is invoked directly ( say through Ajax call ), orgEntityId will be passed
+	//as request parameter. When this widget is used along with OrganizationList widget, the OrganizationList widget will set the orgEntityId as Request Attribute.
+%>
+
+<c:choose>
+	<c:when test="${!empty param.orgEntityId}">
+		<c:set var="orgEntityId" value="${param.orgEntityId}" scope="request"/>
+	</c:when>
+	<c:when test="${!empty WCParam.orgEntityId}">
+		<c:set var="orgEntityId" value="${WCParam.orgEntityId}" scope="request"/>
+	</c:when>
+</c:choose>
+
+<wcf:useBean var="orgApprovalGroupStatusMap" classname="java.util.LinkedHashMap"/> <%-- ApprovalGroupName TO Status map for the current org--%>
+<wcf:useBean var="parentOrgApprovalGroupStatusMap" classname="java.util.LinkedHashMap"/> <%-- ApprovalGroupName TO Status map for the parent org--%>
+<wcf:useBean var="approvalGroupTypeNameToIdMap" classname="java.util.HashMap"/> <%-- ApprovalGroupName TO ApprovalGroupId map. --%>
+
+<c:set target="${orgApprovalGroupStatusMap}" property="OrderApprovalGroup" value="0"/>
+<c:set target="${orgApprovalGroupStatusMap}" property="UserRegistrationApprovalGroup" value="0"/>
+<c:set target="${parentOrgApprovalGroupStatusMap}" property="DisableInherited_OrderApprovalGroup" value="0"/>
+<c:set target="${parentOrgApprovalGroupStatusMap}" property="DisableInherited_UserRegistrationApprovalGroup" value="0"/>
+
+
+<wcf:rest var="orgEntityMemberApprovalGroupType" url="store/${WCParam.storeId}/member_group" scope="request">
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="q" value="approvalMemberGroupTypes" />
+	<wcf:param name="propertiesFilter" value="approval=y"/>
+</wcf:rest>
+
+<%-- The Primary Key of approval member group type table --%>
+<c:set target="${approvalGroupTypeNameToIdMap}" property="OrderApprovalGroup" value="${json:findJSONObject(orgEntityMemberApprovalGroupType.resultList, 'name', 'OrderApprovalGroup').memberGroupTypeId}"/>
+<c:set target="${approvalGroupTypeNameToIdMap}" property="DisableInherited_OrderApprovalGroup" value="${json:findJSONObject(orgEntityMemberApprovalGroupType.resultList, 'name', 'DisableInherited_OrderApprovalGroup').memberGroupTypeId}"/>
+<c:set target="${approvalGroupTypeNameToIdMap}" property="UserRegistrationApprovalGroup" value="${json:findJSONObject(orgEntityMemberApprovalGroupType.resultList, 'name', 'UserRegistrationApprovalGroup').memberGroupTypeId}"/>
+<c:set target="${approvalGroupTypeNameToIdMap}" property="DisableInherited_UserRegistrationApprovalGroup" value="${json:findJSONObject(orgEntityMemberApprovalGroupType.resultList, 'name', 'DisableInherited_UserRegistrationApprovalGroup').memberGroupTypeId}"/>
+
+<wcf:rest var="orgEntityMemberApprovalGroups" url="store/${WCParam.storeId}/member_group" scope="request">
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="q" value="manageable" />
+	<c:forEach var="groupName" items="${orgApprovalGroupStatusMap}">
+		<wcf:param name="typeName" value="${groupName.key}"/>
+	</c:forEach>
+	<c:forEach var="groupName" items="${parentOrgApprovalGroupStatusMap}">
+		<wcf:param name="typeName" value="${groupName.key}"/>
+	</c:forEach>
+</wcf:rest>
+
+
+<%-- If approval group is present, then reset the status to 1 in orgApprovalGroupStatusMap and parentOrgApprovalGroupStatusMap --%>
+<c:forEach var="approvalGroup" items="${orgEntityMemberApprovalGroups.resultList}">
+	<c:choose>
+		<c:when test="${approvalGroup.ownerId eq orgEntityId && parentOrgApprovalGroupStatusMap[approvalGroup.name] eq '0'}">
+			<c:set target="${parentOrgApprovalGroupStatusMap}" property="${approvalGroup.name}" value="1"/>
+		</c:when>
+		<c:when test="${approvalGroup.ownerId eq orgEntityId && orgApprovalGroupStatusMap[approvalGroup.name] eq '0'}">
+			<c:set target="${orgApprovalGroupStatusMap}" property="${approvalGroup.name}" value="1"/>
+		</c:when>
+	</c:choose>
+</c:forEach>
+
+
+<%-- 
+	Text to display in Summary section. 
+	Display text will be one of the following:
+	1. Buyer / Order approvals – inherit setting from parent organization 
+	2. Buyer / Order approvals – enabled
+	3. Buyer / Order approvals – disabled
+--%>
+
+<wcf:useBean var="summarySectionText"classname="java.util.ArrayList"/>
+<c:choose>
+	<c:when test="${orgApprovalGroupStatusMap['OrderApprovalGroup'] eq '1'}">
+		<%-- Explicitly subscribed to Order Approval --%>
+		<wcf:set target="${summarySectionText}" value="ORDER_APPROVALS_ENABLED" />
+	</c:when>
+	<c:when test="${parentOrgApprovalGroupStatusMap['DisableInherited_OrderApprovalGroup'] eq '1'}">
+		<%-- Not subscribed but Order Approval + Disabled Parent setting also --%>
+		<wcf:set target="${summarySectionText}" value="ORDER_APPROVALS_DISABLED" />
+	</c:when>
+	<c:otherwise>
+		<%-- Not subscribed but Order Approval + Not Disabled Parent setting  --%>
+		<wcf:set target="${summarySectionText}" value="ORDER_APPROVALS_INHERITED" />
+	</c:otherwise>
+</c:choose>
+
+<c:choose>
+	<c:when test="${orgApprovalGroupStatusMap['UserRegistrationApprovalGroup'] eq '1'}">
+		<%-- Explicitly subscribed to Buyer Approval --%>
+		<wcf:set target="${summarySectionText}" value="BUYER_APPROVALS_ENABLED" />
+	</c:when>
+	<c:when test="${parentOrgApprovalGroupStatusMap['DisableInherited_UserRegistrationApprovalGroup'] eq '1'}">
+		<%-- Not subscribed to Buyer Approval + Disabled Parent setting also --%>
+		<wcf:set target="${summarySectionText}" value="BUYER_APPROVALS_DISABLED" />
+	</c:when>
+	<c:otherwise>
+		<%-- Not subscribed to Buyer Approval + Not Disabled Parent setting  --%>
+		<wcf:set target="${summarySectionText}" value="BUYER_APPROVALS_INHERITED" />
+	</c:otherwise>
+</c:choose>

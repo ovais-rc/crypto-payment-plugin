@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","da",{label:"Typografier",panelTitle:"Typografier",panelTitle1:"Bloktypografier",panelTitle2:"Indbyggede typografier",panelTitle3:"Objekttypografier"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","th",{options:"อ็อพชันไอคอนแสดงอารมณ์",title:"ไอคอนแสดงอารมณ์",toolbar:"แทรกไอคอนแสดงอารมณ์"});

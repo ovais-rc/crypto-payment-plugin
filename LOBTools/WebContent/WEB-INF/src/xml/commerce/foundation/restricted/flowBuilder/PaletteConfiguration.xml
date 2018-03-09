@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		<p>This is the main palette class for use within an {@link cmc/foundation/FlowBuilder}. When instantiating this class,
+		a datapath must be set on this view with XML in the following format:
+		@START_CODE
+		<Group resourceBundle="resources" name="key1">
+			<Element objectType="element1"/>
+			<Element objectType="element2"/>
+		</Group>
+		<Group resourceBundle="resources" name="key2">
+			<Element objectType="element3"/>
+			<Element objectType="element4"/>
+		</Group>
+		...
+		<Group resourceBundle="resources" name="keyN">
+			<Element objectType="elementN"/>
+			<Element objectType="elementN"/>
+		</Group>
+		@END_CODE 
+		</p>
+		
+		<p>Using the provided XML, a {@link cmc/foundation/PaletteGroup} will be created for each <code>Group</code> element and will be added
+		as a drawer on the palette accordion.</p>
+		
+		<p>This class also provides a drag handler on the right edge of the palette. Dragging this handle will allow the user
+		to resize the palette as desired.</p>
+	
+		@keywords private
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/PaletteConfiguration">
+		<variable name="paletteXML" type="expression" value="null"/>
+		<dependency localName="PaletteGroup" moduleName="cmc/foundation/PaletteGroup"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<!--- Minimum allowed width for this palette -->
+		<variable name="minWidth" type="number" value="90"/>
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			]]>
+		</method>
+							
+		<Tabslider height="${this.immediateParent.height}" name="palette" spacing="0" width="${this.parent.rightBorder.x}" x="0" y="0">
+		<method name="init">
+					<![CDATA[
+					this.inherited(arguments);
+					if (this.classroot.paletteXML != null) {
+						var children = this.classroot.paletteXML.childNodes;
+						if (children) {
+							for (var i = 0; i < children.length; i++) {
+								if ("Group" == children[i].nodeName) {
+									new PaletteGroup.Class(this, {groupXML: children[i]});
+								}
+							}
+						}
+					}
+					]]>
+				</method>
+			<AxisLayout axis="y" spacing="0"/>
+			
+		</Tabslider>
+		
+		<Component bgcolor="#F2F1EF" height="${this.parent.palette.height}" name="rightBorder" width="8" x="90" y="0">
+			<variable name="dragging" type="boolean" value="false"/>
+
+			<handler name="onmousedown">
+				<![CDATA[
+				this.deltaX = this.parent.getMouse("x") - this.getVariableRelative("x", this.parent);
+				this.dragging = true;
+				CursorUtil.lock();
+				this.dragger.setVariable("active", true);
+				]]>
+			</handler>
+	
+			<handler name="onmouseup">
+				<![CDATA[
+				this.dragging = false;
+				CursorUtil.unlock();
+				this.dragger.setVariable("active", false);
+				]]>
+			</handler>
+			
+			<method args="mousex" name="checkDrag">
+				<![CDATA[
+				if (mousex < this.classroot.minWidth) {
+					return this.classroot.minWidth;
+				}
+				else if ((mousex + this.width) > this.classroot.parent.width) {
+					return this.classroot.parent.width - this.width;
+				}
+				return mousex;
+				]]>
+			</method>
+			  
+			<State name="dragger"><variable name="x" value="${this.checkDrag(this.parent.getMouse('x') - this.deltaX)}"/></State>
+			    
+			
+
+		</Component>
+	</Component>
+	
+	<!---
+		Tab slider (drawer) used for the palette in the Flow Builder. This slider allows multiple tabs to be open at once. It
+		will automatically close tabs if needed to make additional space for user-opened tabs.
+		
+		@keywords private
+	-->
+	<BaseTabSlider bgcolor="#ffffff" classDefinition="true" definitionName="cmc/foundation/Tabslider" itemClass="${PaletteGroup}">
+		<dependency localName="PaletteGroup" moduleName="cmc/foundation/PaletteGroup"/>
+		<dependency localName="BaseTabElement" moduleName="cmc/foundation/BaseTabElement"/>
+		<!---
+			Array of all the tabs sorted by view order, top to bottom, regardless of openness.
+			@keywords private
+		-->
+		<variable name="sortedTabs" value="${[]}"/>
+		<!---
+			Array of the currently open tabs, sorted by the order it was opened.
+			@keywords private
+		-->
+		<variable name="openTabs" value="${[]}"/>
+
+		<handler name="oninit">
+			<![CDATA[
+			this.openAll();
+			]]>
+		</handler>
+		
+		<!---
+			When the height changes on this slider, this method is called to
+			recalculate the available height and updates any open tabs.
+			@keywords private
+		-->
+		<method name="resetHeight">
+			<![CDATA[
+			this.calcAvailableHeight();
+			this.redistributeHeights();
+			]]>
+		</method>
+
+		<!---
+			Opens as many tabs as possible, from top to bottom, without causing tabs to scroll. The first tab
+			will always be opened.
+		-->
+		<method name="openAll">
+			<![CDATA[
+			if (this.sortedTabs.length > 0) {
+				this.openTab(this.sortedTabs[0]);
+				for (var i = 1; i < this.sortedTabs.length; i++) {
+					if (this.hasRoomToOpen(this.sortedTabs[i])) {
+						this.openTab(this.sortedTabs[i]);
+					}
+					else {
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Returns whether or not the given tab can be opened and its contents shown in its entirely (without a scrollbar)
+			and without closing another tab to make space.
+			 
+			@param cmc/foundation/PaletteGroup tabelement instance of the tab to check
+			@return boolean Returns <code>true</code> if the tab is currently closed and it could be opened fully without scrolling, otherwise <code>false</code>.
+		-->
+		<method args="tabelement" name="hasRoomToOpen">
+			<![CDATA[
+			var canOpen = false;
+			if (tabelement && !this.isTabOpen(tabelement)) {
+				canOpen = tabelement.contentHeight <= this.availableheight;
+			}
+			return canOpen;
+			]]>
+		</method>
+
+		<!---
+			Returns whether or not the given tab is currently open
+			 
+			@param cmc/foundation/PaletteGroup tabelement instance of the tab to check
+			@return boolean Returns <code>true</code> if the tab is currently open, otherwise <code>false</code>.
+		-->
+		<method args="tabelement" name="isTabOpen">
+			<![CDATA[
+			var foundTab = false;
+			if (tabelement) {
+				for (var i = 0; i < this.openTabs.length; i++) {
+					if (this.openTabs[i] == tabelement) {
+						foundTab = true;
+						break;
+					}
+				}
+			}
+			return foundTab;
+			]]>
+		</method>
+		
+		<!---
+			Closes the specified tab.
+			 
+			@param cmc/foundation/PaletteGroup tabelement the tab to close
+			@return boolean Returns <code>true</code> if the tab was successfully closed, otherwise <code>false</code>.
+		-->
+		<method args="tabelement" name="closeTab">
+			<![CDATA[
+			var didclose = false;
+			if (tabelement && this.isTabOpen(tabelement)) {
+				for (var i = 0; i < this.openTabs.length; i++) {
+					if (this.openTabs[i] == tabelement) {
+						this.openTabs.splice(i, 1);
+						break;
+					}
+				}
+				tabelement.close(tabelement.minheight, this.slideDuration);
+				this.redistributeHeights();
+				didclose = true;
+			}
+			return didclose;
+			]]>
+		</method>
+		
+		<!---
+			Opens the specified tab. Other tabs may be closed in order to make room for the requested tab.
+			 
+			@param cmc/foundation/PaletteGroup tabelement the tab to open
+			param boolean withAnimation: unused.
+			@return boolean Returns <code>true</code> if the tab was successfully opened, otherwise <code>false</code>.
+		-->
+		<method args="tabelement, withAnimation" name="openTab">
+			<![CDATA[
+			if (typeof(withAnimation) == "undefined") withAnimation = false;
+			var didopen = false;
+			if (tabelement && !this.isTabOpen(tabelement)) {
+				if (this.openTabs.length > 0 && !this.hasRoomToOpen(tabelement)) {
+					var freedHeight = 0;
+					var tabsToClose = [];
+					for (var i = 0; i < this.openTabs.length; i++) {
+						freedHeight += this.openTabs[i].contentHeight;
+						tabsToClose.push(this.openTabs[i]);
+						if (freedHeight + this.availableheight >= tabelement.contentHeight) {
+							break;
+						}
+					}
+					for (var i = 0; i < tabsToClose.length; i++) {
+						this.closeTab(tabsToClose[i]);
+					}
+				}
+				this.openTabs.push(tabelement);
+				tabelement.open(tabelement.contentHeight, this.slideDuration, true);
+				this.redistributeHeights();
+				didopen = true;
+			}
+			return didopen;
+			]]>
+		</method>
+		
+		<!---
+			Toggles the specified tab. If the tab is currently closed, it will be opened. If the tab is currently open,
+			it will be closed if there is another tab open.
+			 
+			@param cmc/foundation/PaletteGroup tabelement the tab to toggle
+		-->
+		<method args="tabelement" name="toggleTab">
+			<![CDATA[
+			if (tabelement) {
+				if (this.isTabOpen(tabelement) && (this.openTabs.length > 1)) {
+					this.closeTab(tabelement);
+				}
+				else {
+					this.openTab(tabelement);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method should be called every time a tab changes state or the overall height changes. This method
+			goes through all of the currently open tabs and redistributes vertical space amongst them such that all the
+			tabs are visible and fits on the screen.
+			
+			@keywords private
+		-->
+		<method name="redistributeHeights">
+			<![CDATA[
+			var totalHeight = this.height;
+			var contentHeight = 0;
+			var sortedOpenTabs = [];
+			for (var i = 0; i < this.sortedTabs.length; i++) {
+				var sv = this.sortedTabs[i];
+				if (sv.contentvisible) {
+					contentHeight += sv.contentHeight;
+					sortedOpenTabs.push(sv);
+				}
+			}
+			var extraHeight = totalHeight - contentHeight - this.totalminheight;
+			for (var i = 0; i < sortedOpenTabs.length; i++) {
+				var tab = sortedOpenTabs[i];
+				var resizeHeight = tab.minheight + tab.contentHeight;
+				if (extraHeight >= 0) {
+					if (i == (sortedOpenTabs.length - 1)) {
+						resizeHeight += extraHeight;
+					}
+				}
+				else {
+					resizeHeight += Math.floor(extraHeight / sortedOpenTabs.length);
+					if (i == 0) {
+						resizeHeight += extraHeight % sortedOpenTabs.length;
+					}
+				}
+				tab.resize(resizeHeight, this.slideDuration);
+			}
+			this.setVariable('availableheight', Math.max(0, extraHeight));
+			]]>
+		</method>
+		
+		<!---
+			Calculate the height available for new tabs. This method overrides from the one defined in basetabslider.
+			@keywords private
+		-->
+		<method name="calcAvailableHeight">
+			<![CDATA[
+			var cv = this;
+			this.sortedTabs = [];
+			if (cv.childComponents) {
+				if (!cv.layouts) {
+					return;
+				}
+				var tmh = 0;
+				var contentHeight = 0;
+				for (var m = 0; m < cv.childComponents.length; m++) {
+					var sv = cv.childComponents[m];
+					if (sv.visible && sv instanceof BaseTabElement.Class) {
+						tmh += sv.minheight + this.spacing;
+						this.sortedTabs.push(sv);
+						if (sv.contentvisible) {
+							contentHeight += sv.contentHeight;
+						}
+					}
+				}
+				tmh -= this.spacing;
+				this.setVariable('availableheight', Math.max(0, this.height - contentHeight - tmh));
+				this.setVariable('totalminheight', tmh);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Alias for the <code>toggleTab</code> method and overrides from the one defined in basetabslider.
+			This method opens or closes the specified tab.
+			@param cmc/foundation/PaletteGroup item the tab to open
+		-->
+		<method args="item" name="select">
+			<![CDATA[
+			this.toggleTab(item);
+			]]>
+		</method>
+		
+		<!---
+			Opens the first (from top to bottom), closed tab.
+		-->
+		<method name="openNext">
+			<![CDATA[
+			for (var i = 0; i < this.sortedTabs.length; i++) {
+				if (!this.isTabOpen(this.sortedTabs[i])) {
+					this.openTab(this.sortedTabs[i]);
+					break;
+				}
+			}
+			]]>
+		</method>
+	</BaseTabSlider>
+</Definitions>

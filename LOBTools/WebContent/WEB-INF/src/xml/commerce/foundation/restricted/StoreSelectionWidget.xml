@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- Store selection widget search service. -->
+	<Service checkResultsOverLimit="false" definitionName="cmc/foundation/StoreSelectionGetStoreListService" retryOnError="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/FindStores">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="StoreSearchAction" moduleName="cmc/foundation/StoreSearchAction"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<!---
+			Maximum number of items to return.
+		-->
+	 	<ServiceParam name="maxItems" value="${ConfigProperties.Singleton.maximumStoresInList}"/>
+		<!---
+			Record set start number.
+		-->
+		<ServiceParam name="recordSetStartNumber" value="0"/>
+			
+		<!---
+			Parse the store objects.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			var stores = StoreUtil.Singleton.parseStores(dataElement);
+			var defaultItemIndent = 0;
+			if (dataElement.getAttribute("recordSetCompleteIndicator") && dataElement.getAttribute("recordSetCompleteIndicator") == "false") {
+				stores.push(StoreSearchAction.Singleton);
+				defaultItemIndent = 22;
+			}
+			requestParent.setVariable("defaultItemIndent", defaultItemIndent);
+			requestParent.setValues(stores);
+			]]>
+		</method>
+		
+		<!---
+			Never try to get more records. If there are more than 10 stores, then the
+			store search option will be displayed at the bottom of the store selection
+			list.
+		-->
+		<method args="ds, e" name="hasMoreRecords">
+			<![CDATA[
+			return false;
+			]]>
+		</method>
+	</Service>
+	
+	<!--- Store selection widget get default store service. -->
+	<Service definitionName="cmc/foundation/StoreSelectionGetDefaultStoreService" retryOnError="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetStore">
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Parse the specified data element and return a cmc/foundation/Store instance.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/StoreSelectionGetDefaultStoreService", "parseObjects(requestParent, dataElement)", [requestParent, dataElement]);
+			}
+			var store = null;
+			if (dataElement.childNodes.length > 0) {
+				store = StoreUtil.Singleton.parseStore(dataElement.childNodes[0]);
+				requestParent.changeStore(store);
+			}
+			else if (requestParent.handleDefaultStoreNotAvailable) {
+				requestParent.handleDefaultStoreNotAvailable();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/StoreSelectionGetDefaultStoreService", "parseObjects(requestParent, dataElement)", [store]);
+			}
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		
+		Store search action in store search drop down.
+	-->
+	<Node definitionName="cmc/foundation/StoreSearchAction" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Display name.
+		-->
+		<variable name="displayName" value="${foundationResources.Singleton.storeSelectionWidget_searchLinkText.string}"/>
+		<!---
+			Icon.
+		-->
+		<variable name="icon" type="string" value="StoreSelectSearchButtonResource"/>
+		<!---
+			Declare whether to add a seperator before this list item or not
+		-->
+		<variable name="addSeparatorBefore" type="boolean" value="true"/>
+		<!---
+			Indent.
+		-->
+		<variable name="indent" type="number" value="0"/>
+	</Node>
+
+	<!---
+		@keywords private
+		
+		Store selection widget.
+	-->
+	<ValueSelector classDefinition="true"  defaultTextResourceBundleKey="${foundationResources.Singleton.storeSelectionWidget_defaultText}" definitionName="cmc/foundation/StoreSelectionWidget" height="32" width="312" textColor="#464646" bgcolor="#ffffff" dropDownResource="searchDropdownResource" padding="10" fontsize="14" focusIndicatorColor="#ffffff">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="StoreSearchAction" moduleName="cmc/foundation/StoreSearchAction"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!---
+			Reference to business object editor instance.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			The context of the store selection widget is the global context.
+		-->
+		<variable name="localContext"/>
+		<!---
+			Indicates that the store configuration for the selected store is currently loading.
+		-->
+		<variable name="loadingStoreConfiguration" type="boolean" value="false"/>
+		<Component height="${this.parent.height}" width="2" bgcolor="#4178be" />
+		<Component height="${this.parent.height}" width="2" bgcolor="#4178be" x="${this.parent.width - 2}"/>
+		<Component height="2" width="${this.parent.width}" bgcolor="#4178be"/>
+		<Component height="2" width="${this.parent.width}" bgcolor="#4178be" y="${this.parent.height - 2}"/>
+			
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/StoreSelectionWidget", "init");
+			}
+			this.inherited(arguments);
+			this.localContext = ContextUtil.Singleton.getGlobalContext();
+			this.changeStoreDel = new EventHandler.Class(this, "changeStoreWithPrompt");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/StoreSelectionWidget", "init");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.changeStoreDel.disconnectAll();
+			delete this.changeStoreDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- Refresh the store list and the default store. -->
+		<method args="store" name="refresh">
+			<![CDATA[
+			if (typeof(store) == "undefined") store = null;
+			if (this.oEditor.showStoreSelection) {
+				var caller = this;
+				require(["cmc/foundation/StoreSelectionGetStoreListService"], function(StoreSelectionGetStoreListService) {
+					StoreSelectionGetStoreListService.Singleton.doRequest(caller, {
+						usage: caller.oEditor.usage
+					});
+				});
+				if (store != null) {
+					this.changeStore(store, false);
+				}
+			}
+			else {
+				this.changeStore(StoreUtil.Singleton.getStore("0"));
+			}
+			]]>
+		</method>
+		
+		<!---
+			Change the current store to match the current store. Prompt the user if there are unsaved changes.
+			@param cmc/foundation/Store newStore: the new store
+		-->
+		<method args="newStore" name="changeStoreWithPrompt">
+			<![CDATA[
+			this.changeStore(newStore, true);
+			]]>
+		</method>
+		
+		<!---
+			Change the current store to match the current store
+			@param cmc/foundation/Store newStore: the new store
+			@param boolean prompt: Prompt the user if there are unsaved changes. The default is "true".
+		-->
+		<method args="newStore, prompt" name="changeStore">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = true;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/StoreSelectionWidget", "changeStore");
+			}
+			this.changeStoreDel.disconnectAll();
+			this.loadingStoreConfiguration = false;
+			if (newStore !== null && !newStore.configurationLoaded) {
+				this.changeStoreDel.connect(newStore, "onconfigurationLoaded");
+				this.loadingStoreConfiguration = true;
+				newStore.loadConfiguration();
+			}
+			else if (prompt) {
+				if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+					require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+						TransactionProgressDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					var unsavedObjects = [];
+					var openObjects = this.oEditor.model.openObjects;
+					for (var i = 0; i < openObjects.length; i++) {
+						var o = openObjects[i];
+						if (o.openGroupObject.openGroupDirty) {
+							unsavedObjects.push(o);
+						}
+					}
+					if (unsavedObjects.length > 0) {
+						var caller = this;
+						require(["cmc/foundation/ChangeStoreConfirmationDialog"], function(ChangeStoreConfirmationDialog) {
+							ChangeStoreConfirmationDialog.Singleton.openChangeStoreConfirmationDialog(caller, newStore, unsavedObjects);
+						});
+					}
+					else {
+						this.changeStore(newStore, false);
+					}
+				}
+			}
+			else {
+				var newStoreContext = newStore != null ? ContextUtil.Singleton.findStoreContext(newStore) : null;
+				var newStoreSelected = this.oEditor.localContext == null || this.oEditor.localContext != newStoreContext;
+				if (newStoreSelected) {
+					var oldStoreContext = this.oEditor.localContext;
+					this.setVariable("selectedValue", newStore);
+					this.oEditor.setVariable("localContext", newStoreContext);
+					if (!this.oEditor.isStoreSelected && newStore) {
+						this.oEditor.setVariable("isStoreSelected", true);
+					}
+					else if (this.oEditor.isStoreSelected && !newStore) {
+						this.oEditor.setVariable("isStoreSelected", false);
+					}
+					if (oldStoreContext != null) {
+						this.oEditor.model.reinitializeModel();
+					}
+					if (newStore != null) {
+						if (ModalUtil.getModalComponent() == null) {
+							this.oEditor.restoreFocus();
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/StoreSelectionWidget", "changeStore");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle selection of a new value.
+		-->
+		<method args="newValue" name="selectValue">
+			<![CDATA[
+			if (newValue != null && newValue == StoreSearchAction.Singleton) {
+				this.openStoreSelectDialog();
+			}
+			else {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("changeStore " + newValue.storeName);
+				this.changeStore(newValue);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			]]>
+		</method>
+		<!---
+			Open the store selection dialog.
+		-->
+		<method name="openStoreSelectDialog">
+			<![CDATA[
+			if (!AutomationUtil.Singleton.active && this.oEditor.active) {
+				var storesToShow = null;
+				if (this.values.length > 0 && this.values[this.values.length - 1] != StoreSearchAction.Singleton) {
+					storesToShow = this.values;
+				}
+				var caller = this;
+				require(["cmc/foundation/StoreSelectDialog"], function(StoreSelectDialog) {
+					StoreSelectDialog.Singleton.openStoreSearchDialog(caller.changeStoreDel, "", caller.oEditor.usage, storesToShow);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Open the store selection dialog if the default store is not available.
+		-->
+		<method name="handleDefaultStoreNotAvailable">
+			<![CDATA[
+			this.openStoreSelectDialog();
+			]]>
+		</method>
+		
+		<!---
+			Set the list of values that will be displayed in the drop-down list.
+			@param Object[] values: The array of values to be displayed to the list. Each value object in the array
+				must have a <code>displayName</code> attribute which is used as the display value for the entry.
+		-->
+		<method args="values" name="setValues">
+			<![CDATA[
+			this.values = [];
+			if (values != null && values.length > 0) {
+				for (var i = 0; i < values.length; i++) {
+					this.values.push(values[i]);
+				}
+				if (this.selectedValue == null && !this.loadingStoreConfiguration) {
+					if (values.length == 1) {
+						this.changeStore(values[0]);
+					}
+					else {
+						var currentDefaultStore = PreferenceManager.Singleton.getPreference("CMCDefaultStore");
+						if (currentDefaultStore) {
+							var needToGetDefaultStore = true;
+							for (var i = 0; i < values.length; i++) {
+								if (values[i].storeName == currentDefaultStore) {
+									needToGetDefaultStore = false;
+									this.changeStore(values[i]);
+									break;
+								}
+							}
+							if (needToGetDefaultStore) {
+								var caller = this;
+								require(["cmc/foundation/StoreSelectionGetDefaultStoreService"], function(StoreSelectionGetDefaultStoreService) {
+									StoreSelectionGetDefaultStoreService.Singleton.doRequest(caller, {
+										storeName: currentDefaultStore,
+										usage: caller.oEditor.usage
+									});
+								});
+							}
+						}
+						else {
+							this.openStoreSelectDialog();
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+	</ValueSelector>
+</Definitions>

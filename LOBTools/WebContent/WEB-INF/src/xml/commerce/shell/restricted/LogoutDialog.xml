@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!-- Logout service. -->
+	<Service definitionName="cmc/shell/LogoutService" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/Logout">
+		<!---
+			This method completes the logout process.
+			@param node requestParent: the parent node for this service request
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			requestParent.logoutComplete();
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			ds.requestParent.logoutFailed(message);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Checks if the recovery is needed on service request or not after a session related error occurred.
+			@param XML e: the data element
+			@return boolean: Always return false for logoutService.
+		-->
+		<method args="e" name="checkRequestRecovery">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			return false;
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		
+		This class implements the dialog that is opened when the user clicks on the
+		log out link to start the log out process. When a tool contains unsaved changes,
+		the user can choose to disregard the changes and log out or cancel log out.
+	-->
+	<Dialog classDefinition="true" definitionName="cmc/shell/LogoutDialogClass">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="LogoutProgressDialog" moduleName="cmc/shell/LogoutProgressDialog"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="domConstruct" moduleName="dojo/dom-construct"/>
+		<!---
+			The current state of the tools. It can be normal or with unsaved changes.
+			This is a required attribute.
+		-->
+		<variable name="currentState" type="string" value="NORMAL"/>
+
+		<AxisLayout axis="y"/>
+
+		<Component name="logoutNormal" visible="${this.classroot.currentState == 'NORMAL'}">
+			<Component imageSet="dialogWarningIcon" name="infoIcon"/>
+			<TextComponent multiline="true" name="text" text="${shellResources.Singleton.logoutDialogLogoutPrompt.string}" valign="middle" width="300"/>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+		<Component name="logoutWithUnsavedChanges" visible="${this.classroot.currentState == 'UNSAVEDCHANGES'}">
+			<Component imageSet="dialogWarningIcon" name="infoIcon"/>
+			<TextComponent multiline="true" name="text" text="${shellResources.Singleton.logoutDialogLogoutWithUnsavedChangesPrompt.string}" valign="middle" width="300"/>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+		<Component name="buttonView" placement="footer" visible="${this.classroot.currentState == 'NORMAL' || this.classroot.currentState == 'UNSAVEDCHANGES'}">
+			<Button name="noButton" text="${shellResources.Singleton.noButton.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.handleCancel();
+					]]>
+				</handler>
+			</Button>
+			<Button isdefault="true" name="yesButton" text="${shellResources.Singleton.yesButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.handleLogout();
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+		<!--- @keywords private -->
+		<method name="handleLogout">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LogoutDialogClass", "handleLogout");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("logout");
+			this.closeWindow();
+			if (RootComponent.Singleton.logoutProgressDialog == undefined) {
+				new LogoutProgressDialog.Class(RootComponent.Singleton, {
+					name: "logoutProgressDialog"
+				});
+			}
+			RootComponent.Singleton.logoutProgressDialog.openWindow();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LogoutDialogClass", "handleLogout", "Starts log out process by invoking logoutService.");
+			}
+			var identityId = ContextUtil.Singleton.findContextValue(null, "identityId").value;
+			var identitySignature = ContextUtil.Singleton.findContextValue(null, "identitySignature").value;
+			ContextUtil.Singleton.findContextValue(null, "identityId").setVariable("value", null);
+			ContextUtil.Singleton.findContextValue(null, "identitySignature").setVariable("value", null);
+			ContextUtil.Singleton.findContextValue(null, "logonIdDN").setVariable("value", null);
+			ContextUtil.Singleton.findContextValue(null, "timeZoneId").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "WCToken").setVariable("value", null);
+			ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").setVariable("value", null);
+			var caller = this;
+			require(["cmc/shell/LogoutService"], function(LogoutService) {
+				LogoutService.Singleton.doRequest(caller, {
+					identityId: identityId,
+					identitySignature: identitySignature
+				});
+			});
+			var ibmIdEnabled = ContextUtil.Singleton.findContextValue(null, "ibmIdEnabled").value == "true";
+			if (ibmIdEnabled) {
+				if (typeof this.ibmIdLogoffIframes != "undefined") {
+					for (var i = 0; i < this.ibmIdLogoffIframes.length; i++) {
+						RootComponent.Singleton.widget.domNode.removeChild(this.ibmIdLogoffIframes[i]);
+					}
+				}
+				this.ibmIdLogoffIframes = [];
+				this.ibmIdLogoffIframes.push(domConstruct.toDom("<iframe height=\"0\" width=\"0\" src=\"https://idaas.iam.ibm.com/pkmslogout\"/>"));
+				this.ibmIdLogoffIframes.push(domConstruct.toDom("<iframe height=\"0\" width=\"0\" src=\"https://www-304.ibm.com/pkmslogout\"/>"));
+				this.ibmIdLogoffIframes.push(domConstruct.toDom("<iframe height=\"0\" width=\"0\" src=\"https://www-947.ibm.com/pkmslogout\"/>"));
+				this.ibmIdLogoffIframes.push(domConstruct.toDom("<iframe height=\"0\" width=\"0\" src=\"https://prepiam.toronto.ca.ibm.com/pkmslogout\"/>"));
+				for (var i = 0; i < this.ibmIdLogoffIframes.length; i++) {
+					RootComponent.Singleton.widget.domNode.insertBefore(this.ibmIdLogoffIframes[i], RootComponent.Singleton.widget.domNode.firstChild);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LogoutDialogClass", "handleLogout");
+			}
+			Logger.Singleton.flush();
+			Logger.Singleton.closeLogTraceWindow();
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="handleCancel">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LogoutDialogClass", "handleCancel");
+			}
+			this.closeWindow();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LogoutDialogClass", "handleCancel");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="logoutComplete">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "FINER", "cmc/shell/LogoutDialogClass", "logoutComplete", "Log out process completed successfully, start unloading the main application.");
+			}
+			RootComponent.Singleton.logoutSuccessful();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="message" name="logoutFailed">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/LogoutDialogClass", "logoutFailed(message)", "Log out process failed due to the following reason: " + message);
+			}
+			RootComponent.Singleton.logoutSuccessful();
+			]]>
+		</method>
+
+		<!---
+			Set initial focus to the Yes button.
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.buttonView.yesButton, false);
+			]]>
+		</method>
+	</Dialog>
+
+	<!---
+		@keywords private
+		
+		This class implements the dialog that is opened when log out is in progress. A message
+		is displayed in the dialog along with progress animation.
+	-->
+	<Dialog classDefinition="true" closeable="false" definitionName="cmc/shell/LogoutProgressDialog" minHeight="0" minWidth="0">
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<Component width="200">
+			<TextComponent align="center" name="progressText" text="${shellResources.Singleton.logoutDialogLogoutProgressPrompt.string}"/>
+			<Component align="center" imageSet="logoutProgressIcon" name="progressBar"/>
+			<AxisLayout axis="y" spacing="10"/>
+		</Component>
+	</Dialog>
+
+</Definitions>

@@ -1,0 +1,133 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<wcst:alias name="StoreServer" var="isStoreServer" />
+<c:choose>
+	<c:when test="${!empty param.orgEntityId}">
+		<c:set var="orgEntityId" scope="request"><wcf:out value="${param.orgEntityId}" escapeFormat="js"/></c:set>
+		<c:if test="${not empty param.orgEntityName }">
+			<c:set var="orgEntityName"><wcf:out value="${param.orgEntityName}" escapeFormat="js"/></c:set>
+		</c:if>
+	</c:when>
+	<c:when test="${!empty WCParam.orgEntityId}">
+		<c:set var="orgEntityId"  scope="request"><wcf:out value="${WCParam.orgEntityId}" escapeFormat="js"/></c:set>
+		<c:if test="${not empty WCParam.orgEntityName }">
+			<c:set var="orgEntityName"><wcf:out value="${WCParam.orgEntityName}" escapeFormat="js"/></c:set>
+		</c:if>
+	</c:when>
+	<c:otherwise>
+		<%-- Check if parentMemberId is present in the current list of organizations. Set only if it is present... --%>
+		<c:forEach var="orgDetails" items="${organizationList.organizationDataBeans}">
+			<c:choose>
+				<c:when test="${isStoreServer == 'true' }">
+					<c:if test="${CommandContext.activeOrganizationId eq orgDetails.organizationId}">
+						<c:set var="orgEntityId" value="${orgDetails.organizationId}" scope="request"/>
+						<c:set var="orgEntityName" value="${orgDetails.displayName }" />
+					</c:if>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${CommandContext.user.parentMemberId eq orgDetails.organizationId}">
+						<c:set var="orgEntityId" value="${CommandContext.user.parentMemberId}" scope="request"/>
+						<c:set var="orgEntityName" value="${orgDetails.displayName }" />
+					</c:if>
+				</c:otherwise>
+			</c:choose>
+		</c:forEach>
+	</c:otherwise>
+</c:choose>
+
+<c:choose>
+	<c:when test="${param.forParentOrg eq 'true' && !empty param.parentOrgEntityId}">
+		<c:set var="selectedOrgEntityId" scope="request"><wcf:out value="${param.parentOrgEntityId}" escapeFormat="js"/></c:set>
+	</c:when>
+	<c:when test="${!empty orgEntityId}">
+		<c:set var="selectedOrgEntityId" value="${orgEntityId}" scope="request"/>
+		<c:if test="${not empty orgEntityName }">
+			<c:set var="selectedOrgEntityName" value="${orgEntityName}" scope="request"/>
+		</c:if>
+	</c:when>
+</c:choose>
+<%
+	/* The above REST service will return the organization details as flat list and this list needs
+	 * to be converted into tree structure before it can be displayed. Converting to tree structure can be done in JSP ( Server side code ) or in JS ( client side code).
+
+	 * Uncomment below piece of code if you want to build organizaiton tree structure at server side.
+	 * If organization tree structure is built at server side, then directly use the below javascript function to display the tree structure.
+	 * organizationListJS.displayOrgTree(<wcf:json object="${parentChildOrgDetailsMap}"/>, <wcf:json object="${parentIds}"/>, "<selectBoxId>");
+
+	 *
+	 * The other option is to build organization tree structure at client side using javascript. Use below javascript function to CREATE and display the tree structure.
+	 * organizationListJS.createAndDisplayOrgTree(<wcf:json object="${results}"/>, "<selectBoxId>"); 
+	*/
+	
+		// parentIds - List of top level parent organization Ids. For siteAdministrator this will be {-1}. The top most org is RootOrganization ( -2001 ) and it's parent is null. Null will be replaced by -1.
+		// For other users, the top level parent organization can be more than one, based on the roles the users have to manage different organization
+
+		// parentChildOrgDetailsMap - This Map contains the relationship between parent and child organizations.
+		// Key -> Parent Org id, Value -> List of child organizations object
+		// Each child organization object in the list is again modelled as Map object. The Map contains details about each individual child organization like orgId, orgName, parentOrgId etc.,
+
+		//   Example data structure is shown below:
+		//	{
+		//	7000000000000000902=
+		//		[
+		//			{orgId=7000000000000001901, orgName=a}
+		//		], 
+		//	7000000000000000051=[
+		//			{orgId=7000000000000000204, orgName=Extended Sites Seller OrganizationAuroraB2BESite}, 
+		//			{orgId=7000000000000000203, orgName=Extended Sites Seller OrganizationAuroraESite}, 
+		//			{orgId=7000000000000000201, orgName=Extended Sites Seller OrganizationSample B2B Store}
+		//		]
+		//	}
+		
+		// Below code assumes that organizationList is a java object. The REST API returns JSON Object. So it needs to be converted back to java object
+		// before using this code OR update the below code using JSTL tag library
+		/*
+		List<Map> resultList = (List<Map>)request.getAttribute("organizationList");
+		if(resultList != null){
+			int numberOfOrgs = resultList.size();
+			Set<String> seenIds = new HashSet<String>(numberOfOrgs);
+			List<String> parentIds = new ArrayList<String>(numberOfOrgs);
+			Map<String,List<Map<String,String>>> parentChildOrgDetailsMap = new HashMap<String,List<Map<String,String>>>();
+
+			for (Map result : resultList) {
+				String orgId = (String) result.get("orgId");
+				String parentOrgId = (String) result.get("parentOrgId");
+				String orgName = (String) result.get("orgName");
+
+				// Start building the parent to child list.
+				List childList = parentChildOrgDetailsMap.get(parentOrgId);
+				if(childList == null){
+					childList = new ArrayList();
+					parentChildOrgDetailsMap.put(parentOrgId, childList);
+				}
+				Map<String,String> childOrgDetails = new HashMap<String,String>(2);
+				childOrgDetails.put("orgId", orgId);
+				childOrgDetails.put("orgName", orgName);
+				childList.add(childOrgDetails);
+
+				// Keep track of parent org Ids
+				if(!seenIds.contains(parentOrgId)){
+					// Add new parent..
+					parentIds.add(parentOrgId);
+				}
+				parentIds.remove(orgId);
+				seenIds.add(orgId);
+				seenIds.add(parentOrgId);
+			}
+			request.setAttribute("parentIds", parentIds);
+			request.setAttribute("parentChildOrgDetailsMap",parentChildOrgDetailsMap);
+		}
+		*/
+		
+%>

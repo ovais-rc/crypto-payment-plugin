@@ -1,0 +1,291 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2009, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- BEGIN CommonJSToInclude.jspf -->
+<%-- javascript variables to keep track of which flows are enabled --%>
+<script> 
+	var flowEnabled = {};
+</script>
+
+<%-- Aka call center integration --%>
+<flow:ifEnabled feature="SideBySideIntegration">
+	<script> 
+		flowEnabled.SideBySideIntegration = true;
+	</script>
+</flow:ifEnabled>
+
+<%-- Include the Worklight hybrid JS --%>
+<c:if test = "${_worklightHybridApp eq 'true'}">
+    <%@ include file="../WorklightHybrid/WorklightJSToInclude.jspf" %>
+</c:if>
+
+<%-- Commented out to allow rescaling on tablets when the coshopping feature is not enabled; may need to re-enable this if coshopping is used in this store --%>
+<%-- prevent scaling when store is viewed in mobile devices --%>
+<%-- <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0;" /> --%>
+
+<meta name="CommerceSearch" content="storeId_${storeId}" />
+<meta name="viewport" content="<c:out value="${viewport}"/>">
+
+<%-- Place favicon for the store --%>
+<link rel="shortcut icon" href="${jspStoreImgDir}images/icon-favicon.ico" mce_href="${jspStoreImgDir}images/icon-favicon.ico"/>
+
+<%-- Place favicons for mobile devices --%>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-60px.png" sizes="60x60"/>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-72px.png" sizes="72x72"/>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-76px.png" sizes="76x76"/>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-114px.png" sizes="114x114"/>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-120px.png" sizes="120x120"/>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-144px.png" sizes="144x144"/>
+<link rel="apple-touch-icon-precomposed" href="${jspStoreImgDir}images/touch-icon-152px.png" sizes="152x152"/>
+
+<c:set var="key1" value="store/${storeId}/online_store"/>
+<c:set var="storeInfo" value="${cachedOnlineStoreMap[key1]}"/>
+<c:if test="${empty storeInfo}">
+	<wcf:rest var="queryStoreInfoResult" url="store/{storeId}/online_store" scope="request" cached="true">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	</wcf:rest>
+	<c:set var="storeInfo" value="${queryStoreInfoResult.resultList[0]}"/>
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${storeInfo}"/>
+	<c:set value="${storeInfo.userData['wcc.integration.origin']}" var="wcc_integration_origin"/>
+</c:if>
+
+<script type="text/javascript">
+	// Convert the WCParam object which contains request properties into javascript object
+	var WCParamJS = {
+		"storeId":'<c:out value = "${WCParam.storeId}"/>',
+		"catalogId":'<c:out value = "${WCParam.catalogId}"/>',
+		"langId":'<c:out value = "${WCParam.langId}"/>',
+		"pageView":'<c:out value = "${WCParam.pageView}"/>',
+		"orderBy":'<c:out value = "${WCParam.orderBy}"/>',
+		"orderByContent":'<c:out value = "${WCParam.orderByContent}"/>',
+		"searchTerm":'<wcf:out value = "${WCParam.searchTerm}" escapeFormat="js"/>',
+		"homePageURL" : '${env_TopCategoriesDisplayURL}',
+		"commandContextCurrency": "${CommandContext.currency}",
+		"urlPrefixForHTTPS":"${urlPrefixForHTTPS}",
+		"urlPrefixForHTTP":"${urlPrefixForHTTP}",
+		"wcc_integration_origin":"${wcc_integration_origin}"
+	};
+	var absoluteURL = "<c:out value="${env_absoluteUrl}"/>";
+	var absoluteBaseURL = "<c:out value="${env_absoluteBaseUrl}"/>";
+	var imageDirectoryPath = "<c:out value="${jspStoreImgDir}"/>";
+	var styleDirectoryPath = "<c:out value="${env_vfileColor}"/>";
+	var supportPaymentTypePromotions = <c:out value="${supportPaymentTypePromotions}"/>;
+
+	var subsFulfillmentFrequencyAttrName = "<c:out value="${env_subsFulfillmentFrequencyAttrName}"/>";
+	var subsPaymentFrequencyAttrName = "<c:out value="${env_subsPaymentFrequencyAttrName}"/>";
+	var subsTimePeriodAttrName = "<c:out value="${env_subsTimePeriodAttrName}"/>";
+
+	var storeNLS = null;
+	var storeUserType = "${userType}";
+	var ios = <c:out value="${ios}"/>;
+	var android = <c:out value="${android}"/>;
+	var multiSessionEnabled = <c:out value='${multiSessionEnabled}'/>;
+
+	// Store the amount of time of inactivity before a re-login is required, this value is retrieved from wc-server.xml, default is 30 mins
+	var inactivityTimeout = <c:out value="${loginTimeoutValue}"/>;
+
+	// Store the amount of time the inactivity warning dialog will be displayed before it closes itself, default is 20 seconds
+	var inactivityWarningDialogDisplayTimer = <c:out value="${requestScope.inactivityWarningDialogDisplayTimer}"/>;
+
+	// Store the amount of time to display a inactivity warning dialog before a re-login is required, default is 30 seconds
+	var inactivityWarningDialogBuffer = <c:out value="${requestScope.inactivityWarningDialogBuffer}"/>;
+
+	// Store the timing event to display the inactivity dialog
+	var inactivityTimeoutTracker = null;
+
+	// Store the timing event to close the inactivity dialog
+	var dialogTimeoutTracker = null;
+
+	//browse only mode for Web Call Centre integration
+	var browseOnly = ${env_browseOnly};
+
+	//Summary: Returns the absolute URL to use for prefixing any Ajax URL call.
+	//Returns: The absolute URL to use for prefixing any Ajax URL call.
+	function getAbsoluteURL() {
+		if (absoluteURL != "") {
+			var currentURL = document.URL;
+			var currentProtocol = "";
+
+			if (currentURL.indexOf("://") != -1) {
+				currentProtocol = currentURL.substring(0, currentURL.indexOf("://"));
+			}
+
+			var savedProtocol = "";
+			if (absoluteURL.indexOf("://") != -1) {
+				savedProtocol = absoluteURL.substring(0, absoluteURL.indexOf("://"));
+			}
+
+			if (currentProtocol != savedProtocol) {
+				absoluteURL = currentProtocol + absoluteURL.substring(absoluteURL.indexOf("://"));
+			}
+		}
+
+		return absoluteURL;
+	}
+	function getAbsoluteBaseURL() {
+		if (absoluteBaseURL != "") {
+			var currentURL = document.URL;
+			var currentProtocol = "";
+
+			if (currentURL.indexOf("://") != -1) {
+				currentProtocol = currentURL.substring(0, currentURL.indexOf("://"));
+			}
+
+			var savedProtocol = "";
+			if (absoluteBaseURL.indexOf("://") != -1) {
+				savedProtocol = absoluteBaseURL.substring(0, absoluteURL.indexOf("://"));
+			}
+
+			if (currentProtocol != savedProtocol) {
+				absoluteBaseURL = currentProtocol + absoluteBaseURL.substring(absoluteBaseURL.indexOf("://"));
+			}
+		}
+
+		return absoluteBaseURL;
+	}
+	//Summary: Returns the path pointing to the shared image directory.
+	//Description: In order to get the image directory path in any javascript file, this function can be used.
+	//Returns: The path to reference images.
+	function getImageDirectoryPath() {
+		return imageDirectoryPath;
+	}
+	//Summary: Returns the path pointing to the directory containing color-dependant image files.
+	//Description: In order to get the directory containing color-dependant image files in any javascript file, this function can be used.
+	//Returns: The path to reference color-dependant image files.
+	function getStyleDirectoryPath() {
+		return styleDirectoryPath;
+	}
+
+	<c:if test="${env_onBehalfOf eq 'true'}">
+		var wcCommonRequestParameters = { "forUserId" : "<c:out value="${CommandContext.forUserId}"/>"};
+	</c:if>
+
+	var useShortLocale = false;
+	function localeExceptionHandler() {
+		// If the corresponding nls data is not found, use the short locale instead
+		useShortLocale = true;
+		$.ajax({
+			url: "${jspStoreImgDir}nls/${shortLocale}/nls.js",
+			dataType: "script",
+			async: false,
+			success: function() {
+				if(typeof Globalize !== 'undefined') {
+					var GlobalizeLoaded = false;
+					if(useShortLocale) {
+						
+						Globalize.load( cldrData_<c:out value="${shortLocale}"/> );
+						Globalize.loadMessages( nlsMessages_<c:out value="${shortLocale}"/> );
+						Globalize.locale( '<c:out value="${shortLocale}"/>' );
+						GlobalizeLoaded = true;
+					}
+				}
+			}
+		});
+	}
+</script>
+
+<script type="text/javascript" src="${jspStoreImgDir}javascript/store.js"></script>
+<script type="text/javascript" src="${jspStoreImgDir}nls/${locale}/nls.js" onerror='localeExceptionHandler()'></script>
+
+<%-- The page will be reloaded with the selected catalogId --%>
+<wcf:url var="unsupportedBrowserErrorUrl" value="UnsupportedBrowserErrorView">
+	<wcf:param name="catalogId" value="${sdb.masterCatalog.catalogId}"/>
+	<wcf:param name="storeId" value="${WCParam.storeId}"/>
+	<wcf:param name="langId" value="${CommandContext.languageId}"/>
+</wcf:url>
+
+<script type="text/javascript">
+	if(typeof Globalize !== 'undefined') {
+		var GlobalizeLoaded = false;
+
+		if(!useShortLocale) {
+			Globalize.load( cldrData_<c:out value="${locale}"/> );
+			Globalize.loadMessages( nlsMessages_<c:out value="${locale}"/> );
+			Globalize.locale( '<c:out value="${locale}"/>' );
+			GlobalizeLoaded = true;
+		}
+	 }
+
+ initializeInactivityWarning();
+ var ie6 = false;
+ var ie7 = false;
+ if (navigator != null && navigator.userAgent != null) {
+	 ie6 = (navigator.userAgent.toLowerCase().indexOf("msie 6.0") > -1);
+	 ie7 = (navigator.userAgent.toLowerCase().indexOf("msie 7.0") > -1);
+ }
+ if (location.href.indexOf('UnsupportedBrowserErrorView') == -1 && (ie6 || ie7)) {
+	 document.write('<meta http-equiv="Refresh" content="0;URL=<c:out value="${unsupportedBrowserErrorUrl}"/>"/>');
+ }
+</script>
+
+<flow:ifEnabled feature="Analytics">
+	<%-- The CM header tag must be in the <head> tag of the JSP --%>
+	<cm:output section="header" />
+</flow:ifEnabled>
+
+<script type="text/javascript">
+	$(document).ready(function() {
+		shoppingActionsJS.setCommonParameters('<c:out value="${langId}"/>','<c:out value="${storeId}" />','<c:out value="${catalogId}" />','<c:out value="${userType}" />','<c:out value="${env_CurrencySymbolToFormat}" />');
+
+		if (isChrome() || isSafari()) {
+			var hiddenFields = $('input[type=\"hidden\"]');
+			for (var i = 0; i < hiddenFields.length; i++) {
+				hiddenFields[i].autocomplete="off"
+			}
+		}
+        var isAndroid = /(android)/i.test(navigator.userAgent);
+        var isIOS = navigator.userAgent.match(/(iPod|iPhone|iPad)/);
+        if(isAndroid || isIOS) {
+            $("body").attr("data-wc-device","mobile");
+		}
+	});
+</script>
+
+<%-- wait until we have CI env for integration
+<c:if test="${env_inPreview}">
+	<%@ include file="EnvironmentCI.jspf" %>
+</c:if>
+--%>
+
+<%-- APPLEPAY BEGIN --%>
+<flow:ifEnabled feature="ApplePay">
+	<link rel="apple-touch-icon" size="120x120" href="images/touch-icon-120x120.png">
+	<link rel="apple-touch-icon" size="152x152" href="images/touch-icon-152x152.png">
+	<link rel="apple-touch-icon" size="180x180" href="images/touch-icon-180x180.png">
+
+	<script type="text/javascript">
+		$(document).ready(function() {
+			<fmt:message key="ajaxError" bundle="${storeText}" var="ajaxError"/>
+			<fmt:message key="csrNotSupported" bundle="${storeText}" var="csrNotSupported"/>
+			<fmt:message key="badCatentryId" bundle="${storeText}" var="badCatentryId"/>
+			<fmt:message key="invalidShippingContact" bundle="${storeText}" var="invalidShippingContact"/>
+			<fmt:message key="invalidBillingContact" bundle="${storeText}" var="invalidBillingContact"/>
+			<fmt:message key="failureSendPayment" bundle="${storeText}" var="failureSendPayment"/>
+			<fmt:message key="noStoreSelected" bundle="${storeText}" var="noStoreSelected"/>
+			<fmt:message key="serverOperationFailed" bundle="${storeText}" var="serverOperationFailed"/>
+			MessageHelper.setMessage("ajaxError", <wcf:json object="${ajaxError}"/>);
+			MessageHelper.setMessage("csrNotSupported", <wcf:json object="${csrNotSupported}"/>);
+			MessageHelper.setMessage("badCatentryId", <wcf:json object="${badCatentryId}"/>);
+			MessageHelper.setMessage("invalidShippingContact", <wcf:json object="${invalidShippingContact}"/>);
+			MessageHelper.setMessage("invalidBillingContact", <wcf:json object="${invalidBillingContact}"/>);
+			MessageHelper.setMessage("failureSendPayment", <wcf:json object="${failureSendPayment}"/>);
+			MessageHelper.setMessage("noStoreSelected", <wcf:json object="${noStoreSelected}"/>);
+			MessageHelper.setMessage("serverOperationFailed", <wcf:json object="${serverOperationFailed}"/>);
+		});
+	</script>
+</flow:ifEnabled>
+<%-- APPLEPAY END --%>
+
+<c:set var="extensionJSPIdentifier" value="wc.pgl.jspIncludeHead_" />
+<%@ include file="JSPFExtToInclude.jspf"%>
+<!-- END CommonJSToInclude.jspf -->

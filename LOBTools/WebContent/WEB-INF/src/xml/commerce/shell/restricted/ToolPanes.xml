@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		The cmc/shell/DefaultToolPane class defines the default pane in the work area in Management Center that will be displayed
+		while no business tool is opened. It consists of a background image and the welcome to IBM text.
+		
+		cmc/shell/DefaultToolPane also contains text with instructions on how to start using Management Center and references 
+		business users to the Getting Started page.
+	-->
+	<Component classDefinition="true" definitionName="cmc/shell/DefaultToolPane">
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<Component imageSet="workAreaBackground"/>
+		<Component fontsize="13" name="welcomeText" width="750" x="75" y="75">
+			<TextComponent fontsize="24" multiline="true" text="${shellResources.Singleton.applicationWelcomeTitle.string}" width="${this.parent.width}"/>
+			<Component height="30"/>
+			<TextComponent multiline="true" text="${shellResources.Singleton.applicationWelcomeText1.string}" width="${this.parent.width}"/>
+			<Component height="17"/>
+			<TextComponent multiline="true" text="${shellResources.Singleton.applicationWelcomeText2.string}" width="${this.parent.width}"/>
+			<AxisLayout axis="y" spacing="0"/>
+		</Component>
+	</Component>
+
+	<!---
+		@keywords private
+		
+		This class implements all the panes in the work area in Management Center. When a tool is
+		opened, its associated pane will be displayed in the pane section of the area below the tool
+		tab, and users can view the pane by clicking on the associated tab.
+	-->
+	<Component bgcolor="white" classDefinition="true" definitionName="cmc/shell/ToolPanes" visible="false">
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+
+		<!---
+			This method opens the pane for the specified tool in the work area in Management Center.
+			@param string objectId: identifier of the tool
+			@param string objectClass: class that implements the tool
+			@param string usage: usage of the tool for access control purpose
+			@param boolean availableToWorkspaceTasks Flag that indicates whether the tool is available or not when working on a workspace task
+			@param cmc/foundation/Store store: the store
+			@param boolean setFocus: flag that indicates whether to set focus to this new tool
+		-->
+		<method args="objectId, objectClass, usage, availableToWorkspaceTasks, store, setFocus" name="openPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "openPane(objectId,objectClass,usage,availableToWorkspaceTasks,store,setFocus)", [objectId, objectClass, usage, availableToWorkspaceTasks, store, setFocus]);
+			}
+			var paneViewIndex = this.findPane(objectId);
+			if (paneViewIndex >= 0) {
+				if (setFocus) {
+					this.childComponents[paneViewIndex].completeInstantiation();
+					this.childComponents[paneViewIndex].setVariable("visible", true);
+					if (this.childComponents[paneViewIndex].open) {
+						this.childComponents[paneViewIndex].open(store);
+					}
+					this.focusPane(objectId);
+				}
+			}
+			else {
+				this.createPane(objectId, objectClass, usage, availableToWorkspaceTasks, store, setFocus);
+			}
+			if (!this.visible) {
+				this.setVariable("visible", true);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "openPane(objectId,objectClass,usage,availableToWorkspaceTasks,store,setFocus)");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectId, objectClass, usage, availableToWorkspaceTasks, store, setFocus" name="createPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "createPane(objectId,objectClass,usage,availableToWorkspaceTasks,store)", [objectId, objectClass, usage, availableToWorkspaceTasks, store]);
+			}
+			var tool = null;
+			if (objectClass.Class) {
+				tool = new objectClass.Class(this, {
+					name: objectId,
+					languageId: cmcConfig.languageId,
+					usage: usage,
+					availableToWorkspaceTasks: availableToWorkspaceTasks
+				});
+			}
+			else {
+				tool = DefinitionUtil.createDefinitionInstance(objectClass, this, {
+					name: objectId,
+					languageId: cmcConfig.languageId,
+					usage: usage,
+					availableToWorkspaceTasks: availableToWorkspaceTasks
+				});
+			}
+			if (tool && tool.open) {
+				tool.open(store);
+			}
+			if (setFocus) {
+				this.focusPane(objectId);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "createPane(objectId,objectClass,usage,availableToWorkspaceTasks)");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectId" name="findPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "findPane(objectId)", [objectId]);
+			}
+			for (var i = 0; i < this.childComponents.length; i++) {
+				if (this.childComponents[i].name == objectId) {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "findPane(objectId)", i);
+					}
+					return i;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/ToolPanes", "findPane(objectId)", "Unable to find the following pane from the work area: " + objectId);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "findPane(objectId)", -1);
+			}
+			return -1;
+			]]>
+		</method>
+
+		<!---
+			Set the pane active with objectId flag to true others to false
+			@param string objectId: identifier of the tool that will be focused
+		-->
+		<method args="objectId" name="activatePane">
+			<![CDATA[
+			for (var i = 0; i < this.childComponents.length; i++) {
+				if (this.childComponents[i].name == objectId) {
+					this.childComponents[i].setVariable("active", true);
+				}
+				else {
+					this.childComponents[i].setVariable("active", false);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			This method returns the Business Object Editor instance of the specified tool.
+			@param string objectId: Identifier of the tool.
+			@returns cmc/foundation/BusinessObjectEditor: Instance of the Business Object Editor of the specified tool.
+		-->
+		<method args="objectId" name="getPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "getPane(objectId)", [objectId]);
+			}
+			var paneViewIndex = this.findPane(objectId);
+			if (paneViewIndex >= 0) {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "getPane(objectId)", this.childComponents[paneViewIndex]);
+				}
+				return this.childComponents[paneViewIndex];
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "getPane(objectId)", null);
+			}
+			return null;
+			]]>
+		</method>
+
+		<!---
+			This method returns the identifier of the tool that is currently being focused on
+			in the work area.
+			@returns string: identifier of the tool that is currently being focused
+		-->
+		<method name="getCurrentPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "getCurrentPane");
+			}
+			for (var i = 0; i < this.childComponents.length; i++) {
+				if (this.childComponents[i].visible == true) {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "getCurrentPane", this.childComponents[i]);
+					}
+					return this.childComponents[i];
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/ToolPanes", "getCurrentPane", "Unable to resolve the tool pane that is currently opened.");
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "getCurrentPane", -1);
+			}
+			return -1;
+			]]>
+		</method>
+
+		<!---
+			This method brings the pane of the specified tool into focus.
+			@param string objectId: identifier of the tool that will be focused
+		-->
+		<method args="objectId" name="focusPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "focusPane(objectId)", [objectId]);
+			}
+			for (var i = 0; i < this.childComponents.length; i++) {
+				if (this.childComponents[i].name == objectId) {
+					this.childComponents[i].completeInstantiation();
+					this.childComponents[i].setVariable("visible", true);
+					this.activatePane(objectId);
+				}
+				else {
+					this.childComponents[i].setVariable("visible", false);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "focusPane(objectId)");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method resets the pane of the specified tool in the work area in Management Center.
+			@param string objectId: identifier of the tool that will be reset
+		-->
+		<method args="objectId" name="resetPane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "resetPane(objectId)", [objectId]);
+			}
+			var paneViewIndex = this.findPane(objectId);
+			if (paneViewIndex >= 0 && this.childComponents[paneViewIndex].model) {
+				this.childComponents[paneViewIndex].model.refreshAll(false);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "resetPane(objectId)");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method closes the pane of the specified tool in the work area in Management Center.
+			@param string objectId: identifier of the tool that will be closed
+		-->
+		<method args="objectId" name="closePane">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "closePane(objectId)", [objectId]);
+			}
+			var paneViewIndex = this.findPane(objectId);
+			if (paneViewIndex >= 0) {
+				if (this.childComponents[paneViewIndex].close) {
+					this.childComponents[paneViewIndex].close();
+				}
+				this.childComponents[paneViewIndex].setVariable("visible", false);
+			}
+			var hideToolPanes = true;
+			for (var i = 0; i < this.childComponents.length; i++) {
+				if (this.childComponents[i].visible) {
+					hideToolPanes = false;
+					break;
+				}
+			}
+			if (hideToolPanes) {
+				this.setVariable("visible", false);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolPanes", "closePane(objectId)");
+			}
+			]]>
+		</method>
+	</Component>
+
+</Definitions>

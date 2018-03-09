@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","cs",{button:"Šablony",emptyListMsg:"(nejsou definovány žádné šablony)",insertOption:"Nahradit skutečný obsah",options:"Volby šablony",selectPromptMsg:"Vybrat šablonu pro otevření v editoru",title:"Šablony obsahu"});

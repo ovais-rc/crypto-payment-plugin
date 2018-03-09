@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords flash-only
+		@keywords private
+		
+		The class cmc/foundation/BaseFileUploader implements a basic file upload widget. A file uploader allows a file to be uploaded to the server. 
+		In order to do this, an Action Script FileReference object is used. 
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseFileUploader">
+		<dependency localName="FileUploadUtil" moduleName="cmc/foundation/FileUploadUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>     	
+		<!--- 
+			@keywords private 
+			ActionScript FileReference object. This reference points to the {@link cmc/foundation/ModelObject#fileref fileref}
+			attribute of the {@link cmc/foundation/ModelObject} that this editor is being used by. 
+		-->            
+       	<variable name="fileref" value="${null}"/>            	
+		<!---
+       		@keywords private
+       		The {@link cmc/foundation/ModelProperty } named sourceFileName is marked as dirty when a file is chosen to be uploaded. 
+       		This ensures that a save is triggered on the {@link cmc/foundation/ModelObject object}.
+       	-->
+		<variable name="sourceFileNamePropertyName" type="string" value="sourceFileName"/>
+
+       	<!--- 
+       		@keywords private
+       		This method has the logic for resetting the editor when the fileref object is changed.
+       	-->
+       	<method args="newFileref" name="setFileref">
+			<![CDATA[
+			if (this.fileref != newFileref || newFileref == null) {
+				this.fileref = newFileref;
+				if (this.fileNameField) {
+					if (this.fileref != null && typeof (this.fileref.name) != "undefined") {
+						this.fileNameField.setText(this.fileref.name);
+					}
+					else {
+						this.fileNameField.setText("");
+					}
+					this.fileNameField.setVariable("enabled", false);
+				}
+			}
+			]]>
+		</method>
+			
+		
+		<!---
+			@keywords private
+			This method will be called when the {@link cmc/foundation/FileUploadUtil#onfileSelected} event is sent. 
+			
+			It will set the text of the input field	and will also update the properties of o specified by {@link cmc/foundation/ObjectDefinition#fileNamePropertyName} and
+			{@link cmc/foundation/ObjectDefinition#fileSizePropertyName}.
+			
+			Note that this method will respect the {@link cmc/foundation/ModelObject#readOnly readOnly} flag of the {@link cmc/foundation/ModelProperty} 
+			identified by {@link cmc/foundation/ObjectDefinition#fileNamePropertyName} but will always update the 
+			{@link cmc/foundation/ModelProperty} identified by {@link cmc/foundation/ObjectDefinition#fileSizePropertyName}. 
+		-->
+		<method args="selectedFileref" name="handleSelect">
+			<![CDATA[
+			if (typeof(selectedFileref) == "undefined") selectedFileref = null;
+			if (selectedFileref != null) {
+				this.o.setVariable("fileref", selectedFileref);
+				this.fileNameField.setText(selectedFileref.name);
+				if (this.o.objectDefinition.fileNamePropertyName != null) {
+					var nameProperty = this.o.getProperty(this.o.objectDefinition.fileNamePropertyName);
+					if (nameProperty != null && !nameProperty.readOnly) {
+						this.o.setPropertyValue(this.o.objectDefinition.fileNamePropertyName, null, this.o.fileref.name);
+					}
+				}
+				if (this.o.objectDefinition.fileSizePropertyName != null) {
+					this.o.setPropertyValue(this.o.objectDefinition.fileSizePropertyName, null, this.o.fileref.size);
+				}
+				this.o.setPropertyValue(this.sourceFileNamePropertyName, null, this.o.fileref.name);
+				var sourceFileNameProperty = this.o.getProperty(this.sourceFileNamePropertyName);
+				sourceFileNameProperty.setVariable("dirty", true);
+			}
+			this.reset();
+			]]>
+		</method>  
+		
+		<!---
+			@keywords private
+			This method will be called when the {@link cmc/foundation/FileUploadUtil#onfileCanceled} event is sent.
+		-->
+		<method args="e" name="handleCancel">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.reset();
+			]]>
+		</method> 
+		
+		<!---
+			@keywords private
+			This method will reset the widget by:
+			<ol>
+				<li>Unregistering listeners from the delegates listening to events from {@link cmc/foundation/FileUploadUtil}.</li>				
+			 </ol>
+		-->
+		<method name="reset">
+			<![CDATA[
+			this.handleCancelDel.disconnectAll();
+			this.handleSelectDel.disconnectAll();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.handleCancelDel) {
+				this.handleCancelDel.disconnectAll();
+				delete this.handleCancelDel;
+			}
+			if (this.handleSelectDel) {
+				this.handleSelectDel.disconnectAll();
+				delete this.handleSelectDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="browseForFile">
+			<![CDATA[
+			if (this.handleCancelDel == null) {
+				this.handleCancelDel = new EventHandler.Class(this, "handleCancel");
+			}
+			this.handleCancelDel.connect(FileUploadUtil.Singleton, "onfileCanceled");
+			if (this.handleSelectDel == null) {
+				this.handleSelectDel = new EventHandler.Class(this, "handleSelect");
+			}
+			this.handleSelectDel.connect(FileUploadUtil.Singleton, "onfileSelected");
+			FileUploadUtil.Singleton.browseForFile(this.o.objectDefinition.fileTypes, this.o.objectDefinition.maximumFileSize);
+			]]>
+		</method>
+		
+		
+		<AxisLayout axis="x" spacing="3"/>
+			
+		<!--- The text field to hold the file name. -->
+		<InputText enabled="false" name="fileNameField"/>
+		<!--- The button for browsing to a file. -->	
+		<FocusableBaseButton doesenter="true" imageSet="browseButtonResource" name="browseButton" valign="middle">
+			<!--- @keywords private --> 	
+			<variable name="discardKeyUp" type="boolean" value="false"/>  
+			<!--- @keywords private -->
+			<handler name="onclick">
+				<![CDATA[
+				this.classroot.browseForFile();
+				]]>
+			</handler>					
+			<!---  @keywords private 
+				  In Flash 10 the FileReference.browse method needs to be called from a user triggered event. 
+				  OL normally triggers the onclick event with a timer and not a user event so the FileReference.browse event
+				  would not execute. By generating the onclick in this method, we guarantee a user generated onclick event will happen so 
+				  that the FileReference.browse method can execute successfully.   
+			 -->
+			<handler args="kc" name="onkeyup">
+				<![CDATA[
+				if (kc == 32 || kc == 13) {
+					if (this.discardKeyUp) {
+						this.discardKeyUp = false;
+					}
+					else if (this._enabled) {
+						EventUtil.trigger(this, "onclick");
+						this.showUp();
+					}
+				}
+				]]>
+			</handler>	
+			
+			<!--- 	@keywords private
+					Need to override this method so that it does not generate an onclick event. This method is called 
+					by a timer, so the generated onclick event would not be user generated and the file browse dialog window 
+					would not be launched, and the application would become unresponsive. 
+			-->	
+			<method name="doSpaceUp">
+				<![CDATA[
+
+				]]>
+			</method>
+			
+			<!--- 	@keywords private
+			
+					Need to override this method so that it does not generate an onclick event. This method is called 
+					by a timer, so the generated onclick event would not be user generated and the file browse dialog window 
+					would not be launched, and the application would become unresponsive.										
+			-->	
+			<method name="doEnterUp">
+				<![CDATA[
+
+				]]>
+			</method>
+			<!--- 	@keywords private
+			
+					In the case that someone uses the space/enter key to discard an alert button, we want to ensure
+					that we don't trigger the browse dialog right away.										
+			-->	
+			<handler name="onfocus">
+				<![CDATA[
+				if (KeyUtil.isKeyDown('enter') || KeyUtil.isKeyDown('spacebar')) {
+					this.discardKeyUp = true;
+				}
+				]]>
+			</handler>
+		</FocusableBaseButton>		
+		
+	<method args="fileref" name="set_fileref">
+			<![CDATA[
+			this.setFileref(fileref);
+			]]>
+		</method></Component>
+	<!---
+		@keywords final
+		@keywords flash-only
+	
+		<p>This class defines a widget that allows business users to select a file to upload. This widget can only be used with objects that 
+		have {@link cmc/foundation/ObjectDefinition#isFileObject isFileObject} set to true. This widget associates the selected file with the 
+		{@link cmc/foundation/ModelObject} instance. The file will be uploaded when the object is saved using the object's {@link cmc/foundation/CreateService} 
+		or {@link cmc/foundation/UpdateService}. An instance of cmc/foundation/PropertyFileUploader can only be declared as a child of an instance of 
+		{@link cmc/foundation/PropertyGroup}.</p>
+
+		<p>This widget will update the following properties of the {@link cmc/foundation/ModelObject model object}:
+		<ul>
+			<li>The property defined by {@link cmc/foundation/ObjectDefinition#fileNamePropertyName} will be updated with the fileName of the selected file. This value will include the name and extension of the file
+			but will not include the full path of the file.
+			<li>The property defined by {@link cmc/foundation/ObjectDefinition#fileSizePropertyName} will be updated with the fileSize of the selected file in bytes. To display this value in kilobytes use {@link cmc/foundation/PropertyKilobyte}
+			to display the value.
+		</ul></p>
+
+		<p>For example, consider the following object definition for a managed file:</p>
+			@START_CODE
+		<PrimaryObjectDefinition
+			definitionName="cmc/attachment/BaseManagedFilePrimaryObjectDefinition"
+			isBaseDefinition="true"
+			objectType="BaseManagedFile"
+			objectGroups="ManagedFileGroup"
+			creatable="false"
+			displayName="${attachmentResources.managedFileObjectName}"
+			displayNameProperty="fileName"
+			newDisplayName="${attachmentResources.attachment_newManagedFileDisplayName}"
+			idProperty="fullPath"
+			propertiesDefinition="cmc/attachment/ManagedFileProperties"
+			copyProtected="true"
+			searchType="FindManagedFile"
+			isFileObject="true"
+			fileSizePropertyName="fileSize"
+			fileNamePropertyName="fileName"
+			maximumFileSize="10000000"
+			helpLink="tasks/tttcreatemf.htm"
+			longDisplayNameProperty="fullPath"
+			browseFilterType="ManagedContentsFilter">
+			newObjectMenuItemText="${attachmentResources.contextMenuNewFile}"
+			propertiesDefinition="cmc/attachment/ManagedFileProperties"
+			>
+			...
+		</PrimaryObjectDefinition>
+			@END_CODE
+		 <p>To display the managed file in a properties view, define the following two widgets:</p>
+			@START_CODE		 	
+	        <PropertyInputText
+	            name="fileName"
+	            propertyName="fileName"
+	            extendedHelpText="${attachmentResources.extendedHelpText_fileName}"
+	            promptText="${attachmentResources.managedFile_fileName}"
+	            required="true"/>
+	            	      
+			<PropertyKilobyte
+	            name="fileSize"
+	            propertyName="fileSize"
+	            promptText="${attachmentResources.managedFile_size}"/>
+	       	@END_CODE	
+		<p>Whenever a new file is selected, the values displayed in these two widgets will be updated to reflect the name and size
+		of the newly selected file.</p>
+	-->
+
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyFileUploader">
+		<dependency localName="BaseFileUploader" moduleName="cmc/foundation/BaseFileUploader"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>								
+		<!---
+			@keywords private 
+			File uploaders have a validator of the type {@link cmc/foundation/FileRequiredValidator} that is automatically in use
+			for the widget. This validator ensures that if this is a new object, a file is selected to be uploaded. Otherwise
+			the widget will be in an error state.  
+		-->		
+		<variable name="validatorTypes" type="string" value="fileRequiredValidator"/>							
+
+       	<!---
+			@keywords private
+			Create the check box editor for the given property component. This method overrides the createEditor method in 
+			the cmc/foundation/PropertiesComponent class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new BaseFileUploader.Class(parentComponent, {
+				name: "editor",
+				model: parentComponent.model,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o
+			});
+			]]>
+		</method>			
+		
+		
+		<!---
+			@keywords private
+			This handler listens for a new {@link cmc/foundation/ModelObject} to be assigned for the widget, and updates
+			the widget accordingly.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (newObject != null) {
+				if (newObject.objectDefinition.isFileObject == false) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "SEVERE", "cmc/foundation/PropertyFileUploader", "setModelObject", "This model object is invalid for cmc/foundation/PropertyFileUploader: the object definition for " + newObject.objectType + " is not marked as a file object.");
+				}
+				if (this.editor != null && typeof (newObject.fileref) != "undefined") {
+					this.editor.setVariable("fileref", newObject.fileref);
+				}
+			}
+			else if (this.editor != null) {
+				this.editor.setVariable("fileref", null);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>			
+	</PropertiesComponent>
+
+</Definitions>

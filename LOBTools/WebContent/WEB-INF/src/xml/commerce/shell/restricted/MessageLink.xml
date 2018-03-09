@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		This class implements the message bar displayed in the status area.
+		The message bar shows the latest Management Center message.  The
+		message console opens when a user clicks the message bar.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/MessageLink" focusable="false">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<!--- @keywords private -->
+		<variable name="truncationText" type="string" value="${foundationResources.Singleton.gridTruncationText.string}"/>
+		<!--- @keywords private -->
+		<variable name="truncated" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			This method sets the text to display in the message bar.
+			@param string messageType: message type.
+			@param string messageText: message text.
+		-->
+		<method args="messageType, messageText" name="setDisplayText">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/MessageLink", "setDisplayText(messageType,messageText)", [messageType, messageText]);
+			}
+			var errorIconVisible = messageType == "ERROR" || messageType == "EXCEPTION";
+			this.messageTextView.messageErrorIcon.setVariable("visible", errorIconVisible);
+			this.messageTextView.messageLinkText.setVariable('text', messageText);
+			this.setVariable("truncated", this.messageTextView.messageLinkText.getTextWidth() + (errorIconVisible ? this.messageTextView.messageErrorIcon.width : 0) > this.messageTextView.width);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/MessageLink", "setDisplayText(messageType,messageText)");
+			}
+			]]>
+		</method>
+		
+		<Component name="messageTextView" width="${this.parent.width - this.parent.messageLinkButton.width - 10}" height="20" clip="true" y="2">
+			<Component imageSet="errorIcon" name="messageErrorIcon" visible="false" width="18" valign="middle"/>
+			<TextComponent clickable="true" fgcolor="#cccccc" focusable="true" fontsize="13" name="messageLinkText"
+					width="${this.parent.width - (this.parent.messageErrorIcon.visible ? this.parent.messageErrorIcon.width : 0) - (this.classroot.truncated ? this.parent.truncationText.width : 0)}" valign="middle">
+				<Tooltip enabled="${this.classroot.truncated}" name="untruncatedText" text="${this.parent.text}"/>
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+			</TextComponent>
+			<TextComponent fgcolor="#cccccc" fontsize="13" name="truncationText" text="${this.classroot.truncationText}" visible="${this.classroot.truncated}" valign="middle"/>
+			<AxisLayout axis="x" spacing="0"/>
+		</Component>
+		<FocusableBaseButton doesenter="true" imageSet="statusMessageButtonResource" name="messageLinkButton" x="${this.parent.messageTextView.width + 10}" y="2">
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this
+					});
+				}
+				]]>
+			</handler>
+			<handler name="onclick">
+				<![CDATA[
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/MessageLink", "onclick", "Opening the message console.");
+				}
+				MessageLogger.Singleton.openMessageConsoleDialog();
+				]]>
+			</handler>
+			<Tooltip text="${shellResources.Singleton.messageConsoleButtonTip.string}"/>
+		</FocusableBaseButton>
+	</FocusableComponent>
+
+</Definitions>

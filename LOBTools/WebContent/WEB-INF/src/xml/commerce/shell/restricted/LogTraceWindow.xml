@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- 
+		@keywords private
+		 
+		The combox for setting the log levels for each component.
+	 -->
+	<BaseComboBox classDefinition="true" definitionName="cmc/shell/LogLevelComboBox" width="90">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<variable name="component"/>
+		<handler name="oninit">
+			<![CDATA[
+			for (var type in Logger.Singleton.levelValues) {
+				this.addItem(type, Logger.Singleton.levelValues[type], foundationResources.Singleton["logTraceWindowLogLevel_" + type]);
+			}
+			]]>
+		</handler>
+		<handler name="onselectedValue">
+			<![CDATA[
+			Logger.Singleton.componentsLevel[this.component] = this.getValue();
+			]]>
+		</handler>
+		
+	</BaseComboBox>
+	<!---
+		@keywords private
+		The cmc/shell/LogLevelEditor is used for managing the log levels for a component. It consists of 
+		a text label for displaying component name and a cmc/shell/LogLevelComboBox for setting the log level.
+	 -->
+	<Component classDefinition="true" definitionName="cmc/shell/LogLevelEditor">
+		<dependency localName="TextComponent" moduleName="cmc/foundation/TextComponent"/>
+		<dependency localName="LogLevelComboBox" moduleName="cmc/shell/LogLevelComboBox"/>
+		<variable name="component"/>
+		<variable name="text"/>
+		<variable name="comboBox"/>
+		<handler name="oninit">
+			<![CDATA[
+			this.text = new TextComponent.Class(this, {
+				text: this.component,
+				width: 320
+			});
+			this.comboBox = new LogLevelComboBox.Class(this, {
+				component: this.component
+			});
+			]]>
+		</handler>
+		<method name="destroy">
+			<![CDATA[
+			this.text.destroy();
+			this.comboBox.destroy();
+			this.inherited(arguments);
+			]]>
+		</method>
+		<method args="item" name="selectItem">
+			<![CDATA[
+			this.comboBox.selectItem(item);
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="2"/>
+	</Component>
+	<!---
+		@keywords private
+		A floating window for configuring logging and tracing settings.
+	 -->
+	<Window classDefinition="true" definitionName="cmc/shell/LogTraceWindow" focustrap="true" initstage="late" minHeight="100" minWidth="500" title="${foundationResources.Singleton.logTraceWindowTitle.string}" visible="false">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="LogLevelEditor" moduleName="cmc/shell/LogLevelEditor"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<variable initialValue="${(RootComponent.Singleton.height - 350) / 3}" name="y"/>
+		<variable initialValue="${(RootComponent.Singleton.width - 500) / 2}" name="x"/>
+
+		<DragState drag_axis="both" drag_min_x="0" drag_min_y="0" name="dragger">
+			<variable initialValue="${this.parent.height - this.height}" name="drag_max_y"/>
+			<variable initialValue="${this.parent.width - this.width}" name="drag_max_x"/>
+		</DragState>
+
+		<!---
+			@keywords private
+			A map to store the log level editors for components
+		-->
+		<variable name="componentEditors" value="${{}}"/>
+		
+		<!--- @keywords private  -->
+		<variable name="showDebuggerOptions" type="boolean" value="false"/>
+		
+		 <!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateComponentsLevel();
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Update the log level editors for components.
+		-->
+		<method name="updateComponentsLevel">
+			<![CDATA[
+			for (var i = 0; i < Logger.Singleton.components.length; i++) {
+				var component = Logger.Singleton.components[i];
+				var componentEditor = this.componentEditors[component];
+				if (componentEditor == null) {
+					componentEditor = new LogLevelEditor.Class(SingletonRegistry.componentsDetailLevelView, {
+						component: component
+					});
+					this.componentEditors[component] = componentEditor;
+				}
+				var levelVal = Logger.Singleton.componentsLevel[component];
+				if (levelVal != null) {
+					componentEditor.selectItem(levelVal);
+				}
+				else {
+					componentEditor.selectItem(Logger.Singleton.levelValue);
+					Logger.Singleton.componentsLevel[component] = null;
+				}
+			}
+			]]>
+		</method>		
+		
+		<!---
+			@keywords private
+			Set the focus to header text
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.windowcontent.levelOptionArea.headertext);
+			]]>
+		</method>
+		
+		<handler name="onmousedown">
+			<![CDATA[
+			this.dragger.setVariable("active", true);
+			]]>
+		</handler>
+		<handler name="onmouseup">
+			<![CDATA[
+			this.dragger.setVariable("active", false);
+			]]>
+		</handler>
+        <Component name="windowcontent">
+        	<Component name="levelOptionArea">
+        		<variable name="open" type="boolean" value="true"/>
+				<AxisLayout spacing="3"/>
+
+				<Component bgcolor="#DFE8FB" focusable="true" height="20" name="headertext" width="${Math.max(this.parent.content.width, this.parent.parent.sendOptionArea.content.width) + 20}">
+					<AxisLayout axis="x"/>
+					<Component bgcolor="${this.parent.bgcolor}" imageSet="propertyDrawerResource" name="headbutton" visible="true" width="20">
+						<method name="init">
+							<![CDATA[
+							this.inherited(arguments);
+							this.setVariable("currentImage", (this.parent.parent.open ? 2 : 1));
+							]]>
+						</method>
+					</Component>
+	
+					<TextComponent text="${foundationResources.Singleton.logTraceWindowLogLevelOptions.string}" y="${this.parent.height / 2 - this.height / 2}"/>
+	
+					<handler args="code" name="onkeydown">
+						<![CDATA[
+						if (code == 32) {
+							EventUtil.trigger(this, "onclick");
+						}
+						]]>
+					</handler>
+	
+					<handler name="onclick">
+						<![CDATA[
+						this.parent.setVariable("open", !this.parent.open);
+						this.headbutton.setVariable("currentImage", (this.parent.open ? 2 : 1));
+						]]>
+					</handler>
+										
+					<!--- @keywords private -->
+					<handler name="onfocus">
+						<![CDATA[
+						if (!this.indicator) {
+							new FocusIndicator.Class(this, {
+								name: "indicator",
+								focusableView: this,
+								indicatorView: this.headbutton
+							});
+						}
+						]]>
+					</handler>
+				</Component>
+     	
+				<Component name="content" visible="${this.parent.open}" x="20">			
+					<Component id="componentsLevelView" y="5">
+						<Component>
+							<TextComponent text="${foundationResources.Singleton.logTraceWindowDefaultLogLevel.string}"/>
+							<BaseComboBox name="defaultLevel" width="90">
+								<handler name="oninit">
+									<![CDATA[
+									for (var type in Logger.Singleton.levelValues) {
+										this.addItem(type, Logger.Singleton.levelValues[type], foundationResources.Singleton["logTraceWindowLogLevel_" + type]);
+									}
+									this.selectItem(Logger.Singleton.levelValue);
+									]]>
+								</handler>
+
+								<handler name="onselectedValue">
+									<![CDATA[
+									Logger.Singleton.setLevelValue(this.getValue());
+									this.classroot.updateComponentsLevel();
+									]]>
+								</handler>
+							</BaseComboBox>
+							
+							<AxisLayout axis="x" spacing="5"/>
+						</Component>
+						<TextComponent text="${foundationResources.Singleton.logTraceWindowComponentLogLevels.string}"/>						
+						<Component id="componentsDetailLevelView" x="20">
+							<AxisLayout axis="y" spacing="2"/>
+						</Component>	
+						<AxisLayout axis="y" spacing="5"/>				
+					</Component>
+				</Component>
+			</Component>
+			
+        	<Component name="sendOptionArea">
+        		<variable name="open" type="boolean" value="true"/>
+				<AxisLayout spacing="3"/>
+
+				<Component bgcolor="#DFE8FB" focusable="true" height="20" name="headertext" width="${Math.max(this.parent.content.width, this.parent.parent.levelOptionArea.content.width) + 20}">
+					<AxisLayout axis="x"/>
+					<Component bgcolor="${this.parent.bgcolor}" imageSet="propertyDrawerResource" name="headbutton" visible="true" width="20">
+						<method name="init">
+							<![CDATA[
+							this.inherited(arguments);
+							this.setVariable("currentImage", (this.parent.parent.open ? 2 : 1));
+							]]>
+						</method>
+					</Component>
+	
+					<TextComponent text="${foundationResources.Singleton.logTraceWindowLogTargetOptions.string}" y="${this.parent.height / 2 - this.height / 2}"/>
+	
+					<handler args="code" name="onkeydown">
+						<![CDATA[
+						if (code == 32) {
+							EventUtil.trigger(this, "onclick");
+						}
+						]]>
+					</handler>
+	
+					<handler name="onclick">
+						<![CDATA[
+						this.parent.setVariable("open", !this.parent.open);
+						this.headbutton.setVariable("currentImage", (this.parent.open ? 2 : 1));
+						]]>
+					</handler>
+										
+					<!--- @keywords private -->
+					<handler name="onfocus">
+						<![CDATA[
+						if (!this.indicator) {
+							new FocusIndicator.Class(this, {
+								name: "indicator",
+								focusableView: this,
+								indicatorView: this.headbutton
+							});
+						}
+						]]>
+					</handler>
+				</Component>
+				<Component name="content" visible="${this.parent.open}" x="20">		
+					<Component>
+					<State active="${this.classroot.showDebuggerOptions}" name="state0"/>
+						<TextComponent text="" visible="${this.parent.state0.active}"/>
+			            <BaseListComponent id="targetRadioGroup" layoutProperties="&quot;axis&quot;: &quot;x&quot;, &quot;spacing&quot;: 30" visible="${this.parent.state0.active}">
+			                <Component id="sendToDebuggerWindowOption" selected="${Logger.Singleton.target == 'debugger'}" text="${foundationResources.Singleton.logTraceWindowSendToDebuggerWindow.string}" value="2"/>
+			                <handler name="onvalue">
+								<![CDATA[
+								if (this.value == 2) {
+									Logger.Singleton.setTarget('debugger');
+								}
+								else {
+									SingletonRegistry.sendImmediatelyCheckBox.setValue(false);
+									Logger.Singleton.setTarget('server');
+								}
+								]]>
+							</handler>
+			                <Component id="sendToServerOption" text="${foundationResources.Singleton.logTraceWindowSendToServer.string}" value="1"/>
+			            </BaseListComponent>
+						<BaseValueComponent enabled="${SingletonRegistry.targetRadioGroup.value == 2}" id="sendImmediatelyCheckBox" text="${foundationResources.Singleton.logTraceWindowSendImmediately.string}" value="${Logger.Singleton.sendImmediately}" visible="${this.parent.state0.active}" x="20" y="10">	
+				                <handler name="oninit">
+								<![CDATA[
+								this.value = Logger.Singleton.sendImmediately;
+								]]>
+							</handler>
+
+				                <handler name="onchanged">
+								<![CDATA[
+								Logger.Singleton.setSendImmediately(this.value);
+								]]>
+							</handler>
+						</BaseValueComponent>
+						<AxisLayout axis="y" spacing="5"/>			            
+					
+					</Component>
+					<Component>						
+						<Component>
+							<TextComponent text="${foundationResources.Singleton.logTraceWindowMessageBufferSize.string}"/>
+							<BaseStepper maximumValue="5000" minimumValue="100" name="bufferSize" step="100" value="${String(Logger.Singleton.bufferSize)}" width="70">
+							 	<handler name="onvalue">
+									<![CDATA[
+									Logger.Singleton.setBufferSize(Number(this.getValue()));
+									]]>
+								</handler>
+							</BaseStepper>				
+							<AxisLayout axis="x" spacing="5"/>				
+						</Component>
+						<Component>
+							<TextComponent text="${foundationResources.Singleton.logTraceWindowSendFrequency.string}"/>
+							<BaseStepper maximumValue="600" minimumValue="10" name="flushInterval" step="5" value="${String(Logger.Singleton.flushInterval)}" width="60">
+							 	<handler name="onvalue">
+									<![CDATA[
+									Logger.Singleton.setFlushInterval(Number(this.getValue()));
+									]]>
+								</handler>
+							</BaseStepper>				
+							<AxisLayout axis="x" spacing="5"/>				
+						</Component>
+						<AxisLayout axis="x" spacing="20"/>
+					</Component>
+					<AxisLayout axis="y" spacing="15"/>
+				</Component>		
+        	</Component>
+        	<AxisLayout axis="y" spacing="10"/>
+		</Component>
+		<Component name="buttonSection" placement="footer">
+			<Button minWidth="100" name="enableButton" text="${Logger.Singleton.enabled ? foundationResources.Singleton.logTraceWindowDisableLogTrace.string : foundationResources.Singleton.logTraceWindowEnableLogTrace.string}">
+				
+				<handler name="onclick">
+					<![CDATA[
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.setEnabled(false);
+						this.setVariable("text", foundationResources.Singleton.logTraceWindowEnableLogTrace.string);
+					}
+					else {
+						Logger.Singleton.setEnabled(true);
+						this.setVariable("text", foundationResources.Singleton.logTraceWindowDisableLogTrace.string);
+					}
+					]]>
+				</handler>
+			</Button>
+
+			<Button minWidth="200" name="perfTraceEnableButton" text="${Logger.Singleton.perfTraceEnabled ? foundationResources.Singleton.logTraceWindowDisablePerfTrace.string : foundationResources.Singleton.logTraceWindowEnablePerfTrace.string}">
+				<handler name="onclick">
+					<![CDATA[
+					if (Logger.Singleton.perfTraceEnabled) {
+						Logger.Singleton.setPerfTraceEnabled(false);
+						this.setVariable("text", foundationResources.Singleton.logTraceWindowEnablePerfTrace.string);
+					}
+					else {
+						Logger.Singleton.setPerfTraceEnabled(true);
+						this.setVariable("text", foundationResources.Singleton.logTraceWindowDisablePerfTrace.string);
+					}
+					]]>
+				</handler>
+			</Button>
+
+			<Button minWidth="200" name="perfTimingEventEnableButton" text="${EventTimer.Singleton.enabled ? foundationResources.Singleton.timingEventRegistryDisableTimingEvent.string : foundationResources.Singleton.timingEventRegistryEnableTimingEvent.string}">
+				<handler name="onclick">
+					<![CDATA[
+					EventTimer.Singleton.setVariable("enabled", !EventTimer.Singleton.enabled);
+					]]>
+				</handler>
+			
+			</Button>
+			
+			<Button id="flushButton" minWidth="100" text="${foundationResources.Singleton.logTraceWindowSendNow.string}">
+				<handler name="onclick">
+					<![CDATA[
+					if (Logger.Singleton.enabled || Logger.Singleton.perfTraceEnabled) {
+						Logger.Singleton.flush();
+					}
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>				
+		</Component>
+		
+	</Window>
+
+</Definitions>

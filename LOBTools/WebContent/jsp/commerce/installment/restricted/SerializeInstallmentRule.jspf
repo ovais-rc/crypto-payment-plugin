@@ -1,0 +1,87 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2009, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+
+<c:set var="inherited" value=""/>
+<c:if test="${installmentRule.installmentRuleIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+	<c:set var="inherited" value="Inherited"/>
+</c:if>
+
+<c:set var="readonly" value="false" />
+
+<c:if test="${installmentRule.status.literal == 'Active' || installmentRule.installmentRuleIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+	<c:set var="readonly" value="true"/>
+</c:if>
+
+<object objectType="${inherited}InstallmentRule" readonly="${readonly}">
+	<uniqueId>${installmentRule.installmentRuleIdentifier.uniqueID}</uniqueId>
+	<objectStoreId>${installmentRule.installmentRuleIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+	<name><wcf:cdata data="${installmentRule.installmentRuleIdentifier.externalIdentifier.name}"/></name>
+	<description><wcf:cdata data="${installmentRule.description}"/></description>
+
+	<fmt:setLocale value="${param.locale}"/>
+	<priority><fmt:formatNumber value="${installmentRule.priority}" pattern="0"/></priority>
+	
+	<status><wcf:cdata data="${installmentRule.status.name}"/></status>
+	<startDate><wcf:cdata data="${installmentRule.startDateTime}"/></startDate>
+	<endDate><wcf:cdata data="${installmentRule.endDateTime}"/></endDate>
+	
+	<c:set var="includeAllCatEntries" value="false"/>
+	<c:forEach var="category" items="${installmentRule.catalogGroupAssociation}">
+		<c:if test="${(category.associationType.name == 'Inclusion') && (empty category.catalogGroupIdentifier.uniqueID)}">
+			<c:set var="includeAllCatEntries" value="true"/>
+		</c:if>
+	</c:forEach>
+	
+	<c:forEach var="product" items="${installmentRule.catalogEntryAssociation}">
+		<c:if test="${(product.associationType.name == 'Inclusion') && (empty product.catalogEntryIdentifier.uniqueID)}">
+			<c:set var="includeAllCatEntries" value="true"/>
+		</c:if>
+	</c:forEach>
+	<includeAllCatEntries>${includeAllCatEntries}</includeAllCatEntries>
+
+	<c:set var="includeAllPayMethods" value="false"/>
+	<c:forEach var="paymentMethod" items="${installmentRule.paymentMethodAssociation}">
+		<c:if test="${(paymentMethod.associationType.name == 'Inclusion') && (empty paymentMethod.paymentMethodName)}">
+			<c:set var="includeAllPayMethods" value="true"/>
+		</c:if>
+	</c:forEach>
+	<includeAllPayMethods>${includeAllPayMethods}</includeAllPayMethods>
+
+	<c:set var="includeAllManufacturers" value="true"/>
+	<c:forEach var="cond" items="${installmentRule.condition}">
+		<c:forEach var="userDataField" items="${cond.userData.userDataField}">
+			<c:if test="${userDataField.typedKey == 'manufacturerName'}">
+				<c:set var="includeAllManufacturers" value="false"/>
+			</c:if>
+		</c:forEach>
+	</c:forEach>
+	<includeAllManufacturers>${includeAllManufacturers}</includeAllManufacturers>
+	
+	<c:set var="option" value="${installmentRule.installmentOption[0]}"/>
+	<c:choose>
+		<c:when test="${not empty option.minimumInstallmentAmount.currency}">
+			<currency>${option.minimumInstallmentAmount.currency}</currency>
+		</c:when>
+		<c:otherwise>
+			<currency></currency>
+		</c:otherwise>
+	</c:choose>
+	
+	<c:forEach var="userDataField" items="${installmentRule.userData.userDataField}">
+		<xrule_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xrule_${userDataField.typedKey}>
+	</c:forEach>
+	
+	<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+</object>

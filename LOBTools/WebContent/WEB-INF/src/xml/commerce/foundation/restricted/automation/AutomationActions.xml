@@ -1,0 +1,1351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This action downloads a testcase XML file found at the specified url and
+		inserts the actions found in the file at the start of the list of pending actions. 
+		This action accepts the following parameters:
+		<ul>
+		<li>url - The URL of the testcase XML. This URL must begin with the "/" character. The XML file
+		must be in the LOBTools web application. The <code>url</code> parameter is a required parameter.</li>
+		<li>requiredValueKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that must
+		be set before the action can be run. If the value is an empty string or has not been set, then the action will be skipped.</li>
+		</ul>
+	-->
+	<Service definitionName="cmc/automation/AutoRunTestCaseAction" sendIdentity="false" sendLocale="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			var skip = false;
+			if (params.requiredValueKey) {
+				var requiredValue = AutomationUtil.Singleton.getValue(params.requiredValueKey);
+				if (requiredValue == null || requiredValue == "") {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "INFO", "cmc/automation/AutoRunTestCaseAction", "execute", "Skipping test case. Required value '" + params.requiredValueKey + "' has not been set.");
+					skip = true;
+				}
+			}
+			if (!skip) {
+				var url = params.url;
+				if (url && url.charAt(0) == '/') {
+					if (cmcConfig.serviceContextRoot) {
+						this.url = cmcConfig.serviceContextRoot + url;
+					}
+					else {
+						this.url = "/lobtools" + url;
+					}
+					this.doRequest();
+				}
+				else {
+					AutomationUtil.Singleton.abort();
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunTestCaseAction", "execute", "Invalid url " + url);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---@keywords private -->
+		<method args="ds" name="serviceComplete">
+			<![CDATA[
+			var e = ds.dataXML;
+			var actions = e != null ? e.childNodes : null;
+			this.inherited(arguments);
+			if (actions) {
+				for (var i = actions.length - 1; i >= 0; i--) {
+					AutomationUtil.Singleton.insertAction(actions[i]);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---@keywords private -->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunTestCaseAction", "execute", "Error loading test data: " + this.url);
+			AutomationUtil.Singleton.abort();
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		This action opens specified tool. If the tool is already open, then it becomes the active tool.
+		This action accepts the following parameters:
+		<ul>
+		<li>toolId - The ID of the tool that you want to open. This value is the same as the <code>id</code> attribute specified
+		for the tool's <code>cmc/foundation/ApplicationMenuItem</code> in <code>ApplicationMenuItems.xml</code>. The <code>toolId</code>
+		parameter is a required parameter.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoOpenToolAction" singletonDefinition="true">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.toolId) {
+				if (typeof (SingletonRegistry[params.toolId]) != "undefined" && !SingletonRegistry[params.toolId].objectClass && SingletonRegistry[params.toolId].objectClass_moduleName) {
+					SingletonRegistry[params.toolId].loadDeferredVariable("objectClass");
+					AutomationUtil.Singleton.insertAction(action);
+				}
+				else {
+					ToolsController.Singleton.openToolById(params.toolId);
+					var tool = ToolsController.Singleton.getTool(params.toolId);
+					if (tool != null) {
+						AutomationUtil.Singleton.activeTool = tool;
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoOpenToolAction", "execute", "Tool " + params.toolId + " could not be opened.");
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoOpenToolAction", "execute", "Missing 'toolId' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		This action sets a value that can be used by other actions.
+		This action accepts the following parameters:
+		<ul>
+		<li>valueKey - The name of the value. This name will be used by other actions to refer to the new value.
+		If the value key is already in use, then the value will be updated. This <code>valueKey</code> parameter is a
+		required parameter.</li>
+		<li>value - The new value that will be assigned to the specified value key. If this parameter is not specified,
+		then the new unique value will be generated and assigned to the value key. The <code>value</code> parameter is optional.</li>
+		<li>object - Used together with <code>propertyName</code> parameter as an alternative way to assign value to the specified value key. 
+		This object must match the <code>objectKey</code> parameter of a previous action that created or located the object.
+		The <code>object</code> parameter is optional. If the <code>value</code> parameter is provided, <code>object</code> parameter
+		and <code>propertyName</code> parameter will be ignored.</li>
+		<li>propertyName - The name of the property value in <code>object</code> that will be assigned to the specified value key.
+		<code>propertyName</code> is required if <code>object</code> is provided.</li>
+		<li>valuePrefix - An optional prefix that will be inserted at the start of the value.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoSetValueAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.valueKey) {
+				var value = params.value;
+				if (typeof (value) == "undefined") {
+					if (params.object) {
+						var o = AutomationUtil.Singleton.getObject(params.object);
+						if (o) {
+							var propertyName = params.propertyName;
+							if (propertyName) {
+								value = o.getPropertyValue(propertyName);
+							}
+							else {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSetValueAction", "execute", "Missing 'propertyName' parameter.");
+								AutomationUtil.Singleton.abort();
+							}
+						}
+						else {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoSetValueAction", "execute", "Object " + params.object + " not found.");
+							if (AutomationUtil.Singleton.abortOnError) {
+								AutomationUtil.Singleton.abort();
+							}
+						}
+					}
+					else {
+						value = "" + new Date().getTime();
+					}
+				}
+				if (AutomationUtil.Singleton.active) {
+					var prefix = params.valuePrefix;
+					if (typeof (prefix) == "undefined") {
+						prefix = "";
+					}
+					AutomationUtil.Singleton.setValue(params.valueKey, prefix + value);
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSetValueAction", "execute", "Missing 'valueKey' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		This action switches the current business object editor's store to the specified store.
+		This action accepts the following parameters:
+		<ul>
+		<li>storeIdentifier - The store identifier. This <code>storeIdentifier</code> parameter is
+		required if the <code>storeKey</code> parameter is not specified.</li>
+		<li>storeKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will
+		be used as the store identifier. The <code>storeKey</code> parameter is required if the
+		<code>storeIdentifier</code> parameter is not specified. If this parameter is specified, but no value with
+		the specified name is found, then the <code>storeIdentifier</code> parameter will be used.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoSelectStoreAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<variable name="storeIdentifier" type="string"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var boe = AutomationUtil.Singleton.activeTool;
+			if (boe != null) {
+				var params = AutomationUtil.Singleton.parseParameters(action);
+				if (params.storeIdentifier || params.storeKey) {
+					var storeIdentifier = null;
+					if (params.storeKey) {
+						storeIdentifier = AutomationUtil.Singleton.getValue(params.storeKey);
+					}
+					if (storeIdentifier == null && params.storeIdentifier) {
+						storeIdentifier = params.storeIdentifier;
+					}
+					if (storeIdentifier) {
+						AutomationUtil.Singleton.releaseObjects();
+						this.storeIdentifier = storeIdentifier;
+						var caller = this;
+						require(["cmc/foundation/StoreSelectionGetDefaultStoreService"], function(StoreSelectionGetDefaultStoreService) {
+							StoreSelectionGetDefaultStoreService.Singleton.doRequest(caller, {
+								storeName: storeIdentifier,
+								usage: boe.usage
+							});
+						});
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSelectStoreAction", "execute", "Invalid store ID: Value " + params.storeKey + " not found.");
+						AutomationUtil.Singleton.abort();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSelectStoreAction", "execute", "Missing 'storeIdentifier' or 'storeKey' parameter.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSelectStoreAction", "execute", "No active tool.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="store" name="changeStore">
+			<![CDATA[
+			if (AutomationUtil.Singleton.activeTool != null) {
+				AutomationUtil.Singleton.activeTool.header.storeSelectionList.changeStore(store, false);
+			}
+			this.storeName = null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="handleDefaultStoreNotAvailable">
+			<![CDATA[
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSelectStoreAction", "handleDefaultStoreNotAvailable", "Store " + this.storeIdentifier + " could not be selected.");
+			AutomationUtil.Singleton.abort();
+			this.storeName = null;
+			]]>
+		</method>
+	</Node>
+	
+	<!--- 
+		@keywords private 
+		This action creates new model object instance.
+		This action accepts the following parameters:
+		<ul>
+		<li>objectType - The object type that will be used to identify the object definition that will
+		be used to create the new object. Either this or the <code>objectTypeKey</code> parameter is required.</li>
+		<li>objectTypeKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will
+		be used as the <code>objectType</code>. Either this or the <code>objectType</code> parameter is required.</li>
+		<li>parentObject - The name of the parent object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the parent object. This parameter must be
+		specified if the <code>objectType</code> or <code>objectTypeKey</code> matches a <code>cmc/foundation/ChildObjectDefinition</code> instance. Do not
+		specify this parameter when creating primary objects.</li>
+		<li>referencedObject - The name of the object that will be added as a child of the new object. This
+		name must match the <code>objectKey</code> parameter of a previous action that created or located
+		the object that will be referenced by the new object. This parameter must be specified if the <code>objectType</code> or <ocde>objectTypeKey</code>
+		matches a <code>cmc/foundation/ReferenceObjectDefinition</code> instance. Do not specify this parameter when creating primary objects or
+		simple child objects.</li>
+		<li>templateObject - The name of the object that will be copied when creating the new object. This name
+		must match the <code>objectKey</code> parameter of a previous action that created or located the template
+		object.</li>
+		<li>objectKey - The name that will be used to keep a reference to the new object so it can be used by other actions. This parameter
+		is optional.</li>
+		<li>abortOnError - Set this parameter to "false" to request that automation continue
+		even if the create new object action cannot be performed because the action is not permitted.
+		The default is "true".</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoCreateNewObjectAction" singletonDefinition="true">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.objectType || params.objectTypeKey) {
+				var objectType = params.objectType;
+				if (!objectType || objectType == "") {
+					objectType = AutomationUtil.Singleton.getValue(params.objectTypeKey);
+				}
+				var boe = AutomationUtil.Singleton.activeTool;
+				if (boe != null) {
+					var parentObject = null;
+					if (params.parentObject) {
+						parentObject = AutomationUtil.Singleton.getObject(params.parentObject);
+						if (!parentObject) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "Parent object " + params.parentObject + " could not be resolved.");
+							AutomationUtil.Singleton.abort();
+						}
+					}
+					var referencedObject = null;
+					if (params.referencedObject) {
+						referencedObject = AutomationUtil.Singleton.getObject(params.referencedObject);
+						if (!referencedObject) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "Referenced object " + params.referencedObject + " could not be resolved.");
+							AutomationUtil.Singleton.abort();
+						}
+					}
+					var templateObject = null;
+					if (params.templateObject) {
+						templateObject = AutomationUtil.Singleton.getObject(params.templateObject);
+						if (!templateObject) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "Template object " + params.templateObject + " could not be resolved.");
+							AutomationUtil.Singleton.abort();
+						}
+					}
+					if (AutomationUtil.Singleton.active) {
+						var def = boe.model.getObjectDefinition(parentObject, objectType);
+						if (def) {
+							if (def.reference && (referencedObject == null || !def.isReferencedDefinition(referencedObject.objectDefinition))) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "Referenced object not valid: " + (referencedObject ? referencedObject.logString() : null));
+								AutomationUtil.Singleton.abort();
+							}
+							else {
+								var creatable = def.isCreatable(parentObject, referencedObject);
+								if (AutomationUtil.Singleton.isActionInProgress()) {
+									Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "INFO", "cmc/automation/AutoCreateNewObjectAction", "execute", "Retrying action.");
+									AutomationUtil.Singleton.insertAction(action);
+								}
+								else if (creatable) {
+									var o = boe.model.createNewObject(def, parentObject, true, templateObject);
+									if (o) {
+										if (def.reference) {
+											o.addChild(referencedObject);
+										}
+										if (def.languageSensitive) {
+											var property = o.getProperty("languageId");
+											property.setVariable("value", ContextUtil.Singleton.findContextValue(o, "defaultLanguageId").value);
+										}
+										if (params.objectKey) {
+											AutomationUtil.Singleton.setObject(params.objectKey, o);
+										}
+									}
+									else {
+										Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoCreateNewObjectAction", "execute", "Create new object failed.");
+										if (AutomationUtil.Singleton.abortOnError) {
+											AutomationUtil.Singleton.abort();
+										}
+									}
+								}
+								else {
+									Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoCreateNewObjectAction", "execute", "Object creation not permitted.");
+									if (AutomationUtil.Singleton.abortOnError) {
+										AutomationUtil.Singleton.abort();
+									}
+								}
+							}
+						}
+						else {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "Object definition not found.");
+							AutomationUtil.Singleton.abort();
+						}
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "No active tool.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateNewObjectAction", "execute", "Missing 'objectType' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!--- 
+		@keywords private 
+		This action sets a property value.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object that will be updated. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object. This parameter is required.</li>
+		<li>propertyName - The name of the property that will be updated with the specified value. This parameter is required.</li>
+		<li>value - The new property value. This parameter is required if the <code>valueKey</code> parameter is is not specified.</li>
+		<li>valueKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will
+		be used as the new property value. The <code>valueKey</code> parameter is required if the
+		<code>value</code> parameter is not specified.</li>
+		<li>abortOnError - Set this parameter to "false" to request that automation continue
+		even if the set property action cannot be performed because the action is not permitted.
+		The default is "true".</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoSetPropertyAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o) {
+					var propertyName = params.propertyName;
+					if (propertyName) {
+						var value = params.value;
+						if (typeof (value) == "undefined") {
+							if (params.valueKey) {
+								value = AutomationUtil.Singleton.getValue(params.valueKey);
+							}
+						}
+						if (typeof (value) == "undefined") {
+							value = "";
+						}
+						if (value === null) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoSetPropertyAction", "execute", "Property value cannot be set to null.");
+							if (AutomationUtil.Singleton.abortOnError) {
+								AutomationUtil.Singleton.abort();
+							}
+						}
+						else {
+							var property = o.getProperty(propertyName);
+							if (property.readOnly) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoSetPropertyAction", "execute", "Property update not permitted.");
+								if (AutomationUtil.Singleton.abortOnError) {
+									AutomationUtil.Singleton.abort();
+								}
+							}
+							else {
+								property.change(value);
+							}
+						}
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSetPropertyAction", "execute", "Missing 'propertyName' parameter.");
+						AutomationUtil.Singleton.abort();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSetPropertyAction", "execute", "Object " + params.object + " not found.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSetPropertyAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!--- 
+		@keywords private 
+		This action deletes the specified object.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object that will be deleted. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object. This parameter is required.</li>
+		<li>abortOnError - Set this parameter to "false" to request that automation continue
+		even if the delete cannot be invoked or if the delete fails. The default is "true".</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoDeleteObjectAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o) {
+					if (o.isDeletable()) {
+						o.deleteObject(false);
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoDeleteObjectAction", "execute", "Object deletion not permitted.");
+						if (AutomationUtil.Singleton.abortOnError) {
+							AutomationUtil.Singleton.abort();
+						}
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoDeleteObjectAction", "execute", "Object " + params.object + " not found.");
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoDeleteObjectAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private 
+		This action searches for the specified object and saves it for other actions to use.
+		This action accepts the following parameters:
+		<ul>
+		<li>searchType - The search type that will be used to locate the <code>cmc/foundation/SearchDefinition</code> that 
+		will be used to invoke the search. This parameter is required.</li>
+		<li>searchText - The search text that will be used to search for the object. This parameter is optional.</li>
+		<li>searchKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will
+		be used as the search text. This parameter is optional.</li>
+		<li>searchOption.option - A search option value that will be passed to the search service. Replace "option"
+		with the name of the option. For example to set the catalogId search option, use the parameter name
+		"searchOption.catalogId". Multiple search options with different names can be specified. This parameter is optional.</li>
+		<li>searchOptionKey.option - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that
+		will be used as a search option. Replace "option" with the name of the option. This parameter is optional.</li>
+		<li>objectKey - The name that will be used to keep a reference to the object so it can be used by other actions. This parameter
+		is optional.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoFindObjectAction" singletonDefinition="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<variable name="objectKey" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.searchType) {
+				var searchOptions = {};
+				if (params.searchText) {
+					searchOptions.searchText = params.searchText;
+				}
+				else if (params.searchKey) {
+					searchOptions.searchText = AutomationUtil.Singleton.getValue(params.searchKey);
+				}
+				for (var param in params) {
+					if (param.indexOf("searchOption.") == 0) {
+						var optionName = param.slice("searchOption.".length);
+						searchOptions[optionName] = params[param];
+					}
+					else if (param.indexOf("searchOptionKey.") == 0) {
+						var optionName = param.slice("searchOptionKey.".length);
+						searchOptions[optionName] = AutomationUtil.Singleton.getValue(params[param]);
+					}
+				}
+				if (this.searchCompleteDel) {
+					this.searchCompleteDel.disconnectAll();
+				}
+				else {
+					this.searchCompleteDel = new EventHandler.Class(this, "searchComplete");
+				}
+				this.objectKey = params.objectKey;
+				var boe = AutomationUtil.Singleton.activeTool;
+				if (boe) {
+					var s = boe.model.findSearchResults(params.searchType);
+					if (s) {
+						this.searchCompleteDel.connect(s, "onsearchComplete");
+						s.doSearch(searchOptions);
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoFindObjectAction", "execute", "Invalid 'searchType' parameter: " + params.searchType);
+						AutomationUtil.Singleton.abort();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoFindObjectAction", "execute", "No active tool.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoFindObjectAction", "execute", "Missing 'searchType' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args" name="searchComplete">
+			<![CDATA[
+			this.searchCompleteDel.disconnectAll();
+			if (args) {
+				if (args.searchResultObjects) {
+					var objects = args.searchResultObjects;
+					if (objects.length >= 1) {
+						if (this.objectKey) {
+							AutomationUtil.Singleton.setObject(this.objectKey, objects[0]);
+						}
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoFindObjectAction", "searchComplete", args.statusMessage);
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			this.objectKey = null;
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		This action locates the specified child object and saves it for other actions to use. This action
+		will not invoke the parent object's get children services to load the object. Use the
+		<code>cmc/foundation/AutoLoadChildrenAction</code> action to ensure that the child objects are loaded.
+		This action accepts the following parameters:
+		<ul>
+		<li>objectPath - The object path that will be used to locate the child object. This parameter is required.</li>
+		<li>propertyName - The name of the property that will be used to choose between multiple child objects that match
+		the specified object path. If this parameter is specified, then you must also specify either <code>propertyValue</code>
+		or </code>propertyValueKey</code>.</li>
+		<li>propertyValue - The property value that will be used to find a specific child object. This parameter must be specified
+		if you use <code>propertyName</code> and you do not use <code>propertyValueKey</code>.</li>
+		<li>propertyValueKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will
+		be used as the property value that will be used to find a specific child object. This parameter must be specified
+		if you use <code>propertyName</code> and you do not use <code>propertyValue</code>.</li>
+		<li>parentObject - The name of the parent object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the parent object. If the parent object is not specified,
+		then the object path will be resolve relative to the "Top" object.</li>
+		<li>objectKey - The name that will be used to keep a reference to the object so it can be used by other actions. This parameter
+		is required.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoGetChildObjectAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var boe = AutomationUtil.Singleton.activeTool;
+			if (boe != null) {
+				var params = AutomationUtil.Singleton.parseParameters(action);
+				if (!params.objectPath) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoGetChildObjectAction", "execute", "Missing 'objectPath' parameter.");
+					AutomationUtil.Singleton.abort();
+				}
+				else if (!params.objectKey) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoGetChildObjectAction", "execute", "Missing 'objectKey' parameter.");
+					AutomationUtil.Singleton.abort();
+				}
+				else if (params.propertyName && !params.propertyValue && !params.propertyValueKey) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoGetChildObjectAction", "execute", "Missing 'propertyValue' or 'propertyValueKey' parameter.");
+					AutomationUtil.Singleton.abort();
+				}
+				else {
+					var parentObject = null;
+					if (params.parentObject) {
+						var parentObject = AutomationUtil.Singleton.getObject(params.parentObject);
+						if (parentObject == null) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoGetChildObjectAction", "execute", "Invalid parent object " + params.parentObject);
+							if (AutomationUtil.Singleton.abortOnError) {
+								AutomationUtil.Singleton.abort();
+							}
+						}
+					}
+					else {
+						parentObject = boe.model.topObject;
+					}
+					if (parentObject != null) {
+						var objectPath = params.objectPath;
+						if (params.propertyName) {
+							var value = "";
+							if (params.propertyValue) {
+								value = params.propertyValue;
+							}
+							else if (params.propertyValueKey) {
+								value = AutomationUtil.Singleton.getValue(params.propertyValueKey);
+							}
+							objectPath += "[" + params.propertyName + "=" + value + "]";
+						}
+						var o = parentObject.getObject(objectPath);
+						AutomationUtil.Singleton.setObject(params.objectKey, o);
+					}
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoGetChildObjectAction", "execute", "No active tool.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		This action invokes the specified object's get children services.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the parent object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the parent object. If the parent object is not specified,
+		then the object path will be resolve relative to the "Top" object.</li>
+		<li>objectType - The object type of the child object that you want to load. This parameter is optional.</li>
+		<li>objectTypeKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will
+		be used as the <code>objectType</code>. This parameter is optional and not used if <code>objectType</code> is provided.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoLoadChildrenAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			var boe = AutomationUtil.Singleton.activeTool;
+			if (boe != null) {
+				var o = params.object ? AutomationUtil.Singleton.getObject(params.object) : boe.model.topObject;
+				if (o) {
+					if (params.objectType || params.objectTypeKey) {
+						var objectType = params.objectType;
+						if (!objectType || objectType == "") {
+							objectType = AutomationUtil.Singleton.getValue(params.objectTypeKey);
+						}
+						var objectDefinition = o.model.getObjectDefinition(o, objectType);
+						if (objectDefinition == null) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoLoadChildrenAction", "execute", "Invalid object type " + objectType);
+							AutomationUtil.Singleton.abort();
+						}
+						else {
+							o.loadChildren([objectDefinition], true);
+						}
+					}
+					else {
+						o.loadChildren(null, true);
+					}
+				}
+				else {
+					var objectName = params.object ? ("Object " + params.object) : "Top Object";
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoLoadChildrenAction", "execute", objectName + " not found.");
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoLoadChildrenAction", "execute", "No active tool.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!--- 
+		@keywords private 
+		This action saves all unsaved objects for the current tool.
+		This action accepts the following parameters:
+		<ul>
+		<li>abortOnError - Set this parameter to "false" to request that automation continue
+		even if the save cannot be invoked or if the save fails. The default is "true".</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoSaveAllAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			var boe = AutomationUtil.Singleton.activeTool;
+			if (boe != null) {
+				boe.model.save(false);
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoSaveAllAction", "execute", "No active tool.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private 
+		This action triggers a refresh all action for the current tool. This action does not accept any parameters.
+	-->
+	<Node definitionName="cmc/automation/AutoRefreshAllAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			AutomationUtil.Singleton.releaseObjects();
+			var boe = AutomationUtil.Singleton.activeTool;
+			if (boe != null) {
+				boe.model.refreshAll(false);
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRefreshAllAction", "execute", "No active tool.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		This action verifies that the specified object exists.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoVerifyObjectAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o == null) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyObjectAction", "execute", "Verification Error: Object " + params.object + " not found.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyObjectAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private 
+		This action verifies that the specified object does not exist.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoVerifyNoObjectAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o != null) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyNoObjectAction", "execute", "Verification Error: Object " + params.object + " found.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyNoObjectAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private 
+		This action verifies that the specified property matches a specified value.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object.</li>
+		<li>propertyName - The name of the property that will be verified. This parameter is required.</li>
+		<li>value - The value against which the property value will be tested. This parameter is required if the 
+		<code>valueKey</code> parameter is not specified.</li>
+		<li>valueKey - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that will 
+		be used to test the specified property's value. The <code>valueKey</code> parameter is required if the 
+		<code>value</code> parameter is not specified.</li>
+		<li>type - If this property value represents a number, "number" type can be specified for verification. 
+		This parameter is optional. If not specified, the property value will be verified as string value.</li>
+		<li>startKey - The name of an integer value set by the <code>cmc/foundation/AutoSetValueAction</code> action
+		that indicates the start index from which to begin the string comparison. 
+		Characters that precede the start index in the specified verification value and the property value 
+		will be ignored. This parameter is optional and if it is not specified then it will default to zero.</li>
+		<li>start - An integer that indicates the start index from which to begin the string comparison. 
+		This parameter is optional and takes precedence over <code>startKey</code>.
+		If it is not specified then it will default to zero.</li>
+		<li>endKey - The name of an integer value set by the <code>cmc/foundation/AutoSetValueAction</code> action
+		that indicates the end index plus one of the string comparison. Characters that 
+		are at or after the end index in the specified verification value and the property value will be ignored. 
+		This parameter is optional and if it is not specified then the comparison will proceed from the start 
+		index to the end of the comparison strings.</li>
+		<li>end - An integer that indicates the end index plus one of the string comparison. 
+		This parameter is optional and takes precedence over <code>endKey</code>.
+		If it is not specified then the comparison will proceed from the start index to the end of the comparison strings.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoVerifyPropertyAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o) {
+					var propertyName = params.propertyName;
+					if (propertyName) {
+						var value = params.value;
+						if (typeof (value) == "undefined") {
+							if (params.valueKey) {
+								value = AutomationUtil.Singleton.getValue(params.valueKey);
+							}
+						}
+						if (typeof (value) == "undefined") {
+							value = "";
+						}
+						var propertyValue = o.getPropertyValue(propertyName);
+						if (params.type == "number") {
+							if (Number(propertyValue) != Number(value)) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyPropertyAction", "execute", "Verification Error: Property value '" + propertyValue + "' does not match expected value '" + value + "'.");
+								AutomationUtil.Singleton.abort();
+							}
+						}
+						else {
+							if (params.endKey || params.end) {
+								var end;
+								if (params.endKey) {
+									end = parseInt(AutomationUtil.Singleton.getValue(params.endKey));
+								}
+								if (params.end) {
+									end = parseInt(params.end);
+								}
+								if (!isNaN(end)) {
+									if (propertyValue.length > end) {
+										propertyValue = propertyValue.substring(0, end);
+									}
+									if (value.length > end) {
+										value = value.substring(0, end);
+									}
+								}
+							}
+							if (params.startKey || params.start) {
+								var start;
+								if (params.startKey) {
+									start = parseInt(AutomationUtil.Singleton.getValue(params.startKey));
+								}
+								if (params.start) {
+									start = parseInt(params.start);
+								}
+								if (!isNaN(start)) {
+									if (propertyValue.length - 1 > start) {
+										propertyValue = propertyValue.substring(start);
+									}
+									if (value.length - 1 > start) {
+										value = value.substring(start);
+									}
+								}
+							}
+							if (propertyValue != value) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyPropertyAction", "execute", "Verification Error: Property value '" + propertyValue + "' does not match expected value '" + value + "'.");
+								AutomationUtil.Singleton.abort();
+							}
+						}
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyPropertyAction", "execute", "Missing 'propertyName' parameter.");
+						AutomationUtil.Singleton.abort();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyPropertyAction", "execute", "Object " + params.object + " not found.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoVerifyPropertyAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private 
+		This action performs custom service on the specified object.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object. 
+		This parameter is required.</li>
+		<li>url - The url of the custom service defined in the object's object definition. 
+		This parameter is required.</li>
+		<li>abortOnError - Set this parameter to "false" to request that automation continue
+		even if the service cannot be invoked or if the service request fails. The default is "true".</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoRunCustomServiceAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (!params.object) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunCustomServiceAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			else if (!params.url) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunCustomServiceAction", "execute", "Missing 'url' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			else {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o != null) {
+					var oDef = o.objectDefinition;
+					var url = params.url;
+					if (url.charAt(0) == '/') {
+						if (cmcConfig.serviceContextRoot) {
+							url = cmcConfig.serviceContextRoot + url;
+						}
+						else {
+							url = "/lobtools" + url;
+						}
+					}
+					var customService = null;
+					if (oDef.customServices) {
+						for (var i = 0; i < oDef.customServices.length; i++) {
+							if (oDef.customServices[i].url == url) {
+								customService = oDef.customServices[i];
+								break;
+							}
+						}
+					}
+					if (customService != null) {
+						if (customService.isEnabled(o)) {
+							customService.doRequest(o);
+						}
+						else {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoRunCustomServiceAction", "execute", "Service " + params.url + " is not enabled.");
+							if (AutomationUtil.Singleton.abortOnError) {
+								AutomationUtil.Singleton.abort();
+							}
+						}
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunCustomServiceAction", "execute", "Service " + params.url + " not found.");
+						AutomationUtil.Singleton.abort();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoRunCustomServiceAction", "execute", "Object " + params.object + " not found.");
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		Action to create a version.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object.  This name must match the <code>objectKey</code> parameter of a previous action that created or located the object.  This parameter is required.</li>
+		<li>versionName - The name of the version.  This parameter is required.</li>
+		<li>comment - The comment of the version.  This parameter is optional.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoCreateVersionAction" singletonDefinition="true">
+		<dependency localName="CreateContentVersionService" moduleName="cmc/foundation/CreateContentVersionService"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object && params.versionName) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o) {
+					var versionName = params.versionName;
+					var comment = "";
+					if (params.comment) {
+						comment = params.comment;
+					}
+					CreateContentVersionService.Singleton.doRequest(o, {
+						versionName: versionName,
+						comment: comment,
+						objectType: o.objectType,
+						objectId: o.objectId
+					});
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoCreateVersionAction", "execute", "Object " + params.object + " not found.");
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoCreateVersionAction", "execute", "Missing parameters, must have 'object' and 'versionName'.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		Action to restore a version.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object.  This name must match the <code>objectKey</code> parameter of a previous action that created or located the object.  This parameter is required.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoRestoreVersionAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o) {
+					require(["cmc/foundation/RestoreContentVersionService"], function(RestoreContentVersionService) {
+						RestoreContentVersionService.Singleton.doRequest(o, {
+							versionId: o.getPropertyValue("versionId")
+						});
+					});
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoRestoreVersionAction", "execute", "Object " + params.object + " not found.");
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRestoreVersionAction", "execute", "Missing parameters, must have 'object'");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		Action to trigger a Management Center action that is controlled through ActionManager.
+		This action accepts the following parameters:
+		<ul>
+		<li>actionHandler - The name of the action handler.</li>
+		<li>stringOption.option - A string option value that will be passed to the action. Replace "option"
+		with the name of the option. For example to set the "searchType" option, use the parameter name
+		"stringOption.searchType". Multiple string options with different names can be specified. This parameter is optional.</li>
+		<li>stringOptionKey.option - The name of a string value set by the <code>cmc/foundation/AutoSetValueAction</code> action that
+		will be used as an action option. Replace "option" with the name of the option. This parameter is optional.</li>
+		<li>stringOption.option.subOption - A string sub option value that will be passed to the action. Replace "option"
+		with the name of the option and "subOption" with the name of the sub option. For example to set the "searchOption.searchText" option,
+		use the parameter name "stringOption.searchOption.searchText". Multiple string sub options with different names can be specified. This parameter is optional.</li>
+		<li>stringOptionKey.option.subOption - The name of a string sub option value set by the <code>cmc/foundation/AutoSetValueAction</code> action that
+		will be used as an action sub option. Replace "option" with the name of the option and replace "subOption" with the name of the 
+		sub option. This parameter is optional.</li>
+		<li>objectOption.option - An object option value that will be passed to the action. Replace "option" with the
+		name of the option. For example to set the "sourceObject" option, use the parameter name "objectOption.sourceObject".
+		This parameter is optional.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoTriggerActionAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!--- @keywords private -->
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.actionHandler) {
+				var options = {};
+				for (var param in params) {
+					var value = null;
+					var optionName = null;
+					if (param.indexOf("stringOption.") == 0) {
+						optionName = param.slice("stringOption.".length);
+						value = params[param];
+					}
+					else if (param.indexOf("stringOptionKey.") == 0) {
+						optionName = param.slice("stringOptionKey.".length);
+						value = AutomationUtil.Singleton.getValue(params[param]);
+					}
+					else if (param.indexOf("objectOption.") == 0) {
+						optionName = param.slice("objectOption.".length);
+						value = AutomationUtil.Singleton.getObject(params[param]);
+					}
+					if (optionName != null) {
+						var subOptionIndex = optionName.indexOf(".");
+						if (subOptionIndex != -1) {
+							var subValue = value;
+							var subOptionName = optionName.slice(subOptionIndex + 1);
+							optionName = optionName.slice(0, subOptionIndex);
+							if (typeof (options[optionName]) == "undefined") {
+								value = {};
+							}
+							else {
+								value = options[optionName];
+							}
+							value[subOptionName] = subValue;
+						}
+						if (value != null) {
+							options[optionName] = value;
+						}
+					}
+				}
+				var boe = AutomationUtil.Singleton.activeTool;
+				if (boe) {
+					options.model = boe.model;
+					RootComponent.Singleton.triggerAction(params.actionHandler, options);
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoTriggerActionAction", "execute", "No active tool.");
+					AutomationUtil.Singleton.abort();
+				}
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoTriggerActionAction", "execute", "Missing 'actionHandler' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private 
+		This action launches the punch-out edit service for a specified object property.
+		The punch-out edit service is called with an additional parameter, "test=true",
+		that indicates that this punch-out is to be invoked in test mode. Rather than calling the
+		punch-out application, the punch-out edit service is expected to return the callback URL.
+		This action accepts the following parameters:
+		<ul>
+		<li>object - The name of the object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object. 
+		This parameter is required.</li>
+		<li>propertyName - The name of the property value in <code>object</code> for which the punch-out edit service will
+		will be invoked.</li>
+		<li>punchOutEditServiceId - The identifier of the punch-out edit service to be invoked. This parameter is optional.
+		If it is not specified, then the first punch-out service will be invoked.</li>
+		<li>callbackParameter.parameter - A callback parameter value that will be passed to the punch-out edit service with
+		the intent that the parameter will be passed on to the callback URL. Replace "parameter"
+		with the name of the parameter. For example to set the "link" parameter, use the parameter name
+		"callbackParameter.link". Multiple callback parameters with different names can be specified. This parameter is optional.</li>
+		<li>callbackParameterKey.parameter - The name of a value set by the <code>cmc/foundation/AutoSetValueAction</code> action that
+		will be used as a callback parameter. Replace "parameter" with the name of the option. This parameter is optional.</li>
+		<li>abortOnError - Set this parameter to "false" to request that automation continue
+		even if the service cannot be invoked or if the service request fails. The default is "true".</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/automation/AutoRunPunchOutEditServiceAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (!params.object) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunPunchOutEditServiceAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			else if (!params.propertyName) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunPunchOutEditServiceAction", "execute", "Missing 'propertyName' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			else {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				if (o != null) {
+					var oDef = o.objectDefinition;
+					var propertyName = params.propertyName;
+					var pDef = oDef.getPropertyDefinition(o, propertyName);
+					if (pDef != null && pDef.punchOutEditServices != null && pDef.punchOutEditServices.length > 0) {
+						var punchOutEditService = null;
+						var punchOutEditServiceId = params.punchOutEditServiceId;
+						if (punchOutEditServiceId == null) {
+							punchOutEditService = pDef.punchOutEditServices[0];
+						}
+						else {
+							for (var i = 0; i < pDef.punchOutEditServices.length; i++) {
+								if (pDef.punchOutEditServices[i].punchOutEditServiceId == punchOutEditServiceId) {
+									punchOutEditService = pDef.punchOutEditServices[i];
+									break;
+								}
+							}
+						}
+						if (punchOutEditService == null) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunPunchOutEditServiceAction", "execute", "No punch out edit service with punchOutEditServiceId set to " + punchOutEditServiceId + " found for property " + propertyName);
+							AutomationUtil.Singleton.abort();
+						}
+						else {
+							var punchOutParams = {
+								test: "true"
+							};
+							for (var param in params) {
+								var value = null;
+								var parameterName = null;
+								if (param.indexOf("callbackParameter.") == 0) {
+									parameterName = param;
+									value = params[param];
+								}
+								else if (param.indexOf("callbackParameterKey.") == 0) {
+									parameterName = "callbackParameter." + param.slice("callbackParameterKey.".length);
+									value = AutomationUtil.Singleton.getValue(params[param]);
+								}
+								if (parameterName != null && value != null) {
+									punchOutParams[parameterName] = value;
+								}
+							}
+							punchOutEditService.doRequest(o, punchOutParams);
+						}
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutoRunPunchOutEditServiceAction", "execute", "No punch out edit services found for property " + propertyName);
+						AutomationUtil.Singleton.abort();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", (AutomationUtil.Singleton.abortOnError ? "SEVERE" : "WARNING"), "cmc/automation/AutoRunPunchOutEditServiceAction", "execute", "Object " + params.object + " not found.");
+					if (AutomationUtil.Singleton.abortOnError) {
+						AutomationUtil.Singleton.abort();
+					}
+				}
+			}
+			]]>
+		</method>
+	</Node>
+</Definitions>

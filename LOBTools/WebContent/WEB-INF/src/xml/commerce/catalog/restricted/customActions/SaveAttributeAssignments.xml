@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+
+	<!---
+		@keywords private
+		This class is used to save many to many attribute assignments via {@link cmc/foundation/ActionManager}.
+	-->
+	<SaveHandler classDefinition="true" definitionName="cmc/catalog/AttributeAssignmentsSaveHandler">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="CopyActionHandler" moduleName="cmc/foundation/CopyActionHandler"/>
+		<method args="object" name="save">
+			<![CDATA[
+			var sourceObjects = object.getObjects("AttributeAssignmentReferencedSourceAttributesGroup");
+			var targetObjects = object.getObjects("AttributeAssignmentReferencedTargetCatalogEntriesGroup");
+			object.setOpen(false);
+			object.setVariable("openGroupDirty", false);
+			this.commitObject(object);
+			if (sourceObjects.length > 0 && targetObjects.length > 0) {
+				var transactionEventId = ServiceTransactionUtil.Singleton.createTransactionEvent(true);
+				for (var i = 0; i < targetObjects.length; i++) {
+					var targetObject = targetObjects[i].getReferencedObject();
+					var transactionGroupId = ServiceTransactionUtil.Singleton.createTransactionGroup(targetObject, transactionEventId, true);
+					for (var j = 0; j < sourceObjects.length; j++) {
+						var sourceObject = sourceObjects[j];
+						var sourceType = sourceObject.getReferencedObject().objectType;
+						var objectDefinition = null;
+						var sourceInherited = "";
+						var sourceAttribute = "";
+						if (sourceType == "AttributeDictionaryAttributeWithAssignedValues" || sourceType == "AttributeDictionaryAttributeWithAllowedValues") {
+							sourceInherited = "";
+						}
+						else if (sourceType == "InheritedAttributeDictionaryAttributeWithAssignedValues" || sourceType == "InheritedAttributeDictionaryAttributeWithAllowedValues") {
+							sourceInherited = "Inherited";
+						}
+						if (sourceType == "AttributeDictionaryAttributeWithAssignedValues" || sourceType == "InheritedAttributeDictionaryAttributeWithAssignedValues") {
+							sourceAttribute = "Assigned";
+						}
+						else if (sourceType == "AttributeDictionaryAttributeWithAllowedValues" || sourceType == "InheritedAttributeDictionaryAttributeWithAllowedValues") {
+							sourceAttribute = "Allowed";
+						}
+						objectDefinition = targetObject.model.getObjectDefinition(targetObject, "CatalogEntryReferenceDescriptive" + sourceInherited + "AttributeDictionaryAttributeWith" + sourceAttribute + "Values");
+						if (objectDefinition != null) {
+							CopyActionHandler.Singleton.triggerAction(sourceObject, targetObject, objectDefinition, false, null, transactionEventId, transactionGroupId, true, j == (sourceObjects.length - 1), (i == (targetObjects.length - 1) && (j == sourceObjects.length - 1)));
+						}
+					}
+				}
+			}
+			require(["cmc/foundation/ReleaseObjectHandler"], function(ReleaseObjectHandler) {
+				ReleaseObjectHandler.Singleton.triggerAction(object);
+			});
+			]]>
+		</method>
+		<method args="o" name="commitObject">
+			<![CDATA[
+			for (var key in o.propertyMap) {
+				o.propertyMap[key].reset();
+			}
+			o.newObject = false;
+			o.implicitNewObject = false;
+			for (var key in o.childObjectMap) {
+				var childObject = o.childObjectMap[key];
+				if (!childObject.getIsVersionObject() && childObject.parentObject == o && childObject.openGroupObject == o.openGroupObject) {
+					this.commitObject(childObject);
+				}
+			}
+			]]>
+		</method>
+	</SaveHandler>
+
+</Definitions>

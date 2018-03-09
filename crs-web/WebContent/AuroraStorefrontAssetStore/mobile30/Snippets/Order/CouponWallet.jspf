@@ -1,0 +1,215 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2009, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- 
+  *****
+  * This JSP snippet displays the coupon wallet for checkout
+  * This snippet is used by the OrderItemDisplay and OrderPaymentDetails jsp pages
+  *****
+--%>
+
+<!-- BEGIN CouponWallet.jspf -->
+
+
+<wcf:rest var="coupons" url="store/{storeId}/coupon/@self">
+	<wcf:var name="storeId" value="${WCParam.storeId}"/>
+</wcf:rest>
+	
+<c:if test="${!empty order}">
+	<wcf:rest var="usedCoupons" url="store/{storeId}/cart/@self/assigned_coupon">
+		<wcf:var name="storeId" value="${WCParam.storeId}"/>
+	</wcf:rest>
+</c:if>
+
+
+
+<%-- Find out if there are any valid coupons to display  --%>
+
+<c:set var="hasValidCoupon" value="false"/>
+<c:forEach var="couponStatusCheck" items="${coupons.Coupon}">
+	<c:set var="couponStatus" value="${json:findJSONObject(couponStatusCheck.userData.userDataField, 'key', 'promotionStatus')}"/> 
+	<c:if test="${couponStatus.value == '1'}">
+		<c:set var="hasValidCoupon" value="true"/>
+	</c:if>
+</c:forEach>
+
+<%-- Find out if there are any valid used coupons to display  --%>
+<c:set var="hasValidUsedCoupon" value="false"/>
+<c:forEach var="usedCouponStatusCheck" items="${usedCoupons.couponCode}">
+	 <c:if test="${usedCouponStatusCheck.xcpcd_promotionStatus == '1'}">
+		<c:set var="hasValidUsedCoupon" value="true"/>
+	</c:if>
+</c:forEach>
+
+<div id="couponWallet" class="item_wrapper">
+	<%-- Display a message if there are no coupons in the customers account. --%>
+	<c:if test="${((empty coupons) && (empty usedCoupons) && (empty param.orderId)) || (!hasValidCoupon && !hasValidUsedCoupon && (empty param.orderId))}">
+		<p><fmt:message bundle="${storeText}" key="NO_COUPON_MESSAGE"/></p>
+	</c:if>
+
+	<c:if test="${((!empty coupons) || (!empty usedCoupons)) && (hasValidCoupon || hasValidUsedCoupon)}">
+		<p class="bold"><fmt:message bundle="${storeText}" key="COUPONS_TITLE"/></p>
+		<div class="item_spacer_5px"></div>
+
+		<!-- Show the unused coupons with an Apply link for each -->
+		<c:forEach var="issuedCoupon" items="${coupons.Coupon}" varStatus="status1">
+			<c:set var="issuedCouponStatus" value="${json:findJSONObject(issuedCoupon.userData.userDataField, 'key', 'promotionStatus')}"/> 
+			<c:if test="${issuedCouponStatus.value == '1'}">
+
+				<wcf:url var="ApplyCouponsURL" value="RESTCouponsAdd">
+					<wcf:param name="authToken" value="${authToken}"/>
+					<wcf:param name="storeId" value="${WCParam.storeId}"/>
+					<wcf:param name="langId" value="${WCParam.langId}"/>
+					<wcf:param name="walletItemId" value="${issuedCoupon.walletItemId}"/>
+					<wcf:param name="couponId" value="${issuedCoupon.couponId}"/>
+					<wcf:param name="taskType" value="A"/>
+					<wcf:param name="finalView" value="${returnView}"/>
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+					<wcf:param name="URL" value="RESTOrderCalculate?updatePrices=1&calculationUsageId=-1&URL=${returnView}"/>
+					<wcf:param name="errorViewName" value="${returnView}"/>
+					<wcf:param name="errorView" value="true"/>
+					<wcf:param name="orderId" value="${order.orderId}"/>
+				</wcf:url>
+
+				<%-- Find the best description available to use. First try the short description, then the long description, then the admin description. --%>
+				<c:set var="promoDesc" value="${issuedCoupon.couponDescription[0].shortDescription}"/>
+				<c:if test="${empty promoDesc}">
+					<c:set var="promoDesc" value="${issuedCoupon.couponDescription[0].longDescription}"/>
+				</c:if>
+				<c:if test="${empty promoDesc}">
+					<c:set var="promoBlock" value="${json:findJSONObject(issuedCoupon.userData.userDataField, 'key', 'promotionAdministrativeDescription')}"/> 
+					<c:set var="promoDesc" value="${promoBlock.value}"/>
+				</c:if>
+
+				<wcf:url var="DiscountDetailsDisplayURL" value="m30DiscountDetailsDisplay">
+					<wcf:param name="code" value="${issuedCoupon.promotion.externalIdentifier.name}" />
+					<wcf:param name="langId" value="${langId}" />
+					<wcf:param name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+					<wcf:param name="fromPage" value="${returnView}"/>
+				</wcf:url>
+
+				<div id="issued_coupon">
+					<p><c:out value="${promoDesc}"/></p>
+					<div class="clear_float"></div>
+						
+					<div>
+						<span class="small_text bold"><fmt:message bundle="${storeText}" key="MOCW_COUPON_EXPIRATION_DATE"/>&nbsp;</span>
+						<span class="small_text">
+							<c:catch>
+								<fmt:parseDate parseLocale="${dateLocale}" var="expirationDate" value="${issuedCoupon.expirationDateTime}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+							</c:catch>							
+
+							<c:choose>
+								<c:when test="${!empty expirationDate}">
+									<fmt:formatDate value="${expirationDate}"/>
+								</c:when>
+								<c:otherwise>
+									<c:out value="${issuedCoupon.expirationDateTime}"/>
+								</c:otherwise>
+							</c:choose>
+						</span>
+						<div class="clear_float"></div>
+					</div>
+
+					<div class="multi_button_container">
+						<a id="<c:out value='discount_1${status1.count}_detail_link'/>" href="${fn:escapeXml(DiscountDetailsDisplayURL)}" title="<fmt:message bundle="${storeText}" key="COUPON_VIEW_DETAILS"/>">
+							<div class="secondary_button button_half left"><fmt:message bundle="${storeText}" key="COUPON_VIEW_DETAILS"/></div>
+						</a>
+						<div class="button_spacing left"></div>
+						<a id="<c:out value='apply_coupon_1${status1.count}_link'/>" href="${fn:escapeXml(ApplyCouponsURL)}" title="<fmt:message bundle="${storeText}" key="APPLY"/>">
+							<div class="secondary_button button_half left"><fmt:message bundle="${storeText}" key="APPLY"/></div>
+						</a>
+						<div class="clear_float"></div>
+					</div>
+					<div class="item_spacer_5px"></div>
+				</div>
+			</c:if>
+		</c:forEach>
+
+		<!-- Show the applied coupons with a Remove link for each -->
+		<c:forEach var="usedCoupon" items="${usedCoupons.couponCode}" varStatus="status2">
+			<c:if test="${usedCoupon.xcpcd_promotionStatus == '1'}">
+				<wcf:url var="RemoveCouponsURL" value="RESTCouponsRemove">
+					<wcf:param name="authToken" value="${authToken}"/>
+					<wcf:param name="storeId" value="${WCParam.storeId}"/>
+					<wcf:param name="langId" value="${WCParam.langId}"/>
+					<wcf:param name="walletItemId" value="${usedCoupon.walletItemIdentifier.uniqueID}"/>
+					<wcf:param name="couponId" value="${usedCoupon.couponId}"/>
+					<wcf:param name="taskType" value="R"/>
+					<wcf:param name="finalView" value="${returnView}"/>
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+					<wcf:param name="URL" value="RESTOrderCalculate?updatePrices=1&calculationUsageId=-1&URL=${returnView}"/>
+					<wcf:param name="errorViewName" value="${returnView}"/>
+					<wcf:param name="orderId" value="${order.orderId}"/>
+				</wcf:url>
+
+				<%-- Find the best description available to use. First try the short description, then the long description, then the admin description. --%>
+				<c:set var="promoDesc" value="${usedCoupon.description[0].shortDescription}"/>
+				<c:if test="${empty promoDesc}">
+					<c:set var="promoDesc" value="${usedCoupon.description[0].longDescription}"/>
+				</c:if>
+				<c:if test="${empty promoDesc}">
+					<c:set var="promoDesc" value="${usedCoupon.xcpcd_promotionAdministrativeDescription}"/>
+				</c:if>
+
+				<wcf:url var="DiscountDetailsDisplayURL" value="m30DiscountDetailsDisplay">
+					<wcf:param name="code" value="${usedCoupon.promotion.externalIdentifier.name}" />
+					<wcf:param name="langId" value="${langId}" />
+					<wcf:param name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+					<wcf:param name="fromPage" value="${returnView}"/>
+				</wcf:url>
+
+				<div id="used_coupon">
+					<p><c:out value="${promoDesc}"/> - <fmt:message bundle="${storeText}" key="COUPON_APPLIED"/></p>
+					<div class="clear_float"></div>
+
+					<div>
+						<span class="small_text bold"><fmt:message bundle="${storeText}" key="MOCW_COUPON_EXPIRATION_DATE"/>&nbsp;</span>
+						<span class="small_text">
+							<c:catch>
+								<fmt:parseDate parseLocale="${dateLocale}" var="expirationDate" value="${usedCoupon.expirationDateTime}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+							</c:catch>
+
+							<c:choose>
+								<c:when test="${!empty expirationDate}">
+									<fmt:formatDate value="${expirationDate}"/>
+								</c:when>
+								<c:otherwise>
+									<c:out value="${usedCoupon.expirationDateTime}"/>
+								</c:otherwise>
+							</c:choose>
+						</span>
+						<div class="clear_float"></div>
+					</div>
+
+					<div class="multi_button_container">
+						<a id="<c:out value='discount_2${status2.count}_detail_link'/>" href="${fn:escapeXml(DiscountDetailsDisplayURL)}" title="<fmt:message bundle="${storeText}" key="COUPON_VIEW_DETAILS"/>">
+							<div class="secondary_button button_half left"><fmt:message bundle="${storeText}" key="COUPON_VIEW_DETAILS"/></div>
+						</a>
+						<div class="button_spacing left"></div>
+						<a id="<c:out value='apply_coupon_2${status2.count}_link'/>" href="${fn:escapeXml(RemoveCouponsURL)}" title="<fmt:message bundle="${storeText}" key="REMOVE"/>">
+							<div class="secondary_button button_half left"><fmt:message bundle="${storeText}" key="REMOVE"/></div>
+						</a>
+						<div class="clear_float"></div>
+					</div>
+					<div class="item_spacer_5px"></div>
+				</div>
+			</c:if>
+		</c:forEach>
+	</c:if>
+</div>
+						
+<!-- END CouponWallet.jspf -->

@@ -1,0 +1,932 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class provides the dialog for creating new LayoutWidget objects.
+	-->
+	<Dialog classDefinition="true" definitionName="cmc/pagelayout/BaseNewPageLayoutWidgetDialog" title="${pageLayoutResources.Singleton.widgetDialogTitle.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="PageLayoutWidget" moduleName="cmc/pagelayout/PageLayoutWidget"/>
+		<dependency localName="pageLayoutResources" moduleName="cmc/pagelayout/PageLayoutResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="WidgetGroupUtil" moduleName="cmc/pagelayout/WidgetGroupUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<!---
+			@keywords private
+			The page layout object.
+			@type cmc/foundation/ModelObject
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			@keywords private
+			Array of widget definitions.
+		-->
+		<variable name="widgetDefinitions" value="${null}"/>
+		<!---
+			@keywords private
+			Array of cmc/pagelayout/LayoutWidgetGroup objects.
+		-->
+		<variable name="layoutWidgetGroups" value="${[]}"/>
+		<!---
+			@keywords private
+			The selected widget view.
+		-->
+		<variable name="selectedWidget" value="${null}"/>
+		<!---
+			@keywords private
+			The hover over widget view.
+		-->
+		<variable name="hoverWidget" value="${null}"/>
+		<!---
+			@keywords private
+			The selected slot object.
+			@type cmc/foundation/ModelObject
+		-->
+		<variable name="selectedSlotObject" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute contains an instance of the context class that is used within the scope of this dialog.
+		-->
+		<variable name="localContext"/>
+		<!---
+			@keywords private
+			Reference to the editor to which the objects are being added.
+		-->
+		<variable name="editor" value="${null}"/>
+		<!---
+			@keywords private
+			The new widget object.
+		-->
+		<variable name="newObject" value="${null}"/>
+		<!---
+			@keywords private
+			The optional call back del.
+		-->
+		<variable name="callBackDel" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute indicate whether the pageLayoutView part is hidden or not, 
+			default value is <code>false</false> 
+		-->
+		<variable name="hidePageLayoutView" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute indicate the current search term used to filter widgets. 
+		-->
+		<variable name="searchFilter" type="string" value=""/>
+		<!---
+			@keywords private
+			The currently selected widget group. 
+		-->
+		<variable name="groupFilter" type="string" value="All"/>
+		<!---
+			@keywords private
+			If set to true, then widget descriptions will be shown.
+		-->
+		<variable name="showDescriptions" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			If set to true, then a message will be shown indicating that no widgets were found.
+		-->
+		<variable name="noWidgetsFound" type="boolean" value="false"/>
+		<!---
+			Indicates that the shortcut keys have been registered for this dialog.
+		-->
+		<variable name="shortcutsRegistered" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Handle OK.
+		-->
+		<method name="handleOK">
+			<![CDATA[
+			if (this.selectedSlotObject != null && this.selectedWidget != null) {
+				var selectedSlotIdentifier = this.selectedSlotObject.getPropertyValue("slotIdentifier");
+				var selectedWidgetName = this.handleDuplication(this.selectedWidget.widgetDefinition.widgetName);
+				var selectedWidgetDefId = this.selectedWidget.widgetDefinition.widgetId;
+				var selectedWidgetRestrictionGroups = this.selectedWidget.widgetDefinition.widgetRestrictionGroups;
+				var childObjectType = this.selectedWidget.widgetDefinition.widgetObjectType;
+				var childObjDef = this.selectedWidget.widgetDefinition.widgetObjectDefinition;
+				this.newObject = childObjDef.model.createNewObject(childObjDef, this.o, true);
+				this.newObject.setPropertyValue("widgetName", null, selectedWidgetName);
+				this.newObject.setPropertyValue("slotIdentifier", null, selectedSlotIdentifier);
+				this.newObject.setPropertyValue("widgetDefId", null, selectedWidgetDefId);
+				this.newObject.setPropertyValue("widgetRestrictionGroups", null, selectedWidgetRestrictionGroups);
+				if (childObjDef.populateNewObjectService != null) {
+					childObjDef.populateNewObjectService.doRequest(this.newObject, {
+						widgetDefinitionName: selectedWidgetName,
+						widgetDefinitionId: selectedWidgetDefId,
+						widgetDefinitionObjectType: childObjectType
+					});
+				}
+				this.o.updateChildObjects(true);
+				this.closeWindow();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Handle the duplicated widgetName.
+			Return a name with proper suffix/prefix.
+		-->
+		<method args="name" name="handleDuplication">
+			<![CDATA[
+			var newName = name;
+			var widgetNamesMap = {};
+			var widgetObjects = this.o.getObjects("LayoutWidgetAlias");
+			for (var i = 0; i < widgetObjects.length; i++) {
+				var widgetName = widgetObjects[i].getPropertyValue("widgetName");
+				if (widgetName != "" && widgetName.indexOf(name) != -1) {
+					widgetNamesMap[widgetName] = true;
+				}
+			}
+			var count = 2;
+			while (widgetNamesMap[newName]) {
+				newName = pageLayoutResources.Singleton.replaceValues("newWidgetNameTemplate", [name, count++]);
+			}
+			return newName;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			if (this.newObject != null && this.editor != null) {
+				this.editor.list.showObjectInView(this.newObject, true);
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle Cancel.
+		-->
+		<method name="handleCancel">
+			<![CDATA[
+			this.closeWindow();
+			]]>
+		</method>
+
+		<!---
+			Close the dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.unregisterShortcutKeys();
+			this.inherited(arguments);
+			if (this.callBackDel != null) {
+				this.callBackDel.execute(null);
+				this.callBackDel = null;
+			}
+			if (this.hidePageLayoutView) {
+				this.setVariable("hidePageLayoutView", false);
+			}
+			this.setVariable("o", null);
+			this.editor = null;
+			this.localContext = undefined;
+			this.setVariable("widgetDefinitions", null);
+			this.setVariable("selectedWidget", null);
+			this.setVariable("hoverWidget", null);
+			this.setVariable("selectedSlotObject", null);
+			this.newObject = null;
+			]]>
+		</method>
+		
+		<!---
+			Open the dialog.
+		-->
+		<method args="o, editor, options" name="openNewActionDialog">
+			<![CDATA[
+			if (typeof(options) == "undefined") options = null;
+			this.openWindow();
+			this.registerShortcutKeys();
+			this.setVariable("o", o);
+			this.editor = editor;
+			this.localContext = o.localContext;
+			if (options != null) {
+				if (options.hidePageLayoutView) {
+					this.setVariable("hidePageLayoutView", true);
+				}
+				if (options.callBackDel) {
+					this.callBackDel = options.callBackDel;
+				}
+				if (options.selectedSlotObject) {
+					this.setVariable("selectedSlotObject", options.selectedSlotObject);
+					this.templatePageLayoutView.slotSelector.selectItem(options.selectedSlotObject);
+					this.templatePageLayoutView.pageLayoutViewer.setVariable("selectedSlotObject", options.selectedSlotObject);
+				}
+			}
+			var caller = this;
+			require(["cmc/pagelayout/GetWidgetDefinitionsService"], function(GetWidgetDefinitionsService) {
+				GetWidgetDefinitionsService.Singleton.doRequest(caller, {
+					storeId: caller.o.getPropertyValue("objectStoreId")
+				});
+			});
+			]]>
+		</method>
+		
+		<!---
+			Register shortcut keys.
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (this.shortcutsRegistered) {
+				return;
+			}
+			KeyUtil.callOnKeyCombo(this.widgetsView.clippedContent.content.pageDownDel, ["Pagedown"]);
+			KeyUtil.callOnKeyCombo(this.widgetsView.clippedContent.content.pageUpDel, ["Pageup"]);
+			this.shortcutsRegistered = true;
+			]]>
+		</method>
+			
+		<!---
+			Unregister shortcut keys.
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			KeyUtil.removeKeyComboCall(this.widgetsView.clippedContent.content.pageDownDel, ["Pagedown"]);
+			KeyUtil.removeKeyComboCall(this.widgetsView.clippedContent.content.pageUpDel, ["Pageup"]);
+			this.shortcutsRegistered = false;
+			]]>
+		</method>
+			
+		<AxisLayout axis="x" spacing="30"/>
+		<Component height="400" name="templatePageLayoutView" visible="${this.parent.hidePageLayoutView ? false : true}">
+			<AxisLayout axis="y"/>
+ 
+ 			<TextComponent fontstyle="bold" text="${pageLayoutResources.Singleton.widgetDialogStepOne.string}"/>
+ 			<Component height="44"/>
+			<BaseComboBox name="slotSelector" width="180">
+				<!---
+					Update the combo box when the layout object changes.
+				-->
+				<handler eventSource="this.classroot" name="ono">
+					<![CDATA[
+					this.updateSlots();
+					]]>
+				</handler>
+
+				<!---
+					Handle slot selection.
+				-->
+				<handler name="onselectedValue">
+					<![CDATA[
+					this.classroot.setVariable("selectedSlotObject", this.getValue());
+					this.parent.pageLayoutViewer.setVariable("selectedSlotObject", this.getValue());
+					]]>
+				</handler>
+
+				<!---
+					Update the list of slots.
+				-->
+		   		<method name="updateSlots">
+					<![CDATA[
+					this.selectValue(null);
+					var values = [];
+					if (this.classroot.o != null) {
+						var slots = this.classroot.o.getObjects("LayoutContainerWidget/LayoutSlot");
+						for (var i = 0; i < slots.length; i++) {
+							var slot = slots[i];
+							if (slot.getPropertyValue("xSlotPosition_state") != "disabled") {
+								values.push({
+									value: slot,
+									displayName: slot.getPropertyValue("slotName")
+								});
+							}
+						}
+					}
+					this.setValues(values);
+					]]>
+				</method>
+			</BaseComboBox>
+			<Component height="20"/>
+			
+			<BasePageLayoutViewer allowSelection="true" name="pageLayoutViewer" o="${this.classroot.o}" package="cmc/pagelayout" showText="true" width="180">
+				<!---
+					Handle the selection of a slot.
+				-->
+				<method args="slotObject" name="slotSelected">
+					<![CDATA[
+					this.setVariable("selectedSlotObject", slotObject);
+					this.parent.slotSelector.selectItem(slotObject);
+					]]>
+				</method>
+			</BasePageLayoutViewer>
+		</Component>
+		 
+		<Component name="widgetsView" width="660">
+			<AxisLayout axis="y" spacing="20"/>
+			
+			<TextComponent fontstyle="bold" multiline="true" text="${this.classroot.hidePageLayoutView ? pageLayoutResources.Singleton.widgetDialogSingleStep.string : pageLayoutResources.Singleton.widgetDialogStepTwo.string}" width="${this.parent.width}"/>
+			<Component name="widgetFilterRow" width="${this.parent.width}">
+			    <AxisLayout axis="y" spacing="5"/>
+				<TextComponent text="${pageLayoutResources.Singleton.widgetDialogFilterText.string}"/>
+				<Component name="widgetFilters">
+					<AxisLayout axis="x" spacing="20"/>
+					<Component name="searchTextArea" height="31" width="180">
+						<InputTextComponent name="searchText" height="${this.parent.height - 2}" width="${this.parent.clearTextButton.x - 10}" x="10" y="1">
+							<!---
+								@keywords private
+								This is the text that displays in the input field when no text is entered
+							-->
+							<variable name="promptText" type="string" value="${pageLayoutResources.Singleton.widgetDialogFilterByNameLabel.string}"/>
+							
+							<handler name="oninit">
+								<![CDATA[
+								this.setVariable("text", this.promptText);
+								]]>
+							</handler>
+							
+							<handler eventSource="this.classroot" name="ono">
+								<![CDATA[
+								if (this.classroot.o == null) {
+									this.setVariable("text", this.promptText);
+									this.classroot.setVariable("searchFilter", "");
+								}
+								]]>
+							</handler>
+							
+							<handler name="onpromptText">
+								<![CDATA[
+								this.setVariable("text", this.promptText);
+								]]>
+							</handler>
+							
+							<handler name="onfocus">
+								<![CDATA[
+								if (!this.indicator) {
+									new FocusIndicator.Class(this, {
+										name: "indicator",
+										focusableView: this,
+										indicatorView: this.parent,
+										offset: 1
+									});
+								}
+								if (this.text == this.promptText) {
+									this.setVariable("text", "");
+								}
+								]]>
+							</handler>
+							
+							<handler name="onblur">
+								<![CDATA[
+								if (this.text == "") {
+									this.setVariable("text", this.promptText);
+								}
+								]]>
+							</handler>
+							
+							<handler args="kc" name="onkeyup">
+								<![CDATA[
+								this.doSearch();
+								]]>
+							</handler>
+							
+							<method name="clearSearch">
+								<![CDATA[
+								this.clearText();
+								this.doSearch();
+								]]>
+							</method>
+							
+							<method name="doSearch">
+								<![CDATA[
+								var newSearchFilter = this.text == this.promptText ? "" : this.text;
+								if (newSearchFilter != this.classroot.searchFilter) {
+									this.classroot.setVariable("selectedWidget", null);
+									this.classroot.setVariable("searchFilter", newSearchFilter);
+								}
+								]]>
+							</method>
+						</InputTextComponent>
+ 						<BaseButton imageSet="clearIcon" name="clearTextButton" visible="${this.parent.searchText.text != '' &amp;&amp; this.parent.searchText.text != this.parent.searchText.promptText}" x="${this.parent.width - this.width - 10}" valign="middle">
+ 							<handler name="onclick">
+								<![CDATA[
+								this.parent.searchText.clearSearch();
+								]]>
+							</handler>
+						</BaseButton>
+						<Component height="${this.parent.height}" bgcolor="#959595" width="1" x="0" y="0"/>
+						<Component height="${this.parent.height}" bgcolor="#959595" width="1" x="${this.parent.width - 1}" y="0"/>
+						<Component bgcolor="#959595" height="1"  width="${this.parent.width}" x="0" y="0"/>
+						<Component bgcolor="#959595" height="1" width="${this.parent.width}" x="0" y="${this.parent.height - 1}"/>
+					</Component>
+					
+					<BaseComboBox name="widgetGroupSelector" width="180">
+						<handler name="oninit">
+							<![CDATA[
+							this.updateGroupsDel = new EventHandler.Class(this, "updateGroups");
+							this.updateGroups();
+							]]>
+						</handler>
+						
+						<!---
+							Handle slot selection.
+						-->
+						<handler name="onselectedValue">
+							<![CDATA[
+							if (!this._settingValues && this.selectedValue != null) {
+								var newGroupFilter = this.selectedValue.value;
+								if (newGroupFilter != this.classroot.groupFilter) {
+									this.classroot.setVariable("selectedWidget", null);
+									this.classroot.setVariable("groupFilter", newGroupFilter);
+								}
+							}
+							]]>
+						</handler>
+							
+				 		<!---
+							@keywords private
+						-->
+						<method name="destroy">
+							<![CDATA[
+							this.updateGroupsDel.disconnectAll();
+							delete this.updateGroupsDel;
+							this.inherited(arguments);
+							]]>
+						</method>
+						
+						<!---
+							Update the list of groups.
+						-->
+				   		<method args="e" name="updateGroups">
+							<![CDATA[
+							if (typeof(e) == "undefined") e = null;
+							this.updateGroupsDel.disconnectAll();
+							this.updateGroupsDel.connect(this.classroot, "ono");
+							if (this.classroot.o != null) {
+								var values = [{
+									value: "All",
+									displayName: pageLayoutResources.Singleton.widgetGroupDisplayName_All.string
+								}];
+								var sortedWidgetGroups = WidgetGroupUtil.Singleton.getSortedWidgetGroups(this.classroot.layoutWidgetGroups);
+								for (var i = 0; i < sortedWidgetGroups.length; i++) {
+									values.push({
+										value: sortedWidgetGroups[i].identifier,
+										displayName: sortedWidgetGroups[i].displayName
+									});
+								}
+								this._settingValues = true;
+								this.setValues(values);
+								this._settingValues = false;
+								this.selectItem(this.classroot.groupFilter);
+								if (this.selectedValue == null) {
+									this.selectItem("All");
+								}
+							}
+							]]>
+						</method>
+				   		
+					</BaseComboBox>
+					<BaseCheckbox name="showDescriptionsBox" text="${pageLayoutResources.Singleton.widgetDialogShowDescriptionsLink.string}" value="true" y="5">
+					    <handler name="onvalue">
+						    <![CDATA[
+						    this.classroot.setVariable("showDescriptions", this.value);
+						    ]]>
+					    </handler>
+				    </BaseCheckbox>
+				</Component>
+			</Component>
+			
+			<TextComponent height="${this.parent.clippedContent.height}" multiline="true" text="${pageLayoutResources.Singleton.widgetDialogNoWidgetsMessage.string}" visible="${this.classroot.noWidgetsFound}" width="${this.parent.width}"/>
+
+	  		<Component clip="true" height="400" name="clippedContent" visible="${!this.classroot.noWidgetsFound}" width="${this.parent.width}">
+				<Component name="content" width="${this.parent.width}">
+					<!---
+						@keywords private
+						The list of widget views.
+					-->
+					<variable name="widgetViews" value="${[]}"/>
+					<!---
+						@keywords private
+						List of available widget definition views.
+					-->
+					<variable name="availableWidgetViews" value="${[]}"/>
+										
+					<handler name="oninit">
+						<![CDATA[
+						this.checkFocusDel = new EventHandler.Class(this, "checkFocus");
+						this.updateWidgetViewsDel = new EventHandler.Class(this, "updateWidgetViews");
+						this.pageUpDel = new EventHandler.Class(this, "pageUp");
+						this.pageDownDel = new EventHandler.Class(this, "pageDown");
+						this.updateWidgetViews();
+						]]>
+					</handler>
+										
+			 		<!---
+						@keywords private
+					-->
+					<method name="destroy">
+						<![CDATA[
+						this.checkFocusDel.disconnectAll();
+						delete this.checkFocusDel;
+						this.updateWidgetViewsDel.disconnectAll();
+						delete this.updateWidgetViewsDel;
+						this.pageUpDel.disconnectAll();
+						delete this.pageUpDel;
+						this.pageDownDel.disconnectAll();
+						delete this.pageDownDel;
+						this.inherited(arguments);
+						]]>
+					</method>
+
+					<!---
+						Scroll up a page.
+					-->
+					<method args="e" name="pageUp">
+						<![CDATA[
+						if (typeof(e) == "undefined") e = null;
+						this.parent.objectsVScrollbar.step(0 - this.parent.objectsVScrollbar.stepsize);
+						]]>
+					</method>
+			
+					<!---
+						Scroll down a page.
+					-->
+					<method args="e" name="pageDown">
+						<![CDATA[
+						if (typeof(e) == "undefined") e = null;
+						this.parent.objectsVScrollbar.step(this.parent.objectsVScrollbar.stepsize);
+						]]>
+					</method>
+					
+					<!---
+						Check focus and auto scroll if needed.
+					-->
+					<method args="e" name="checkFocus">
+						<![CDATA[
+						var focusedView = FocusUtil.getFocus();
+						var containsFocus = ViewUtil.Singleton.containsView(this, focusedView);
+						if (containsFocus) {
+							var vScrollStepsize = this.parent.objectsVScrollbar.stepsize;
+							var y = focusedView.getVariableRelative("y", this.parent) - this.parent.y;
+							var clipViewHeight = this.parent.height;
+							if (y < 0) {
+								var space = y / vScrollStepsize;
+								this.parent.objectsVScrollbar.step(space);
+							}
+							if (y + focusedView.height > clipViewHeight) {
+								var space = (y + focusedView.height - clipViewHeight) / vScrollStepsize;
+								this.parent.objectsVScrollbar.step(space);
+							}
+						}
+						]]>
+					</method>
+										
+					<method args="e" name="updateWidgetViews">
+						<![CDATA[
+						if (typeof(e) == "undefined") e = null;
+						this.updateWidgetViewsDel.disconnectAll();
+						this.updateWidgetViewsDel.connect(this.classroot, "ongroupFilter");
+						this.updateWidgetViewsDel.connect(this.classroot, "onsearchFilter");
+						this.updateWidgetViewsDel.connect(this.classroot, "onselectedSlotObject");
+						this.updateWidgetViewsDel.connect(this.classroot, "onwidgetDefinitions");
+						while (this.widgetViews.length > 0) {
+							var widgetView = this.widgetViews.pop();
+							this.availableWidgetViews.unshift(widgetView);
+						}
+						if (this.classroot.widgetDefinitions != null && this.classroot.groupFilter != null) {
+							var allowedWidgetGroups = [];
+							var selectedSlotObject = this.classroot.selectedSlotObject;
+							if (selectedSlotObject != null) {
+								allowedWidgetGroups = StringUtil.Singleton.splitAndTrim(selectedSlotObject.getPropertyValue("xSlotPosition_allowedWidgetGroups"), ",");
+							}
+							for (var i = 0; i < this.classroot.widgetDefinitions.length; i++) {
+								var widgetView = null;
+								var widgetDefinition = this.classroot.widgetDefinitions[i];
+								if ((this.classroot.searchFilter == "" || widgetDefinition.widgetName.toLowerCase().indexOf(this.classroot.searchFilter.toLowerCase()) != -1) && WidgetGroupUtil.Singleton.widgetDisplayed(widgetDefinition.widgetDisplayGroups, this.classroot.groupFilter) && WidgetGroupUtil.Singleton.widgetAllowed(widgetDefinition.widgetRestrictionGroups, allowedWidgetGroups)) {
+									if (this.availableWidgetViews.length > 0) {
+										widgetView = this.availableWidgetViews.shift();
+										if (widgetView.widgetDefinition != widgetDefinition) {
+											widgetView.setVariable("widgetDefinition", widgetDefinition);
+										}
+										if (!widgetView.visible) {
+											widgetView.setVariable("visible", true);
+										}
+									}
+									else {
+										widgetView = new PageLayoutWidget.Class(this, {
+											dialog: this.classroot,
+											widgetDefinition: widgetDefinition
+										});
+									}
+									this.widgetViews.push(widgetView);
+								}
+							}
+							this.classroot.setVariable("noWidgetsFound", this.widgetViews.length == 0);
+						}
+						for (var i = 0; i < this.availableWidgetViews.length; i++) {
+							var widgetView = this.availableWidgetViews[i];
+							widgetView.setVariable("visible", false);
+							widgetView.setVariable("widgetDefinition", null);
+						}
+						this.checkFocusDel.disconnectAll();
+						if (this.classroot.widgetDefinitions != null) {
+							this.checkFocusDel.connect(FocusUtil, "onfocus");
+						}
+						]]>
+					</method>
+
+					<WrappingLayout axis="x" xspacing="20" yspacing="50"/>
+				</Component>
+				<VerticalScrollbar ignoreLayout="true" name="objectsVScrollbar" stepsize="15" visible="${this.scrollable}"/>
+			</Component>
+		</Component>
+
+		<Component name="buttonSection" placement="footer">
+			<Button name="cancelButton" text="${foundationResources.Singleton.simpleDialogCancel.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.handleCancel();
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.classroot.selectedWidget != null &amp;&amp; this.classroot.selectedSlotObject != null}" isdefault="true" name="okButton" text="${foundationResources.Singleton.simpleDialogOK.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.handleOK();
+					]]>
+				</handler>
+			</Button>
+
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+	</Dialog>
+	
+	<!---
+		@keywords private
+		Page layout widget view. This view is used by the new layout widget dialog to display
+		each of the available widgets.
+	-->
+	<Component classDefinition="true" definitionName="cmc/pagelayout/PageLayoutWidget">
+		<dependency localName="pageLayoutResources" moduleName="cmc/pagelayout/PageLayoutResources"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			Widget definition object.
+		-->	
+		<variable name="widgetDefinition" value="${null}"/>
+		<!---
+			New layout widget dialog.
+		-->
+		<variable name="dialog" value="${null}"/>
+		<!---
+			The icon path of the widget.
+		-->
+		<variable name="widgetIconPath" type="string" value="${null}"/>
+		<!---
+			The widget display text.
+		-->
+		<variable name="widgetText" type="string" value="${null}"/>
+		<!---
+			The widget display text.
+		-->
+		<variable name="widgetDescription" type="string" value="${null}"/>
+		<!---
+			The widget help link to the infocenter.
+		-->
+		<variable name="widgetHelpLink" type="string" value="${null}"/>
+		<!---
+			Default background color of the widget icon.
+		-->
+	   	<variable name="defaultFillColor" type="string" value="#ffffff"/>
+		<!---
+			Hover background color of the widget icon.
+		-->
+		<variable name="hoverFillColor" type="string" value="#e6effb"/>
+		<!---
+			Select fill color of the widget icon.
+		-->
+		<variable name="selectFillColor" type="string" value="#4178be"/>
+	
+		<handler name="oninit">
+			<![CDATA[
+			this.updateWidget();
+			]]>
+		</handler>
+	
+		<handler name="onwidgetDefinition">
+			<![CDATA[
+			this.updateWidget();
+			]]>
+		</handler>
+		
+		<handler eventSource="this.dialog" name="onselectedWidget">
+			<![CDATA[
+			this.updateWidget();
+			]]>
+		</handler>
+		
+		<handler eventSource="this.dialog" name="onhoverWidget">
+			<![CDATA[
+			this.updateWidget();
+			]]>
+		</handler>
+
+		<!---
+			Update the widget.
+		-->
+		<method name="updateWidget">
+			<![CDATA[
+			if (this.widgetDefinition != null && this.dialog.o != null) {
+				var widgetObjectType = this.widgetDefinition.widgetObjectType;
+				if (widgetObjectType == null || widgetObjectType == "") {
+					widgetObjectType = "LayoutWidget";
+				}
+				var widgetObjectDefinition = this.dialog.o.objectDefinition.getChildDefinition(widgetObjectType);
+				if (widgetObjectDefinition != null) {
+					var iconPath = widgetObjectDefinition.iconPath;
+					if (iconPath == null || iconPath == "") {
+						this.borderedImage.image.setVariable("icon", widgetObjectDefinition.icon);
+					}
+					else {
+						if (cmcConfig.serviceContextRoot) {
+							iconPath = cmcConfig.serviceContextRoot + iconPath;
+						}
+						else {
+							iconPath = "/lobtools" + iconPath;
+						}
+						if (iconPath != this.widgetIconPath) {
+							this.setVariable("widgetIconPath", iconPath);
+							this.borderedImage.image.setVariable("iconPath", iconPath);
+						}
+					}
+				}
+				if (this.widgetText != this.widgetDefinition.widgetName) {
+					this.setVariable("widgetText", this.widgetDefinition.widgetName);
+				}
+				if (this.widgetDescription != this.widgetDefinition.description) {
+					this.setVariable("widgetDescription", this.widgetDefinition.description);
+				}
+				if (this.widgetHelpLink != this.widgetDefinition.helpLink) {
+					this.setVariable("widgetHelpLink", this.widgetDefinition.helpLink);
+				}
+				if (this.dialog.selectedWidget == this) {
+					this.borderedImage.setVariable("bgcolor", this.selectFillColor);
+				}
+				else if (this.dialog.hoverWidget == this) {
+					this.borderedImage.setVariable("bgcolor", this.hoverFillColor);
+				}
+				else {
+					this.borderedImage.setVariable("bgcolor", this.defaultFillColor);
+				}
+			}
+			]]>
+		</method>
+		
+		<handler name="onmouseover">
+			<![CDATA[
+			this.dialog.setVariable("hoverWidget", this);
+			]]>
+		</handler>	
+		
+		<handler name="onmouseout">
+			<![CDATA[
+			if (this.dialog.hoverWidget == this) {
+				this.dialog.setVariable("hoverWidget", null);
+			}
+			]]>
+		</handler>
+				
+		<handler name="onclick">
+			<![CDATA[
+			this.dialog.setVariable("selectedWidget", this);
+			FocusUtil.setFocus(this);
+			]]>
+		</handler>
+	    
+	    <handler name="ondblclick">
+			<![CDATA[
+			this.dialog.setVariable("selectedWidget", this);
+			this.dialog.handleOK();
+			]]>
+		</handler>
+		
+	    <AxisLayout axis="x" spacing="15"/>
+	    
+	    <Component focusable="true" name="borderedImage" height="${this.image.height + 2}" width="${this.image.width + 2}">
+			<IconView iconPath="${this.classroot.widgetIconPath}" name="image" x="1" y="1"/>
+			<!--- @keywords private -->
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this
+					});
+				}
+				]]>
+			</handler>	
+			<!--- @keywords private -->
+			<handler args="k" name="onkeydown">
+				<![CDATA[
+				if (k == 32) {
+					EventUtil.trigger(this.classroot, "onclick");
+				}
+				]]>
+			</handler>
+			
+			<Tooltip text="${this.classroot.widgetText}"/>				
+		</Component>
+		
+		<Component name="widgetTextView">
+			<AxisLayout axis="y"/>
+			<Tooltip text="${this.classroot.widgetDescription}" enabled="${!this.classroot.dialog.showDescriptions}"/>
+			<TextComponent fontstyle="bold" multiline="true" text="${this.classroot.widgetText}" width="233"/>
+			<TextComponent multiline="true" text="${this.classroot.widgetDescription}" visible="${this.classroot.dialog.showDescriptions}" width="233" lineHeight="16"/>
+			<HelpLinkText helpLink="${this.classroot.widgetHelpLink}" text="${pageLayoutResources.Singleton.widgetDialogDescriptionLearnMore.string}" visible="${this.classroot.dialog.showDescriptions &amp;&amp; this.classroot.widgetHelpLink != null}" width="233"/>								
+		</Component>
+    </Component>
+
+	<!---
+		@keywords private
+		Get the widget definitions for the specified store.
+	-->
+	<Service abortResultsOverLimit="false" definitionName="cmc/pagelayout/GetWidgetDefinitionsService" retryOnError="true" sendMaxItems="true" singletonDefinition="true" url="/cmc/GetPageLayoutWidgetDefinitions">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			Parse the widget definitions.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			if (requestParent.o != null) {
+				var widgetDefinitions = requestParent.widgetDefinitions;
+				if (widgetDefinitions == null) {
+					widgetDefinitions = [];
+				}
+				for (var i = 0; i < dataElement.childNodes.length; i++) {
+					var widgetDefinition = this.parseWidgetDefinition(requestParent.o, dataElement.childNodes[i]);
+					widgetDefinitions.push(widgetDefinition);
+				}
+				requestParent.setVariable("widgetDefinitions", widgetDefinitions);
+			}
+			]]>
+		</method>
+
+		<!---
+			Parses each widget definition object.
+			@param cmc/foundation/ModelObject o The page layout model object
+			@param XML dataElement The child data element
+			@return Object The widget definition
+		-->
+		<method args="o, dataElement" name="parseWidgetDefinition">
+			<![CDATA[
+			var widget = {
+				widgetName: "",
+				helpLink: null,
+				widgetDisplayGroups: [],
+				widgetRestrictionGroups: []
+			};
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var node = dataElement.childNodes[i];
+				var propertyName = node.nodeName;
+				var propertyValue = XMLUtil.getNodeValue(node);
+				if (propertyName == "widgetRestrictionGroups") {
+					widget.widgetRestrictionGroups = StringUtil.Singleton.splitAndTrim(propertyValue, ",");
+				}
+				else {
+					widget[propertyName] = propertyValue;
+				}
+			}
+			if (widget.widgetObjectType == null || widget.widgetObjectType == "") {
+				widget.widgetObjectType = "LayoutWidget";
+			}
+			widget.widgetObjectDefinition = o.objectDefinition.getChildDefinition(widget.widgetObjectType);
+			if (typeof (widget.widgetObjectDefinition) != "undefined") {
+				widget.helpLink = widget.widgetObjectDefinition.helpLink;
+				widget.widgetDisplayGroups = StringUtil.Singleton.splitAndTrim(widget.widgetObjectDefinition.widgetDisplayGroups, ",");
+			}
+			else {
+				widget.widgetObjectType = "LayoutWidget";
+				widget.widgetObjectDefinition = o.objectDefinition.getChildDefinition("LayoutWidget");
+			}
+			return widget;
+			]]>
+		</method>
+	</Service>
+</Definitions>

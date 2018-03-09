@@ -1,0 +1,186 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%!
+	public String toEscapeSlash(String aString)
+	{
+		String result = UIUtil.toJavaScript(aString);
+		return result;
+	}
+%>
+<%!
+	public String createData(CommandContext cmdContext, CatalogEntryAccessBean abEntry, boolean bCategory, Hashtable rbProduct, int index)
+	{
+		String result = "";
+		if (abEntry == null) { return "data["+index+"].deleted=true;\n"; }
+
+		try {
+			String strType = abEntry.getType();
+			if (strType.equals("ProductBean") && abEntry.getItemspc_idInEntityType() != null) strType = "ProductItemBean";
+
+			if (abEntry.getMemberId().equals(cmdContext.getStore().getMemberId())) 
+			{ 
+				result += "data["+index+"].DOIOWN = true;\n";
+			}
+			
+			CatalogEntryDataBean dbCatalogEntry = new CatalogEntryDataBean();
+			dbCatalogEntry.setInitKey_catalogEntryReferenceNumber(abEntry.getCatalogEntryReferenceNumber());
+			com.ibm.commerce.beans.DataBeanManager.activate(dbCatalogEntry, cmdContext);
+			result += "data["+index+"].ObjectPath = '" + toEscapeSlash(dbCatalogEntry.getObjectPath()) + "';\n";
+
+			if (abEntry.getMarkForDeleteInEntityType().intValue() != 0)
+			{
+				return "data["+index+"].deleted=true;\n";
+			}
+
+			result += "data["+index+"].ID           = '" + toEscapeSlash(abEntry.getCatalogEntryReferenceNumber()) + "';\n";
+			result += "data["+index+"].type         = '" + strType + "';\n";
+			result += "data["+index+"].partNumber   = '" + toEscapeSlash(abEntry.getPartNumber()) + "';\n";
+			result += "data["+index+"].mfPartNumber = '" + toEscapeSlash(abEntry.getManufacturerPartNumber()) + "';\n";
+			result += "data["+index+"].mfName       = '" + toEscapeSlash(abEntry.getManufacturerName()) + "';\n";
+			result += "data["+index+"].url          = '" + toEscapeSlash(abEntry.getUrl()) + "';\n";
+			result += "data["+index+"].customField1 = '" + toEscapeSlash(abEntry.getField1()) + "';\n";
+			result += "data["+index+"].customField2 = '" + toEscapeSlash(abEntry.getField2()) + "';\n";
+			result += "data["+index+"].customField3 = '" + toEscapeSlash(abEntry.getField3()) + "';\n";
+			result += "data["+index+"].customField4 = '" + toEscapeSlash(abEntry.getField4()) + "';\n";
+			result += "data["+index+"].customField5 = '" + toEscapeSlash(abEntry.getField5()) + "';\n";
+			result += "data["+index+"].onSpecial    = '" + toEscapeSlash(abEntry.getOnSpecial()) + "';\n";
+			result += "data["+index+"].onAuction    = '" + toEscapeSlash(abEntry.getOnAuction()) + "';\n";
+			result += "data["+index+"].buyable      = '" + toEscapeSlash(abEntry.getBuyable()) + "';\n";
+
+			                                
+      } catch (Exception e) {
+			return "data["+index+"].deleted=true;\n";
+		}
+         
+		try {
+			
+			CatalogEntryDescriptionAccessBean abDescription = new CatalogEntryDescriptionAccessBean();
+			abDescription.setInitKey_catalogEntryReferenceNumber(abEntry.getCatalogEntryReferenceNumber());
+			abDescription.setInitKey_language_id(cmdContext.getLanguageId().toString());
+			
+			
+			result += "data["+index+"].name             = '" + toEscapeSlash(abDescription.getName()) + "';\n";
+			result += "data["+index+"].shortDescription = '" + toEscapeSlash(abDescription.getShortDescription()) + "';\n";
+			result += "data["+index+"].longDescription  = '" + toEscapeSlash(abDescription.getLongDescription()) + "';\n";
+			result += "data["+index+"].auxDescription1  = '" + toEscapeSlash(abDescription.getAuxDescription1()) + "';\n";
+			result += "data["+index+"].auxDescription2  = '" + toEscapeSlash(abDescription.getAuxDescription2()) + "';\n";
+			result += "data["+index+"].thumbnailImage   = '" + toEscapeSlash(abDescription.getThumbNail()) + "';\n";
+			result += "data["+index+"].fullImage        = '" + toEscapeSlash(abDescription.getFullImage()) + "';\n";
+			result += "data["+index+"].keyword          = '" + toEscapeSlash(abDescription.getKeyWord()) + "';\n";
+			result += "data["+index+"].published        = '" + toEscapeSlash(abDescription.getPublished()) + "';\n";
+		} catch (Exception e) {
+		}
+
+		if (bCategory) {
+
+			String strCategory   = null;
+			String strCategoryID = null;
+
+			try {
+
+				ServerJDBCHelperBean abHelper = com.ibm.commerce.ejb.helpers.SessionBeanHelper.lookupSessionBean(ServerJDBCHelperBean.class);
+				String strSQL  = "SELECT catgroup.catgroup_id, catgroup.identifier";
+						 strSQL += " FROM catgroup, catgpenrel";
+						 strSQL += " WHERE catgroup.catgroup_id = catgpenrel.catgroup_id";
+						 strSQL += " AND catgpenrel.catalog_id=" + cmdContext.getStore().getMasterCatalog().getCatalogReferenceNumber();
+						 strSQL += " AND catgpenrel.catentry_id=" +  abEntry.getCatalogEntryReferenceNumber();
+
+				Vector vResult = abHelper.executeQuery(strSQL);
+				for (int i=0; i<vResult.size(); i++)
+				{
+					Vector vRow = (Vector) vResult.elementAt(i);
+
+					String strCatgroupId  = vRow.elementAt(0).toString();
+					String strName        = (String) vRow.elementAt(1);
+
+					try {
+
+						CatalogGroupDescriptionAccessBean abCatgroupDesc = new CatalogGroupDescriptionAccessBean();
+						abCatgroupDesc.setInitKey_language_id(cmdContext.getLanguageId().toString());
+						abCatgroupDesc.setInitKey_catalogGroupReferenceNumber(strCatgroupId);
+						
+						strName = abCatgroupDesc.getName();
+
+					} catch (Exception ex) {}
+
+					if (strCategoryID == null) {
+						strCategoryID = strCatgroupId; 
+						strCategory   = strName;
+					} else {
+						strCategoryID = "-1"; 
+						strCategory   = strCategory + "," + strName;
+					}
+
+				}
+
+			} catch (Exception e) {
+			}
+
+
+			if (strCategoryID == null) 
+			{
+				strCategory   = UIUtil.toJavaScript((String)rbProduct.get("shippingCategoryNameNotAvailable"));
+				strCategoryID = "-1";
+			}
+
+			result += "data["+index+"].category   = '" + UIUtil.toJavaScript(strCategory) + "';\n";
+			result += "data["+index+"].categoryID = '" + strCategoryID + "';\n";
+
+		}
+
+		return result;
+	}
+%>
+
+<%!
+	public String createDataObject(Integer iLanguage)
+	{
+		String result = "";
+		result += "function DataObject()\n";
+		result += "{\n";
+		result += "   this.ID               = '-1';\n";
+		result += "   this.type             = 'ProductBean';\n";
+		result += "   this.isNew            = false;\n";
+		result += "   this.DOIOWN           = false;\n";
+		result += "   this.partNumber       = '';\n";
+		result += "   this.mfPartNumber     = '';\n";
+		result += "   this.mfName           = '';\n";
+		result += "   this.url              = '';\n";
+		result += "   this.customField1     = '';\n";
+		result += "   this.customField2     = '';\n";
+		result += "   this.customField3     = '';\n";
+		result += "   this.customField4     = '';\n";
+		result += "   this.customField5     = '';\n";
+		result += "   this.onSpecial        = '0';\n";
+		result += "   this.onAuction        = '0';\n";
+		result += "   this.buyable          = '1';\n";
+		result += "   this.name             = '';\n";
+		result += "   this.shortDescription = '';\n";
+		result += "   this.longDescription  = '';\n";
+		result += "   this.auxDescription1  = '';\n";
+		result += "   this.auxDescription2  = '';\n";
+		result += "   this.thumbnailImage   = '';\n";
+		result += "   this.fullImage        = '';\n";
+		result += "   this.keyword          = '';\n";
+		result += "   this.published        = '';\n";
+		result += "   this.languageId       = '" + iLanguage + "';\n";
+		result += "   this.deleted          = false;\n";
+		result += "   this.category         = '';\n";
+		result += "   this.categoryID       = '-1';\n";
+		result += "}\n";
+		return result;
+	}
+%>
+

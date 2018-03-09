@@ -1,0 +1,149 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+***** 
+Given a CatalogEntryView object, this snippet formats and sets a priceString variable.
+
+params: 
+
+Parameters required:
+        catalogIdEntry:		A CatalogNavigationViewType.catalogEntryView object representing a catalog entry object
+
+Output:
+	priceString: 		Containing the formatted price of the dynamic kit
+*****
+--%>
+<c:remove var="priceString" />
+<c:remove var="indexedPrice" />
+<c:remove var="listPrice" />
+<c:remove var="calculatedPrice" />
+<c:remove var="rangePrice" />
+
+<wcst:alias name="StoreHelper" var="priceMode">
+	<wcf:param name="parameter" value=""/>
+	<wcf:param name="parameter" value="${storeId}"/>
+</wcst:alias>
+
+<c:if test="${empty calculatedPriceFlag}">
+	<c:choose>
+		<c:when test="${priceMode == '0'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+		<c:when test="${priceMode == '1'}">
+			<c:set var="calculatedPriceFlag" value="false"/>
+		</c:when>
+		<c:when test="${priceMode == '2'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+	</c:choose>
+</c:if>
+
+
+<c:choose>
+ <c:when test="${calculatedPriceFlag == 'true'}">
+ 
+ 	<c:set var="type" value="${fn:toLowerCase(catalogIdEntry.catalogEntryTypeCode)}" />
+	<c:set var="type" value="${fn:replace(type,'bean','')}" />
+ 	<c:choose>
+ 	<c:when test="${type eq 'item' || (type eq 'product' && empty catalogIdEntry.numberOfSKUs)}">
+	 	<wcf:rest var="displayPriceResult" url="/store/{storeId}/display_price">
+			<wcf:var name="storeId" value="${param.storeId}" />
+			<wcf:param name="q" value="byCatalogEntryIdsAndPriceRuleName"/>
+			<wcf:param name="catalogEntryId" value="${catalogIdEntry.uniqueID}"/>
+			<wcf:param name="priceRuleName" value="${defaultDisplayPriceRuleName}"/>
+		</wcf:rest>
+		<c:set var="displayPriceType" value="${displayPriceResult.resultList[0]}"  />
+			
+		<c:if test="${null!=displayPriceType}">
+			<c:forEach var="aUnitPrice" items="${displayPriceType.unitPrice}" begin="0" end="0">
+				<c:set var="listPriced" value="true"/>
+				<c:set var="listPrice" value="${aUnitPrice.price}"/>
+			</c:forEach>
+		</c:if>
+			<c:catch>
+				<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="q" value="byCatalogEntryIds"/>
+					<wcf:param name="catalogEntryId" value="${catalogIdEntry.uniqueID}" />
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="checkEntitlement" value="false"/>
+					<wcf:param name="profileName" value="IBM_Store_EntitledPrice_RangePrice_All"/>
+				</wcf:rest>
+				<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+			</c:catch>
+			
+			<c:if test="${null!=entitledPrices}">
+				<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+						<c:if test="${!empty unitPrice.price}">
+							<c:set var="offerPrice" value="${unitPrice.price}"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+				
+				<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:if test="${!empty entitledPrice.RangePrice}">
+						<c:set var="rangePrice" value="${entitledPrice.RangePrice}"/>
+					</c:if>
+				</c:forEach>
+			</c:if>
+	</c:when>
+	</c:choose>
+ </c:when>
+ <c:otherwise>
+ 	<c:forEach var="price" items="${catalogIdEntry.price}" >
+	<c:choose>
+		<c:when test="${price.description == 'I'}">
+			<c:set var="indexedPrice" value="${price}" />
+		</c:when>
+		<c:when test="${price.description == 'L'}">
+			<c:set var="listPrice" value="${price}" />
+		</c:when>
+		<c:when test="${price.description == 'O'}">
+			<c:set var="calculatedPrice" value="${price}" />
+		</c:when>
+	</c:choose>
+	</c:forEach>
+	
+	<c:if test="${not empty indexedPrice}" >
+		<c:if test="${not empty listPrice && listPrice.value gt indexedPrice.value}" >
+			<c:set var="strikedPriceString" value="${listPrice.value}"/>
+		</c:if>
+		<c:set var="offerPrice" value="${indexedPrice}"/>
+	</c:if>
+	<c:if test="${not empty calculatedPrice}" >
+		<c:remove var="strikedPriceString"/>
+		<c:set var="minimumPriceString" value="${calculatedPrice.minimumValue.value}"  />
+		<c:set var="maximumPriceString" value="${calculatedPrice.maximumValue.value}"  />
+		<c:set var="offerPrice" value="${calculatedPrice}" />
+	</c:if>
+ </c:otherwise>
+</c:choose>
+	<c:choose>
+			<c:when test="${not empty minimumPriceString && not empty maximumPriceString}">
+				<c:set var="priceString" value="${minimumPriceString} - ${maximumPriceString}"/>
+			</c:when>
+			<c:otherwise>
+				<c:choose>
+					<c:when test="${not empty listPrice && listPrice.value gt offerPrice.value}">
+						<c:set var="strikedPriceString" value="${listPrice.value}"/>
+					</c:when>
+					<c:otherwise>
+						<c:remove var="listPrice"/>
+					</c:otherwise>
+				</c:choose>
+			<c:set var="priceString" value="${offerPrice.value}"/>
+			</c:otherwise>
+		</c:choose>

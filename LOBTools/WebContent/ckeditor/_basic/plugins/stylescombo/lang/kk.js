@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","kk",{label:"Мәнерлер",panelTitle:"Мәнерлер",panelTitle1:"Мәнерлерді құлыптау",panelTitle2:"Кірістірілген мәнерлер",panelTitle3:"Нысан мәнерлері"});

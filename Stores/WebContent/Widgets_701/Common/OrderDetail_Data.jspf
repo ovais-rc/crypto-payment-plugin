@@ -1,0 +1,165 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- ======================================================================
+	 data for approval record --%>
+
+<c:if test="${empty approvalRecord && !empty WCParam.approvalId}">
+	<wcf:rest var="approvalRecords" url="store/{storeId}/approval_status" scope="page">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="q" value="orderApprovals"/>
+		<wcf:param name="approvalStatusId" value="${WCParam.approvalId}" />
+	</wcf:rest>
+
+	<c:forEach var="approval" items="${approvalRecords.resultList}"> 
+		<c:if test="${approval.approvalStatusId eq WCParam.approvalId}">
+			<c:set var="approvalRecord" value="${approval}" scope="request"/>
+		</c:if>
+	</c:forEach>
+</c:if>
+
+<c:if test="${empty order}">
+	<%-- ======================================================================
+	     data for order --%>
+	<%-- gets the first page of the order records --%>
+	<c:choose>
+		<c:when test="${WCParam.orderId != null}">
+			<wcf:rest var="order" url="store/{storeId}/order/{orderId}" scope="request">
+				<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+				<wcf:var name="orderId" value="${WCParam.orderId}" encode="true"/>
+				<wcf:param name="accessProfile" value="IBM_Details" />
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="1"/>
+			</wcf:rest>
+			<c:set var="objectId" value="${order.orderId}" scope="request"/>
+		</c:when>
+	
+		<c:when test="${WCParam.externalOrderId != null}">
+			<wcf:rest var="order" url="store/{storeId}/order/{orderId}" scope="request">
+				<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+				<wcf:var name="orderId" value="${WCParam.externalOrderId}" encode="true"/>
+				<wcf:param name="accessProfile" value="IBM_External_Details" />
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="1"/>
+			</wcf:rest>
+			<c:set var="objectId" value="${order.externalOrderID}" scope="request"/>
+		</c:when>
+	
+		<c:when test="${WCParam.quoteId != null}">
+			<%/* Currently no local implementation available*/%>
+		</c:when>
+		
+		<c:when test="${WCParam.externalQuoteId != null}">
+			<wcf:rest var="quote" url="store/{storeId}/order" scope="request">
+				<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+				<wcf:param name="q" value="findQuoteByExternalQuoteId"/>
+				<wcf:param name="quoteId" value="$PWCParam.externalQuoteId}"/>
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="1"/>
+			</wcf:rest>
+			<c:set var="objectId" value="${quote.quoteIdentifier.externalQuoteID}" scope="request"/>
+			<c:set var="order" value="${quote.orderTemplate}" scope="request"/>
+		</c:when>
+	</c:choose>
+
+	<%-- ======================================================================
+	     set shipmentTypeId: 1 = single shipment, 2 = multiple shipment --%>
+	<c:set var="shipmentTypeId" value="1" scope="request"/>
+	<c:choose>
+		<c:when test="${fn:length(order.orderItem) > maxOrderItemsToInspect}">
+			<c:set var="shipmentTypeId" value="2" scope="request"/>
+		</c:when>
+		<c:otherwise>
+			<c:remove var="blockMap"/>
+			<jsp:useBean id="blockMap" class="java.util.HashMap" scope="request"/>
+			<c:forEach var="orderItem" items="${order.orderItem}" varStatus="status">
+				<c:set var="itemId" value="${orderItem.orderItemId}"/>
+				<c:set var="addressId" value="${orderItem.addressId}"/>
+				<c:set var="shipModeId" value="${orderItem.shipModeId}"/>
+				<c:set var="keyVar" value="${addressId}_${shipModeId}"/>
+				<c:set var="itemIds" value="${blockMap[keyVar]}"/>
+				<c:choose>
+					<c:when test="${empty itemIds}">
+						<c:set target="${blockMap}" property="${keyVar}" value="${itemId}"/>
+					</c:when>
+					<c:otherwise>
+						<c:set target="${blockMap}" property="${keyVar}" value="${itemIds},${itemId}"/>
+					</c:otherwise>
+				</c:choose>
+			</c:forEach>
+			<c:choose>
+				<c:when test="${fn:length(blockMap) == 1}">
+					<c:set var="shipmentTypeId" value="1" scope="request"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="shipmentTypeId" value="2" scope="request"/>
+				</c:otherwise>
+			</c:choose>
+		</c:otherwise>
+	</c:choose>
+	
+	<%-- ======================================================================
+	     set currency of the order --%>
+	     
+	<c:if test="${!(CommandContext.currency eq order.orderAmount.grandTotal.currency)}">
+		<%-- Need to reset currencyFormatterDB as initialized in JSTLEnvironmentSetup.jspf, as the currency code used there is from commandContext. For saved orders we want to display which currency was used when the order was placed. --%>
+		<%-- order currency is different from user's currency, setup currency symbol and decimal for the order --%> 
+		<c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${order.grandTotalCurrency}+-1+${langId}"/>
+		<c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+		<c:if test="${empty currencyFormatterDB}">
+			<wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+				<wcf:var name="storeId" value="${storeId}" />
+				<wcf:param name="q" value="byCurrency" />
+				<wcf:param name="currency" value="${order.grandTotalCurrency}" />
+				<wcf:param name="numberUsage" value="-1" />
+				<wcf:param name="langId" value="${langId}" />
+			</wcf:rest>
+			<c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+			<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+		</c:if>
+		
+		<c:set var="env_currencyDecimal" value="${currencyFormatterDB.decimalPlaces}" scope="request"/>
+		<c:set var="env_currencyCode" value="${currencyFormatterDB.currencyCode}" scope="request" />
+		
+		<c:if test="${order.grandTotalCurrency == 'KRW'}">
+			<c:set property="env_currencySymbol" value='&#8361;' target="${currencyFormatterDB}"/>
+		</c:if>
+		<c:if test="${order.grandTotalCurrency == 'PLN'}">
+			<c:set property="env_currencySymbol" value='z&#322;' target="${currencyFormatterDB}"/>
+		</c:if>
+		<c:if test="${order.grandTotalCurrency == 'TRY'}">
+			<c:set property="env_currencySymbol" value="<IMG src='${staticIBMAssetAliasRoot}/images/turkish_lira.gif' align='bottom'>" target="${currencyFormatterDB}"/>
+		</c:if>
+		<c:if test="${order.grandTotalCurrency == 'EGP' && locale != 'iw_IL'}">
+			<c:set property="env_currencySymbol" value="<SPAN dir=ltr> .&#1580;.&#1605;</SPAN>" target="${currencyFormatterDB}"/>	
+		</c:if>
+		<c:if test="${order.grandTotalCurrency == 'ILS' && locale == 'iw_IL'}">
+			<c:set property="env_currencySymbol" value="&#1513;&#1524;&#1495;" target="${currencyFormatterDB}"/>
+		</c:if>
+		
+		<c:choose>
+			<c:when test="${locale == 'ar_EG' && order.grandTotalCurrency == 'EGP'}">
+				<c:set var="env_CurrencySymbolToFormat" value="" scope="request"/>
+				<c:set var="env_CurrencySymbol" value="${currencyFormatterDB.currencySymbol}" scope="request"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="env_CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}" scope="request"/>
+				<c:set var="env_CurrencySymbol" value="" scope="request"/>
+			</c:otherwise>
+		</c:choose>
+	</c:if>	
+
+</c:if>
+

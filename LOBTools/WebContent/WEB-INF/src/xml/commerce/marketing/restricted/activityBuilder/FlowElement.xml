@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- @keywords private -->
+	<FlowElement classDefinition="true" contextMenuClass="${mktFlowElementContextMenu}" definitionName="cmc/marketing/FlowElement" objectClass="${mktFlowPath}">
+		<dependency localName="mktFlowUtils" moduleName="cmc/marketing/FlowUtils"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="mktFlowElementContextMenu" moduleName="cmc/marketing/FlowElementContextMenu"/>
+		<dependency localName="mktFlowPath" moduleName="cmc/marketing/FlowPath"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<!--- Object type of Experiment flow elements -->
+		<variable name="experimentObjectType" type="string" value="branch"/>
+		
+		<!---
+			Property name that contains the number of customers that reached this element
+			@keywords private
+		-->
+		<variable name="customerCountPropertyName" type="string" value="customerCount"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.updateCount();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.branchDel) {
+				this.branchDel.disconnectAll();
+				delete this.branchDel;
+			}
+			if (this.countDel) {
+				this.countDel.disconnectAll();
+				delete this.countDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				if (this.branchDel) {
+					this.branchDel.disconnectAll();
+				}
+				else {
+					this.branchDel = new EventHandler.Class(this, "updateBranch");
+				}
+				if (this.countDel) {
+					this.countDel.disconnectAll();
+				}
+				else {
+					this.countDel = new EventHandler.Class(this, "updateCount");
+				}
+				this.inherited(arguments);
+				if (this.o) {
+					if (this.customerCountPropertyName != "") {
+						var countProp = this.o.getProperty(this.customerCountPropertyName);
+						this.countDel.connect(countProp, "onvalue");
+						this.countDel.connect(marketingResources.Singleton.customerCount, "onstring");
+						this.updateCount();
+					}
+					if (this.parent.parentFlow.o.objectType && (this.parent.parentFlow.o.objectType == "WebActivity" || this.parent.parentFlow.o.objectType == "InheritedWebActivity") || (this.parent.parentFlow.o.objectType == "WebActivityTemplate") || (this.parent.parentFlow.o.objectType == "InheritedWebActivityTemplate") || (this.parent.parentFlow.o.objectType == "SearchActivity") || (this.parent.parentFlow.o.objectType == "InheritedSearchActivity") || (this.parent.parentFlow.o.objectType == "SearchActivityTemplate") || (this.parent.parentFlow.o.objectType == "InheritedSearchActivityTemplate")) {
+						this.setVariable("fixedElement", this.o.objectDefinition.elemTemplateType == "Trigger");
+					}
+					if (this.o.objectType == this.experimentObjectType) {
+						var statusProp = this.o.getProperty("state");
+						this.branchDel.connect(statusProp, "onvalue");
+						this.updateBranch();
+					}
+					if (this.hasChildElements) {
+						this.branchDel.connect(this.o, "onchildObjects");
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Called when this flow element has a branch element and the element's state flag changes between 'active' and 'inactive'.
+			@keywords private
+		-->
+		<method args="e" name="updateBranch">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.iconView && (this.o.objectType == this.experimentObjectType)) {
+				var state = this.o.getPropertyValue("state");
+				if (state == "inactive") {
+					this.iconView.setVariable("currentImage", 2);
+				}
+				else {
+					var childPaths = this.o.getObjects("FlowElement");
+					var winnerFound = false;
+					for (var i = 0; i < childPaths.length; i++) {
+						var winner = childPaths[i].getPropertyValue("winner");
+						if (winner == "true") {
+							winnerFound = true;
+							break;
+						}
+					}
+					if (winnerFound) {
+						this.iconView.setVariable("currentImage", 3);
+					}
+					else {
+						this.iconView.setVariable("currentImage", 1);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			This method is called when the property value defined in <code>customerCountPropertyName</code> has changed.
+			If the value is not empty, it is shown in beneath the element icon and summary text.
+			@keywords private
+		-->
+		<method args="e" name="updateCount">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.MainView) {
+				var countProp = this.o.getProperty(this.customerCountPropertyName);
+				if (countProp.value != "") {
+					var countText = marketingResources.Singleton.replaceValues("customerCount", [countProp.value]);
+					this.MainView.iconcontentview.iconcontent.textview.counttext.setVariable('text', countText);
+					this.MainView.iconcontentview.iconcontent.textview.counttext.setVariable('visible', true);
+				}
+				else {
+					this.MainView.iconcontentview.iconcontent.textview.counttext.setVariable('visible', false);
+				}
+			}
+			]]>
+		</method>
+
+
+		<!--- @keywords private -->
+		<method name="deleteFlowElements">
+			<![CDATA[
+			this.inherited(arguments);
+			var exp = mktFlowUtils.Singleton.hasExperiment(this.parentFlow.o) ? "Experiment" : "";
+			if (exp != this.parentFlow.o.getPropertyValue("experimentType")) {
+				this.parentFlow.o.setPropertyValue("experimentType", null, exp);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="forcedBranchType, branchObjectType" name="addElementsToBranch">
+			<![CDATA[
+			if ((typeof (branchObjectType) == "undefined") || (branchObjectType == "")) {
+				branchObjectType = this.experimentObjectType;
+			}
+			var experiment = this.parentFlow.o.getPropertyValue("experimentType");
+			if ((branchObjectType != this.experimentObjectType) || ((branchObjectType == this.experimentObjectType) && (experiment != "Experiment"))) {
+				this.inherited(arguments);
+				if (branchObjectType == this.experimentObjectType) {
+					this.parentFlow.o.setPropertyValue("experimentType", null, "Experiment");
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="isDragEnabled">
+			<![CDATA[
+			var dragEnabled = this.inherited(arguments);
+			if (dragEnabled) {
+				var parentFlow = FlowUtils.Singleton.getParentFlow(this);
+				if (this.parentFlowPath && (parentFlow.flowPath == this.parentFlowPath) && ((parentFlow.o.objectType == "WebActivity") || (parentFlow.o.objectType == "InheritedWebActivity") || (parentFlow.o.objectType == "WebActivityTemplate") || (parentFlow.o.objectType == "InheritedWebActivityTemplate") || (parentFlow.o.objectType == "SearchActivity") || (parentFlow.o.objectType == "InheritedSearchActivity") || (parentFlow.o.objectType == "SearchActivityTemplate") || (parentFlow.o.objectType == "InheritedSearchActivityTemplate"))) {
+					var siblings = FlowUtils.Singleton.getSortedElements(this.parentFlowPath.o);
+					if (siblings.length > 0) {
+						if (siblings[0] == this.o) {
+							dragEnabled = false;
+						}
+					}
+				}
+			}
+			return dragEnabled;
+			]]>
+		</method>
+	</FlowElement>
+</Definitions>

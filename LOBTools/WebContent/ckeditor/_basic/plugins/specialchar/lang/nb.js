@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","nb",{options:"Alternativer for spesialtegn",title:"Spesialtegn",toolbar:"Sett inn spesialtegn"});

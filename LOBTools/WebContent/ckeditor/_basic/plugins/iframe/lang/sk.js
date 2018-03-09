@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","sk",{border:"Zobraziť kraj rámčeka",noUrl:"Zadajte adresu URL iframe",scrolling:"Povoliť rolovacie lišty",title:"Vlastnosti IFrame",toolbar:"Vložiť IFrame",ibm:{title:"IFrame"}});

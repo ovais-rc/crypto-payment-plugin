@@ -1,0 +1,563 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%
+   /* Get the e-Marketing Spot name from the request parameters, and decode it in case it has been encoded. */
+   String emsName = request.getParameter("emsName");
+   if (emsName != null) {
+  	request.setAttribute("emsName", emsName);
+   }
+   Object DM_marketingSpotBehavior = request.getAttribute("DM_emsBehavior-" + emsName);
+   if (DM_marketingSpotBehavior != null) {
+   	request.setAttribute("DM_marketingSpotBehavior", DM_marketingSpotBehavior.toString());
+   }
+
+   /* Set the name of the command that has called this page. */
+   String pathInfo = (String)request.getAttribute("javax.servlet.forward.path_info");
+   if (pathInfo != null && pathInfo.startsWith ("/")) {
+      pathInfo = pathInfo.substring (1);
+   }
+   request.setAttribute("requestURI", pathInfo);
+
+%>
+
+<%--
+  *
+  * Set up the URL to handle the full path 
+  *
+--%>
+<wcf:url var="homePageURL" patternName="HomePageURLWithLang">
+	<wcf:param name="langId" value="${langId}" />
+	<wcf:param name="storeId" value="${storeId}" />
+	<wcf:param name="catalogId" value="${catalogId}" />
+	<wcf:param name="urlLangId" value="${urlLangId}"/>
+</wcf:url>
+
+<%--
+  *
+  * Set up the variables required by the snippet.
+  *
+--%>
+<c:set var="requestURI"                value="${requestScope.requestURI}"/>
+<c:set var="commandName" value="${WCParam.commandName}"/>
+<c:if test="${empty commandName}" >
+	<c:set var="commandName" value="${param.commandName}"/>
+</c:if>
+<c:if test="${!empty commandName}">
+	<c:set var="requestURI" value="${commandName}"/>
+</c:if>
+<c:set var="emsName"                   value="${requestScope.emsName}"/>
+
+
+<%--
+  *
+  * Specify if a fully qualified URL or relative paths should be used for
+  * image tags. A fully qualified URL is required for e-mail activity functionality.
+  *
+--%>
+<c:set var="prependFullURL">
+    <c:out value="${param.useFullURL}" default="false" />
+</c:set>
+
+<%--
+  *
+  * Set the ClickInfo command URL if the optional clickInfoURL parameter is provided; otherwise, use the
+  * default value of the URL.
+  *
+--%>
+<c:set value="ClickInfo" var="clickInfoCommand" />
+<c:set value="" var="clickOpenBrowser" />
+<c:if test="${!empty param.clickInfoURL}">
+    <c:set value="${param.clickInfoURL}" var="clickInfoCommand" />
+    <c:set value='target="_blank"' var="clickOpenBrowser" />
+</c:if>
+
+<%--
+  *
+  * Specify the host name of the URL that is used to point to the shared image directory.  
+  * Use this variable to reference images.
+  *
+--%>
+<c:set var="hostPath" value="" />
+<c:if test="${prependFullURL}">
+    <c:set value="${pageContext.request.scheme}://${pageContext.request.serverName}${portUsed}" var="hostPath" />
+</c:if>
+
+<c:set var="uniqueID" value="${eSpotDatas.marketingSpotIdentifier}"/>
+<c:set var="espotName" value="${fn:replace(emsName,' ','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\\\\','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\"','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\\\'','')}"/>	
+
+<%--
+  *
+  * Create the e-Marketing Spot.
+  *
+--%>
+
+	<%-- Call the REST service to get the data to display in the e-Marketing Spot --%>
+		<wcf:rest var="eSpotDatasRoot" url="/store/{storeId}/espot/{name}" format="json" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:var name="name" value="${emsName}" encode="true"/>
+
+            <wcf:param name="DM_EmsName" value="${emsName}" />
+
+			<wcf:param name="DM_marketingSpotBehavior" value="${requestScope.DM_marketingSpotBehavior}"/>
+            <wcf:param name="DM_contextPath" value="${env_contextAndServletPath}" />
+            <wcf:param name="DM_imagePath" value="${requestScope.jspStoreImgDir}" />
+
+            <%-- url command name --%>
+            <wcf:param name="DM_ReqCmd" value="${requestURI}" />
+            <%-- url name value pair parameters --%>    
+			<c:catch>
+				<c:forEach var="aParam" items="${WCParamValues}">
+					<c:forEach var="aValue" items="${aParam.value}">
+						<c:if test="${aParam.key !='logonPassword' && aParam.key !='logonPasswordVerify' && aParam.key !='URL' && aParam.key !='logonPasswordOld' && aParam.key !='logonPasswordOldVerify' && aParam.key !='account' && aParam.key !='cc_cvc' && aParam.key !='check_routing_number' && aParam.key !='plainString' && aParam.key !='xcred_logonPassword'}">
+							<wcf:param name="${aParam.key}" value="${aValue}"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+            </c:catch>
+
+			<c:if test="${!empty param.substitutionName1 && !empty param.substitutionValue1}">
+				<wcf:param name="DM_SubstitutionName1" value="${param.substitutionName1}" />
+				<wcf:param name="DM_SubstitutionValue1" value="${param.substitutionValue1}" />
+			</c:if>
+			<c:if test="${!empty param.substitutionName2 && !empty param.substitutionValue2}">
+				<wcf:param name="DM_SubstitutionName2" value="${param.substitutionName2}" />
+				<wcf:param name="DM_SubstitutionValue2" value="${param.substitutionValue2}" />
+			</c:if>
+			<c:if test="${!empty param.substitutionName3 && !empty param.substitutionValue3}">
+				<wcf:param name="DM_SubstitutionName3" value="${param.substitutionName3}" />
+				<wcf:param name="DM_SubstitutionValue3" value="${param.substitutionValue3}" />
+			</c:if>
+			<c:if test="${!empty param.substitutionName4 && !empty param.substitutionValue4}">
+				<wcf:param name="DM_SubstitutionName4" value="${param.substitutionName4}" />
+				<wcf:param name="DM_SubstitutionValue4" value="${param.substitutionValue4}" />
+			</c:if>
+            
+			<c:if test="${empty param.substitutionName1}">
+				<wcf:param name="DM_SubstitutionName1" value="[storeName]" />
+				<wcf:param name="DM_SubstitutionValue1" value="${storeName}" />
+			</c:if>
+			<c:if test="${empty param.substitutionName2}">
+				<wcf:param name="DM_SubstitutionName2" value="[fullPathHomeURL]" />
+				<wcf:param name="DM_SubstitutionValue2" value="${homePageURL}" />
+			</c:if>
+			<c:if test="${empty param.substitutionName3}">
+				<wcf:param name="DM_SubstitutionName3" value="[langlocale]" />
+				<wcf:param name="DM_SubstitutionValue3" value="${locale}" />
+			</c:if>
+
+			<wcf:param name="DM_SubstitutionName4" value="[productTotalCount]" />
+			<wcf:param name="DM_SubstitutionValue4" value="${searchTabSubText1}" />
+
+			<wcf:param name="DM_SubstitutionName5" value="[contentTotalCount]" />
+			<wcf:param name="DM_SubstitutionValue5" value="${searchTabSubText2}" />
+
+			<wcf:param name="DM_SubstitutionName6" value="[widgetSuffix]" />
+			<wcf:param name="DM_SubstitutionValue6" value="${widgetSuffix}" />
+            
+			<%-- Example of including a value from a specific cookie
+			     <wcf:param name="MYCOOKIE" value="${cookie.MYCOOKIE.value}" />
+			--%>
+			    
+			<%-- Example of including all cookies 
+			     <c:forEach var="cookieEntry" items="${cookie}">
+			         <wcf:param name="${cookieEntry.key}" value="${cookieEntry.value.value}" />                    
+			     </c:forEach>
+			--%>
+			            
+            <c:if test="${!empty param.previewReport}">
+                <wcf:param name="DM_PreviewReport" value="${param.previewReport}"/>
+            </c:if>
+  		</wcf:rest>
+		<c:if test="${!empty eSpotDatasRoot.MarketingSpotData[0]}" >
+			<c:set  var="eSpotDatas" value="${eSpotDatasRoot.MarketingSpotData[0]}"/>
+		</c:if>
+
+ <wcf:eMarketingSpotCache marketingSpotDataJSON="${eSpotDatas}" contentDependencyName="contentId" />
+
+<%@ include file="../Common/ESpot/ESpotTitle_Data.jspf"%>
+ 
+<%--
+  *
+  * Start: Content
+  * The following block is used to display the content associated with this e-Marketing
+  * Spot. The URL link defined with the content can be referenced through the submission of
+  * the HTML form in the calling .jsp file.
+  *
+--%>
+<jsp:useBean id="contentNameMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentUrlMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentImageMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentDescriptionMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentTextMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentAssetPathMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentFlashMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentTypeMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentFormatMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentImageAreaInputMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentImageAreaNameMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentImageAreaMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="contentImageAreaSourceMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+
+<c:set var="emptyFooterContent" value="true"/>
+<c:if test="${!empty eSpotDatas.baseMarketingSpotActivityData && param.fromPage == 'footer'}">
+	<c:set var="emptyFooterContent" value="false"/>
+</c:if>
+<c:set var="currentRowCount" value="0"/>
+<c:forEach var="eSpotData" items="${eSpotDatas.baseMarketingSpotActivityData}" varStatus="status3">
+    <c:if test='${eSpotData.baseMarketingSpotDataType eq "MarketingContent"}'>
+    	<c:set target="${contentNameMap}" property="${currentRowCount}" value="${eSpotData.contentName}" />
+        <%--
+          *
+          * Set up the URL to call when the image or text is clicked.
+          *
+        --%>
+		<c:set var="contentClickUrl" value="${param.contentClickUrl}"/>
+		<c:if test = "${empty contentClickUrl}">
+			<c:url value="${eSpotData.contentUrl}" var="contentClickUrl">
+				<c:if test="${!empty param.errorViewName}" >
+					<c:param name="errorViewName" value="${param.errorViewName}" />
+					<c:if test="${!empty param.orderId}">
+						<c:param name="orderId" value="${param.orderId}"/>
+					</c:if>
+				</c:if>
+				<c:if test="${!empty eSpotData.contentUrl && (fn:contains(eSpotData.contentUrl,'OrderItemAdd') || fn:contains(eSpotData.contentUrl,'AddOrderItemWithPromotionCodeOrCoupon'))}" >
+					<c:param name="deleteCartCookie" value="true"/>
+				</c:if>
+			</c:url>
+		</c:if>
+
+        <c:url value="${clickInfoCommand}" var="ClickInfoURL">
+            <c:param name="evtype" value="CpgnClick" />
+            <c:param name="mpe_id" value="${eSpotDatas.marketingSpotIdentifier}" />
+            <c:param name="intv_id" value="${eSpotData.activityIdentifierID}" />
+            <c:param name="storeId" value="${storeId}" />
+            <c:param name="catalogId" value="${catalogId}" />
+            <c:param name="langId" value="${langId}" />
+
+			<c:forEach var="expResult" items="${eSpotData.experimentResult}" begin="0" end="0">
+				<c:param name="experimentId" value="${expResult.experimentResultId}" />
+				<c:param name="testElementId" value="${expResult.experimentResultTestElementId}" />
+				<c:param name="controlElement" value="${expResult.controlElement}" />
+			</c:forEach>
+			<c:param name="expDataType" value="${eSpotData.baseMarketingSpotDataType}" />
+			<c:param name="expDataUniqueID" value="${eSpotData.baseMarketingSpotActivityID}" />
+			
+			<c:choose>
+				<c:when test="${(fn:contains(contentClickUrl, '?'))}">
+					<c:param name="URL" value="${contentClickUrl}" />
+				</c:when>
+				<c:otherwise>
+					<c:param name="URL" value="${contentClickUrl}?evtype=&mpe_id=&intv_id=&storeId=&catalogId=&langId=&experimentId=&testElementId=&controlElement=&expDataType=&expDataUniqueID=" />
+				</c:otherwise>
+			</c:choose>
+        </c:url>
+        
+        <%-- Coremetrics tag --%>
+        <flow:ifEnabled feature="Analytics">
+        	
+            <cm:campurl espotDataJSON="${eSpotDatas}" id="ClickInfoURL" url="${ClickInfoURL}"
+                        initiative="${eSpotData.activityIdentifierID}"
+                        name="${eSpotData.marketingContentDescription[0].marketingText}" />
+            
+        </flow:ifEnabled>
+
+
+        <c:choose>
+        
+            <c:when test="${eSpotData.contentFormatName == 'File'}">
+				<c:set target="${contentFormatMap}" property="${currentRowCount}" value="File" />
+                <%--
+                  *
+                  * For handling language specific assets and descriptions
+                  *
+                --%>
+                <c:set var="foundLanguage" value="false"/>
+                
+                <%-- Store the index of the asset for the current language in the array --%>
+                <c:set var="assetIndex" value="0"/>
+                
+                <%-- Check if there are any attachment assets --%>
+                <c:if test="${fn:length(eSpotData.attachmentAsset) > 0}">
+                    <%-- Go through each asset and scan the list of languages specified --%>
+                    <%-- Take the first asset found with the current selected language --%>
+                    <%-- If no language specific asset is found, use the first asset as the default --%>
+                    <c:forEach var="i" begin="0" end="${fn:length(eSpotData.attachmentAsset)-1}">
+                        <c:forEach var="language" items="${eSpotData.attachmentAsset[i].attachmentAssetLanguage}">
+                            <c:if test="${(language == langId) && (!foundLanguage)}">
+                                <c:set var="foundLanguage" value="true"/>
+                                <c:set var="assetIndex" value="${i}"/>
+                            </c:if>
+                        </c:forEach>
+                    </c:forEach>
+                </c:if>
+
+                <c:set var="foundLanguage" value="false"/>
+                <%-- Store the index of the attachment description for the current language in the array --%>
+                <c:set var="descriptionIndex" value="0"/>
+
+                <%-- Check if there are any attachment descriptions --%>
+                <c:if test="${fn:length(eSpotData.attachmentDescription) > 0}">
+                    <%-- Go through each description and find the description associated with the current language --%>
+                    <%-- If no language specific description is found, use the default English description --%>
+                    <c:forEach var="i" begin="0" end="${fn:length(eSpotData.attachmentDescription)-1}">
+                        <c:forEach var="language" items="${eSpotData.attachmentDescription[i].attachmentLanguage}">
+                            <c:if test="${(language == langId) && (!foundLanguage)}">
+                                <c:set var="foundLanguage" value="true"/>
+                                <c:set var="descriptionIndex" value="${i}"/>
+                            </c:if>
+                        </c:forEach>
+                    </c:forEach>
+                </c:if>
+                
+                <c:set var="contentMimeType" value="${eSpotData.contentMimeType}"/>
+                <c:set var="assetMimeType" value="${eSpotData.attachmentAsset[assetIndex].attachmentAssetMimeType}"/>
+                <c:if test="${(empty contentMimeType) && 
+                	(fn:endsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, '.gif') ||
+                	 fn:endsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, '.jpg') ||
+                	 fn:endsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, '.jpeg') ||
+                	 fn:endsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, '.png')	)}">
+                	 <c:set var="contentMimeType" value="image"/>
+                </c:if>
+                <c:if test="${(empty contentMimeType) && (fn:endsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, '.swf') )}">
+                	<c:set var="contentMimeType" value="application"/>
+                	<c:set var="assetMimeType" value="application/x-shockwave-flash"/>
+                </c:if>
+                
+                <c:set var="contentPath" value=""/>
+                <c:choose>
+                	<c:when test="${(fn:startsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, 'http://') ||
+                		fn:startsWith(eSpotData.attachmentAsset[assetIndex].attachmentAssetPath, 'https://')	)}">
+                		<c:set var="contentPath" value="${eSpotData.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+                	</c:when>
+                	<c:when test="${empty eSpotData.attachmentAsset[assetIndex].attachmentAssetRootDirectory}">
+                		<c:set var="contentPath" value="${hostPath}${storeImgDir}${eSpotData.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+                	</c:when>
+                	<c:otherwise>
+                		<c:set var="contentPath" value="${hostPath}${env_customImageContextPath}/${eSpotData.attachmentAsset[assetIndex].attachmentAssetRootDirectory}/${eSpotData.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+                	</c:otherwise>
+                </c:choose>		
+            	
+				  	 <c:choose>
+	              		<c:when test="${(contentMimeType eq 'image') || (contentMimeType eq 'images')}">
+						<c:set target="${contentTypeMap}" property="${currentRowCount}" value="image" />
+						<c:choose>
+							<c:when test="${param.isCategorySubsriptionDisplayURL eq true or WCParam.isCategorySubsriptionDisplayURL eq true}">
+								<img id="divider" alt="" src="${jspStoreImgDir}${env_vfileColor}left_nav_divider.gif" />
+								<div id="CategorySubscriptionOption" class="CategorySubscriptionOption">
+									<form id="CategorySubscriptionForm" name="CategorySubscriptionForm" method="post" action="RESTMarketingTriggerProcessServiceEvaluate">
+										<input type="hidden" name="DM_ReqCmd" value="<c:out value='${eSpotData.contentUrl}'/>" id="CategorySubscriptionForm_DM_ReqCmd"/>
+										<input type="hidden" name="storeId" value='<c:out value="${param.storeId}" />' id="CategorySubscriptionForm_storeId"/>
+										<input type="hidden" name="catalogId" value='<c:out value="${param.catalogId}"/>' id="CategorySubscriptionForm_catalogId"/>
+										<input type="hidden" name="langId" value='<c:out value="${param.langId}"/>' id="CategorySubscriptionForm_langId"/>
+										<input type="hidden" name="categoryId" value='<c:out value="${WCParam.categoryId}"/>' id="CategorySubscriptionForm_categoryId"/>
+										<input type="hidden" name="errorViewName" value="AjaxOrderItemDisplayView" id="CategorySubscriptionForm_errorViewName"/>
+										<input type="hidden" name="URL" value="" id="CategorySubscriptionForm_URL"/>
+									</form>
+									<c:set var="ajaxEnabled" value="false"/>
+									<flow:ifEnabled feature="AjaxAddToCart">
+										<c:set var="ajaxEnabled" value="true"/>
+									</flow:ifEnabled>
+									<a id="CategorySubscriptionLink" href="#" onclick="JavaScript:setCurrentId('CategorySubscriptionLink');categoryDisplayJS.handleCategorySubscription('CategorySubscriptionForm','${ajaxEnabled}');return false;">
+										<img id="CategorySubscriptionImage" src='${contentPath}'
+										   alt='<c:out value="${eSpotData.attachmentDescription[descriptionIndex].attachmentShortDescription}"/>' title='<c:out value="${eSpotData.attachmentDescription[descriptionIndex].attachmentShortDescription}"/>'
+										   border="0"
+										/>
+									</a>
+								</div>
+							</c:when>
+							<c:otherwise>
+					              	 <%--
+				                    *
+				                    * Display the content image, with optional click information.
+				                    *
+				                   --%>
+								   
+								<c:if test="${!empty eSpotData.contentUrl}">
+									<c:set target="${contentUrlMap}" property="${currentRowCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+								</c:if>
+									<c:set target="${contentImageMap}" property="${currentRowCount}" value="${contentPath}" />
+									<c:set target="${contentDescriptionMap}" property="${currentRowCount}" value="${eSpotData.attachmentDescription[descriptionIndex].attachmentShortDescription}" />
+									
+									<c:set target="${contentImageAreaInputMap}" property="${currentRowCount}" value="${eSpotData.contentInputOption}" />
+									<c:set target="${contentImageAreaNameMap}" property="${currentRowCount}" value="${eSpotData.marketingContentImageMap[0].name}" />
+									<c:if test="${!empty eSpotData.marketingContentImageMap}" >
+									
+										<c:choose>
+											<c:when test="${!empty eSpotData.marketingContentImageMap[0].area}" >
+												<jsp:useBean id="contentImageAreaPerEspotMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+												
+												<c:forEach var="imageArea" items="${eSpotData.marketingContentImageMap[0].area}" varStatus="aStatus">
+													<c:url value="${clickInfoCommand}" var="ImageMapClickInfoURL">
+														<c:param name="evtype" value="CpgnClick" />
+														<c:param name="mpe_id" value="${eSpotDatas.marketingSpotIdentifier}" />
+														<c:param name="intv_id" value="${eSpotData.activityIdentifierID}" />
+														<c:param name="storeId" value="${storeId}" />
+														<c:param name="catalogId" value="${catalogId}" />
+														<c:param name="langId" value="${langId}" />
+														<c:forEach var="expResult" items="${eSpotData.experimentResult}" begin="0" end="0">
+															<c:param name="experimentId" value="${expResult.experimentResultId}" />
+															<c:param name="testElementId" value="${expResult.experimentResultTestElementId}" />
+															<c:param name="controlElement" value="${expResult.controlElement}" />
+														</c:forEach>
+														<c:param name="expDataType" value="${eSpotData.baseMarketingSpotDataType}" />
+														<c:param name="expDataUniqueID" value="${eSpotData.baseMarketingSpotActivityID}" />
+														<c:param name="URL" value="${imageArea.url}" />
+													</c:url>
+												
+													<jsp:useBean id="contentImageAreaMap_current" class="java.util.HashMap" type="java.util.Map"/>
+													<c:set target="${contentImageAreaMap_current}" property="shape" value="${imageArea.shape}" />
+													<c:set target="${contentImageAreaMap_current}" property="coordinates" value="${imageArea.coordinates}" />
+													<c:set target="${contentImageAreaMap_current}" property="url" value="${env_absoluteUrl}${ImageMapClickInfoURL}" />
+													<c:set target="${contentImageAreaMap_current}" property="title" value="${imageArea.title}" />
+													<c:set target="${contentImageAreaMap_current}" property="target" value="${imageArea.target}" />
+													<c:set target="${contentImageAreaMap_current}" property="altText" value="${imageArea.alternateText}" />
+																																				
+													<c:set target="${contentImageAreaPerEspotMap}" property="${aStatus.count}" value="${contentImageAreaMap_current}" />
+													<c:remove var="contentImageAreaMap_current"/>
+												</c:forEach>
+												<c:set target="${contentImageAreaMap}" property="${currentRowCount}" value="${contentImageAreaPerEspotMap}" />
+											</c:when>
+											<c:when test="${!empty eSpotData.marketingContentImageMap[0].source}" >
+												<c:set target="${contentImageAreaSourceMap}" property="${currentRowCount}" value="${eSpotData.marketingContentImageMap[0].source}" />
+											</c:when>
+										</c:choose>
+									</c:if>
+							</c:otherwise>
+						</c:choose>
+			          </c:when>
+
+                    <c:when test="${(contentMimeType eq 'application') ||
+                                    (contentMimeType eq 'applications') ||
+                                    (contentMimeType eq 'text') ||
+                                    (contentMimeType eq 'textyv') ||
+                                    (contentMimeType eq 'video') ||
+                                    (contentMimeType eq 'audio') ||
+                                    (contentMimeType eq 'model')
+                                    }">
+						<c:set target="${contentTypeMap}" property="${currentRowCount}" value="application" />
+                        <%--
+                          *
+                          * Display the content: flash, audio, or other.
+                          *
+                        --%>
+                        <c:choose>
+                            <c:when test="${(assetMimeType eq 'application/x-shockwave-flash')}" >
+								<c:set target="${contentFlashMap}" property="${currentRowCount}" value="true" />
+								
+								<c:set target="${contentDescriptionMap}" property="${currentRowCount}" value="${eSpotData.marketingContentDescription[0].marketingText}" />
+								
+								<c:set target="${contentUrlMap}" property="${currentRowCount}" value="${contentPath}" />                          
+                            </c:when>
+							
+                            <c:otherwise>
+								<c:set target="${contentFlashMap}" property="${currentRowCount}" value="false" />
+								
+								<c:set target="${contentAssetPathMap}" property="${currentRowCount}" value="${contentPath}" /> 
+                <c:set target="${contentImageMap}" property="${currentRowCount}" value="${hostPath}${env_customImageContextPath}/${eSpotData.attachmentAsset[assetIndex].attachmentAssetRootDirectory}/${eSpotData.attachmentImage}"/>
+								
+								<c:set target="${contentDescriptionMap}" property="${currentRowCount}" value="${eSpotData.attachmentDescription[descriptionIndex].attachmentShortDescription}"/>
+								
+								
+								 <c:if test="${!empty eSpotData.contentUrl}">
+									<c:set target="${contentUrlMap}" property="${currentRowCount}" value="${env_absoluteUrl}${ClickInfoURL}" />								
+									
+									<c:set target="${contentTextMap}" property="${currentRowCount}" value="${eSpotData.marketingContentDescription[0].marketingText}"/>
+								</c:if>
+                                                              
+                            </c:otherwise>
+                        </c:choose>
+
+
+                    </c:when>
+
+                    <c:otherwise>
+                        <%--
+                          * Content type is File, but no image or known mime type is associated, so display a link to the URL.
+                          * Display the content text, with optional click information.
+                          *
+                        --%>
+						
+						<c:set target="${contentAssetPathMap}" property="${currentRowCount}" value="${eSpotData.attachmentAsset[0].attachmentAssetPath}" />
+						                        					
+                        <c:if test="${!empty eSpotData.contentUrl}">
+                            <c:set target="${contentUrlMap}" property="${currentRowCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+                        </c:if>
+                        
+                        <c:if test="${!empty eSpotData.marketingContentDescription[0].marketingText}">
+                           	<c:set target="${contentTextMap}" property="${currentRowCount}" value="${eSpotData.marketingContentDescription[0].marketingText}"/>
+                        </c:if>
+                        												
+                    </c:otherwise>
+                </c:choose>
+            </c:when>
+            
+            <c:when test="${eSpotData.contentFormatName == 'Text'}">
+				<c:set target="${contentFormatMap}" property="${currentRowCount}" value="Text" />
+                <c:choose>
+                    <c:when test="${param.isCategorySubsriptionDisplayURL eq true or WCParam.isCategorySubsriptionDisplayURL eq true}">
+                        <img id="divider" alt="" src="${jspStoreImgDir}${env_vfileColor}left_nav_divider.gif" />
+                        <div id="CategorySubscriptionOption" class="CategorySubscriptionOption">
+                            <form id="CategorySubscriptionForm" name="CategorySubscriptionForm" method="post" action="RESTMarketingTriggerProcessServiceEvaluate">
+                                <input type="hidden" name="DM_ReqCmd" value="<c:out value='${eSpotData.contentUrl}'/>" id="CategorySubscriptionForm_DM_ReqCmd"/>
+                                <input type="hidden" name="storeId" value='<c:out value="${param.storeId}" />' id="CategorySubscriptionForm_storeId"/>
+                                <input type="hidden" name="catalogId" value='<c:out value="${param.catalogId}"/>' id="CategorySubscriptionForm_catalogId"/>
+                                <input type="hidden" name="langId" value='<c:out value="${param.langId}"/>' id="CategorySubscriptionForm_langId"/>
+                                <input type="hidden" name="categoryId" value='<c:out value="${WCParam.categoryId}"/>' id="CategorySubscriptionForm_categoryId"/>
+                                <input type="hidden" name="errorViewName" value="AjaxOrderItemDisplayView" id="CategorySubscriptionForm_errorViewName"/>
+                                <input type="hidden" name="URL" value="" id="CategorySubscriptionForm_URL"/>
+                            </form>
+                            <c:set var="ajaxEnabled" value="false"/>
+                            <flow:ifEnabled feature="AjaxAddToCart">
+                                <c:set var="ajaxEnabled" value="true"/>
+                            </flow:ifEnabled>
+                            <a id="CategorySubscriptionLink" href="#" onclick="JavaScript:setCurrentId('CategorySubscriptionLink');categoryDisplayJS.handleCategorySubscription('CategorySubscriptionForm','${ajaxEnabled}');return false;">
+                                <c:out value="${eSpotData.marketingContentDescription[0].marketingText}" escapeXml="false" />
+                            </a>
+                        </div>
+                    </c:when>
+                    <c:otherwise>
+                        <%--
+                          *
+                          * Display the content text, with optional click information.
+                          *
+                        --%>                          
+                        <c:if test="${!empty eSpotData.contentUrl}">
+							<c:set target="${contentUrlMap}" property="${currentRowCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+                        </c:if>
+						
+							<c:set target="${contentTextMap}" property="${currentRowCount}" value="${eSpotData.marketingContentDescription[0].marketingText}"/>
+							         
+                    </c:otherwise>
+                </c:choose>
+                
+            </c:when>
+            
+        </c:choose>        
+	<c:set var="currentRowCount" value="${currentRowCount+1}"/>
+    </c:if>
+</c:forEach>
+
+<c:if test="${env_inPreview && !env_storePreviewLink}">
+	<wcst:message key="ES_CONTENT_RECOMMENDATION" bundle="${widgetPreviewText}" var="espotTypeInfo"/>	
+</c:if>
+
+<%--
+  *
+  * End: Content
+  *
+--%>

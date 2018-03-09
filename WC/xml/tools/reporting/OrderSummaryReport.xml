@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report  reportName="OrderSummaryReport" online="true" >
+   <comment></comment>
+   <SQLvalue>
+    select oi."Year" ,
+     oi."Month" ,
+     sum(oi.totalproduct),
+     sum(oi.taxamount),
+     sum(oi.shipcharge),
+     sum(oi.shiptaxamount),
+     sum(oi.totaladjustment),
+     sum(oi.totalproduct+oi.taxamount+oi.shipcharge+oi.shiptaxamount+oi.totaladjustment),
+     t3.ordercount,
+     cast(sum(oi.totalproduct+oi.taxamount+oi.shipcharge+oi.shiptaxamount+oi.totaladjustment) as decimal(20, 5)) / t3.ordercount,
+     orders.currency
+     from orders, storeent, store, ordrelease,
+       (select $DB_YEAR_FUNC(timeshipped)$ as "Year", $DB_MONTH_FUNC(timeshipped)$ as "Month", totalproduct, taxamount, shipcharge, shiptaxamount, totaladjustment, orders_id, ordreleasenum, timeshipped from orderitems)
+          oi,
+		(select count(distinct(t2.ordernum)) as ordercount, t2.y as yy,t2.m as mm,orders.currency as cc
+		   from orders,
+		    (select $DB_YEAR_FUNC(timeshipped)$ as y,$DB_MONTH_FUNC(timeshipped)$ as m,orderitems.orders_id as ordernum, orderitems.ordreleasenum, orderitems.timeshipped,orders.currency as ccc
+		      from orderitems, orders, store, storeent, ordrelease  
+				where orderitems.orders_id=orders.orders_id   
+				and orders.storeent_id=storeent.storeent_id    
+				and storeent.storeent_id=store.store_id    
+				and orderitems.ordreleasenum=ordrelease.ordreleasenum  
+				and orderitems.orders_id=ordrelease.orders_id   
+				and ordrelease.status='MNF'    
+				and store.store_id={storeent_id}
+				and orderitems.timeshipped &gt;= $DB_TIMESTAMP_FUNC({StartDate})$  
+				and orderitems.timeshipped &lt;= $DB_TIMESTAMP_FUNC({EndDate})$) t2  
+            where orders.currency=t2.ccc				
+			group by t2.y,t2.m,orders.currency) t3 
+			          
+       where oi.orders_id=orders.orders_id
+     and orders.storeent_id=storeent.storeent_id
+     and storeent.storeent_id=store.store_id
+     and oi.ordreleasenum=ordrelease.ordreleasenum
+     and oi.orders_id=ordrelease.orders_id
+     and ordrelease.status='MNF'
+     and store.store_id={storeent_id}
+     and oi.timeshipped &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+     and oi.timeshipped &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+     and oi."Year"=t3.yy
+	 and oi."Month"=t3.mm 
+	 and orders.currency=t3.cc
+     group by "Year", "Month",orders.currency,t3.ordercount   
+     order by "Year" desc, "Month" desc, orders.currency desc
+	 
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>reporting.reportStrings</resourceBundle>
+         <title>OrderSummaryReportOutputViewTitle</title>
+         <message>OrderSummaryReportOutputViewTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH {  font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD {  font-size : 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>OrderSummaryReportYearColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>OrderSummaryReportMonthColumnTitle</columnName>
+            <columnType>month</columnType>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>OrderSummaryReportProductTotalColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>OrderSummaryReportProdutTaxColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>OrderSummaryReportShippingTotalColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C5</columnKey>
+            <columnName>OrderSummaryReportShippingTaxColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C6</columnKey>
+            <columnName>OrderSummaryReportAdjustmentsColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C7</columnKey>
+            <columnName>OrderSummaryReportTotalColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C8</columnKey>
+            <columnName>OrderSummaryReportOrdersColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>integer</columnType>
+         </columns>
+         <columns>
+            <columnKey>C9</columnKey>
+            <columnName>OrderSummaryReportAverageColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+         </columns>
+         <columns>
+            <columnKey>C10</columnKey>
+            <columnName>OrderSummaryReportCurrencyColumnTitle</columnName>
+         </columns>
+      </userDefinedParameters>
+   </display>
+  </Report>
+</Reporting>

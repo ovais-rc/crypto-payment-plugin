@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","he",{label:"סגנונות",panelTitle:"סגנונות",panelTitle1:"סגנונות חטיבה",panelTitle2:"סגנונות שורה",panelTitle3:"סגנונות אובייקט"});

@@ -1,0 +1,351 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- BEGIN OrderDetail_SubscriptionsOrderData.jsp -->
+
+<%-- paging variables - to pass to rest call --%>
+<c:set var="pageSize" value="${WCParam.pageSize}" />
+<c:if test="${empty pageSize}">
+	<c:set var="pageSize" value="${maxOrderItemsPerPage}"/>
+</c:if>
+<fmt:parseNumber var="pageSize" value="${pageSize}"/>
+
+<c:set var="beginIndex" value="${WCParam.beginIndex}" />
+<c:if test="${empty beginIndex}">
+	<c:set var="beginIndex" value="0" />
+</c:if> 
+
+<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+
+<c:set var="orderId" value="${WCParam.orderId}"/>
+<c:set var="orderItemId" value="${WCParam.orderItemId}"/>
+
+<%-- use value from WC_timeoffset to adjust to browser time zone --%>
+<%-- Format the timezone retrieved from cookie since it is in decimal representation --%>
+<%-- Convert the decimals back to the correct timezone format such as :30 and :45 --%>
+<%-- Only .75 and .5 are converted as currently these are the only timezones with decimals --%>								
+<c:set var="formattedTimeZone" value="${fn:replace(cookie.WC_timeoffset.value, '%2B', '+')}"/>													
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.75', ':45')}"/>	
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.5', ':30')}"/>	
+
+<c:if test="${WCParam.currentSelection eq 'SubscriptionDetailSlct'}">
+	<wcf:rest var="childOrdersResult" url="store/{storeId}/order">
+		<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+		<wcf:param name="q" value="findChildOrderByOrderItemId"/>
+		<wcf:param name="orderItemId" value="${orderItemId}"/>
+		<wcf:param name="pageSize" value="${pageSize}"/>
+		<wcf:param name="pageNumber" value="${currentPage}"/>
+	</wcf:rest>
+</c:if>
+
+<c:if test="${empty childOrdersResult && beginIndex >= pageSize}">
+	<c:set var="beginIndex" value="${beginIndex - pageSize}"/>
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	<c:if test="${WCParam.currentSelection eq 'SubscriptionDetailSlct'}">
+		<wcf:rest var="childOrdersResult" url="store/{storeId}/order">
+			<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+			<wcf:param name="q" value="findChildOrderByOrderItemId"/>
+			<wcf:param name="orderItemId" value="${orderItemId}"/>
+			<wcf:param name="pageSize" value="${pageSize}"/>
+			<wcf:param name="pageNumber" value="${currentPage}"/>
+		</wcf:rest>
+	</c:if>
+</c:if>
+
+<c:set var="childOrders" value="${childOrdersResult.Order}"/>
+<c:set var="pageSize" value="${childOrdersResult.recordSetCount + pageSize - childOrdersResult.recordSetCount}" />
+
+<fmt:parseNumber var="numEntries" value="${childOrdersResult.recordSetTotal}" integerOnly="true" />
+<c:set var="numEntries" value="${numEntries}"/>
+<c:if test="${numEntries > pageSize}">
+	<fmt:formatNumber var="totalPages" value="${(numEntries/pageSize)}" maxFractionDigits="0"/>
+	<c:if test="${numEntries%pageSize < (pageSize/2)}">
+		<fmt:formatNumber var="totalPages" value="${(numEntries+(pageSize/2)-1)/pageSize}" maxFractionDigits="0"/>
+	</c:if>
+	<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= numEntries}">
+			<c:set var="endIndex" value="${numEntries}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+</c:if>
+
+<%-- Retrieve the current page of order & order item information from this request --%>
+<c:set var="pagorder" value="${requestScope.order}"/>
+<c:if test="${empty pagorder || pagorder == null}">
+	<c:choose>
+		<c:when test="${WCParam.orderId != null && WCParam.orderId != ''}">
+			<wcf:rest var="pagorder" url="store/{storeId}/order/{orderId}" scope="request">
+				<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+				<wcf:var name="orderId" value="${WCParam.orderId}" encode="true"/>
+				<wcf:param name="accessProfile" value="IBM_Details" />
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="${currentPage}"/>
+			</wcf:rest>
+		</c:when>
+	
+		<c:when test="${WCParam.externalOrderId != null && WCParam.externalOrderId != ''}">
+			<wcf:rest var="pagorder" url="store/{storeId}/order/{orderId}" scope="request">
+				<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+				<wcf:var name="orderId" value="${WCParam.externalOrderId}" encode="true"/>
+				<wcf:param name="accessProfile" value="IBM_External_Details" />
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="${currentPage}"/>
+			</wcf:rest>
+		</c:when>
+	
+		<c:when test="${WCParam.quoteId != null && WCParam.quoteId != ''}">
+			<%/* Currently no local implementation available*/%>
+		</c:when>
+		
+		<c:when test="${WCParam.externalQuoteId != null && WCParam.externalQuoteId != ''}">
+			<wcf:rest var="quote" url="store/{storeId}/order" scope="request">
+				<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+				<wcf:param name="q" value="findQuoteByExternalQuoteId"/>
+				<wcf:param name="quoteId" value="$PWCParam.externalQuoteId}"/>
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="${currentPage}"/>
+			</wcf:rest>
+			<c:set var="pagorder" value="${quote.orderTemplate}" scope="request"/>
+		</c:when>	
+	</c:choose>
+</c:if>
+
+<%-- ****************************************************************
+     update paging variables --%>
+
+	<c:if test="${beginIndex == 0}">
+		<c:if test="${childOrdersResult.recordSetTotal > childOrdersResult.recordSetCount}">
+			<c:set var="pageSize" value="${childOrdersResult.recordSetCount}" />
+		</c:if>
+	</c:if>
+	<c:set var="numEntries" value="${childOrdersResult.recordSetTotal}"/>
+
+	<fmt:formatNumber var="totalPages" value="${(numEntries/pageSize)}" maxFractionDigits="0"/>
+	<c:if test="${numEntries%pageSize < (pageSize/2)}">
+		<fmt:formatNumber var="totalPages" value="${(numEntries+(pageSize/2)-1)/pageSize}" maxFractionDigits="0"/>
+	</c:if>
+	<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= numEntries}">
+			<c:set var="endIndex" value="${numEntries}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+
+	<wcst:message var="pageDisplay1" key="ORDERDETAIL_PAGE_DISPLAY1" bundle="${widgetText}"/>
+	<wcst:message var="pageDisplay2" key="ORDERDETAIL_PAGE_DISPLAY2" bundle="${widgetText}">
+		<c:choose>
+			<c:when test="${numEntries == 0}">
+				<wcst:param><wcst:formatNumber value="${beginIndex}"/></wcst:param>
+			</c:when>
+			<c:otherwise>
+				<wcst:param><wcst:formatNumber value="${beginIndex + 1}"/></wcst:param>
+			</c:otherwise>
+		</c:choose>
+		<wcst:param><wcst:formatNumber value="${endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${numEntries}"/></wcst:param>
+	</wcst:message>
+
+	
+	<%-- The following variable are passed to ItemTable_UI.jsp --%>
+	<c:set var="widgetName" value="OrderDetail_RecurringOrderHistory" />
+	<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}" />
+
+	<%-- ****************************************************************
+	 strings to to pass to UI JSP from properties file --%>
+
+	<%-- table header --%>
+	<wcst:message var="hCol1Text" key="ORDERDETAIL_RECURRINGORDERHISTORY_SUBSCRIPTION" bundle="${widgetText}"/>
+	<wcst:message var="hCol2Text" key="ORDERDETAIL_RECURRINGORDERHISTORY_ORDERDATE" bundle="${widgetText}"/>
+	<wcst:message var="hCol3Text" key="ORDERDETAIL_RECURRINGORDERHISTORY_ORDERSTATUS" bundle="${widgetText}"/>
+	
+
+	<%-- ****************************************************************
+	 header row main div class name --%>
+	<c:set var="headerDivClass" value="row tableHeader" />
+
+	<%--
+	hCells is an array holding div class and contents of the cells in the header row, we have 4 columns for
+	the table so there are 4 cells.
+	Structure of hCells array:
+	"hCells": [
+		"hCell":{
+			"cellDivClass": <DIV_CLASS>
+			"cellContent": <CELL_CONTENT>
+		},
+
+	The HTML of the header row is:
+	<div class="<DIV_CLASS>">
+		<div class="cell">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>	
+	
+	<wcf:useBean var="hCells" classname="java.util.ArrayList"/>
+
+		<%-- header row column 1 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col2" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol1Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+	
+		<%-- header row column 2 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col3" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol2Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		<%-- header row column 3 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col4" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol3Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		
+	<%-- ****************************************************************
+	 table row main div class name --%>
+	<c:set var="rowDivClass" value="row entry withPreviewImage" />
+		
+	<%--
+	rows is an array holding rCells, each rCells record holds data for one row of the table
+	rCells is an array holding div class, id and contents of the cells in a table row, we have 6 columns so there are 6 cells each row
+	Structure of rCells array:
+	"rCells": [
+		"rCell":{
+			"div1Class": <DIV1_CLASS>
+			"div2Class": <DIV2_CLASS>
+			"div2Id": <DIV2_ID>
+			"cellContent": <CELL_CONTENT>
+		},
+
+	The HTML of a table cell is:
+	<div class="<DIV1_CLASS>">
+		<div class="<DIV2_CLASS>" id="<DIV2_ID">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>
+
+	<c:set var="rowCount" value="0"/>
+	<wcf:useBean var="rows" classname="java.util.ArrayList"/>
+	
+	<c:if test="${empty childOrders}">
+		<wcst:message var="itemTableEmpty" key="ORDERDETAIL_RECURRINGORDERHISTORY_NAME_EMPTY" bundle="${widgetText}"/>
+	</c:if>
+	
+	<c:forEach var="order" items="${childOrders}" varStatus="status">
+
+		<wcf:useBean var="rCells" classname="java.util.ArrayList"/>
+	
+		<%-- table row column 1 - subscription name --%>
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+			<wcf:set key="div1Class" value="col2 updated" target="${rCell}" />
+			<wcf:set key="div2Class" value="cell" target="${rCell}" />
+			<wcf:set key="div2Id" value="" target="${rCell}" />
+			<wcf:set key='cellContent' value='${WCParam.subscriptionName}' target='${rCell}' />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+	
+	
+		<%-- table row column 2 - order date --%>
+		<c:catch>
+			<fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+		</c:catch>
+		<c:if test="${empty orderDate}">
+			<c:catch>
+				<fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+		
+		<c:choose>
+			<c:when test="${!empty orderDate}">
+				<fmt:formatDate var="formattedDate" value="${orderDate}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+			</c:when>
+			<c:otherwise>
+				<wcst:message var="formattedDate" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+			</c:otherwise>
+		</c:choose>
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+			<wcf:set key="div1Class" value="col3 name" target="${rCell}" />
+			<wcf:set key="div2Class" value="cell" target="${rCell}" />
+			<wcf:set key="div2Id" value="" target="${rCell}" />
+			<wcf:set key='cellContent' value='${formattedDate}' target='${rCell}' />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 3 - order status --%>
+		<c:choose>
+			<c:when test="${!empty order.orderStatus}">
+					<wcst:message var="thisOrderStatus" bundle="${widgetText}" key="MO_OrderStatus_${order.orderStatus}" />
+			</c:when>
+			<c:otherwise>
+				<wcst:message var="thisOrderStatus" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+			</c:otherwise>
+		</c:choose>
+		
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+			<wcf:set key="div1Class" value="col4 name" target="${rCell}" />
+			<wcf:set key="div2Class" value="cell" target="${rCell}" />
+			<wcf:set key="div2Id" value="" target="${rCell}" />
+			<wcf:set key='cellContent' value='${thisOrderStatus}' target='${rCell}' />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		
+		<wcf:set target="${rows}" value="${rCells}" />
+		<c:remove var="rCells"/>
+	</c:forEach>
+	
+	
+	<%-- Set variables used by pagination controls - used by PaginationControls.jspf --%>
+	<c:set var="linkPrefix" value="${widgetName}"/>
+	<c:set var="otherViews" value="false"/>
+	<c:set var="eventName" value="showResultsForPageNumber_RecOrderHistory"/>
+
+	<%--
+	<script>
+		$( document ).ready(function() {			
+		wcTopic.subscribe("showResultsForPageNumber_reqList",$.proxy(ReqListItemsJS.showResultsPage,ReqListItemsJS));
+			<c:if test="${env_inPreview && !env_storePreviewLink}">
+			wcTopic.subscribe("CMPageRefreshEvent",function(){           
+				var previewHeader = window.parent.frames[0];
+				if(previewHeader.isSpotsShown()) {
+					previewHeader.showESpots();previewHeader.showESpots();
+					}
+				});
+			</c:if>
+		});
+	</script>
+	--%>
+
+<!-- END OrderDetail_SubscriptionsOrderData.jsp -->

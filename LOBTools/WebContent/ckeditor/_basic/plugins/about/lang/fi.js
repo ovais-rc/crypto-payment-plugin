@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("about","fi",{copy:"Copyright &copy; $1. Kaikki oikeudet pidätetään.",dlgTitle:"Tietoja CKEditor-muokkausohjelmasta",help:"Saat ohjeita kohteesta $1.",moreInfo:"Käyttöoikeustiedot ovat saatavana Web-sivustostamme:",title:"Tietoja CKEditor-muokkausohjelmasta",userGuide:"CKEditor-muokkausohjelman käyttöopas"});

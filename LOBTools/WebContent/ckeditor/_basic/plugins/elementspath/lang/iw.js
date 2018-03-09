@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("elementspath","iw",{eleLabel:"נתיב מרכיבים",eleTitle:"מרכיב %1"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("removeformat","zh",{toolbar:"除去格式"});

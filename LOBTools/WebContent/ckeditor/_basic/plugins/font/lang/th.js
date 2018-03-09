@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","th",{fontSize:{label:"ขนาด",voiceLabel:"ขนาดฟอนต์",panelTitle:"ขนาดฟอนต์"},label:"ฟอนต์",panelTitle:"ชื่อฟอนต์",voiceLabel:"ฟอนต์"});

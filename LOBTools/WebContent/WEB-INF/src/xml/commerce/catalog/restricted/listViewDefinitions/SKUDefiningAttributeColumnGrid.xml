@@ -1,0 +1,446 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	
+	<!---
+		This class represents the Base SKU grid that displays product level SKUs
+		as well as their defining attributes.
+		
+		This class is used by the SKU widget cmc/catalog/PropertySKUDefiningAttributesViewer in the properties view
+		of a ProductSKU, but shares code between the grid displaying product level SKUs and the SKU defining
+		attribute tab in the SKU properties view.
+		
+		The class 'cmc/catalog/SKUDefiningAttributeColumnGrid' extends off of this class and is used for the
+		SKU list grid.
+				
+		This class attribute 'definingAttributeObjectPath' is overriden in the child class
+		'cmc/catalog/SKUDefiningAttributeColumnGrid' to allow for the grid to navigate reference objects.
+		
+		The SKU grid will display 'ProductChildSKU' reference objects, whereas the ProductSKU properties
+		view will be displaying information for a 'ProductSKU'.
+		
+		@keywords private
+	-->
+	<ObjectGrid classDefinition="true" definitionName="cmc/catalog/BaseSKUDefiningAttributeColumnGrid" preferenceKey="catBaseSKUDefiningAttributeColumnGrid">
+		<dependency localName="SKUAttributeColumn" moduleName="cmc/catalog/SKUAttributeColumn"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="CatalogEntryDefiningAttributeModelObjectManager" moduleName="cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager"/>
+		
+		<!---
+			Stores the attribute columns representing SKU defining attributes.
+			The objects in this array are of type 'cmc/catalog/SKUAttributeColumn'.
+		-->
+		<variable name="attributeColumns" value="${[]}"/>
+		
+		<!--- Sets the border size of the list. -->
+		<variable name="listBorderSize" type="number" value="1"/>
+		
+		<!---
+			Stores the attribute columns representing SKU defining attributes.
+			The objects in this array are of type 'cmc/catalog/SKUAttributeColumn'.
+			
+			This pool is used for column re-use for performance.
+		-->
+		<variable name="attributeColumnsPool" value="${[]}"/>
+		<!---
+			This attribute represents the parent product (CMC object Product, InheritedProduct)
+			for the SKU(s) currently being viewed.
+		-->		
+		<variable name="productObject" value="${null}"/>
+		<!---
+			This attribute represents the object path the column will use to represent the object
+			path of the attribute column.
+			
+			This default is set to 'SKUDefiningAttribute' for the class	'cmc/catalog/BaseSKUDefiningAttributeColumnGrid'.
+			This attribute value is overridden in the class 'cmc/catalog/SKUAttributeColumn'.
+			
+			The SKU widget in the properties view will use the object path:
+			'SKUDefiningAttribute' for classic or
+			'ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues' and 
+			'ProductSKUReferenceInheritedDefiningAttributeDictionaryAttributeWithAllowedValues'
+			for Attribute Dictionary.			
+			
+			The SKU widget for displaying SKUs in a grid will use the following object paths.
+			For classic:
+			'InheritedProductSKU/SKUDefiningAttribute' if the parent product is an InheritedProductSKU,
+			'ProductSKU/SKUDefiningAttribute' if the parent product is a ProductSKU.
+			For Attribute Dictionary:
+			'ProductSKU/ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues',
+			'ProductSKU/ProductSKUReferenceInheritedDefiningAttributeDictionaryAttributeWithAllowedValue',
+			'InheritedProductSKU/ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues' and 
+			'InheritedProductSKU/ProductSKUReferenceInheritedDefiningAttributeDictionaryAttributeWithAllowedValues'.
+		-->		
+		<variable name="definingAttributeObjectPath" type="string" value="SKUDefiningAttribute"/>
+		
+		
+		<!---
+			Initialization.
+			
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateAttributeColumnsDel = new EventHandler.Class(this, "updateAttributeColumns");
+			this.updateAttributeColumns();
+			]]>
+		</handler>
+		
+		<!---
+			This method will cleanup delegates that are used throughout this class.
+			
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "destroy");
+			}
+			this.updateAttributeColumnsDel.disconnectAll();
+			delete this.updateAttributeColumnsDel;
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "destroy");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will retrieve the value of the registered attribute object's
+			property 'attrDisplaySequence'.
+			
+			This sequence will be used to display attribute columns in a
+			particular order.
+			
+			Attributes with no sequence value will be given a default value of 0.
+			
+			@keywords private
+		-->
+		<method args="o" name="getAttributeObjectSequence">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "getAttributeObjectSequence", [o]);
+			}
+			var sequence = o.getPropertyValue("attrDisplaySequence");
+			if (isNaN(sequence)) {
+				sequence = 0;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "getAttributeObjectSequence", sequence);
+			}
+			return sequence;
+			]]>
+		</method>
+		
+		<!---
+			This method will compare the value of the registered attribute object's
+			property 'attrDisplaySequence' to determine how the attribute column
+			should be displayed.
+			
+			This sequence will be used to display attribute columns in a
+			particular order.
+			
+			@keywords private
+		-->
+		<method args="o1, o2" name="compareAttributeObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "compareAttributeObjects", [o1, o2]);
+			}
+			var o1Sequence = this.getAttributeObjectSequence(o1);
+			var o2Sequence = this.getAttributeObjectSequence(o2);
+			var retSequence = 0;
+			if (o1Sequence > o2Sequence) {
+				retSequence = 1;
+			}
+			else if (o1Sequence < o2Sequence) {
+				retSequence = -1;
+			}
+			else {
+				retSequence = 0;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "compareAttributeObjects", retSequence);
+			}
+			return retSequence;
+			]]>
+		</method>
+		
+		<!---
+			This method will return a set of attribute objects ordered
+			by their display sequence.
+						
+			@keywords private
+		-->
+		<method args="objects" name="getOrderedObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "getOrderedObjects");
+			}
+			var comparator = function(o1, o2) {
+				return arguments.callee.grid.compareAttributeObjects(o1, o2);
+			};
+			comparator.grid = this;
+			objects.sort(comparator);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "getOrderedObjects", objects);
+			}
+			return objects;
+			]]>
+		</method>
+		
+		<!---
+			This method will set the parent product object for SKU.
+			
+			@keywords private
+		-->
+		<method args="newProductObject" name="setProductObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "setProductObject", [newProductObject]);
+			}
+			if (this.productObject != newProductObject) {
+				this.productObject = newProductObject;
+			}
+			if (this.updateAttributeColumnsDel) {
+				this.updateAttributeColumns();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "setProductObject");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will load all of the children and references for the registered product object
+			and fetch all of its child attributes
+			
+			CMC Objects:
+			CatalogEntryDefiningAttribute
+			CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues.
+			CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues
+			
+			Based on the attributes found, columns will be added to the grid.
+			
+			@keywords private
+		-->
+		<method args="e" name="updateAttributeColumns">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "updateAttributeColumns");
+			}
+			var refreshRequired = false;
+			this.updateAttributeColumnsDel.disconnectAll();
+			if (this.productObject) {
+				this.updateAttributeColumnsDel.connect(this.productObject, "onchildObjects");
+				var objDefinitions = [this.productObject.objectDefinition.getChildDefinition("CatalogEntryDefiningAttribute"), this.productObject.objectDefinition.getChildDefinition("CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues"), this.productObject.objectDefinition.getChildDefinition("CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues")];
+				this.productObject.loadChildren(objDefinitions);
+				if (this.productObject.isGetChildrenServicesLoaded(objDefinitions)) {
+					var objects = this.productObject.getObjects("CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+					objects = objects.concat(this.productObject.getObjects("CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues"));
+					if (objects.length == 0) {
+						objects = this.productObject.getObjects("CatalogEntryDefiningAttribute");
+					}
+					objects = this.getOrderedObjects(objects);
+					var sequence = this.columns.length - this.attributeColumns.length;
+					for (var i = 0; i < this.attributeColumns.length; i++) {
+						var column = this.attributeColumns[i];
+						column.setVariable("attributeObject", null);
+						this.releaseColumn(column);
+						this.attributeColumnsPool.push(column);
+						refreshRequired = true;
+					}
+					this.attributeColumns = [];
+					for (var i = 0; i < objects.length; i++) {
+						var o = objects[i];
+						if (!o.newObject) {
+							CatalogEntryDefiningAttributeModelObjectManager.Singleton.registerAttributeObject(o);
+							var column = null;
+							if (this.attributeColumnsPool.length > 0) {
+								column = this.attributeColumnsPool.pop();
+								this.addColumn(column);
+							}
+							else {
+								column = new SKUAttributeColumn.Class(this, {
+									draggable: false,
+									width: 100,
+									visible: true
+								});
+							}
+							this.setDefiningAttributeObjectPath(o);
+							column.setVariable("editable", true);
+							column.setVariable("attributeObject", o);
+							refreshRequired = true;
+							this.attributeColumns.push(column);
+							this.setColumnPosition(column, sequence, false);
+							sequence++;
+						}
+						else {
+							this.updateAttributeColumnsDel.connect(o, "onnewObject");
+							this.updateAttributeColumnsDel.connect(o, "beingDestroyed");
+						}
+					}
+				}
+			}
+			else {
+				while (this.attributeColumns.length > 0) {
+					var column = this.attributeColumns.shift();
+					column.setVariable("attributeObject", null);
+					this.releaseColumn(column);
+					this.attributeColumnsPool.push(column);
+					refreshRequired = true;
+				}
+			}
+			if (refreshRequired) {
+				this.refresh();
+				this.updateColumnOrder();
+			}
+			EventUtil.trigger(this, "onattributeColumns");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributeColumnGrid", "updateAttributeColumns");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method set the object path based on where the column is used.
+			@keywords private
+		-->
+		<method args="o" name="setDefiningAttributeObjectPath">
+			<![CDATA[
+			if (o.objectType == "CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues") {
+				this.setVariable("definingAttributeObjectPath", "ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+			}
+			if (o.objectType == "CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues") {
+				this.setVariable("definingAttributeObjectPath", "ProductSKUReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues");
+			}
+			if (o.objectType == "CatalogEntryDefiningAttribute") {
+				this.setVariable("definingAttributeObjectPath", "SKUDefiningAttribute");
+			}
+			]]>
+		</method>
+		
+	<method args="productObject" name="set_productObject">
+			<![CDATA[
+			this.setProductObject(productObject);
+			]]>
+		</method></ObjectGrid>
+	
+	<!---
+		This class represents the SKU grid that displays product level SKUs (ProductSKUs)
+		as well as their defining attributes.  This grid is navigated to either by
+		clicking on a product in the catalog tree, or clicking the 'Show SKUs' button on the
+		CMC toolbar with a product properties view is open.
+		
+		This class extends from 'cmc/catalog/BaseSKUDefiningAttributeColumnGrid', which shares code
+		between the grid displaying product level SKUs and the SKU defining attribute tab in the
+		SKU properties view.
+		
+		This class overrides the 'definingAttributeObjectPath' attribute of the parent class
+		'cmc/catalog/BaseSKUDefiningAttributeColumnGrid' to allow for the grid to navigate reference objects.
+		
+		The SKU grid will display 'ProductChildSKU' reference objects, whereas the ProductSKU properties
+		view will be displaying information for a 'ProductSKU'.
+		
+		@keywords private
+	-->
+	<BaseSKUDefiningAttributeColumnGrid classDefinition="true" definitionName="cmc/catalog/SKUDefiningAttributeColumnGrid" package="cmc/catalog">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		
+		<!---
+			Initialization.
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateProductDel = new EventHandler.Class(this, "updateProduct");
+			this.updateProduct();
+			]]>
+		</handler>
+				
+		<!---
+			This method will update the parent product for the SKU.
+			The parent can either be a Product or InheritedProduct.
+			
+			@keywords private
+		-->
+		<method args="e" name="updateProduct">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUDefiningAttributeColumnGrid", "updateProduct");
+			}
+			this.updateProductDel.disconnectAll();
+			this.updateProductDel.connect(this, "onparentO");
+			if (this.parentO) {
+				this.setVariable("productObject", this.parentO);
+			}
+			else {
+				this.setVariable("productObject", null);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUDefiningAttributeColumnGrid", "updateProduct");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method set the object path based on where the column is used.
+			
+			The class attribute 'definingAttributeObjectPath' is overidden
+			in this method to update the object path for use in the Product
+			SKU navigation list.
+			
+			@keywords private
+		-->
+		<method args="o" name="setDefiningAttributeObjectPath">
+			<![CDATA[
+			if (o.objectType == "CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues") {
+				this.setVariable("definingAttributeObjectPath", this.parent.o.objectType + "SKU/ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+			}
+			if (o.objectType == "CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues") {
+				this.setVariable("definingAttributeObjectPath", this.parent.o.objectType + "SKU/ProductSKUReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues");
+			}
+			if (o.objectType == "CatalogEntryDefiningAttribute") {
+				this.setVariable("definingAttributeObjectPath", this.parent.o.objectType + "SKU/SKUDefiningAttribute");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will cleanup delegates that are used throughout this class.
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUDefiningAttributeColumnGrid", "destroy");
+			}
+			delete this.updateProductDel;
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUDefiningAttributeColumnGrid", "destroy");
+			}
+			]]>
+		</method>
+		
+	</BaseSKUDefiningAttributeColumnGrid>
+
+</Definitions>

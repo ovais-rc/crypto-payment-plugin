@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","hu",{label:"Stílusok",panelTitle:"Stílusok",panelTitle1:"Blokkstílusok",panelTitle2:"Belső stílusok",panelTitle3:"Objektumstílusok"});

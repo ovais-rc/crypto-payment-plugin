@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","sl",{keystrokeForContextMenu:"Pritisnite Ctrl in kliknite z desno miškino tipko za več možnosti",keystrokeForContextMenuMac:"Pritisnite Cmd in kliknite z desno miškino tipko za več možnosti"});

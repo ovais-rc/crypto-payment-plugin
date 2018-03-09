@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","ar",{border:"عرض حدود الاطار",noUrl:"برجاء ادخال عنوان URL الى iframe",scrolling:"اتاحة خطوط التصفح",title:"خصائص IFrame",toolbar:"ادراج IFrame",ibm:{title:"IFrame"}});

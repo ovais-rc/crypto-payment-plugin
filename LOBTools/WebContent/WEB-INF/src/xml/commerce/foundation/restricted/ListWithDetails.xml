@@ -1,0 +1,521 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		A view consisting of a list and a details panel.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/ListWithDetails" visible="false">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<!---
+			Panel title.
+		-->
+		<variable name="title" type="string" value=""/>
+		<!---
+			Panel title message.
+		-->
+		<variable name="titleMessage" type="string" value=""/>
+		<!---
+			Panel error message.
+		-->
+		<variable name="errorMessage" type="string" value=""/>
+		<!---
+			Panel header icon resource name.
+		-->
+		<variable name="headerIconResource" type="string" value="${null}"/>
+		<!---
+			The associated instance of the business object editor. This value
+			must be an instance of cmc/foundation/BusinessObjectEditor or a subclass. This is a required attribute.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			The list class. The list class may be any view class, but it
+			must trigger and "onselect" event when the selection changes
+			and it must support a method called "getSelectedObject" to return
+			the currently selected model object. This is a required attribute.
+		-->
+		<variable name="listClass" type="module"/>
+		<!---
+			The availableHeight for the list class
+		-->		
+		<variable name="availableHeight" type="number" value="300"/>
+		<!---
+			The availableWidth for the list class
+		-->		
+		<variable name="availableWidth" type="number" value="${null}"/>
+		<!---
+			Indicate to the split layout that this view can be split into a master/details view.
+		-->
+		<variable name="splittable" value="true"/>
+		<!---
+			The class that will be used by the list view to create the context menu.
+		-->
+		<variable name="rowMenuClass" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			Menu class for grid background.
+		-->
+		<variable name="menuClass" type="module" value="${null}"/>
+
+		<!---
+			@keywords private
+			An instance of {@link cmc/foundation/DisplayNameStyle} that the framework will use to display the display name of this
+			business object. If this value is null, then the default display name style will
+			be used.
+		-->
+		<variable name="displayNameStyle" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (typeof (this.immediateParent.availableHeight) != "undefined") {
+				this.updateAvailableHeightDel = new EventHandler.Class(this, "updateAvailableHeight");
+				this.updateAvailableHeightDel.connect(this.immediateParent, "onavailableHeight");
+				this.updateAvailableHeight();
+			}
+			if (typeof (this.immediateParent.availableWidth) != "undefined") {
+				this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+				this.updateAvailableWidthDel.connect(this.immediateParent, "onavailableWidth");
+				this.updateAvailableWidth();
+			}
+			if (this.listClass.Class) {
+				var v = new this.listClass.Class(this, {
+					name: "list",
+					rowMenuClass: this.rowMenuClass,
+					menuClass: this.menuClass,
+					embedded: false,
+					findable: true
+				});
+			}
+			else {
+				v = DefinitionUtil.createDefinitionInstance(this.listClass, this, {
+					name: "list",
+					rowMenuClass: this.rowMenuClass,
+					menuClass: this.menuClass,
+					embedded: false,
+					findable: true
+				});
+			}
+			this.list = v;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateAvailableHeightDel) {
+				this.updateAvailableHeightDel.disconnectAll();
+				delete this.updateAvailableHeightDel;
+			}
+			if (this.updateAvailableWidthDel) {
+				this.updateAvailableWidthDel.disconnectAll();
+				delete this.updateAvailableWidthDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+	
+		<method args="e" name="updateAvailableHeight">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("availableHeight", this.immediateParent.availableHeight);
+			]]>
+		</method>
+		
+		<method args="e" name="updateAvailableWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("availableWidth", this.immediateParent.availableWidth);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the available custom services.
+		-->
+		<method name="getCustomServices">
+			<![CDATA[
+			var customServices = [];
+			var selectedObjects = this.list.getSelectedObjects();
+			if (selectedObjects != null && selectedObjects.length > 0) {
+				var oDef = selectedObjects[0].getReferencedObject().objectDefinition;
+				for (var i = 0; i < oDef.customServices.length; i++) {
+					var customService = oDef.customServices[i];
+					var customServiceEnabled = true;
+					for (var j = 0; j < selectedObjects.length; j++) {
+						var po = selectedObjects[j].getReferencedObject();
+						if (!po.objectDefinition.isCustomServiceDefined(customService)) {
+							customServiceEnabled = false;
+							break;
+						}
+					}
+					if (customServiceEnabled) {
+						customServices.push(customService);
+					}
+				}
+			}
+			return customServices;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the available client actions.
+		-->
+		<method name="getClientActions">
+			<![CDATA[
+			var clientActions = [];
+			var selectedObjects = this.list.getSelectedObjects();
+			if (selectedObjects != null && selectedObjects.length > 0) {
+				var oDef = selectedObjects[0].getReferencedObject().objectDefinition;
+				for (var i = 0; i < oDef.clientActions.length; i++) {
+					var clientAction = oDef.clientActions[i];
+					if (clientAction.availableFromMainListView && (clientAction.allowMultipleSelection || selectedObjects.length == 1)) {
+						var clientActionEnabled = true;
+						for (var j = 0; j < selectedObjects.length; j++) {
+							var po = selectedObjects[j].getReferencedObject();
+							if (!po.objectDefinition.isClientActionDefined(clientAction)) {
+								clientActionEnabled = false;
+								break;
+							}
+						}
+						if (clientActionEnabled) {
+							clientActions.push(clientAction);
+						}
+					}
+				}
+			}
+			return clientActions;
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords private
+		
+		A view consisting of a list and a details panel. This is specific for a model object.
+	-->
+	<ListWithDetails classDefinition="true" definitionName="cmc/foundation/NavigationList">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			The current model object.
+		-->
+		<variable name="o" value="${null}"/>		
+		<!---
+			The navigation list definition for this list.
+		-->
+		<variable name="navigationListDefinition" value="${null}"/>
+		
+		<handler name="onvisible">
+			<![CDATA[
+			if (this.visible && this.list.list && this.list.list.getSelectedObjects) {
+				this.o.model.setVariable("workAreaActiveSelectionView", this.list.list);
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.listClass = this.navigationListDefinition.listClass;
+			this.inherited(arguments);
+			this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+			this.updateHeaderDel = new EventHandler.Class(this, "updateHeader");
+			this.updateHeader();
+			this.updateDisplayNameStyle();
+			this.updateTitleMessageDel = new EventHandler.Class(this, "updateTitleMessage");
+			this.updateTitleMessageDel.connect(this.list, "onstatusMessage");
+			this.updateTitleMessage();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateHeaderDel.disconnectAll();
+			delete this.updateHeaderDel;
+			if (this.updateDisplayNameStyleDel) {
+				this.updateDisplayNameStyleDel.disconnectAll();
+				delete this.updateDisplayNameStyleDel;
+			}
+			this.updateTitleMessageDel.disconnectAll();
+			delete this.updateTitleMessageDel;
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			]]>
+		</method>
+		
+		<!---
+			Update the header.
+		-->
+		<method args="e" name="updateHeader">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateHeaderDel.disconnectAll();
+			var newTitle = "";
+			var newHeaderIconResource = null;
+			if (this.o != null) {
+				if (this.navigationListDefinition.listTitle != null && this.navigationListDefinition.listTitle != "") {
+					this.updateHeaderDel.connect(this.navigationListDefinition, "onlistTitle");
+					this.updateHeaderDel.connect(foundationResources.Singleton.childListEditorTitle, "onstring");
+					newTitle = foundationResources.Singleton.replaceValues("childListEditorTitle", [this.o.objectDisplayName, this.navigationListDefinition.listTitle]);
+				}
+				else {
+					newTitle = StringUtil.Singleton.escapeText(this.o.objectDisplayName);
+				}
+				this.updateHeaderDel.connect(this.o, "onobjectDisplayName");
+				newHeaderIconResource = this.o.objectDefinition.headerIcon;
+			}
+			if (newTitle != this.title) {
+				this.setVariable("title", newTitle);
+			}
+			if (newHeaderIconResource != this.headerIconResource) {
+				this.setVariable("headerIconResource", newHeaderIconResource);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the title message to reflect the current status message from the navigation results.
+		-->		
+		<method args="e" name="updateTitleMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newMessage = this.list.statusMessage;
+			if (!this.list.hasError) {
+				this.setVariable("errorMessage", "");
+				this.setVariable("titleMessage", newMessage);
+			}
+			else {
+				this.setVariable("titleMessage", "");
+				this.setVariable("errorMessage", newMessage);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Release the model object.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			Handle model object changed event.
+		-->
+		<handler name="ono">
+			<![CDATA[
+			this.releaseModelObjectDel.disconnectAll();
+			if (this.o) {
+				this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+				this.releaseModelObjectDel.connect(this.o.model.oEditor, "onisOpen");
+			}
+			this.updateHeader();
+			this.updateDisplayNameStyle();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Update display name style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateDisplayNameStyleDel) {
+				this.updateDisplayNameStyleDel.disconnectAll();
+			}
+			else {
+				this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			}
+			var style = null;
+			if (this.o != null) {
+				this.updateDisplayNameStyleDel.connect(this.o, "ondisplayNameStyle");
+				style = this.o.displayNameStyle;
+			}
+			if (style != this.displayNameStyle) {
+				this.setVariable("displayNameStyle", style);
+			}
+			]]>
+		</method>
+
+	</ListWithDetails>
+
+	<!---
+		@keywords private
+		
+		A view consisting of a list and a details panel. This is specific to search results.
+	-->
+	<ListWithDetails classDefinition="true" definitionName="cmc/foundation/SearchResultsList">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="SearchResultsBackgroundMenu" moduleName="cmc/foundation/SearchResultsBackgroundMenu"/>
+		<!---
+			The search results model object.
+		-->
+		<variable name="searchResults" value="${null}"/>	
+		
+		<variable name="headerIconResource" value="panelHeaderSearchResource"/>
+		<!---
+			@keywords private
+			Menu class for the grid background.
+		-->
+		<variable name="menuClass" type="module" value="${SearchResultsBackgroundMenu}"/>
+		
+		<handler name="onvisible">
+			<![CDATA[
+			if (this.visible && this.list.getSelectedObjects) {
+				this.oEditor.model.setVariable("workAreaActiveSelectionView", this.list);
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.listClass = this.searchResults.searchDefinition.listClass;
+			this.inherited(arguments);
+			this.updateTitleMessageDel = new EventHandler.Class(this, "updateTitleMessage");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateTitleMessageDel.disconnectAll();
+			delete this.updateTitleMessageDel;
+			]]>
+		</method>
+				
+		<!---
+			Setup some preperties when the search results is set.
+		-->
+		<handler name="onsearchResults">
+			<![CDATA[
+			if (this.searchResults != null) {
+				this.setVariable("title", foundationResources.Singleton.replaceValues("searchResultsTitle", [this.searchResults.searchDefinition.displayName]));
+				if (!this.searchResults.hasError) {
+					this.setVariable("errorMessage", "");
+					this.setVariable("titleMessage", this.searchResults.statusMessage);
+				}
+				else {
+					this.setVariable("titleMessage", "");
+					this.setVariable("errorMessage", this.searchResults.statusMessage);
+				}
+				this.updateTitleMessageDel.disconnectAll();
+				this.updateTitleMessageDel.connect(this.searchResults, "onstatusMessage");
+				this.updateTitleMessageDel.connect(foundationResources.Singleton.searchResultsTitle, "onstring");
+				this.updateTitleMessageDel.connect(this.searchResults.searchDefinition, "ondisplayName");
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Update the title message to reflect the current status message from the search results.
+		-->		
+		<method args="e" name="updateTitleMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("title", foundationResources.Singleton.replaceValues("searchResultsTitle", [this.searchResults.searchDefinition.displayName]));
+			if (!this.searchResults.hasError) {
+				this.setVariable("errorMessage", "");
+				this.setVariable("titleMessage", this.searchResults.statusMessage);
+			}
+			else {
+				this.setVariable("titleMessage", "");
+				this.setVariable("errorMessage", this.searchResults.statusMessage);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if delete is enabled.
+		-->
+		<method name="isDeleteEnabled">
+			<![CDATA[
+			var objects = this.list.getSelectedObjects();
+			var deleteEnabled = objects.length > 0;
+			if (deleteEnabled) {
+				for (var i = 0; i < objects.length; i++) {
+					var o = objects[i];
+					var oDef = o.objectDefinition;
+					if (!o.isDeletable()) {
+						deleteEnabled = false;
+						break;
+					}
+					if (oDef.parentReference) {
+						if (!o.getReferencedObject().isDeletable()) {
+							deleteEnabled = false;
+							break;
+						}
+					}
+				}
+			}
+			return deleteEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Invoke delete.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			var selectedObjects = this.list.getSelectedObjects();
+			var objects = [];
+			for (var i = 0; i < selectedObjects.length; i++) {
+				objects[i] = selectedObjects[i];
+			}
+			var deleteObjects = [];
+			for (var i = 0; i < objects.length; i++) {
+				var o = objects[i];
+				var oDef = o.objectDefinition;
+				if (oDef.openGroupTop) {
+					deleteObjects.push(o);
+				}
+				else if (oDef.parentReference) {
+					deleteObjects.push(o.getReferencedObject());
+				}
+				else {
+					o.deleteObject();
+				}
+			}
+			if (deleteObjects.length == 1) {
+				deleteObjects[0].deleteObject(true);
+			}
+			else if (deleteObjects.length > 0) {
+				require(["cmc/foundation/MultipleDeleteConfirmationDialog"], function(MultipleDeleteConfirmationDialog) {
+					MultipleDeleteConfirmationDialog.Singleton.openMultipleDeleteConfirmationDialog(deleteObjects);
+				});
+			}
+			]]>
+		</method>
+
+
+	</ListWithDetails>
+
+</Definitions>

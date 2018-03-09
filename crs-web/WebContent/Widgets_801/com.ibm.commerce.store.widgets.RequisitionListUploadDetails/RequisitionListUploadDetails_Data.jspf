@@ -1,0 +1,58 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN RequisitionListUploadDetails_Data.jspf -->
+<wcf:rest var="fileUploadJobResult" url="/store/{storeId}/file_upload_job/{fileUploadJobId}">
+	<wcf:var name="storeId" value="${WCParam.storeId}" />
+	<wcf:var name="fileUploadJobId" value="${WCParam.fileUploadJobId}" />
+	<wcf:param name="accessProfile" value="IBM_Store_Details" />
+</wcf:rest>
+<c:set var="reqListUploadDetails" value="${fileUploadJobResult.resultList[0]}"/>
+
+<%-- invalidLines are appended to the failedPartNumbers list --%>
+<c:set var="failedPartNumbers" value="" scope="page"/>
+<c:set var="invalidLines" value="" scope="page"/>
+<c:set var="processedItemSuccessCount" value="0" scope="page"/>
+<c:set var="failedPartNumbersCount" value="0" scope="page"/>
+<c:set var="failedPartNumbersHalfCount" value="0" scope="page"/>
+
+<c:if test="${!empty reqListUploadDetails && !empty reqListUploadDetails.processFile[0] 
+	&& !empty reqListUploadDetails.processFile[0].processInfo}">
+	<json:parse json="${reqListUploadDetails.processFile[0].processInfo}" var="processInfo" scope="page" />
+	
+	<c:set var="invalidLines" value="${processInfo.InvalidLines}" scope="page"/>
+	<c:set var="failedPartNumbers" value="${processInfo.FailedPartNumbers}" scope="page"/>
+	<c:set var="failedPartNumbersCount" value="${fn:length(processInfo.FailedPartNumbers) + fn:length(invalidLines)}" scope="page"/>
+	<c:set var="processedItemSuccessCount" value="${processInfo.ProcessedItemsNumber}" scope="page"/>
+	<c:set var="failedPartNumbersHalfCount" value="${(failedPartNumbersCount/2) - 0.5}" scope="page"/>
+	<fmt:parseNumber var="failedPartNumbersHalfCount" integerOnly="true" scope="page">${failedPartNumbersHalfCount}</fmt:parseNumber>
+	
+	<%-- Merge the failedPartNumbers and invalidLines together --%>
+	<c:forEach var="invalidLine" items="${invalidLines}">
+		<wcf:set target="${failedPartNumbers}" value="${invalidLine}" />	
+	</c:forEach>
+</c:if>
+
+<%-- Format the time the file was uploaded --%>
+<c:catch>
+	<fmt:parseDate var="uploadDate" value="${reqListUploadDetails.uploadFile.uploadTime}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+</c:catch>
+<c:if test="${empty uploadDate}">
+	<c:catch>
+		<fmt:parseDate var="uploadDate" value="${reqListUploadDetails.uploadFile.uploadTime}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+	</c:catch>
+</c:if>
+<fmt:formatDate value="${uploadDate}" dateStyle="long" timeStyle="short" type="both" var="formattedUploadDate" timeZone="${fn:replace(cookie.WC_timeoffset.value, '%2B', '+')}"/>
+					
+<!-- END RequisitionListUploadDetails_Data.jspf -->

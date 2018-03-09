@@ -1,0 +1,117 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="f" value="0" />
+<c:set var="sType" value="${WCParam.sType}"/>
+<c:if test="${empty sType}">
+	<c:set var="sType" value="SimpleSearch"/>
+</c:if>
+
+<c:set var="pageView" value="${WCParam.pageView}" scope="request"/>
+<c:if test="${empty pageView}" >
+	<c:set var="pageView" value="${env_defaultPageView}" scope="request"/>
+</c:if>
+
+<c:set var="displayFeaturedFacets" value="true"/>
+<c:choose>
+	<c:when test="${!empty WCParam.searchTerm || empty WCParam.categoryId}">
+		<c:set var="displayFeaturedFacets" value="false"/>
+	</c:when>
+	<c:otherwise>
+		<c:forEach var="facetField" items="${globalcategories}">
+			<c:if test="${facetField.extendedData['groupId'] == 1}">
+				<c:forEach var="item" items="${facetField.entry}" varStatus="aStatus">
+					<c:forEach var="breadcrumb" items="${globalbreadcrumbs.breadCrumbTrailEntryView}">
+						<c:if test="${breadcrumb.value == item.value}">
+							<c:set var="displayFeaturedFacets" value="false"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:if>
+		</c:forEach>
+	</c:otherwise>
+</c:choose>
+<c:forEach var="facetField" items="${globalcategories}">
+	<c:choose>
+		<c:when test="${facetField.value eq 'parentCatgroup_id_search'}">
+			<c:if test="${fn:length(facetField.entry) > 0}">
+				<%@ include file="CategoryFacetDisplay.jspf" %>
+			</c:if>
+				</c:when>
+		<c:when test="${facetField.extendedData['groupId'] == 1 && displayFeaturedFacets}">			
+			<%@ include file="/Widgets_701/Common/Facet/FeaturedFacetDisplay.jspf" %>
+		</c:when>
+	</c:choose>
+</c:forEach>
+
+<c:set var="showTopCategory" value="false" />
+<c:if test="${!empty param.showTopCategory}">
+	<c:set var="showTopCategory" value="${param.showTopCategory}" />
+</c:if>
+
+<c:if test="${(empty categoryFacetList || categoryFacetList == null) && requestScope.pageGroup != 'Search' && showTopCategory == 'true'}">
+	<c:set var="depthAndLimit" value="-1"/>
+	<c:set var="displayProductCount" value="false"/>
+	<wcf:rest var="categoryHierarchy" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/@top" format="json" >
+		<c:if test="${!empty WCParam.langId}">
+		<wcf:param name="langId" value="${WCParam.langId}"/>
+		</c:if>
+		<c:if test="${empty WCParam.langId}">
+		<wcf:param name="langId" value="${langId}"/>
+		</c:if>
+		<wcf:param name="responseFormat" value="json"/>		
+		<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+		<wcf:param name="depthAndLimit" value="${depthAndLimit}"/>
+	 	<c:forEach var="contractId" items="${env_activeContractIds}">
+			<wcf:param name="contractId" value="${contractId}"/>
+		</c:forEach>
+	</wcf:rest>
+		
+	<%--								
+	  This list will contain all the data to be displayed in the department widger
+	      The List contains the Top category name, Top Category URL,
+		  List of sub-categories and their corresponding URL
+	 --%>
+	<wcf:useBean var="fullTopCategoryList" classname="java.util.ArrayList" />
+	 
+	<c:forEach var="topCategory" items="${categoryHierarchy.catalogGroupView}" varStatus="status">
+	 	<wcf:useBean var="topCategoryMappingList" classname="java.util.ArrayList"/>
+	 	<c:set var="productCount" value="0"/>
+	 	
+	 	<wcf:url var="CategoryDisplayURL" patternName="CanonicalCategoryURL" value="Category3">
+			<wcf:param name="langId" value="${WCParam.langId}" />
+			<wcf:param name="storeId" value="${WCParam.storeId}" />
+			<wcf:param name="catalogId" value="${WCParam.catalogId}" />				
+			<wcf:param name="categoryId" value="${topCategory.uniqueID}" />	
+			<wcf:param name="beginIndex" value="0" />
+			<wcf:param name="urlLangId" value="${WCParam.urlLangId}" />
+		</wcf:url>
+
+		<wcf:set target="${topCategoryMappingList}" value="${topCategory.name}" />	   	 
+		<wcf:set target="${topCategoryMappingList}" value="${productCount}" /> 			 	
+	 	<wcf:set target="${topCategoryMappingList}" value="${CategoryDisplayURL}" />
+		<wcf:set target="${fullTopCategoryList}" value="${topCategoryMappingList}" />					
+		<c:remove var="topCategoryMappingList"/>	
+										
+	</c:forEach>
+
+<c:set var="categoryFacetList" value="${fullTopCategoryList}" />
+
+</c:if>
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+
+<c:set var="subcategoryLimit" value="10"/>

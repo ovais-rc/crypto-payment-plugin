@@ -1,0 +1,492 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<fmt:formatNumber var="pageNumber" value="${(beginIndex/pageSize)+1}"/>
+<fmt:parseNumber var="pageNumber" value="${pageNumber}" integerOnly="true"/>
+<c:set var="approvalType" value="orderApprovals"/>
+<c:set var="status" value="all" scope="request"/>
+<c:choose>
+	<c:when test="${(not empty WCParam.approvalStatus)}">
+		<c:set var="status" value="${WCParam.approvalStatus}" scope="request"/>
+	</c:when>
+	<c:when test="${(not empty param.approvalStatus)}">
+		<c:set var="status" value="${param.approvalStatus}" scope="request"/>
+	</c:when>
+</c:choose>
+<wcf:rest var="orderApprovals" url="store/{storeId}/approval_status" scope="page">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="q" value="${approvalType}"/>
+	<wcf:param name="pageNumber" value="${pageNumber}" />
+	<wcf:param name="pageSize" value="${pageSize}" />
+	<wcf:param name="approverId" value="${userId}" />
+	<c:if test="${(not empty status && status ne 'all')}">
+		<wcf:param name="status" value="${status}" />
+	</c:if>
+	<c:if test="${not empty WCParam.firstName}">
+		<wcf:param name="submitterFirstName" value="${WCParam.firstName}" />
+	</c:if>
+	<c:if test="${not empty WCParam.lastName}">
+		<wcf:param name="submitterLastName" value="${WCParam.lastName}" />
+	</c:if>
+	<c:if test="${not empty WCParam.startDate}" >
+		<wcf:param name="startSubmitTime" value="${WCParam.startDate}"/>
+	</c:if>
+	<c:if test="${not empty WCParam.endDate}" >
+		<wcf:param name="endSubmitTime" value="${WCParam.endDate}"/>
+	</c:if>
+	<c:if test="${not empty WCParam.orderId}">
+		<wcf:param name="entityId" value="${WCParam.orderId}" />
+	</c:if>
+</wcf:rest>
+
+<wcst:message key="MA_NUMBEROFAPPROVALS_DISPLAY" bundle="${widgetText}" var="approvalsDisplay">
+	<wcst:param value="${orderApprovals.recordSetTotal}" />
+</wcst:message>
+<c:choose>
+	<c:when test="${orderApprovals.recordSetTotal < 1}" >
+		<wcst:message var="approvalDesc" key="MA_ORDERTOAPPROVE" bundle="${widgetText}"/>
+	</c:when>
+	<c:when test="${orderApprovals.recordSetTotal > 1}" >
+		<wcst:message var="approvalDesc" key="MA_ORDERSTOAPPROVE" bundle="${widgetText}"/>
+	</c:when>
+</c:choose>
+
+<script type="text/javascript">
+	dojo.addOnLoad(function() { 
+		OrderApprovalListJS.setCommonParameters('<c:out value="${langId}"/>','<c:out value="${storeId}" />','<c:out value="${catalogId}" />');
+		<wcst:message var="APPROVAL_APPROVE_SUCCESS" key="APPROVAL_APPROVE_SUCCESS" bundle="${widgetText}"/>
+		<wcst:message var="APPROVAL_REJECT_SUCCESS" key="APPROVAL_REJECT_SUCCESS" bundle="${widgetText}"/>
+		
+		MessageHelper.setMessage("APPROVAL_APPROVE_SUCCESS", <wcf:json object="${APPROVAL_APPROVE_SUCCESS}"/>);		
+		MessageHelper.setMessage("APPROVAL_REJECT_SUCCESS", <wcf:json object="${APPROVAL_REJECT_SUCCESS}"/>);		
+		
+		var data = {"acceApprovalDesc":"${approvals.recordSetTotal}${approvalDesc}", "approvalsDisplay":"${approvalsDisplay}"};
+		require(["dojo/topic","dojo/domReady!"], function(topic){
+			console.debug("publish", data);
+			topic.publish("PendingApprovalsCount${approvalType}",data);
+		});
+	});
+</script>
+
+<%-- The following variable are passed to ItemTable_UI.jsp --%>
+<c:set var="widgetName" value="OrderApproval" />
+<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}" />
+
+<c:set var="approvalStatus_PENDING" value="0"/>
+<c:set var="approvalStatus_APPROVED" value="1"/>
+<c:set var="approvalStatus_REJECTED" value="2"/>
+
+<wcst:message var="statusPending" key="Approval_Status_Pending" bundle="${widgetText}"/>
+<wcst:message var="statusApproved" key="Approval_Status_Approved" bundle="${widgetText}"/>
+<wcst:message var="statusRejected" key="Approval_Status_Rejected" bundle="${widgetText}"/>
+
+<%-- ****************************************************************
+     pagination --%>
+	<c:set var="numEntries" value="${orderApprovals.recordSetTotal}"/>
+	
+	<fmt:formatNumber var="totalPages" value="${(numEntries%pageSize) > 0 ? (numEntries/pageSize) + 0.5 : numEntries/pageSize}" type="number" pattern="#"/>		
+	<fmt:parseNumber var="totalPages" integerOnly="true">${totalPages}</fmt:parseNumber>
+		
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= numEntries}">
+			<c:set var="endIndex" value="${numEntries}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+	
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	
+	<wcst:message var="pageDisplay1" key="Approval_Page_Display1" bundle="${widgetText}"/>
+	<wcst:message var="pageDisplay2" key="Approval_Page_Display2" bundle="${widgetText}"> 
+		<c:choose>
+			<c:when test="${numEntries == 0}">
+				<wcst:param><wcst:formatNumber value="${beginIndex}"/></wcst:param>
+			</c:when>
+			<c:otherwise>
+				<wcst:param><wcst:formatNumber value="${beginIndex + 1}"/></wcst:param>
+			</c:otherwise>
+		</c:choose>
+		<wcst:param><wcst:formatNumber value="${endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${numEntries}"/></wcst:param>
+	</wcst:message>
+	
+	<%-- Set variables used by pagination controls - used by PaginationControls.jspf --%>
+
+	<c:set var="linkPrefix" value="${widgetName}"/>
+	<c:set var="otherViews" value="false"/>
+	<c:set var="eventName" value="showResultsForPageNumber_orderApproval"/>
+
+	<script>
+		dojo.addOnLoad(function(){
+			dojo.subscribe("showResultsForPageNumber_orderApproval",OrderApprovalListJS,"showResultsPage");
+			<c:if test="${env_inPreview && !env_storePreviewLink}">
+			dojo.subscribe("CMPageRefreshEvent",function(){
+				var previewHeader = window.parent.frames[0];
+				if(previewHeader.isSpotsShown()) {
+					previewHeader.showESpots();previewHeader.showESpots();
+					}
+				});
+			</c:if>
+		});
+	</script>
+
+<%-- ****************************************************************
+     strings to to pass to UI JSP from properties file --%>
+	
+	<%-- table header --%>
+	<wcst:message var="hCol1Text" key="OrderApproval_Col_OrderNum" bundle="${widgetText}"/>
+	<wcst:message var="hCol2Text" key="OrderApproval_Col_Buyer" bundle="${widgetText}"/>
+	<wcst:message var="hCol3Text" key="OrderApproval_Col_OrderName" bundle="${widgetText}"/>
+	<wcst:message var="hCol4Text" key="OrderApproval_Col_Total" bundle="${widgetText}"/>
+	<wcst:message var="hCol5Text" key="OrderApproval_Col_Status" bundle="${widgetText}"/>
+	<wcst:message var="hCol6Text" key="OrderApproval_Col_Date" bundle="${widgetText}"/>
+	<wcst:message var="hCol7Text" key="OrderApproval_Col_StatusDate" bundle="${widgetText}"/>
+	<wcst:message var="hCol8Text" key="OrderApproval_Col_Actions" bundle="${widgetText}"/>
+	
+
+<%-- ****************************************************************
+     toolbar section  --%>
+
+<%-- set toolbarType to determine which toolbar JSP to include --%>
+<c:set var="toolbarType" value="InputsAndButtons_OrderApprovalItems" />
+
+<%-- ****************************************************************
+     header row main div class name --%>
+	<c:set var="headerDivClass" value="row tableHeader" />
+	
+	<%-- 
+	hCells is an array holding div class and contents of the cells in the header row, we have 7 columns for 
+	requisiton list items page so there are 7 cells.
+	Structure of hCells array:
+	"hCells": [
+		"hCell":{
+			"cellDivClass": <DIV_CLASS>
+			"cellContent": <CELL_CONTENT>
+		},
+		
+	The HTML of the header row is:
+	<div class="<DIV_CLASS>">
+		<div class="cell">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>
+	<wcf:useBean var="hCells" classname="java.util.ArrayList"/>
+	
+	<%-- header row column 1 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col1 orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol1Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+	
+	<%-- header row column 2 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col2 orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol2Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+	
+	<%-- header row column 3 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col3 orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol3Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+	
+	<%-- header row column 4 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col2 orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol4Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+	
+	<%-- header row column 5 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col1 orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol5Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+	
+	<%-- header row column 6 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col1 date orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol6Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+
+	<%-- header row column 7 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col1 status orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol7Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+
+	<%-- header row column 8 --%>
+	<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+	<wcf:set key="cellDivClass" value="col1 actions orderApprovalHeader" target="${hCell}" />
+	<wcf:set key="cellContent" value="${hCol8Text}" target="${hCell}" />
+	<wcf:set target="${hCells}" value="${hCell}" />
+	<c:remove var="hCell"/>
+		
+<%-- ****************************************************************
+     table row main div class name --%>
+	<c:set var="rowDivClass" value="row entry withPreviewImage" />
+
+	<%-- 
+	rows is an array holding rCells, each rCells record holds data for one row of the table
+	rCells is an array holding div class, id and contents of the cells in a table row, we have 7 columns so there are 7 cells each row
+	Structure of rCells array:
+	"rCells": [
+		"rCell":{
+			"div1Class": <DIV1_CLASS>
+			"div2Class": <DIV2_CLASS>
+			"div2Id": <DIV2_ID>
+			"cellContent": <CELL_CONTENT>
+		},
+		
+	The HTML of a table cell is:
+	<div class="<DIV1_CLASS>">
+		<div class="<DIV2_CLASS>" id="<DIV2_ID">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>
+	
+	<c:set var="rowCount" value="0"/>
+	<wcf:useBean var="rows" classname="java.util.ArrayList"/>
+
+	<wcf:useBean var="buyerIdNameMap" classname="java.util.HashMap" /> <%-- Map of buyerId to buyer display Name --%>
+	
+	<c:forEach var="approvalBean" items="${orderApprovals.resultList}" varStatus="istat"> 
+		<c:set var="rowCount" value="${rowCount+1}"/>
+		
+		<%-- Get buyer details and also save it in internal buyerIdNameMap hashMap for later use --%>
+		<c:if test="${empty buyerIdNameMap[approvalBean.submitterId]}" >
+			<c:choose>
+				<c:when test="${locale eq 'ja_JP' || locale eq 'ko_KR' || locale eq 'zh_CN' || locale eq 'zh_TW'}">
+					<c:set var="buyerName" value="${approvalBean.submitter.lastName} ${approvalBean.submitter.firstName}"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="buyerName" value="${approvalBean.submitter.firstName} ${approvalBean.submitter.lastName}"/>
+				</c:otherwise>
+			</c:choose>
+			<wcf:set target="${buyerIdNameMap}" key="${approvalBean.submitterId}" value="${buyerName}" />
+		</c:if>
+		<c:set var="buyerName" value="${buyerIdNameMap[approvalBean.submitterId]}"/>
+
+		<wcf:useBean var="rCells" classname="java.util.ArrayList"/>
+		<%-- table row column 1 --%>
+		<wcf:url var="OrderDetailUrl" value="OrderApprovalDetailView">
+			<wcf:param name="orderId" value="${approvalBean.entityId}"/>
+			<wcf:param name="approvalId" value="${approvalBean.approvalStatusId}" />
+			<wcf:param name="approvalType" value="order" />
+			<wcf:param name="storeId" value="${WCParam.storeId}"/>
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<wcf:param name="langId" value="${WCParam.langId}"/>
+		</wcf:url>
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col1 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="" target="${rCell}" />
+		<wcf:set key="cellContent" value='<a id="${widgetName}_r${rowCount}_col1Link" href="${OrderDetailUrl}">${fn:escapeXml(approvalBean.entityId)}</a>' target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 2 --%>
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col2 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="" target="${rCell}" />
+		<wcf:set key="cellContent" value="${fn:escapeXml(buyerName)}" target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 3 --%>
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col3 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="" target="${rCell}" />
+		<wcf:set key="cellContent" value="${approvalBean.order.description}" target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 4 --%>
+		<c:remove var="orderAmt"/>
+		<c:choose>
+	    	<c:when test="${approvalBean.order.orderTotal != null}">
+				<%-- Need to reset currencyFormatterDB as initialized in JSTLEnvironmentSetup.jspf, as the currency code used there is from commandContext. For order history we want to display with currency used when the order was placed. --%>
+				<%-- Get currencyDecimal for the given currency symbole and also save it in internal cachedOnlineStoreMap hashMap for later use --%>
+				<c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${approvalBean.order.currency}+-1+${langId}"/>
+				<c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+				<c:if test="${empty currencyFormatterDB}">
+					<wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+						<wcf:var name="storeId" value="${storeId}" />
+						<wcf:param name="q" value="byCurrency" />
+						<wcf:param name="currency" value="${approvalBean.order.currency}" />
+						<wcf:param name="numberUsage" value="-1" />
+						<wcf:param name="langId" value="${langId}" />
+					</wcf:rest>
+					<c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+					<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+				</c:if>
+
+				<%-- These variables are used to hold the currency symbol --%>
+				<c:choose>
+					<c:when test="${locale == 'ar_EG' && approvalBean.order.currency == 'EGP'}">
+						<c:set var="CurrencySymbolToFormat" value=""/>
+						<c:set var="CurrencySymbol" value="${currencyFormatterDB.currencySymbol}"/>
+					</c:when>
+					<c:otherwise>
+						<c:set var="CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}"/>
+						<c:set var="CurrencySymbol" value=""/>
+					</c:otherwise>
+				</c:choose>
+				<c:set var="currencyDecimal" value="${currencyFormatterDB.decimalPlaces}"/>
+
+				<c:choose>
+					<c:when test="${!empty approvalBean.order.orderTotal}">
+						<fmt:formatNumber var="orderAmt" value="${approvalBean.order.orderTotal}" type="currency" maxFractionDigits="${currencyDecimal}" currencySymbol="${CurrencySymbolToFormat}"/>
+						<c:set var="orderAmt" value="${orderAmt}${CurrencySymbol}"/>
+					</c:when>
+					<c:otherwise>
+						<wcst:message var="orderAmtNotAvail" bundle="${widgetText}" key="Approval_info_not_avail" />	
+						<c:set var="orderAmt" value="${orderAmtNotAvail}"/>
+					</c:otherwise>
+				</c:choose>
+			</c:when>
+			<c:otherwise>
+				<wcst:message var="orderAmtNotAvail" bundle="${widgetText}" key="Approval_info_not_avail" />		
+				<c:set var="orderAmt" value="${orderAmtNotAvail}"/>			
+			</c:otherwise>
+		</c:choose>
+
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col2 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="quantityCell${rowCount}" target="${rCell}" />
+		<wcf:set key="cellContent" value="${orderAmt}" target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 5 --%>
+		<c:remove var="approvalStatus"/>
+		
+		<c:choose>
+			<c:when test="${approvalBean.status eq approvalStatus_PENDING}">
+				<c:set var="approvalStatus" value="${statusPending}"/>
+			</c:when>
+			<c:when test="${approvalBean.status eq approvalStatus_APPROVED}">
+				<c:set var="approvalStatus" value="${statusApproved}"/>
+			</c:when>
+			<c:when test="${approvalBean.status eq approvalStatus_REJECTED}">
+				<c:set var="approvalStatus" value="${statusRejected}"/>
+			</c:when>
+		</c:choose> 
+		
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col1 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="" target="${rCell}" />
+		<wcf:set key="cellContent" value="${approvalStatus}" target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+
+		<%-- table row column 6 --%>
+		
+		<c:remove var="submitDate"/>
+
+		<c:catch>
+			<fmt:parseDate parseLocale="${dateLocale}" var="submitDate" value="${approvalBean.submitTime}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+		</c:catch>
+		<c:if test="${empty submitDate}">
+			<c:catch>
+				<fmt:parseDate parseLocale="${dateLocale}" var="submitDate" value="${approvalBean.submitTime}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+		<c:if test="${empty submitDate}">
+			<c:catch>
+				<fmt:parseDate parseLocale="${dateLocale}" var="submitDate" value="${approvalBean.submitTime}" pattern="yyyy-MM-dd'T'HH:mm" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+		<c:choose>
+			<c:when test="${!empty submitDate}">
+				<fmt:formatDate var="submitDate" value="${submitDate}" dateStyle="short" timeZone="${formattedTimeZone}"/>				
+			</c:when>
+			<c:otherwise>
+				<wcst:message var="submitDate" bundle="${widgetText}" key="Approval_info_not_avail" />
+			</c:otherwise>
+		</c:choose>
+		
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col1 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="" target="${rCell}" />
+		<wcf:set key="cellContent" value="${submitDate}" target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 7 --%>
+		<c:remove var="approveDate"/>
+		<c:catch>
+			<fmt:parseDate parseLocale="${dateLocale}" var="approveDate" value="${approvalBean.approveTime}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+		</c:catch>
+		<c:if test="${empty approveDate}">
+			<c:catch>
+				<fmt:parseDate parseLocale="${dateLocale}" var="approveDate" value="${approvalBean.approveTime}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+		<c:if test="${empty approveDate}">
+			<c:catch>
+				<fmt:parseDate parseLocale="${dateLocale}" var="approveDate" value="${approvalBean.approveTime}" pattern="yyyy-MM-dd'T'HH:mm" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+		<c:if test="${!empty approveDate}">
+			<fmt:formatDate var="approveDate" value="${approveDate}" dateStyle="short" timeZone="${formattedTimeZone}"/>				
+		</c:if>
+
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col1 orderApprovalColumn" target="${rCell}" />
+		<wcf:set key="div2Class" value="cell" target="${rCell}" />
+		<wcf:set key="div2Id" value="" target="${rCell}" />
+		<wcf:set key="cellContent" value="${approveDate}" target="${rCell}" />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="rCell"/>
+		
+		<%-- table row column 8 --%>
+		<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+		<wcf:set key="div1Class" value="col1 actions orderApprovalColumn" target="${rCell}" />
+		<wcf:useBean var="actionsMap" classname="java.util.HashMap"/>
+		<c:choose>
+			<c:when test="${approvalBean.status eq approvalStatus_PENDING}">
+				<wcf:set key="APPROVE" value="OrderApprovalListJS.approveOrder(${approvalBean.approvalStatusId});" target="${actionsMap}" />
+				<wcf:set key="REJECT" value="OrderApprovalListJS.rejectOrder(${approvalBean.approvalStatusId});" target="${actionsMap}" />
+			</c:when>
+			<c:otherwise>
+				<wcf:set key="APPROVE" value="" target="${actionsMap}" />
+				<wcf:set key="REJECT" value="" target="${actionsMap}" />
+			</c:otherwise>
+		</c:choose>	
+		<wcf:set key="VIEW" value="document.location.href='${OrderDetailUrl}'" target="${actionsMap}" />
+		<wcf:set key='actionsMap' value='${actionsMap}' target='${rCell}' />
+		<wcf:set target="${rCells}" value="${rCell}" />
+		<c:remove var="actionsMap"/>
+		<c:remove var="rCell"/>
+				
+		<wcf:set target="${rows}" value="${rCells}" />
+		<c:remove var="rCells"/>
+	</c:forEach>

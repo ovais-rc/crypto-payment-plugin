@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","ar",{closed:"تم اغلاق الاعلام."});

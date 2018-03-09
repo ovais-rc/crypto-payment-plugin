@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		Class for creating a help manager that knows how to open links from 
+		the help server.
+		
+		@START_CODE
+    	<sample>
+        	<HelpManagerClass definitionName="cmc/shell/HelpManager" package="cmc/shell" singletonDefinition="true"/>
+    	</sample>
+		@END_CODE
+	-->
+	<Node classDefinition="true" definitionName="cmc/shell/HelpManagerClass">
+		<dependency localName="SearchResultsTree" moduleName="cmc/foundation/SearchResultsTree"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="OpenObjectTree" moduleName="cmc/foundation/OpenObjectTree"/>
+		<dependency localName="BusinessObjectEditor" moduleName="cmc/foundation/BusinessObjectEditor"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="BrowseObjectTree" moduleName="cmc/foundation/BrowseObjectTree"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.attemptToLaunchContextSensitiveHelpDel = new EventHandler.Class(this, "attemptToLaunchContextSensitiveHelp");
+			KeyUtil.callOnKeyCombo(this.attemptToLaunchContextSensitiveHelpDel, ['f2']);
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Delay 50ms and execute <code>del</code>
+			@param cmc/foundation/EventHandler del: the delegate that will be executed 50ms later
+		-->
+		<method args="del" name="delay">
+			<![CDATA[
+			Timer.addTimer(del, 50);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Attempt to launch the context sensitive help by first checking if the KeyUtil.downKeysArray.length has 
+			been reset first. If it's not, it will attempt to relaunch the function 50ms later. 
+		-->
+		<method args="e" name="attemptToLaunchContextSensitiveHelp">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (KeyUtil.downKeysArray.length == 0) {
+				this.openContextSensitiveHelp();
+			}
+			else {
+				this.delay(this.attemptToLaunchContextSensitiveHelpDel);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="ondestroy">
+			<![CDATA[
+			KeyUtil.removeKeyComboCall(this.attemptToLaunchContextSensitiveHelpDel, ['f2']);
+			]]>
+		</handler>
+		
+		<!--- 
+			Open a new browser with the specified URL in the specified window.
+			@param string url: the full URL to launch
+			@param string windowHandlerName: the name of the window to launch
+		-->
+		<method args="url, windowHandlerName" name="openLink">
+			<![CDATA[
+			var newWindowObj = new Object();
+			newWindowObj.URL = url;
+			newWindowObj.windowName = windowHandlerName;
+			newWindowObj.windowFeatures = "left=0,top=0,width=1014,height=710,scrollbars=yes,toolbar=yes,directories=yes,status=yes,menubar=yes,copyhistory=yes,resizable=yes";
+			openNewWindow(newWindowObj);
+			]]>
+		</method>
+		
+		<!---
+			Get the prefix for all help URLs. This includes the protocol, host, port and context path.
+			The default prefix is http://<host>:8001/help
+			@return string The help URL prefix
+		-->
+		<method name="getHelpURLPrefix">
+			<![CDATA[
+			var url = window.location;
+			var host = cmcConfig.helpServerHostName ? cmcConfig.helpServerHostName : url.hostname;
+			var helpPort = cmcConfig.helpServerPort ? cmcConfig.helpServerPort : "8001";
+			var context = cmcConfig.helpServerContextPath ? cmcConfig.helpServerContextPath : "/help";
+			var helpURLPrefix = "http://" + host;
+			if (helpPort != "80") {
+				helpURLPrefix += ":" + helpPort;
+			}
+			helpURLPrefix += context;
+			return helpURLPrefix;
+			]]>
+		</method>
+
+		<!--- 
+			Open a new browser with the specified relative URL.
+			The relative URL will be pre-pended with the common help server
+			path and required parameters.
+			@param string relativeURL: the relative URL to launch
+		-->
+		<method args="relativeURL, topicPath" name="openHelpLink">
+			<![CDATA[
+			if (typeof(topicPath) == "undefined") topicPath = null;
+			var helpURL = "";
+			var defaultTopicPath = "/SSZLC2_9.0.0/com.ibm.commerce.management-center.doc/";
+			if (topicPath == null) {
+				topicPath = defaultTopicPath;
+			}
+			if (relativeURL.indexOf("?") != -1) {
+				helpURL = this.getHelpURLPrefix() + topicPath + relativeURL + "&lang=" + PreferenceManager.Singleton.getPreference("preferredLanguage");
+			}
+			else {
+				helpURL = this.getHelpURLPrefix() + topicPath + relativeURL + "?lang=" + PreferenceManager.Singleton.getPreference("preferredLanguage");
+			}
+			this.openLink(helpURL, "helpWindow");
+			]]>
+		</method>		
+
+		<!--- 
+			Open a new browser to show videos with the specified relative URL.
+			The relative URL will be pre-pended with the common help server
+			path and required parameters.
+			@param string relativeURL: the relative URL to launch
+		-->
+		<method args="relativeURL" name="openVideoLink">
+			<![CDATA[
+			var videoURL = "";
+			if (relativeURL.indexOf("?") != -1) {
+				videoURL = this.getHelpURLPrefix() + "/SSZLC2_9.0.0/com.ibm.commerce.management-center.doc/" + relativeURL;
+			}
+			else {
+				videoURL = this.getHelpURLPrefix() + "/SSZLC2_9.0.0/com.ibm.commerce.management-center.doc/" + relativeURL;
+			}
+			this.openLink(videoURL, "videoWindow");
+			]]>
+		</method>	
+
+		<!--- 
+			Open a new browser and direct it to the information center home page.
+		-->
+		<method name="openInfoCenter">
+			<![CDATA[
+			var helpURL = this.getHelpURLPrefix() + "/SSZLC2_9.0.0/landing/wc_welcome.html?lang=" + PreferenceManager.Singleton.getPreference("preferredLanguage");
+			this.openLink(helpURL, "helpWindow");
+			]]>
+		</method>
+				
+		<!--- 
+			Determine the relative URL that contains the help information
+			that explains the task in hand depending on the current context
+			of the user.
+			The relative URL is either defined here for general shell panels
+			or they are defined in each component business editor code.
+		-->
+		<method name="openContextSensitiveHelp">
+			<![CDATA[
+			var helpLink = "";
+			if (!SingletonRegistry.logonPanel && SingletonRegistry.logonPanel.visible) {
+				helpLink = "tasks/ttflogon.htm";
+			}
+			else if (PreferenceManager.Singleton.userPreferenceDialog != null && PreferenceManager.Singleton.userPreferenceDialog.visible) {
+				helpLink = "concepts/ctfcmc.htm";
+			}
+			else if (typeof (ToolsController.Singleton) == "undefined" || ToolsController.Singleton.toolList.length > 0) {
+				var currentToolPane;
+				if (typeof (ToolsController.Singleton) != "undefined") {
+					currentToolPane = SingletonRegistry.toolPanesWidget.getCurrentPane();
+				}
+				else {
+					currentToolPane = RootComponent.Singleton.testShell.editorArea.editor;
+				}
+				if (currentToolPane instanceof BusinessObjectEditor.Class) {
+					var navigationTree = currentToolPane.navigationTree;
+					var treeNodeSelection = navigationTree.getSelection();
+					if (treeNodeSelection instanceof BrowseObjectTree.Class) {
+						var selectedNavigationListDefinition = treeNodeSelection.navigationListDefinition;
+						if (selectedNavigationListDefinition == null && treeNodeSelection.o != null) {
+							selectedNavigationListDefinition = treeNodeSelection.o.objectDefinition;
+						}
+						helpLink = selectedNavigationListDefinition.helpLink;
+					}
+					else if (treeNodeSelection instanceof OpenObjectTree.Class) {
+						var selectedObjectDefinition = treeNodeSelection.o.objectDefinition;
+						helpLink = selectedObjectDefinition.helpLink;
+					}
+					else if (treeNodeSelection instanceof SearchResultsTree.Class) {
+						helpLink = treeNodeSelection.searchDefinition.helpLink;
+					}
+					if (typeof (helpLink) == "undefined" || helpLink == null || helpLink == "") {
+						helpLink = currentToolPane.helpLink;
+					}
+				}
+				else {
+					helpLink = "concepts/ctfcmc.htm";
+				}
+			}
+			else {
+				helpLink = "concepts/ctfcmc.htm";
+			}
+			this.openHelpLink(helpLink);
+			]]>
+		</method>
+		
+		<!--- 
+			Open a new browser and direct it to the shortcut key legend help page.
+		-->
+		<method name="openShortcutKeyLegend">
+			<![CDATA[
+			this.openHelpLink("concepts/ctfcmcshortcut.htm");
+			]]>
+		</method>
+		
+		<!--- 
+			Open a new browser and direct it to the getting started help page.
+		-->
+		<method name="openGettingStarted">
+			<![CDATA[
+			this.openHelpLink("refs/rtfgetstart.htm?noframes=true");
+			]]>
+		</method>
+	</Node>
+</Definitions>

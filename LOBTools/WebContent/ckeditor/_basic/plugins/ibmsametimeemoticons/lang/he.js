@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmsametimeemoticons","he",{angel:"מלאך",angry:"כועס",cool:"מגניב",crying:"בוכה",eyebrow:"הרמת גבה",frown:"זועף",goofy:"שטותי",grin:"גיחוך",half:"חצי",idea:"רעיון",laughing:"צוחק",laughroll:"צחוק מתגלגל",no:"לא",oops:"אופס",shy:"מבויש",smile:"חיוך",tongue:"לשון",wink:"קורץ",yes:"כן"});

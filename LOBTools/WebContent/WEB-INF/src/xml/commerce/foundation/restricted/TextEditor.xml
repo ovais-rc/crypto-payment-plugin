@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		The cmc/foundation/TextEditor class will bind a {@link cmc/foundation/ModelProperty} with the {@link cmc/foundation/InputText} widget. The relationship 
+		is bi-directional.  This means that the inputbox text will be refreshed to represent the value of the property and 
+		the new property value will be stored when a user changes the inputbox text.
+		
+		This text field is for internal use by both the properties and grid implementations. {@link cmc/foundation/PropertyInputText}, 
+		{@link cmc/foundation/PropertyInputLongText} and {@link cmc/foundation/PropertyInputMultiLineText} all create an cmc/foundation/TextEditor for 
+		use in the properties view. {@link cmc/foundation/GridTextEditor} creates cmc/foundation/TextEditor for use inside {@link cmc/foundation/Grid}.
+	-->
+	<InputText classDefinition="true" definitionName="cmc/foundation/TextEditor" visible="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!--- Reference to {@link cmc/foundation/ModelProperty} object that is being edited. -->
+		<variable name="property" value="${null}"/>
+		<!---
+			@keywords private 
+			Locks the stored value from being updated.
+		-->
+		<variable name="storeValueLock" type="boolean" value="false"/>
+		<!---
+			@keywords private 
+			Delay used in the delayStoreValue method, will wait this amount before calling storeValue
+		-->
+		<variable name="storeValueDelay" value="500"/> <!-- 1000ms = 1 second -->
+		<!---
+			@keywords private 
+			keeps track of the store value timer, when true the timer is already set
+		-->
+		<variable name="storeValuePending" type="boolean" value="false"/>
+		<!---
+			@keywords private 
+			Skip storing value of the property.
+		-->
+		<variable name="skipStoringValue" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this input box. Listeners are created to
+			watch the property value. If the property changes at anytime, the updateValue method will be called.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this input box.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				if (this.property && this.storeValuePending) {
+					this.storeValue();
+				}
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					this.setText("");
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			Update and refresh the cmc/foundation/TextEditor value with a new {@link cmc/foundation/ModelProperty} value. 
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.storeValueLock) {
+				var value = this.property.value;
+				if (value != this.getText()) {
+					this.skipStoringValue = true;
+					this.setText(value);
+					this.skipStoringValue = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			Set the {@link cmc/foundation/ModelProperty} to represent the cmc/foundation/TextEditor value. This method is called when the input box
+			value is changed.
+		-->
+		<method args="e" name="storeValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.storeValuePending) {
+				this.storeValueDel.disconnectAll();
+				Timer.removeTimer(this.storeValueDel);
+			}
+			this.storeValuePending = false;
+			this.storeValueLock = true;
+			if (this.property) {
+				this.property.change(this.getText());
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/TextEditor", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + this.getText() + this.property.o.logString());
+				}
+			}
+			this.storeValueLock = false;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Calls storeValue on a 2.5 second delay
+		-->
+		<method name="delayedStoreValue">
+			<![CDATA[
+			if (!this.skipStoringValue && !this.storeValuePending && this.property) {
+				this.storeValuePending = true;
+				if (typeof (this.storeValueDel) == "undefined") {
+					this.storeValueDel = new EventHandler.Class(this, "storeValue");
+				}
+				this.storeValueDel.disconnectAll();
+				this.storeValueDel.connect(this.property.o.openGroupObject, "beingSaved");
+				Timer.addTimer(this.storeValueDel, this.storeValueDelay);
+			}
+			]]>
+		</method>
+
+		<!--- 
+			When the text of the input box is changed by the business user, storeValue method will be called.
+		-->	
+		<handler name="ontext">
+			<![CDATA[
+			this.delayedStoreValue();
+			]]>
+		</handler>
+		
+		<!--- 
+			@keywords private
+		-->	
+		<handler name="onblur">
+			<![CDATA[
+			if (this.storeValuePending) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+		<!--- @keywords private -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</InputText>
+	
+	<!---
+		@keywords private
+		
+		The cmc/foundation/PunchOutTextEditor class combines an instance of the {@link cmc/foundation/TextEditor} widget and a button
+		that will launch a punch-out edit dialog in a separate browser window. The punch-out edit feature is only
+		available if the property being edited is associated with one or more enabled instances of {@link cmc/foundation/PunchOutEditService}.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/PunchOutTextEditor" focusable="false">
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			This is a boolean indicator as to whether this text input field is multi-line. The default value for this attribute
+			is "false".
+		-->
+		<variable name="multiline" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute provides a maximum text area height.
+		-->
+		<variable name="maximumHeight" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute provides a minimum text area height. The default value is 100.
+		-->
+		<variable name="textAreaHeight" type="number" value="100"/>
+		<!---
+			@keywords private
+			The size of the padding for the input text widget. The default value is 8.
+		-->
+		<variable name="inputTextPadding" type="number" value="8"/>
+		<!--- Reference to {@link cmc/foundation/ModelProperty} object that is being edited. -->
+		<variable name="property"/>
+		<!---
+			@keywords private
+			Indicates that that punch-out editing is enabled.
+		-->
+		<variable name="punchOutEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Punch-out tooltip text.
+		-->
+		<variable name="punchOutTooltip" type="string" value=""/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updatePunchOutEnabled();
+			this.updatePunchOutTooltip();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updatePunchOutEnabledDel) {
+				this.updatePunchOutEnabledDel.disconnectAll();
+				delete this.updatePunchOutEnabledDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Update punchOutEnabled.
+		-->
+		<method args="e" name="updatePunchOutEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var enabled = false;
+			if (this.updatePunchOutEnabledDel) {
+				this.updatePunchOutEnabledDel.disconnectAll();
+			}
+			else {
+				this.updatePunchOutEnabledDel = new EventHandler.Class(this, "updatePunchOutEnabled");
+			}
+			this.updatePunchOutEnabledDel.connect(this, "onproperty");
+			if (this.property != null) {
+				this.updatePunchOutEnabledDel.connect(this.property, "onpropertyDefinition");
+				if (this.property.propertyDefinition != null && this.property.propertyDefinition.punchOutEditServices != null) {
+					var services = this.property.propertyDefinition.punchOutEditServices;
+					for (var i = 0; i < services.length; i++) {
+						if (services[i].isEnabled(this.property.o, this.updatePunchOutEnabledDel)) {
+							enabled = true;
+							break;
+						}
+					}
+				}
+			}
+			if (enabled != this.punchOutEnabled) {
+				this.setVariable("punchOutEnabled", enabled);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update punchOutTooltip
+		-->
+		<method args="e" name="updatePunchOutTooltip">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var tooltipText = "";
+			if (this.updatePunchOutTooltipDel) {
+				this.updatePunchOutTooltipDel.disconnectAll();
+			}
+			else {
+				this.updatePunchOutTooltipDel = new EventHandler.Class(this, "updatePunchOutTooltip");
+			}
+			this.updatePunchOutTooltipDel.connect(this, "onproperty");
+			if (this.property != null) {
+				this.updatePunchOutTooltipDel.connect(this.property, "onpropertyDefinition");
+				if (this.property.propertyDefinition != null) {
+					this.updatePunchOutTooltipDel.connect(this.property.propertyDefinition, "onpunchOutEditHelpText");
+					tooltipText = this.property.propertyDefinition.punchOutEditHelpText;
+				}
+			}
+			if (tooltipText != this.punchOutTooltip) {
+				this.setVariable("punchOutTooltip", tooltipText);
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="0"/>
+		<TextEditor enabled="${this.parent.enabled}" maximumHeight="${this.parent.maximumHeight}" name="textEditor" property="${this.parent.property}" textAreaHeight="${this.parent.textAreaHeight}" inputTextPadding="${this.parent.inputTextPadding}" width="${this.parent.width - (this.parent.punchOutEnabled ? this.parent.punchOutButton.width : 0)}">
+			<!--- @keywords private -->
+			<method args="parent, args" name="constructor">
+				<![CDATA[
+				if (parent.multiline != null) {
+					this.multiline = parent.multiline;
+				}
+				]]>
+			</method>
+			
+			<handler name="ontext">
+				<![CDATA[
+				EventUtil.trigger(this.parent, "ontext");
+				]]>
+			</handler>
+		</TextEditor>
+				
+		<BaseButton enabled="${this.parent.enabled}" focusable="true" imageSet="rteGridIcon" name="punchOutButton" visible="${this.parent.punchOutEnabled}">
+			<!--
+				@keyword private
+			-->
+			<handler name="onclick">
+				<![CDATA[
+				if (this.classroot.punchOutEnabled && this.classroot.property != null && this.classroot.property.propertyDefinition != null && this.classroot.property.propertyDefinition.punchOutEditServices != null) {
+					var services = this.classroot.property.propertyDefinition.punchOutEditServices;
+					var enabledServices = [];
+					for (var i = 0; i < services.length; i++) {
+						if (services[i].isEnabled(this.classroot.property.o)) {
+							enabledServices.push(services[i]);
+						}
+					}
+					if (enabledServices.length > 1) {
+						var caller = this;
+						require(["cmc/foundation/PunchOutEditDialog"], function(PunchOutEditDialog) {
+							PunchOutEditDialog.Singleton.openPunchOutEditDialog(caller.classroot.property);
+						});
+					}
+					else if (enabledServices.length == 1) {
+						enabledServices[0].doRequest(this.classroot.property.o);
+					}
+				}
+				]]>
+			</handler>
+			
+			<!---
+				@keywords private
+				Handle focus.
+			-->
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this
+					});
+				}
+				]]>
+			</handler>
+			<Tooltip name="tooltip" text="${this.classroot.punchOutTooltip}"/>
+		</BaseButton>
+	</FocusableComponent>
+</Definitions>

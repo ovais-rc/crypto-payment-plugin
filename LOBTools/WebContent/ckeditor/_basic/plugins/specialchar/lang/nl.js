@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","nl",{options:"Opties voor speciale tekens",title:"Speciaal teken",toolbar:"Speciaal teken invoegen"});

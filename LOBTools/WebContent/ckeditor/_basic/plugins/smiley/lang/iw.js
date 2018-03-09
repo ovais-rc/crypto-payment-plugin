@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","iw",{options:"אפשרויות רגשונים",title:"רגשונים",toolbar:"הוספת רגשון"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","ar",{keystrokeForContextMenu:"Ctrl + ضغط بالمفتاح الأيمن لمزيد من الاختيارات",keystrokeForContextMenuMac:"Cmd + ضغط بالمفتاح الأيمن لمزيد من الاختيارات"});

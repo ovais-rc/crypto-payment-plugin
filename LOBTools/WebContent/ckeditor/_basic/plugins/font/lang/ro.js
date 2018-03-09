@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","ro",{fontSize:{label:"Dimensiune",voiceLabel:"Dimensiune font",panelTitle:"Dimensiune font"},label:"Font",panelTitle:"Nume font",voiceLabel:"Font"});

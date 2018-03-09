@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<!--
+		This definition defines the base object from which AttributeFolder
+		and InheritedAttributeFolder are derived. An Attribute folder is an
+		object used to organize attributes so that they can be found easily.
+		An attribute can be in multiple folders at the same time. Attribute folders use the
+		Folder noun from the file wc-infrastructure-clientobjects.xml which
+		contains information on how the parameters in the services are mapped
+		to create the appropriate BOD for the Web services.
+	-->
+<Definitions>
+	<PrimaryObjectDefinition definitionName="cmc/catalog/BaseAttributeFolderPrimaryObjectDefinition" displayName="${catalogResources.attributeFolderObjectName}" displayNameProperty="identifier" idProperty="folderId" isBaseDefinition="true" newDisplayName="${catalogResources.attributeFolder_newAttributeFolderDisplayName}" newObjectMenuItemText="${catalogResources.contextMenuNewAttributeFolder}" objectGroups="AttributeFolderGroup" propertiesDefinition="cmc/catalog/AttributeFolderProperties" utilitiesListDefinition="cmc/catalog/UtilitiesAttributeBrowseGrid" writeUsage="IBM_ManageAttributeDictionary">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<!-- This object type filter is for display child folders and attributes when a folder is selected in Utility View -->
+		<ObjectTypeFilter filterType="FolderChildren" objectTypes="AttributeFolder,InheritedAttributeFolder,AttributeFolderReference,AttributeFolderItemReference,AttributeFolderInheritedItemReference,InheritedAttributeFolderInheritedItemReference"/>
+		<!--- Update service to update a folder. -->
+		<UpdateService url="/cmc/UpdateFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="parentFolderId" optional="true" parameterName="parentFolderId" parentProperty="true" propertyName="folderId"/>
+		</UpdateService>
+		<!--- This service retrieves all the child folders.  -->
+		<GetChildrenService objectTypes="AttributeFolderReference,InheritedAttributeFolderReference" url="/cmc/GetChildFolders">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="folderObjectType" value="AttributeFolder"/>
+		</GetChildrenService>
+		<!--
+			This service retrieves all the attributes that belong to this
+			folder.
+		-->
+		<GetChildrenService objectTypes="AttributeFolderItemReference,AttributeFolderInheritedItemReference,InheritedAttributeFolderInheritedItemReference" url="/cmc/GetAttributeFolderItems">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="defaultLanguageId"/>
+		</GetChildrenService>
+		<!--
+			This service retrieves the cmc/catalog/BaseAttributeFolderPrimaryObjectDefinition object
+			that is the parent to this folder.
+		-->
+		<GetReferencesService url="/cmc/GetParentFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="parentFolderId" propertyName="parentFolderId"/>
+			<ServiceParam name="folderObjectType" value="AttributeFolder"/>
+		</GetReferencesService>
+		<!-- Refresh Service to reload the properties of the folder -->
+		<RefreshService url="/cmc/GetFolderById">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="folderObjectType" value="AttributeFolder"/>
+		</RefreshService>
+		<!--
+			This is the folder_id defined in the FOLDER table, which indicates
+			the primary key of this folder.
+		-->
+		<PropertyDefinition copyProtected="true" propertyName="folderId"/>
+		<!--- This is the identifier of the folder. Showing as "Name" in CMC UI -->
+		<PropertyDefinition displayName="${catalogResources.attributeFolder_name}" maximumSize="256" propertyName="identifier" required="true" trim="true"/>
+		<!--- This is the description of the folder. -->
+		<PropertyDefinition displayName="${catalogResources.attributeFolder_description}" maximumSize="256" propertyName="description" type="string"/>
+		<Xml name="template">
+			<folderType>IBM_AttributeFolder</folderType>
+		</Xml>
+		<!--- Reference to the parent of the folder. -->
+		<ParentReferenceObjectDefinition baseDefinition="cmc/catalog/AttributeFolderReferenceObjectDefinition" cascadeDelete="true"/>
+		<!--
+			Navigation list definition for navigating from the folder to
+			the attributes.
+		-->
+		<NavigationListDefinition baseDefinition="cmc/catalog/AttributeFolderItemGridChildList" isDefault="true"/>
+		<!--
+			Navigation list definition for navigating from the folder to its
+			child folders.
+		-->
+		<NavigationListDefinition baseDefinition="cmc/catalog/AttributeFolderGridChildList" toolbarIcon="folderListToolbarIcon"/>
+	</PrimaryObjectDefinition>
+
+	<!--
+		Defines the object to be used to represent folders owned by the local
+		store.
+	-->
+	<PrimaryObjectDefinition baseDefinition="cmc/catalog/BaseAttributeFolderPrimaryObjectDefinition" definitionName="cmc/catalog/AttributeFolder" headerIcon="GenericFolderHeaderIcon" icon="GenericFolderIcon" objectType="AttributeFolder">
+		<!--- Create service to create a folder and its relationship to a parent folder.. -->
+		<CreateService url="/cmc/CreateFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="parentFolderId" optional="false" parameterName="parentFolderId" parentProperty="true" propertyName="folderId">
+				<EnablementCondition conditionId="enableParentFolderId" enablementValue="" negate="true" parentProperty="true" propertyName="identifier"/>
+			</ServiceParam>
+		</CreateService>
+		<!--- Delete service to delete a folder. -->
+		<DeleteService url="/cmc/DeleteFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+		</DeleteService>
+		<!--
+			Reference to the items that belong to the folder and are owned by
+			the local store.
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/catalog/AttributeFolderItemReferenceObjectDefinition"/>
+		<!--
+			Reference to the items that belong to the folder and are owned by
+			the asset store.
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/catalog/AttributeFolderInheritedItemReferenceObjectDefinition"/>
+		<!--- Condition to disable the object creation in certain store types. -->
+		<EnablementAndCondition>
+			<EnablementOrCondition baseDefinition="cmc/catalog/StoreTypeCatalogObjectCreationRestriction"/>
+			<EnablementCondition conditionId="attributeDictionaryIsEnabledCondition" contextName="attributeDictionaryEnabledForStore" enablementValue="enabled"/>
+		</EnablementAndCondition>
+	</PrimaryObjectDefinition>
+
+	<!--
+		Defines the object to be used to represent folders owned by the asset
+		store.
+	-->
+	<PrimaryObjectDefinition baseDefinition="cmc/catalog/BaseAttributeFolderPrimaryObjectDefinition" compatibleObjectTypes="AttributeFolder" definitionName="cmc/catalog/InheritedAttributeFolder" headerIcon="InheritedGenericFolderHeaderIcon" icon="InheritedGenericFolderIcon" objectType="InheritedAttributeFolder">
+		<!--- Reference to the parent of the folder. -->
+		<ParentReferenceObjectDefinition baseDefinition="cmc/catalog/InheritedAttributeFolderReferenceObjectDefinition"/>
+		<!--
+			Reference to the items that belong to the folder and are owned by
+			the asset store.
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/catalog/InheritedAttributeFolderInheritedItemReferenceObjectDefinition"/>
+	</PrimaryObjectDefinition>
+
+	<!-- The relationship between this folder and its local parent -->
+	<ParentReferenceObjectDefinition definitionName="cmc/catalog/AttributeFolderReferenceObjectDefinition" derivedId="true" idProperty="folderReferenceId" objectType="AttributeFolderReference" referencedType="AttributeFolder"/>
+
+	<!-- The relationship between this folder and its asset store parent -->
+	<ParentReferenceObjectDefinition definitionName="cmc/catalog/InheritedAttributeFolderReferenceObjectDefinition" derivedId="true" idProperty="folderReferenceId" objectType="InheritedAttributeFolderReference" referencedType="InheritedAttributeFolder"/>
+
+	<!--
+		The relationship between a folder and local attributes in this folder.
+	-->
+	<ReferenceObjectDefinition baseDefinition="cmc/catalog/BaseAttributeFolderItemReferenceObjectDefinition" definitionName="cmc/catalog/AttributeFolderItemReferenceObjectDefinition" initializeObjectStoreId="true" objectType="AttributeFolderItemReference" referencedTypes="AttributeDictionaryAttributeWithAssignedValues,AttributeDictionaryAttributeWithAllowedValues">
+		<TrueEnablementCondition/>
+	</ReferenceObjectDefinition>
+
+	<!--
+		The relationship between this folder and asset store attributes in
+		this folder.
+	-->
+	<ReferenceObjectDefinition baseDefinition="cmc/catalog/BaseAttributeFolderItemReferenceObjectDefinition" definitionName="cmc/catalog/AttributeFolderInheritedItemReferenceObjectDefinition" initializeObjectStoreId="true" objectType="AttributeFolderInheritedItemReference" referencedTypes="InheritedAttributeDictionaryAttributeWithAssignedValues,InheritedAttributeDictionaryAttributeWithAllowedValues">
+		<EnablementCondition checkHasAccessRight="true" conditionId="accessRightCondition" enablementValue="true"/>
+	</ReferenceObjectDefinition>
+
+	<!--
+		The relationship between an inherited folder and an inherited
+		attribute in this folder.
+	-->
+	<ReferenceObjectDefinition baseDefinition="cmc/catalog/BaseAttributeFolderItemReferenceObjectDefinition" definitionName="cmc/catalog/InheritedAttributeFolderInheritedItemReferenceObjectDefinition" objectType="InheritedAttributeFolderInheritedItemReference" referencedTypes="InheritedAttributeDictionaryAttributeWithAssignedValues,InheritedAttributeDictionaryAttributeWithAllowedValues"/>
+
+	<!--
+		The class to represent relationships between folders and attributes.
+		These relationships are called folder items.
+	-->
+	<ReferenceObjectDefinition allowDuplicates="false" definitionName="cmc/catalog/BaseAttributeFolderItemReferenceObjectDefinition" idProperty="folderItemID" isBaseDefinition="true">
+		<!--
+			Create service to create the relationship between the parent folder
+			and folder item reference.
+		-->
+		<CreateService url="/cmc/CreateFolderItemReference">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" parentProperty="true" propertyName="objectStoreId"/>
+			<ServiceParam name="folderItemStoreId" objectPath="AttributeDictionaryAttributes" parameterName="folderItemStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" parentProperty="true" propertyName="folderId"/>
+			<ServiceParam name="folderItemReferenceId" objectPath="AttributeDictionaryAttributes" propertyName="attrId"/>
+		</CreateService>
+		<!--
+			Delete service to delete the relationship between the parent folder
+			and folder item reference.
+		-->
+		<DeleteService url="/cmc/DeleteFolderItemReference">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderItemStoreId" objectPath="AttributeDictionaryAttributes" parameterName="folderItemStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" parentProperty="true" propertyName="folderId"/>
+			<ServiceParam name="folderItemReferenceId" objectPath="AttributeDictionaryAttributes" propertyName="attrId"/>
+			<ServiceParam name="folderItemType" propertyName="folderItemType"/>
+		</DeleteService>
+		<Xml name="template">
+			<folderItemType>AttributeDictionaryAttributeType</folderItemType>
+		</Xml>
+	</ReferenceObjectDefinition>
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","zh-cn",{closed:"已关闭通知。"});

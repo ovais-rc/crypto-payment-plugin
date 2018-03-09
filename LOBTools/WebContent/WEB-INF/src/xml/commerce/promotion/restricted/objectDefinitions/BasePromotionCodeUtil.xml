@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This utility node provides methods for generation of promotion code example and to calculate the 
+		maximum possible number of promotion codes based on a pattern definition.
+	-->
+	<Node classDefinition="true" definitionName="cmc/promotion/BasePromotionCodeUtil">
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+		<!--- Valid values to replace the character D defined in the pattern. -->		
+		<variable name="valuesForCharacterD" type="string" value="0123456789"/>
+		<!--- Valid values to replace the character A defined in the pattern. --> 
+		<variable name="valuesForCharacterA" type="string" value="ABCDEFGHIJKLMNOPQRSTUVWXYZ"/>
+		<!--- Valid values to replace the character a defined in the pattern. -->
+		<variable name="valuesForCharactera" type="string" value="abcdefghijklmnopqrstuvwxyz"/>
+		<!--- Valid values to replace the character M defined in the pattern. -->
+		<variable name="valuesForCharacterM" type="string" value="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"/>
+		<!--- Valid values to replace the character X defined in the pattern. -->
+		<variable name="valuesForCharacterX" type="string" value="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"/>
+		<!--- Valid values to replace the character x defined in the pattern. -->
+		<variable name="valuesForCharacterx" type="string" value="abcdefghijklmnopqrstuvwxyz0123456789"/>
+		<!--- Valid values to replace the character N defined in the pattern. -->
+		<variable name="valuesForCharacterN" type="string" value="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"/>
+		<!--- Valid values to replace the character S defined in the pattern. -->	
+		<variable name="valuesForCharacterS" type="string" value="0123456789"/>
+		
+		<!---
+			@keywords private
+			Calculate the example codes and the maximum possible number of codes 
+			based on the supplied pattern argument.		
+
+			@param string pattern: The pattern definition to use
+			@param number noOfExamples: The number of examples to generate
+			@returns Array: An array where the first element contains the example codes and the second element contains 
+			the maximum possible number of codes. Each example code returned in the first element is separated by 
+			a line break.			
+		-->
+		<method args="pattern, noOfExamples" name="calculateExampleAndNumberOfCodes">
+			<![CDATA[
+			var exampleAndNumberOfCodes = ["", ""];
+			var examples = new Array(isNaN(noOfExamples) ? 0 : Number(noOfExamples));
+			for (var k = 0; k < examples.length; k++) {
+				examples[k] = "";
+			}
+			var mask = false;
+			var fixedText = "";
+			var type = "";
+			var minSequenceSize = "";
+			for (var i = 0; i < pattern.length; i++) {
+				if (pattern.charAt(i) == "[") {
+					if (fixedText != "") {
+						for (var k = 0; k < examples.length; k++) {
+							examples[k] = examples[k] + fixedText;
+						}
+						fixedText = "";
+					}
+					mask = true;
+				}
+				else if (pattern.charAt(i) == "]") {
+					mask = false;
+				}
+				else if (!mask) {
+					fixedText += pattern.charAt(i);
+				}
+				else if (mask) {
+					var j = i;
+					fixedText = "";
+					type = pattern.charAt(i);
+					if (type == "S") {
+						var zeroString = "";
+						var sequenceSize = 0;
+						while (j < pattern.length && pattern.charAt(j) == "S") {
+							zeroString += '0';
+							sequenceSize = (sequenceSize == 0) ? 1 * this.valuesForCharacterS.length : sequenceSize * this.valuesForCharacterS.length;
+							j++;
+						}
+						var start = 0;
+						var step = 1;
+						if (pattern.charAt(j) == '+') {
+							j++;
+							var startString = "";
+							while (j < pattern.length && this.valuesForCharacterS.indexOf(pattern.charAt(j)) > -1) {
+								startString += pattern.charAt(j);
+								j++;
+							}
+							start = isNaN(startString) ? 0 : Number(startString);
+							if (sequenceSize > start) {
+								sequenceSize = sequenceSize - start;
+							}
+							else {
+								sequenceSize = 0;
+							}
+						}
+						if (pattern.charAt(j) == '/') {
+							j++;
+							var stepString = "";
+							while (j < pattern.length && this.valuesForCharacterS.indexOf(pattern.charAt(j)) > -1) {
+								stepString += pattern.charAt(j);
+								j++;
+							}
+							step = isNaN(stepString) ? 1 : Number(stepString);
+							sequenceSize = sequenceSize / step;
+						}
+						if (minSequenceSize == "") {
+							minSequenceSize = sequenceSize;
+						}
+						else {
+							if (sequenceSize < minSequenceSize) {
+								minSequenceSize = sequenceSize;
+							}
+						}
+						for (var k = 0; k < examples.length; k++) {
+							var sequenceValue = start;
+							examples[k] = examples[k] + (zeroString + sequenceValue).substr((zeroString + sequenceValue).length - zeroString.length);
+							start = start + step;
+						}
+					}
+					else if (type == "A") {
+						while (j < pattern.length && pattern.charAt(j) == "A") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharacterA.length : exampleAndNumberOfCodes[1] * this.valuesForCharacterA.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharacterA.substr(Math.round(Math.random() * (this.valuesForCharacterA.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else if (type == "a") {
+						while (j < pattern.length && pattern.charAt(j) == "a") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharactera.length : exampleAndNumberOfCodes[1] * this.valuesForCharactera.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharactera.substr(Math.round(Math.random() * (this.valuesForCharactera.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else if (type == 'D') {
+						while (j < pattern.length && pattern.charAt(j) == "D") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharacterD.length : exampleAndNumberOfCodes[1] * this.valuesForCharacterD.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharacterD.substr(Math.round(Math.random() * (this.valuesForCharacterD.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else if (type == 'X') {
+						while (j < pattern.length && pattern.charAt(j) == "X") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharacterX.length : exampleAndNumberOfCodes[1] * this.valuesForCharacterX.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharacterX.substr(Math.round(Math.random() * (this.valuesForCharacterX.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else if (type == 'x') {
+						while (j < pattern.length && pattern.charAt(j) == "x") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharacterx.length : exampleAndNumberOfCodes[1] * this.valuesForCharacterx.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharacterx.substr(Math.round(Math.random() * (this.valuesForCharacterx.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else if (type == 'M') {
+						while (j < pattern.length && pattern.charAt(j) == "M") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharacterM.length : exampleAndNumberOfCodes[1] * this.valuesForCharacterM.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharacterM.substr(Math.round(Math.random() * (this.valuesForCharacterM.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else if (type == 'N') {
+						while (j < pattern.length && pattern.charAt(j) == "N") {
+							exampleAndNumberOfCodes[1] = (exampleAndNumberOfCodes[1] == "") ? 1 * this.valuesForCharacterN.length : exampleAndNumberOfCodes[1] * this.valuesForCharacterN.length;
+							for (var k = 0; k < examples.length; k++) {
+								examples[k] = examples[k] + this.valuesForCharacterN.substr(Math.round(Math.random() * (this.valuesForCharacterN.length - 1)), 1);
+							}
+							j++;
+						}
+					}
+					else {
+						j++;
+					}
+					i = j - 1;
+				}
+			}
+			if (minSequenceSize != "") {
+				minSequenceSize = Math.ceil(minSequenceSize);
+				exampleAndNumberOfCodes[1] = minSequenceSize;
+			}
+			if (fixedText != "" && !mask) {
+				for (var k = 0; k < examples.length; k++) {
+					examples[k] = examples[k] + fixedText;
+				}
+			}
+			for (var k = 0; k < examples.length; k++) {
+				exampleAndNumberOfCodes[0] = exampleAndNumberOfCodes[0] + examples[k];
+				if (k != examples.length - 1) {
+					exampleAndNumberOfCodes[0] = exampleAndNumberOfCodes[0] + "<br/>";
+				}
+			}
+			if (exampleAndNumberOfCodes[1] != "" && !isFinite(exampleAndNumberOfCodes[1])) {
+				exampleAndNumberOfCodes[1] = promotionResources.Singleton.promotion_numberTooBig.string;
+			}
+			return exampleAndNumberOfCodes;
+			]]>
+		</method>
+		
+		<!---
+			Get the generated code example(s) based on the supplied pattern argument.
+
+			Sample usage:
+			@START_CODE
+			var codeExample = CodeUtil.Singleton.getCodeExample("SUMMER-[XX]-SALE");
+			@END_CODE
+
+			In the sample above, one of the codeExample values could be "SUMMER-A9-SALE"
+
+			@param string pattern: The pattern definition
+			@param number noOfExamples: The number of examples to generate			
+			@returns string: The code example(s) generated. Each example in the string is separated by a line break
+		-->		
+		<method args="pattern, noOfExamples" name="getCodeExample">
+			<![CDATA[
+			return this.calculateExampleAndNumberOfCodes(pattern, noOfExamples)[0];
+			]]>
+		</method>		
+		
+		<!---
+			Get the maximum possible number of promotion codes based on the supplied 
+			pattern argument.
+
+			Sample usage:
+			@START_CODE
+			var possibleNumberOfCodes = CodeUtil.Singleton.getNoOfPossibleCodes("SUMMER-[XX]-SALE");
+			@END_CODE
+
+			In the sample above, the result of possibleNumberOfCodes would be 1296(=36*36).
+
+			@param string pattern: The pattern definition			
+			@returns string: The maximum possible number of promotion codes
+		-->	
+		<method args="pattern" name="getNoOfPossibleCodes">
+			<![CDATA[
+			return this.calculateExampleAndNumberOfCodes(pattern, 0)[1];
+			]]>
+		</method>
+		
+	</Node>
+</Definitions>

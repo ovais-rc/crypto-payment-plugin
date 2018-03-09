@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("bidi","nb",{ltr:"Tekstretning fra venstre mot høyre",rtl:"Tekstretning fra høyre mot venstre"});

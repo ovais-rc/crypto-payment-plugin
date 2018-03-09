@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		Store search result list item.
+	-->
+	<BaseTextListItem classDefinition="true" definitionName="cmc/foundation/StoreSearchListItem">
+		<!---
+			Handle double click event.
+		-->
+		<handler name="ondblclick">
+			<![CDATA[
+			this.parentDialog.setVariable("selectedStore", this.value);
+			this.parentDialog.handleOk();
+			]]>
+		</handler>
+	</BaseTextListItem>
+
+	<!---
+		Base store search dialog class.
+		@keywords private
+	-->	
+	<Dialog classDefinition="true" definitionName="cmc/foundation/StoreSearchDialogBase" title="${foundationResources.Singleton.storeSearchDialog_title.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StoreSearchListItem" moduleName="cmc/foundation/StoreSearchListItem"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="VerticalScrollbar" moduleName="cmc/foundation/VerticalScrollbar"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			The delegate to call when a store is selected.
+		-->
+		<variable name="setStoreDelegate" value="${null}"/>
+		<!---
+			Store "usage". This is used to restrict the stores returned by the search to those that match the specified usage.
+		-->
+		<variable name="usage" type="string" value=""/>
+		<!---
+			Indicates that search is currently enabled.
+		-->
+		<variable name="searchEnabled" type="boolean" value="true"/>
+		<!---
+			Indicates thta the OK action is currently enabled.
+		-->
+		<variable name="okEnabled" type="boolean" value="false"/>
+		<!---
+			Indicates that there is currently an active search request.
+		-->
+		<variable name="searchActive" type="boolean" value="false"/>
+		<!---
+			Array of list items.
+		-->
+		<variable name="listItems" value="${[]}"/>
+		<!---
+			Array of items that are already created that can be used from the list.
+		-->
+		<variable name="listItemsPool" value="${[]}"/>
+		<!---
+			The currently selected store.
+		-->
+		<variable name="selectedStore" value="${null}"/>
+		<!---
+			Check the search action enablement.
+		-->
+		<method name="checkSearchEnabled">
+			<![CDATA[
+			this.setVariable("searchEnabled", !this.searchActive);
+			]]>
+		</method>
+
+		<!---
+			Handle search active changed event.
+		-->
+		<handler name="onsearchActive">
+			<![CDATA[
+			this.checkSearchEnabled();
+			]]>
+		</handler>
+		
+		<!---
+			Check the OK button enablement.
+		-->
+		<method name="checkOkEnabled">
+			<![CDATA[
+			this.setVariable("okEnabled", this.selectedStore != null);
+			]]>
+		</method>
+		
+		<!---
+			Handle store selected event.
+		-->
+		<handler name="onselectedStore">
+			<![CDATA[
+			this.checkOkEnabled();
+			]]>
+		</handler>
+
+		<!---
+			Indicates setDefaultStore check box not visible
+		-->
+		<variable name="setDefaultVisible" type="boolean" value="false"/>
+
+		<!---
+			Handle OK.
+		-->
+		<method name="handleOk">
+			<![CDATA[
+			if (this.okEnabled) {
+				if (this.setDefaultVisible && this.setDefaultStore.value) {
+					PreferenceManager.Singleton.setPreference("CMCDefaultStore", this.selectedStore.storeName);
+				}
+				this.setStoreDelegate.execute(this.selectedStore);
+				this.closeWindow();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Trigger a new search.
+		-->
+		<method name="doSearch">
+			<![CDATA[
+			if (this.searchEnabled) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/StoreSearchDialog doSearch: " + this.searchView.searchFieldView.searchTextView.searchText.getText());
+				this.clearStores();
+				var searchText = StringUtil.Singleton.trim(this.searchView.searchFieldView.searchTextView.searchText.getText());
+				if (searchText != "") {
+					this.setVariable("searchActive", true);
+					var caller = this;
+					require(["cmc/foundation/StoreSearchDialogService"], function(StoreSearchDialogService) {
+						StoreSearchDialogService.Singleton.doRequest(caller, {
+							searchText: searchText,
+							usage: caller.usage
+						});
+					});
+				}
+				else {
+					this.updateResultsMessage();
+				}
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			]]>
+		</method>
+
+		<!---
+			Use this method to open the Store Search Dialog.
+			@param cmc/foundation/EventHandler setStoreDelegate: the callback delegate that will be called when the new store is selected
+			@param string searchText: default search text
+			@param string usage: optional store usage
+			@param array stores: initial list of stores
+		 -->
+		<method args="setStoreDelegate, searchText, usage, stores" name="openStoreSearchDialog">
+			<![CDATA[
+			if (typeof(stores) == "undefined") stores = null;
+			this.openWindow();
+			this.clearStores();
+			this.setStoreDelegate = setStoreDelegate;
+			if (typeof (usage) != "undefined") {
+				this.usage = usage;
+			}
+			else {
+				this.usage = "";
+			}
+			this.searchView.searchFieldView.searchTextView.searchText.setText(searchText);
+			if (stores != null) {
+				this.appendStores(stores);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Reset the values in the dialog for things that should not be persisted when the dialog is closed.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.searchView.searchFieldView.searchTextView.searchText.setText("");
+			this.setVariable("selectedStore", null);
+			this.setVariable("okEnabled", false);
+			]]>
+		</method>
+
+		<!---
+			Add the specified stores to the current list of stores.
+			@param array stores: array of cmc/foundation/Store instances
+		-->
+		<method args="stores" name="appendStores">
+			<![CDATA[
+			for (var i = 0; i < stores.length; i++) {
+				var store = stores[i];
+				var item = null;
+				if (this.listItemsPool.length > 0) {
+					item = this.listItemsPool.shift();
+					item.setVariable("value", store);
+					item.setVariable("text", store.storeName);
+					item.setVariable("visible", true);
+				}
+				else {
+					item = new StoreSearchListItem.Class(this.searchView.storeSearchResults, {
+						value: store,
+						text: store.storeName,
+						parentDialog: this
+					});
+				}
+				this.listItems.push(item);
+			}
+			if (stores.length > 0 && this.listItems.length == stores.length) {
+				this.searchView.storeSearchResults.select(this.listItems[0]);
+				FocusUtil.setFocus(this.searchView.storeSearchResults, false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Clear the list of stores.
+		-->
+		<method name="clearStores">
+			<![CDATA[
+			this.searchView.storeSearchResults.clearSelection();
+			this.setVariable("selectedStore", null);
+			this.checkOkEnabled();
+			while (this.listItems.length > 0) {
+				var curItem = this.listItems.shift();
+				curItem.setVariable("visible", false);
+				curItem.setVariable("value", null);
+				this.listItemsPool.push(curItem);
+			}
+			this.searchView.resultsMessage.setVariable("text", "");
+			this.searchView.resultsMessage.setVariable("visible", false);
+			this.searchView.resultsMessagePadding.setVariable("visible", false);
+			]]>
+		</method>
+
+		<!---
+			Show status message about the search results to the user.
+			@param array stores: array of cmc/foundation/Store instances
+			@param string message: the exception message
+		-->
+		<method args="stores, message" name="updateResultsMessage">
+			<![CDATA[
+			if (typeof(stores) == "undefined") stores = null;
+			if (typeof(message) == "undefined") message = null;
+			var statusMessage = "";
+			if (stores && stores != null) {
+				if (this.listItems.length == 0) {
+					statusMessage = foundationResources.Singleton.replaceValues("searchResultsNoResultsMsg", [this.searchView.searchFieldView.searchTextView.searchText.getText()]);
+				}
+				else {
+					statusMessage = foundationResources.Singleton.replaceValues("searchResultsSuccessMsg", [this.listItems.length, this.searchView.searchFieldView.searchTextView.searchText.getText()]);
+				}
+			}
+			else {
+				if (message) {
+					statusMessage = message;
+				}
+				else {
+					statusMessage = foundationResources.Singleton.searchResultsNoCriteriaMsg.string;
+				}
+			}
+			if (statusMessage != "") {
+				this.searchView.resultsMessage.setVariable("text", statusMessage);
+				this.searchView.resultsMessage.setVariable("visible", true);
+				this.searchView.resultsMessagePadding.setVariable("visible", true);
+			}
+			]]>
+		</method>
+
+		<!---
+			Set initial focus to search criteria entry field.
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.selectedStore == null) {
+				FocusUtil.setFocus(this.searchView.searchFieldView.searchTextView.searchText, false);
+			}
+			]]>
+		</method>
+
+		<Component name="searchView">
+			<Component name="searchFieldView">
+				<AxisLayout axis="y" spacing="2"/>
+				<TextComponent text="${foundationResources.Singleton.storeSearchDialog_textboxLabel.string}"/>
+				<Component name="searchTextView">
+					<AxisLayout axis="x" spacing="5"/>
+					<InputText doesenter="true" name="searchText" width="320">
+						<handler args="code" name="onkeydown">
+							<![CDATA[
+							if (code == 13) {
+								this.parent.parent.parent.parent.doSearch();
+							}
+							]]>
+						</handler>
+					</InputText>
+					<FocusableBaseButton doesenter="true" enabled="${this.parent.parent.parent.searchEnabled}" imageSet="storeSearchIcon" name="storeSearchButton" valign="middle">
+						<handler name="onclick">
+							<![CDATA[
+							this.parent.parent.parent.parent.doSearch();
+							]]>
+						</handler>
+						<Tooltip text="${foundationResources.Singleton.storeSearchDialog_searchBtnName.string}"/>
+					</FocusableBaseButton>
+				</Component>
+			</Component>
+
+			<Component height="6"/>
+			
+			<TextComponent multiline="true" name="resultsMessage" text="" visible="false" width="${this.parent.width}" fontsize="14" fontstyle="bold"/>
+			<Component height="6" name="resultsMessagePadding" visible="false"/>
+			
+			<TextComponent text="${foundationResources.Singleton.storeSearchDialog_resultsLabel.string}"/>
+
+			<BaseList height="210" name="storeSearchResults" scrollBarClass="${VerticalScrollbar}" shownitems="10" width="350">
+				<handler name="onselect">
+					<![CDATA[
+					var s = this.getSelection();
+					if (s) {
+						this.parent.parent.setVariable("selectedStore", s.value);
+					}
+					else {
+						this.parent.parent.setVariable("selectedStore", null);
+					}
+					this.setVariable("doesenter", true);
+					]]>
+				</handler>
+				
+				<!--- 
+					@keywords private 
+				-->
+				<method name="doEnterDown">
+					<![CDATA[
+					this.parent.parent.handleOk();
+					]]>
+				</method>
+				
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this,
+							offset: 1,
+							placement: "list"
+						});
+					}
+					]]>
+				</handler>
+			</BaseList>
+			
+			<AxisLayout axis="y" spacing="2"/>
+		</Component>
+		<BaseCheckbox name="setDefaultStore" text="${foundationResources.Singleton.storeSearchDialog_setDefaultStoreLabel.string}" value="true" visible="${this.parent.setDefaultVisible}"/>
+		
+		<Component name="buttonSection" placement="footer">
+			<Button name="storeSearchCancelButton" text="${foundationResources.Singleton.storeSearchDialog_cancelBtnName.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.parent.parent.okEnabled}" name="storeSearchOkButton" text="${foundationResources.Singleton.storeSearchDialog_addBtnName.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.handleOk();
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+		<AxisLayout axis="y" spacing="10"/>
+	</Dialog>
+	
+	<!---
+		Store search dialog.
+	-->
+	<StoreSearchDialogBase definitionName="cmc/foundation/StoreSearchDialog" singletonDefinition="true">
+	</StoreSearchDialogBase>
+	
+	<StoreSearchDialogBase definitionName="cmc/foundation/StoreSelectDialog" setDefaultVisible="true" singletonDefinition="true" title="${foundationResources.Singleton.storeSelectDialog_title.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+	</StoreSearchDialogBase>
+	
+
+	<!-- Store search dialog service. -->
+	<Service definitionName="cmc/foundation/StoreSearchDialogService" retryOnError="true" sendMaxItems="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/FindStores">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<!---
+			Parse the store objects.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			var stores = StoreUtil.Singleton.parseStores(dataElement);
+			requestParent.appendStores(stores);
+			requestParent.updateResultsMessage(stores);
+			var moreStores = dataElement.getAttribute("recordSetCompleteIndicator") && dataElement.getAttribute("recordSetCompleteIndicator") == "false";
+			requestParent.setVariable("searchActive", false);
+			]]>
+		</method>
+		
+		<!---
+			Handle exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			ds.requestParent.setVariable("searchActive", false);
+			ds.requestParent.updateResultsMessage(null, message);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle results set over the UI limit.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: "values" data element
+		-->
+		<method args="ds, e" name="handleResultsOverLimit">
+			<![CDATA[
+			this.inherited(arguments);
+			var statusMessage = foundationResources.Singleton.storeSearchDialogResultsOverServerLimitMsg.string;
+			ds.requestParent.setVariable("searchActive", false);
+			ds.requestParent.updateResultsMessage(null, statusMessage);
+			]]>
+		</method>
+	</Service>
+</Definitions>

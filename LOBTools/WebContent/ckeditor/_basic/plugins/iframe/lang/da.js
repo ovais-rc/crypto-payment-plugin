@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","da",{border:"Vis rammekant",noUrl:"Skriv URL til iframe",scrolling:"Aktivér rullepaneler",title:"Egenskaber for IFrame",toolbar:"Indsæt IFrame",ibm:{title:"IFrame"}});

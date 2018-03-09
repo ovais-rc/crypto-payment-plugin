@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","it",{error:"L'opzione per incollare le immagini al momento non è supportata. Utilizzare l'opzione della barra degli strumenti 'Inserisci immagine'."});

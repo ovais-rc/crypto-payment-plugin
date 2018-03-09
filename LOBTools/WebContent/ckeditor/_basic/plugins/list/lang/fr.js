@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","fr",{bulletedlist:"Liste à puces",numberedlist:"Liste numérotée",ibm:{numberedTitle:"Liste numérotée",bulletedTitle:"Liste à puces",description:"Les paramètres seront appliqués au niveau de liste en cours",fontsize:"Taille de police :"}});

@@ -1,0 +1,520 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>Base class for all graphical flow builders used as a properties view for an object type. 
+		This class provides a view of a flow diagram where flow elements can be added, and a properties pane
+		below the diagram to edit selected flow elements.</p>
+		
+		<p>Implementors of this class should provide values for:
+		<ul>
+			<li><code>generalPropertiesClass</code></li>
+			<li><code>flowConnectorClass</code></li>
+			<li><code>flowPathClass</code></li>
+			<li>a <code>dataset(xml)</code> with the name <code>palette</code></li>
+		</ul>
+		</p>
+		
+		<p>The palette dataset should have the format:
+		@START_CODE
+		<xml name="palette">
+			<Group resourceBundle="resourceBundleId" name="groupOneResourceKey">
+				<Element objectType="elementOne"/>
+				<Element objectType="elementTwo"/>
+			</Group>
+			<Group resourceBundle="resourceBundleId" name="groupTwoResourceKey">
+				<Element objectType="elementThree"/>
+				<Element objectType="elementFour"/>
+			</Group>
+		</xml>
+		@END_CODE
+		See {@link cmc/foundation/PaletteGroup} for more information.</p>
+
+		@keywords private abstract
+	-->
+	<BaseObjectProperties addRightSpacing="false" classDefinition="true" definitionName="cmc/foundation/FlowBuilder" height="${this.immediateParent.availableHeight}" width="${this.immediateParent.availableWidth}">
+		<dependency localName="FlowPath" moduleName="cmc/foundation/FlowPath"/>
+		<dependency localName="Panel" moduleName="cmc/foundation/Panel"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="IntroPrompt" moduleName="cmc/foundation/IntroPrompt"/>
+		<dependency localName="BaseFlowConnector" moduleName="cmc/foundation/BaseFlowConnector"/>
+		<dependency localName="Element" moduleName="cmc/foundation/Element"/>
+		<!---
+			The class name that modifies the properties of the object. This properties view
+			will be shown when the start node is selected in the flow diagram.
+			@type cmc/foundation/FlowElementProperties
+		-->
+		<variable name="generalPropertiesClass" type="string" value="${null}"/>
+		<!---
+			The definition name of the properties view that modifies the properties of the object. This properties view
+			will be shown when the start node is selected in the flow diagram. Only specify this
+			attribute if you are not providing a value for <code>generalPropertiesClass</code>.
+		-->
+		<variable name="generalPropertiesDefinition" type="module" value="${null}"/>
+
+		<!---
+			The class name to use for the connectors in the diagram.
+			@type cmc/foundation/BaseFlowConnector
+		-->
+		<variable name="flowConnectorClass" type="module" value="${BaseFlowConnector}"/>
+
+		<!---
+			The maximum levels of nested branching allowed in the flow. Default is 5.
+			Larger values may cause unexpected hanging due to Flash execution stack limits.
+			@keywords private
+		-->
+		<variable name="maxBranchDepth" type="number" value="5"/>
+
+		<!--- @keywords private -->
+		<variable name="editableFlow" type="boolean" value="true"/>
+		
+		<!--- @keywords private -->
+		<variable name="propertiesPane" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="propertiesFrameVisible" type="boolean" value="true"/>
+		
+		<!--- @keywords private -->
+		<variable name="flowPathClass" type="module" value="${FlowPath}"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.generalPropertiesClass == null) {
+				this.generalPropertiesClass = this.generalPropertiesDefinition;
+			}
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			if (this.parent instanceof Panel.Class) {
+				if (this.inDetails) {
+					this.updatePropertiesFrameVisible();
+					this.updatePropertiesFrameVisibleDel = new EventHandler.Class(this, "updatePropertiesFrameVisible");
+					this.updatePropertiesFrameVisibleDel.connect(this.parent, "onmaximized");
+				}
+			}
+			this.propertiesFrameVisible = !this.inDetails;
+			this.determinePaneSizes();
+			if (this.o) {
+				this.container.completeInstantiation();
+				this.container.flowPane.content.flowcontent.flowDiagram.setVariable("o", this.o);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updatePropertiesFrameVisibleDel) {
+				this.updatePropertiesFrameVisibleDel.disconnectAll();
+				delete this.updatePropertiesFrameVisibleDel;
+			}
+			if (this.setFocusToFirstComponentDel) {
+				this.setFocusToFirstComponentDel.disconnectAll();
+				delete this.setFocusToFirstComponentDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updatePropertiesFrameVisible">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.parent.maximized) {
+				this.setVariable("propertiesFrameVisible", true);
+			}
+			else {
+				this.setVariable("propertiesFrameVisible", false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				var oldObject = this.o;
+				this.inherited(arguments);
+				if (oldObject) {
+					oldObject.releaseReleasableProperties();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<handler name="ono">
+			<![CDATA[
+			if (this.container && this.o) {
+				this.container.completeInstantiation();
+				this.container.flowPane.content.flowcontent.flowDiagram.setVariable("o", this.o);
+			}
+			this.updateEditableFlow();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateEditableFlow">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateEditableFlowDel) {
+				this.updateEditableFlowDel.disconnectAll();
+			}
+			else {
+				this.updateEditableFlowDel = new EventHandler.Class(this, "updateEditableFlow");
+			}
+			if (this.o) {
+				this.updateEditableFlowDel.connect(this.o, "onreadOnly");
+				var newEditableFlow = !this.o.readOnly;
+				if (newEditableFlow != this.editableFlow) {
+					this.setVariable("editableFlow", newEditableFlow);
+				}
+			}
+			]]>
+		</method>
+
+		<handler name="onpropertiesFrameVisible">
+			<![CDATA[
+			this.determinePaneSizes();
+			]]>
+		</handler>
+		
+		<handler eventSource="this.container" name="onheight">
+			<![CDATA[
+			this.determinePaneSizes();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="determinePaneSizes">
+			<![CDATA[
+			if (this.container.flowPane) {
+				if (this.propertiesFrameVisible) {
+					if (this.__previousYRatio) {
+						this.container.flowPane.resizer.setVariable("y", Math.round(this.__previousYRatio * this.container.height));
+					}
+					else {
+						this.container.flowPane.resizer.setVariable("y", Math.round(this.container.height / 3));
+					}
+				}
+				else {
+					this.container.flowPane.resizer.setVariable("y", Math.round(this.container.height - this.container.flowPane.resizer.height));
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Called when the model object changes and resets views, if required.
+			Currently, when new objects are created, the focus is set to the first input field.
+			@keywords private
+		-->
+		<method args="e" name="resetPropertiesView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o != null && !this.inDetails && !IntroPrompt.Singleton.isOpen) {
+				if (typeof (this.setFocusToFirstComponentDel) == "undefined") {
+					this.setFocusToFirstComponentDel = new EventHandler.Class(this, "setFocusToFirstComponent");
+				}
+				CallbackUtil.Singleton.addDeferredCallback(this.setFocusToFirstComponentDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>This method searches the FlowElements of the flow in the Flow Builder, looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one 
+			of an {@link cmc/foundation/ModelProperty object property} or a {@link cmc/foundation/Validator#validatorType validator type}. The matching properties component must
+			match either the specified property, or the specified object and validator type.
+			
+			<p>If a match is found, this method ensures that the {@link cmc/foundation/PropertiesComponent properties component} is visible by making
+			it and all of its ancestors visible. This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and the changing of {@link cmc/foundation/PropertyTab tabs}. The method then sets the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and returns true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or display.
+						
+			@param cmc/foundation/ModelObject errorObject the model object that contains the error
+			@param cmc/foundation/ModelProperty errorProperty the model property that contains the error
+			@param string validatorType the validator type of the validator that reported the error
+			@return boolean true if the focus was set to the specified error, false otherwise
+		-->
+		<method args="errorObject, errorProperty, validatorType" name="setFocusToError">
+			<![CDATA[
+			var errorFound = false;
+			var curO = errorObject;
+			while (curO.parentObject != null && !curO.objectDefinition.matchesType("FlowElement")) {
+				curO = curO.parentObject;
+			}
+			var propertiesView = null;
+			if (curO.parentObject == null) {
+				this.propertiesPane.loadProperties(this.o, this.generalPropertiesClass);
+				propertiesView = this.propertiesPane.propertiesView;
+			}
+			else if (curO.objectDefinition.matchesType("FlowElement")) {
+				if (curO.objectDefinition.objectType == "path") {
+					this.propertiesPane.loadProperties(curO.parentObject, null);
+				}
+				else {
+					this.propertiesPane.loadProperties(curO, null);
+				}
+				propertiesView = this.propertiesPane.propertiesView;
+			}
+			if (propertiesView != null) {
+				errorFound = propertiesView.setFocusToError(errorObject, errorProperty, validatorType);
+			}
+			else {
+				errorFound = this.inherited(arguments);
+			}
+			return errorFound;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>This method will search the FlowElements of the flow in the Flow Builder, looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one 
+			of an optional {@link cmc/foundation/ModelProperty object property}. 
+			
+			<p>If the specified view is a {@link cmc/foundation/PropertiesComponent properties component} then 
+			this method will call its {@link cmc/foundation/PropertiesComponent#matches matches} to determine if it is a match. 
+			
+			<p>If a match is found, this method will make the {@link cmc/foundation/PropertiesComponent properties component} visible by ensuring
+			that it and all of its ancestors are visible as well. It will also make the flow element it is associated with visible.
+			This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and changing of {@link cmc/foundation/PropertyTab tabs}. The method will then set the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and return true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or what's currently being displayed.
+						
+			@param cmc/foundation/Component v The view from which to begin the recursive search for the matching {@link cmc/foundation/PropertiesComponent}.
+			@param cmc/foundation/ModelObject o The model object of the matching property component. 
+			@param cmc/foundation/ModelProperty property The object property of the matching property component. This can be null. 
+			@param cmc/foundation/ModelObject propertiesViewObject The model object associated with v.
+			@return boolean true if the properties component with the error was found, and the focus was set to it. false otherwise.
+		-->
+		<method args="v, o, property, propertiesViewObject" name="setFocusOnComponent">
+			<![CDATA[
+			var matches = false;
+			if (v == this) {
+				var curO = o;
+				while (curO.parentObject != null && !curO.objectDefinition.matchesType("FlowElement")) {
+					curO = curO.parentObject;
+				}
+				if (curO.parentObject == null) {
+					this.propertiesPane.loadProperties(v.o, this.generalPropertiesClass);
+				}
+				else if (curO.objectDefinition.matchesType("FlowElement")) {
+					if (curO.objectDefinition.objectType == "path") {
+						this.propertiesPane.loadProperties(curO.parentObject, null);
+					}
+					else {
+						this.propertiesPane.loadProperties(curO, null);
+					}
+				}
+				matches = this.inherited(arguments);
+			}
+			else {
+				matches = this.inherited(arguments);
+			}
+			return matches;
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method recursively searches the properties view for the first error returned by a properties component.
+
+			@param cmc/foundation/Component v The view from which the search should begin.
+			@returns string error The first error.
+		-->
+		<method args="v" name="getFirstError">
+			<![CDATA[
+			var error = null;
+			if (v == this && this.propertiesPane != null) {
+				this.updateValidationErrorDel.connect(this.propertiesPane, "onvisible");
+				error = this.getFirstError(this.propertiesPane);
+				if (error == null) {
+					error = this.getFirstError(this.container.flowPane.content);
+				}
+			}
+			if (error == null) {
+				if (v instanceof Element.Class) {
+					if (v.oList) {
+						this.updateValidationErrorDel.connect(v.oList, "objectViewsUpdated");
+					}
+					if (v.o) {
+						this.updateValidationErrorDel.connect(v.o, "onvalidationErrors");
+						var errors = v.o.getValidationErrors();
+						if (errors.length > 0) {
+							error = errors[0];
+						}
+						if (error == null) {
+							var propertyMap = v.o.propertyMap;
+							for (var key in propertyMap) {
+								var property = propertyMap[key];
+								this.updateValidationErrorDel.connect(property, "onvalidationErrors");
+								errors = property.getValidationErrors();
+								if (errors.length > 0) {
+									error = errors[0];
+									break;
+								}
+							}
+						}
+					}
+				}
+				else if (v instanceof FlowPath.Class) {
+					if (v.oList) {
+						this.updateValidationErrorDel.connect(v.oList, "objectViewsUpdated");
+					}
+				}
+				if (error == null) {
+					error = this.inherited(arguments);
+				}
+			}
+			return error;
+			]]>
+		</method>
+
+			
+		<!-- We want the panel to be part of the drag and drop tracking so that its registered on top -->		
+		<TrackingDropTarget dragAndDropManager="${DndManager.Singleton}"/>
+
+		<Component height="${this.immediateParent.height}" initstage="defer" name="container" width="${this.immediateParent.width}">
+			<PaletteConfiguration height="${this.immediateParent.height}" name="palette" visible="${this.classroot.editableFlow}">
+		<variable name="paletteXML" value="${this.classroot.palette}"/></PaletteConfiguration>
+			
+			<Component height="${this.immediateParent.height}" name="flowPane" width="${this.immediateParent.width - this.x}" x="${this.parent.palette.visible ? this.parent.palette.width : 0}" y="0">
+				<Component clip="true" height="${this.parent.resizer.y}" name="content" width="${this.parent.width}" x="0" y="0">
+					<Component clip="true" height="${this.parent.height}" name="flowcontent" valign="top" width="${this.parent.width}">
+						<Flow editableFlow="${this.classroot.editableFlow}" flowBuilder="${this.classroot}" flowPathClass="${this.classroot.flowPathClass}" name="flowDiagram"/>
+						<HorizontalScrollbar name="hScrollbar" scrolltarget="${this.parent.flowDiagram}" valign="bottom" visible="${this.scrollable}" width="${(this.parent.vScrollbar.visible) ? this.parent.width - this.parent.vScrollbar.width : this.parent.width}"/>
+						<VerticalScrollbar align="right" name="vScrollbar" scrolltarget="${this.parent.flowDiagram}" visible="${this.scrollable}"/>
+					</Component>
+				</Component>
+				
+				<PropertiesPane height="${this.parent.height - this.y}" name="propertiesPane" visible="${this.classroot.propertiesFrameVisible}" width="${this.parent.width}" x="0" y="${this.parent.resizer.y + this.parent.resizer.height}">
+					<handler name="oninit">
+						<![CDATA[
+						this.classroot.setVariable("propertiesPane", this);
+						]]>
+					</handler>
+				</PropertiesPane>
+				
+				<Component height="7" name="resizer" width="${this.parent.width}" x="0" bgcolor="#f2f1ef" >
+					<variable name="dragging" type="boolean" value="false"/>
+	
+					<handler name="onmousedown">
+						<![CDATA[
+						this.deltaY = this.parent.getMouse("y") - this.getVariableRelative("y", this.parent);
+						this.dragging = true;
+						CursorUtil.lock();
+						this.dragger.setVariable("active", true);
+						]]>
+					</handler>
+			
+					<handler name="onmouseup">
+						<![CDATA[
+						this.dragging = false;
+						CursorUtil.unlock();
+						this.dragger.setVariable("active", false);
+						]]>
+					</handler>
+	
+					<handler name="ony">
+						<![CDATA[
+						if (this.dragging) {
+							this.classroot.__previousYRatio = (this.y / this.classroot.container.height);
+							if (!this.classroot.propertiesFrameVisible) {
+								this.classroot.setVariable("propertiesFrameVisible", true);
+							}
+						}
+						]]>
+					</handler>
+					
+					<method args="mouseY" name="checkDrag">
+						<![CDATA[
+						if (mouseY < 0) {
+							return 0;
+						}
+						else if ((mouseY + this.height) > this.parent.height) {
+							return this.parent.height - this.height;
+						}
+						return mouseY;
+						]]>
+					</method>
+					  
+					<State name="dragger"><variable name="y" value="${this.checkDrag(this.parent.getMouse('y') - this.deltaY)}"/></State>
+					    
+					
+					  
+					
+					<Component align="center" imageSet="wcfSnapDownArrow" visible="${this.classroot.propertiesFrameVisible}"><handler name="onclick">
+							<![CDATA[
+							this.classroot.setVariable('propertiesFrameVisible', false);
+							]]>
+						</handler><handler name="onmouseout">
+							<![CDATA[
+							this.setVariable("currentImage", 1);
+							]]>
+						</handler><handler name="onmouseover">
+							<![CDATA[
+							this.setVariable("currentImage", 2);
+							]]>
+						</handler></Component>
+						
+					<Component align="center" imageSet="wcfSnapUpArrow" visible="${!this.classroot.propertiesFrameVisible}"><handler name="onclick">
+							<![CDATA[
+							this.classroot.setVariable('propertiesFrameVisible', true);
+							]]>
+						</handler><handler name="onmouseout">
+							<![CDATA[
+							this.setVariable("currentImage", 1);
+							]]>
+						</handler><handler name="onmouseover">
+							<![CDATA[
+							this.setVariable("currentImage", 2);
+							]]>
+						</handler></Component>
+				</Component>
+			</Component>
+		</Component>
+	<method name="setFocusToErrorComponent">
+			
+		</method></BaseObjectProperties>
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","eu",{bulletedlist:"Buletdun zerrenda",numberedlist:"Zenbakidun zerrenda",ibm:{numberedTitle:"Zenbakidun zerrenda",bulletedTitle:"Buletdun zerrenda",description:"Ezarpenak oraingo zerrenda-mailari ezarriko zaizkio.",fontsize:"Letraren tamaina:"}});

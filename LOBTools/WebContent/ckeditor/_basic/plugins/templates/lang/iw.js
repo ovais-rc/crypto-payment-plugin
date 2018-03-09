@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","iw",{button:"תבניות",emptyListMsg:"(לא הוגדרו תבניות)",insertOption:"החלפת תוכן ממשי",options:"אפשרויות תבניות",selectPromptMsg:"בחרו את את התבנית לפתיחה בעורך",title:"תבניות תוכן"});

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---  
+		This validator checks that the value of the "attrValueValue" property is acceptable based on the current value of the "attrDataType" 
+		property. A message will be added to the "attrValueValue" property if the "attrDataType" property's value is 
+		"Integer" and the "attrValueValue" property's value does not match boundary.
+		@keywords deprecated
+	 -->
+	<PropertyRangeValidator classDefinition="true" definitionName="cmc/catalog/DescriptiveAttributeNumericValueValidator">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+	
+		<!---
+			The maximum value for this property. This value is used by the property range 
+			validator.
+		-->
+		<variable name="maxValue" type="number" value="2147483647"/>
+		<!---
+			Th minimum value for this property. This value is used by the property range 
+			validator.
+		-->
+		<variable name="minValue" type="number" value="${-2147483648}"/>	
+		
+		<!---  
+			An unique identifier string for this validator within a node. 
+		-->
+		<variable name="validatorId" type="string" value="catDescriptiveAttributeNumericValueValidator"/>		
+
+		<!---
+			@keywords private
+		 -->
+		<method args="o, changedProperty" name="validate">
+			<![CDATA[
+			if (typeof(changedProperty) == "undefined") changedProperty = null;
+			var minIsAcceptable = false;
+			var maxIsAcceptable = false;
+			if (!o) {
+				return;
+			}
+			var attributeDataType = o.parentObject.getPropertyValue("attrDataType");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.catalog", "INFO", "cmc/catalog/DescriptiveAttributeNumericValueValidator", "validate", "attributeDataType=" + attributeDataType + ".");
+			}
+			if (attributeDataType == "Integer") {
+				minIsAcceptable = this.verifyMinRangeNotExceeded(changedProperty, this.minValue);
+				maxIsAcceptable = this.verifyMaxRangeNotExceeded(changedProperty, this.maxValue);
+				if (minIsAcceptable && maxIsAcceptable) {
+					changedProperty.clearValidationError(this);
+				}
+				if (minIsAcceptable && !maxIsAcceptable) {
+					changedProperty.addValidationError(this, foundationResources.Singleton.replaceValues("propertyValueTooLarge", [changedProperty.propertyDefinition.getDisplayName(), this.maxValue]));
+				}
+				if (maxIsAcceptable && !minIsAcceptable) {
+					changedProperty.addValidationError(this, foundationResources.Singleton.replaceValues("propertyValueTooSmall", [changedProperty.propertyDefinition.getDisplayName(), this.minValue]));
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="property, minValue" name="verifyMinRangeNotExceeded">
+			<![CDATA[
+			if (!property || !property.value) {
+				return true;
+			}
+			var value = property.value;
+			if (this.isNumeric(value) == true) {
+				value = parseFloat(value);
+				minValue = parseFloat(minValue);
+				if (value < minValue) {
+					return false;
+				}
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="property, maxValue" name="verifyMaxRangeNotExceeded">
+			<![CDATA[
+			if (!property || !property.value) {
+				return true;
+			}
+			var value = property.value;
+			if (this.isNumeric(value) == true) {
+				value = parseFloat(value);
+				maxValue = parseFloat(maxValue);
+				if (value > maxValue) {
+					return false;
+				}
+			}
+			return true;
+			]]>
+		</method>		
+		
+	</PropertyRangeValidator>
+	
+</Definitions>

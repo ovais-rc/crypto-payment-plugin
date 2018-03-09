@@ -1,0 +1,192 @@
+<!-- ========================================================================
+  Licensed Materials - Property of IBM
+   
+  WebSphere Commerce
+   
+  (c) Copyright IBM Corp. 2001, 2002
+   
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+   -------------------------------------------------------------------
+    ReportInventoryAdjustmentCodeHelper.jsp
+ ===========================================================================-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+
+<%@page import="java.util.*" %>
+<%@page import="com.ibm.commerce.beans.DataBeanManager" %>
+<%@page import="com.ibm.commerce.command.CommandContext"%>
+<%@page import="com.ibm.commerce.server.ECConstants"%>
+<%@page import="com.ibm.commerce.inventory.beans.InventoryAdjustmentCodeListDataBean"%>
+<%@page import="com.ibm.commerce.inventory.beans.InventoryAdjustmentCodeDataBean"%>
+
+<%
+   CommandContext InventoryAdjustmentCodeHelperCC = (CommandContext) request.getAttribute(ECConstants.EC_COMMANDCONTEXT);
+   Hashtable      InventoryAdjustmentCodeHelperRB = (Hashtable)com.ibm.commerce.tools.util.ResourceDirectory.lookup("reporting.reportStrings", InventoryAdjustmentCodeHelperCC.getLocale());
+   String InventoryAdjustmentCodeHelperStoreId = InventoryAdjustmentCodeHelperCC.getStoreId().toString();
+   String InventoryAdjustmentCodeHelperLangId  = InventoryAdjustmentCodeHelperCC.getLanguageId().toString();
+%>
+
+
+<%!
+private String generateInventoryAdjustmentCode(String container, Hashtable reportsRB, String availablelabel, String selectedLabel)
+{
+   String labels = "";
+
+   if (availablelabel!= null && selectedLabel != null) {
+      labels =     "    <TR>\n" +
+                   "       <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32>\n" + reportsRB.get(selectedLabel) + "\n" +
+                   "       </TD>\n" +
+		   "       <TD> </TD>" + 
+                   "       <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32>\n" + reportsRB.get(availablelabel) + "\n" +
+                   "       </TD>\n" +
+                   "    </TR>\n";
+   }
+
+   String result = "<FORM NAME=" + container + ">\n" + 
+                   "   <TABLE CELLPADDING=0 CELLSPACING=0>" + labels +
+                   "      <TR>\n" +
+                   "         <TD VALIGN=BOTTOM CLASS=selectWidth>\n" + 
+                   "            <SELECT NAME=collateralSelected id=\"collateralSelected\" CLASS=selectWidth SIZE=5 MULTIPLE onChange=\"javascript:updateSelectedCollateral('" + container + "');\"></SELECT>\n" +
+                   "         </TD>\n" +
+                   "         <TD WIDTH=150px ALIGN=CENTER>\n" +
+                   "            <br>\n" +
+                   "            <INPUT TYPE=BUTTON NAME=addToSloshBucketButton      VALUE=\"" + reportsRB.get("InventoryAdjustmentCodeHelperSloshBucketAdd") + "\" style=\"width: 120px\" ONCLICK=\"javascript:addToSelectedCollateral('" + container + "');\" >\n" +
+                   "            <br>\n" +                                                                       
+                   "            <INPUT TYPE=BUTTON NAME=removeFromSloshBucketButton VALUE=\"" + reportsRB.get("InventoryAdjustmentCodeHelperSloshBucketRemove") + "\" style=\"width: 120px\" ONCLICK=\"javascript:removeFromSelectedCollateral('" + container + "')\" >\n" + 
+                   "            <br>" +
+                   "         </TD>\n" +
+                   "         <TD VALIGN=BOTTOM CLASS=selectWidth>\n" +
+                   "            <SELECT NAME=collateralAvailable id=\"collateralAvailable\" CLASS=selectWidth SIZE=5 MULTIPLE onChange=\"javascript:updateAvailableCollateral('" + container + "');\"></SELECT>\n" +
+                   "         </TD>\n" +
+                   "      </TR>\n" +
+                   "   </TABLE>\n" +
+                   "</FORM>\n";
+
+
+   return result;
+}
+%>
+
+<SCRIPT>
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // If this is the first time the page is being loaded within the transaction then initialize the
+   // Inventory Adjustment Code data from the data bean.
+   // If this page is being reloaded within the transaction then retrieve the data from the parent object
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function onLoadInventoryAdjustmentCode(container) 
+   {
+      var myContainer = parent.get(container, null);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // If false then this is the first time to the page and we need to generate the data bean
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      if (myContainer == null) initializeInventoryAdjustmentCode(container);
+      else                     retrieveInventoryAdjustmentCode(container);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Initialize the slosh bucket contents
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      onLoadCollateral(container);
+      return;
+   }
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Initialize the Inventory Adjustment Code data from the data bean
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function initializeInventoryAdjustmentCode(container) 
+   {
+      var myContainer = new Object();
+<%
+      try 
+      {
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         // Instantiate the Inventory Adjustment Code data bean
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         InventoryAdjustmentCodeListDataBean IACList = new InventoryAdjustmentCodeListDataBean();
+         IACList.setStoreentId(InventoryAdjustmentCodeHelperStoreId);
+         IACList.setLanguageId(InventoryAdjustmentCodeHelperLangId);
+         DataBeanManager.activate(IACList, request);
+
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         // Loop through the Inventory Adjustment Codes and add to the selection box
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         InventoryAdjustmentCodeDataBean[] IACenters = IACList.getInventoryAdjustmentCodeList();
+         for (int i = 0; i<IACenters.length; i++) {
+           String iaCodeDisplay = IACenters[i].getDisplay();
+           String iaCodeId = IACenters[i].getInvAdjCodeId();
+           if(iaCodeDisplay!=null) iaCodeDisplay = iaCodeDisplay.trim();  else iaCodeDisplay = "";
+           if(iaCodeId!=null)      iaCodeId = iaCodeId.trim(); else iaCodeId = "";
+%>
+            putAvailableCollateral(container, "<%=UIUtil.toJavaScript(iaCodeDisplay) %>", "<%=UIUtil.toJavaScript(iaCodeId)%>");
+<%
+         }
+      } catch (Exception ex) {
+%>
+         putAvailableCollateral(container, "Adjustment Error 1", "1");
+<%
+         System.out.println("THIS IS AN INVENTORY ADJUSTMENT CODE EXCEPTION: ");
+      }
+%>   
+      parent.put(container, myContainer);
+   }
+
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   // Retrieve the saved available Inventory Adjustment Code data
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   function retrieveInventoryAdjustmentCode(container) 
+   {
+      retrieveCollateral(container);
+   }
+
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   // Save the Inventory Adjustment Code data
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   function saveInventoryAdjustmentCode(container) 
+   {
+      saveCollateral(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return an array of selected Inventory Adjustment Code ids
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedInventoryAdjustmentCodeIDs(container)
+   {
+      return returnSelectedCollateralValue(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return an array of selected Inventory Adjustment Code names
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedInventoryAdjustmentCodeNames(container)
+   {
+      return returnSelectedCollateralText(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return the number of selected Inventory Adjustment Codes
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function getNumberOfSelectedInventoryAdjustmentCodes(container)
+   {
+      return getNumberOfSelectedCollateral(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Validation function to ensure that a Inventory Adjustment Code has been selected
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function validateInventoryAdjustmentCode(container)
+   {
+      if (getNumberOfSelectedInventoryAdjustmentCodes(container) == 0) {
+         parent.alertDialog("<%=UIUtil.toJavaScript(InventoryAdjustmentCodeHelperRB.get("InventoryAdjustmentCodeHelperNoSelection"))%>");
+         return false;
+      }
+      return true;
+   }
+
+	function setSelectAdjustmentCodeVisible(container, s) {
+		document.forms[container].collateralSelected.style.visibility = s;
+		document.forms[container].collateralAvailable.style.visibility = s;
+	}
+</SCRIPT>

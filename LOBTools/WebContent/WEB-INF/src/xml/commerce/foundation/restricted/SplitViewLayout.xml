@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<Layout classDefinition="true" definitionName="cmc/foundation/SplitViewLayout">
+		<dependency localName="Resizer" moduleName="cmc/foundation/Resizer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<variable name="axis" type="string" value="x"/>
+		<variable name="resizer" value="${null}"/>
+		
+		<method name="init">
+			<![CDATA[
+			this.updateHandler.connect(this.immediateParent, "onwidth");
+			this.updateHandler.connect(this.immediateParent, "onheight");
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method args="a" name="setAxis">
+			<![CDATA[
+			if (this.axis == null || this.axis != a) {
+				this.axis = a;
+				this.size = a == "x" ? "width" : "height";
+				this.minSize = a == "x" ? "minWidth" : "minHeight";
+				this.splitSize = a == "x" ? "xSplitSize" : "ySplitSize";
+				if (this.components.length) {
+					this.update();
+				}
+				EventUtil.trigger(this, "onaxis", this.axis);
+			}
+			]]>
+		</method>
+
+		<method args="v" name="addComponent">
+			<![CDATA[
+			if (v instanceof Resizer.Class) {
+				this.resizer = v;
+				this.updateHandler.connect(v, "onxSplitSize");
+				this.updateHandler.connect(v, "onySplitSize");
+			}
+			else {
+				this.updateHandler.connect(v, "onsplittable");
+				this.updateHandler.connect(v, "onclosed");
+				this.updateHandler.connect(v, "onmaximized");
+				this.updateHandler.connect(v, "onminimized");
+				this.updateHandler.connect(v, "onminWidth");
+				this.updateHandler.connect(v, "onminHeight");
+			}
+			this.inherited(arguments);
+			this.update();
+			]]>
+		</method>
+		
+		<method args="e" name="update">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.locked) {
+				if (this.components.length == 3) {
+					this.lock();
+					var v1 = this.components[0];
+					var v2 = this.components[2];
+					var v2Closed = (v1.splittable || this.parent.ignoreSplittable) ? v2.closed : true;
+					var parentClosed = v1.closed && v2Closed;
+					var parentMinimized = (v1.minimized || v1.closed) && (v2.minimized || v2Closed);
+					var maximizedPanel = null;
+					if (v1.maximized && !v1.closed) {
+						maximizedPanel = v1.maximizedPanel ? v1.maximizedPanel : v1;
+					}
+					else if (v2.maximized && !v2Closed) {
+						maximizedPanel = v2.maximizedPanel ? v2.maximizedPanel : v2;
+					}
+					var parentMaximized = maximizedPanel != null;
+					if (parentClosed != this.parent.closed) {
+						this.parent.setVariable("closed", parentClosed);
+					}
+					if (parentMinimized != this.parent.minimized) {
+						this.parent.setVariable("minimized", parentMinimized);
+					}
+					if (parentMaximized != this.parent.maximized) {
+						this.parent.setVariable("maximized", parentMaximized);
+					}
+					if (maximizedPanel != this.parent.maximizedPanel) {
+						this.parent.setVariable("maximizedPanel", maximizedPanel);
+					}
+					var vis1 = !v1.closed;
+					var vis2 = !v2Closed;
+					var s = this.immediateParent[this.size];
+					var min1 = v1[this.minSize];
+					var min2 = v2[this.minSize];
+					if (!v1.closed && !v2Closed && !v1.minimized && !v2.minimized && !v1.maximized && !v2.maximized) {
+						if (!this.resizer.visible) {
+							this.resizer.setVariable("visible", true);
+						}
+						var resizerSize = this.resizer[this.size];
+						var s1 = this.resizer.reverseSplit ? s - this.resizer[this.splitSize] - resizerSize : this.resizer[this.splitSize];
+						var p2 = s1 + resizerSize;
+						if (!this.resizer.dragging) {
+							if (s1 < min1) {
+								s1 = min1;
+								p2 = s1 + resizerSize;
+							}
+							else if (s - p2 < min2) {
+								s1 = s - min2 - resizerSize;
+								p2 = s1 + resizerSize;
+							}
+							if (this.resizer[this.axis] != s1) {
+								this.resizer.setVariable(this.axis, s1);
+							}
+						}
+						var s2 = s - p2;
+						if (v1[this.size] != s1) {
+							v1.setVariable(this.size, s1);
+						}
+						if (v2[this.axis] != p2) {
+							v2.setVariable(this.axis, p2);
+						}
+						if (v2[this.size] != s2) {
+							v2.setVariable(this.size, s2);
+						}
+					}
+					else {
+						if (this.resizer.visible) {
+							this.resizer.setVariable("visible", false);
+						}
+						var vis1 = !v1.closed && (v1.maximized || !v2.maximized);
+						var vis2 = !v2Closed && !v1.maximized;
+						var s1 = vis1 ? ((v1.minimized && !v1.maximized) ? min1 : s) : 0;
+						var s2 = vis2 ? ((v2.minimized && !v2.maximized) ? min2 : s) : 0;
+						if (vis1 && !v1.minimized && !v1.maximized) {
+							s1 = s1 - s2;
+						}
+						if (vis2 && !v2.minimized && !v2.maximized) {
+							s2 = s2 - s1;
+						}
+						if (vis1) {
+							if (v1[this.size] != s1) {
+								v1.setVariable(this.size, s1);
+							}
+							if (v1.maximized) {
+								vis2 = false;
+							}
+						}
+						if (vis2) {
+							if (v2[this.axis] != s1) {
+								v2.setVariable(this.axis, s1);
+							}
+							if (v2[this.size] != s2) {
+								v2.setVariable(this.size, s2);
+							}
+						}
+					}
+					if (vis1 != v1.visible) {
+						v1.setVariable("visible", vis1);
+					}
+					if (vis2 != v2.visible) {
+						v2.setVariable("visible", vis2);
+					}
+					this.locked = false;
+				}
+				else if (this.components.length == 2) {
+					this.lock();
+					var v1 = this.components[0];
+					var parentClosed = v1.closed;
+					var parentMinimized = v1.minimized || v1.closed;
+					var maximizedPanel = null;
+					if (v1.maximized && !v1.closed) {
+						maximizedPanel = v1.maximizedPanel ? v1.maximizedPanel : v1;
+					}
+					var parentMaximized = maximizedPanel != null;
+					if (parentClosed != this.parent.closed) {
+						this.parent.setVariable("closed", parentClosed);
+					}
+					if (parentMinimized != this.parent.minimized) {
+						this.parent.setVariable("minimized", parentMinimized);
+					}
+					if (parentMaximized != this.parent.maximized) {
+						this.parent.setVariable("maximized", parentMaximized);
+					}
+					if (maximizedPanel != this.parent.maximizedPanel) {
+						this.parent.setVariable("maximizedPanel", maximizedPanel);
+					}
+					var s = this.immediateParent[this.size];
+					var min1 = v1[this.minSize];
+					if (this.resizer.visible) {
+						this.resizer.setVariable("visible", false);
+					}
+					var vis1 = !v1.closed;
+					var s1 = vis1 ? ((v1.minimized && !v1.maximized) ? min1 : s) : 0;
+					if (vis1) {
+						if (v1[this.size] != s1) {
+							v1.setVariable(this.size, s1);
+						}
+					}
+					if (vis1 != v1.visible) {
+						v1.setVariable("visible", vis1);
+					}
+					this.locked = false;
+				}
+			}
+			]]>
+		</method>
+		<method args="axis" name="set_axis">
+			<![CDATA[
+			this.setAxis(axis);
+			]]>
+		</method>
+	</Layout>
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","sl",{error:"Lepljenje slik trenutno ni podprto. Namesto tega uporabite možnost orodne vrstice 'Vstavi sliko'."});

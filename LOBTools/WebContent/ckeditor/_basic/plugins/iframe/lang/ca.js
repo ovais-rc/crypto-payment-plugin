@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","ca",{border:"Mostra el contorn del marc",noUrl:"Escriviu l'URL d'iframe",scrolling:"Habilita les barres de desplaçament",title:"Propietats d'IFrame",toolbar:"Insereix IFrame",ibm:{title:"IFrame"}});

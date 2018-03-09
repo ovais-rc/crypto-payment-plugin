@@ -1,0 +1,289 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<jsp:useBean id="foundEsiteSEOPropertiesLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="foundAssetStoreSEOPropertiesLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="missingEsiteSEOPropertiesLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="missingAssetStoreSEOPropertiesLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="foundAssetSEOPropertyObjectList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="foundEsiteSEOPropertyObjectList" class="java.util.HashMap" type="java.util.Map"/>
+
+<c:forEach var="templateSEOProperties" items="${onlineStoreSEO.SEOPageDefinitions}">
+
+	<c:if test="${templateSEOProperties.resolved == true && templateSEOProperties.language != null}">
+		<c:set var="inherited" value=""/>
+		<c:if test="${templateSEOProperties.parentStoreIdentifier.uniqueID != param.storeId }">
+			<c:set var="inherited" value="Inherited"/>
+		</c:if>
+  
+	  	<c:set var="useDefaultTitle" value="0"/>
+	  	<c:set var="useDefaultMetaDesc" value="0"/>
+	  	<c:set var="useDefaultImageAltDesc" value="0"/>
+	  	
+	  	<object objectType="${inherited}CatalogGroupBaseSeoAttributes">
+	  		<c:set var="changeControlIsSet" value="false"/>
+	  		<%-- 
+	  			We always lock the SEO URL noun part whenever the SEO Property noun part is modified (locked) and vice versa. 
+	  			However, in cases where the SEO Property noun part(title, meta-data description) doesn't have any values, 
+	  			we still want to lock the entire SEO section. Since the SEO URL noun part should always return the URLPrefix value, 
+	  			the SEO URL noun part will always have a meta data entry returned as part of the show response of the Catalog Group. 
+	  			To ensure that the SEO Property section is also locked in the UI, loop through the SEO URL and use the change control 
+	  			information of the corresponding SEO URL to set the SEO properties change control. 
+	  		--%>
+	  		<c:forEach var="seoURL" items="${catalogGroup.SEOURL}" varStatus="status">
+				<c:if test="${seoURL.parentStoreIdentifier.uniqueID == templateSEOProperties.parentStoreIdentifier.uniqueID}">
+					<c:set var="showVerb" value="${showVerb}" scope="request"/>
+					<c:set var="businessObject" value="${seoURL}" scope="request"/>
+					<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+					<c:set var="changeControlIsSet" value="true"/>
+					<%-- break the loop: set the status.index to the end so we don't iterate any more --%>
+					<c:set var="status.index" value="${fn:length(catalogGroup.SEOURL)}"/> 
+					
+					<c:choose>
+						<c:when test="${inherited == 'Inherited'}">
+			   				<c:set target="${foundAssetStoreSEOPropertiesLanguageList}" property="${templateSEOProperties.language}" value="${templateSEOProperties.language}"/>
+			   				<c:set target="${foundAssetSEOPropertyObjectList}" property="${templateSEOProperties.parentStoreIdentifier.uniqueID}" value="${seoURL}"/>
+			   			</c:when>
+			   			<c:otherwise>
+			   				<c:set target="${foundEsiteSEOPropertiesLanguageList}" property="${templateSEOProperties.language}" value="${templateSEOProperties.language}"/>
+			   				<c:set target="${foundEsiteSEOPropertyObjectList}" property="${templateSEOProperties.parentStoreIdentifier.uniqueID}" value="${seoURL}"/>
+			   			</c:otherwise>
+		   			</c:choose>
+				</c:if>
+			</c:forEach>
+	  		
+	  		<objectStoreId><wcf:cdata data="${templateSEOProperties.parentStoreIdentifier.uniqueID}"/></objectStoreId>
+	  		
+	  		<object objectType="CatalogGroupSeoAttributes">
+	  			<languageId><wcf:cdata data="${templateSEOProperties.language}"/></languageId>
+	  			<objectStoreId><wcf:cdata data="${templateSEOProperties.parentStoreIdentifier.uniqueID}"/></objectStoreId>
+	  			<c:if test="${templateSEOProperties.title != null}">
+					<seo_templatetitle readonly="true"><wcf:cdata data="${templateSEOProperties.title}"/></seo_templatetitle>
+				</c:if>
+				<c:if test="${templateSEOProperties.metaDescription != null}">
+					<seo_templatemetadesc readonly="true"><wcf:cdata data="${templateSEOProperties.metaDescription}"/></seo_templatemetadesc>
+				</c:if>
+				<c:if test="${templateSEOProperties.fullImageAltDescription != null}">
+					<seo_templateimagealtdesc readonly="true"><wcf:cdata data="${templateSEOProperties.fullImageAltDescription}"/></seo_templateimagealtdesc>
+				</c:if>
+	    
+				<c:forEach var="seoProperties" items="${catalogGroup.SEOProperties}">
+					<c:if test="${!changeControlIsSet}">
+						<c:set var="showVerb" value="${showVerb}" scope="request"/>
+						<c:set var="businessObject" value="${seoProperties}" scope="request"/>
+						<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+						
+						<c:choose>
+							<c:when test="${inherited == 'Inherited'}">
+				   				<c:set target="${foundAssetStoreSEOPropertiesLanguageList}" property="${seoProperties.language}" value="${seoProperties.language}"/>
+				   				<c:set target="${foundAssetSEOPropertyObjectList}" property="${seoProperties.parentStoreIdentifier.uniqueID}" value="${seoProperties}"/>
+				   			</c:when>
+				   			<c:otherwise>
+				   				<c:set target="${foundEsiteSEOPropertiesLanguageList}" property="${seoProperties.language}" value="${seoProperties.language}"/>
+				   				<c:set target="${foundEsiteSEOPropertyObjectList}" property="${seoProperties.parentStoreIdentifier.uniqueID}" value="${seoProperties}"/>
+				   			</c:otherwise>
+			   			</c:choose>
+					</c:if>
+					<c:if test="${seoProperties.resolved == true && seoProperties.language != null && seoProperties.language == templateSEOProperties.language && templateSEOProperties.parentStoreIdentifier.uniqueID == seoProperties.parentStoreIdentifier.uniqueID}">
+						<c:if test="${seoProperties.title != null && seoProperties.title != ''}">
+							<c:set var="useDefaultTitle" value="1"/>
+							<seo_title><wcf:cdata data="${seoProperties.title}"/></seo_title>
+						</c:if>
+						<c:if test="${seoProperties.metaDescription != null && seoProperties.metaDescription != ''}">
+							<c:set var="useDefaultMetaDesc" value="1"/>
+							<seo_metadesc><wcf:cdata data="${seoProperties.metaDescription}"/></seo_metadesc>
+						</c:if>
+						<c:if test="${seoProperties.fullImageAltDescription != null && seoProperties.fullImageAltDescription != ''}">
+							<c:set var="useDefaultImageAltDesc" value="1"/>
+							<seo_imagealtdesc><wcf:cdata data="${seoProperties.fullImageAltDescription}"/></seo_imagealtdesc>
+						</c:if>
+					</c:if>
+				</c:forEach>
+	    
+				<seo_useTitleDefault>${useDefaultTitle}</seo_useTitleDefault>
+				<seo_useMetaDescDefault>${useDefaultMetaDesc}</seo_useMetaDescDefault>
+				<seo_useImageAltDescDefault>${useDefaultImageAltDesc}</seo_useImageAltDescDefault>
+			</object>
+		</object>
+	</c:if>
+</c:forEach>
+  
+  
+
+<jsp:useBean id="foundESiteURLLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="foundAssetStoreURLLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="missingESiteURLLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="missingAssetStoreURLLanguageList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="foundAssetURLObjectList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="foundEsiteURLObjectList" class="java.util.HashMap" type="java.util.Map"/>
+
+
+<c:forEach var="seoURL" items="${catalogGroup.SEOURL}">
+	<c:set var="inherited" value=""/>
+ 
+	<c:if test="${seoURL.parentStoreIdentifier.uniqueID != param.storeId }">
+ 		<c:set var="inherited" value="Inherited"/>
+ 	</c:if>
+		
+	<c:forEach var="seoURLKeyword" items="${seoURL.URLKeyword}">
+		<c:if test="${seoURLKeyword.language != null}">  
+	  		<object objectType="${inherited}CatalogGroupBaseSeoURL">
+				<c:set var="showVerb" value="${showVerb}" scope="request"/>
+				<c:set var="businessObject" value="${seoURL}" scope="request"/>
+				<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+				<objectStoreId><wcf:cdata data="${seoURL.parentStoreIdentifier.uniqueID}"/></objectStoreId>
+				<object objectType="CatalogGroupSeoURL">
+					<c:choose>
+						<c:when test="${inherited == 'Inherited'}">
+		   					<c:set target="${foundAssetStoreURLLanguageList}" property="${seoURLKeyword.language}" value="${seoURLKeyword.language}"/>
+		   					<c:set target="${foundAssetURLObjectList}" property="${seoURL.parentStoreIdentifier.uniqueID}" value="${seoURL}"/>
+		   				</c:when>
+		   				<c:otherwise>
+		   					<c:set target="${foundESiteURLLanguageList}" property="${seoURLKeyword.language}" value="${seoURLKeyword.language}"/>
+		   					<c:set target="${foundEsiteURLObjectList}" property="${seoURL.parentStoreIdentifier.uniqueID}" value="${seoURL}"/>
+		   				</c:otherwise>
+	   				</c:choose>
+					<languageId><wcf:cdata data="${seoURLKeyword.language}"/></languageId>
+					<objectStoreId><wcf:cdata data="${seoURL.parentStoreIdentifier.uniqueID}"/></objectStoreId>
+					<c:if test="${seoURLKeyword.keyword != null && seoURLKeyword.keyword != ''}">
+						<seo_urlkeyword><wcf:cdata data="${seoURLKeyword.keyword}"/></seo_urlkeyword>
+					</c:if>
+					<c:if test="${seoURLKeyword.URLPrefix != null && seoURLKeyword.URLPrefix != ''}">
+						<seo_prefixurl><wcf:cdata data="${seoURLKeyword.URLPrefix}"/></seo_prefixurl>
+					</c:if>
+				</object>
+			</object>
+		</c:if>
+	</c:forEach>
+</c:forEach>
+	
+<c:forEach var="language" items="${param.dataLanguageIds}">
+	 <c:if test="${empty foundEsiteSEOPropertiesLanguageList[language]}">
+	 	<c:set target="${missingEsiteSEOPropertiesLanguageList}" property="${language}" value="${language}"/>
+	 </c:if>	 
+	  <c:if test="${empty foundAssetStoreSEOPropertiesLanguageList[language]}">
+	 	<c:set target="${missingAssetStoreSEOPropertiesLanguageList}" property="${language}" value="${language}"/>
+	 </c:if>
+</c:forEach>
+
+<c:forEach var="language" items="${param.dataLanguageIds}">
+	 <c:if test="${empty foundESiteURLLanguageList[language]}">
+	 	<c:set target="${missingESiteURLLanguageList}" property="${language}" value="${language}"/>
+	 </c:if>
+	 
+	  <c:if test="${empty foundAssetStoreURLLanguageList[language]}">
+	 	<c:set target="${missingAssetStoreURLLanguageList}" property="${language}" value="${language}"/>
+	 </c:if>
+</c:forEach>
+
+
+<%-- 
+	We always lock the SEO URL noun part whenever the SEO Property noun part is modified (locked) and vice versa. 
+	However, in cases where the SEO Property noun part(title, meta-data description) or the SEO URL doesn't have any values, 
+	we still want to lock the entire SEO section. Since we lock the SEO section per store, we check if either 
+	the SEO URL or SEO Property has a value, and use that change control information to lock the missing SEO sections.
+--%>
+<c:if test="${!empty missingAssetStoreSEOPropertiesLanguageList && empty templateSEOProperties}">
+	<c:if test="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+		<object objectType="InheritedCatalogGroupBaseSeoAttributes">
+			
+			<c:if test="${!empty foundAssetURLObjectList[catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID]}">
+				<c:set var="showVerb" value="${showVerb}" scope="request"/>
+				<c:set var="businessObject" value="${foundAssetURLObjectList[catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID]}" scope="request"/>
+				<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+			</c:if>
+			
+			<objectStoreId><wcf:cdata data="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+			<c:forEach var="language" items="${missingAssetStoreSEOPropertiesLanguageList}">
+				<object objectType="CatalogGroupSeoAttributes">
+					<languageId><wcf:cdata data="${language.value}"/></languageId>
+					<objectStoreId><wcf:cdata data="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+				</object>
+			</c:forEach>
+		</object>
+	</c:if>
+</c:if>
+
+<c:if test="${!empty missingEsiteSEOPropertiesLanguageList && empty templateSEOProperties}">
+	<object objectType="CatalogGroupBaseSeoAttributes">
+		
+		<c:if test="${!empty foundEsiteURLObjectList[param.storeId]}">
+			<c:set var="showVerb" value="${showVerb}" scope="request"/>
+			<c:set var="businessObject" value="${foundEsiteURLObjectList[param.storeId]}" scope="request"/>
+			<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+		</c:if>
+		
+		<objectStoreId><wcf:cdata data="${param.storeId}"/></objectStoreId>
+		<c:forEach var="language" items="${missingEsiteSEOPropertiesLanguageList}">
+			<object objectType="CatalogGroupSeoAttributes">
+				<languageId><wcf:cdata data="${language.value}"/></languageId>
+				<objectStoreId><wcf:cdata data="${param.storeId}"/></objectStoreId>
+			</object>
+		</c:forEach>
+	</object>
+</c:if>
+
+<c:if test="${!empty missingAssetStoreURLLanguageList }">
+	<c:if test="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+		<object objectType="InheritedCatalogGroupBaseSeoURL">
+			
+			<c:if test="${!empty foundAssetSEOPropertyObjectList[catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID]}">
+				<c:set var="showVerb" value="${showVerb}" scope="request"/>
+				<c:set var="businessObject" value="${foundAssetSEOPropertyObjectList[catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID]}" scope="request"/>
+				<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+			</c:if>
+			
+			<objectStoreId><wcf:cdata data="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+			<c:forEach var="language" items="${missingAssetStoreURLLanguageList}">
+				<object objectType="CatalogGroupSeoURL">
+					<languageId><wcf:cdata data="${language.value}"/></languageId>
+					<objectStoreId><wcf:cdata data="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+				</object>
+			</c:forEach>
+		</object>
+	</c:if>
+</c:if>
+
+<c:if test="${!empty missingESiteURLLanguageList}">
+	<object objectType="CatalogGroupBaseSeoURL">
+		
+		<c:if test="${!empty foundEsiteSEOPropertyObjectList[param.storeId]}">
+			<c:set var="showVerb" value="${showVerb}" scope="request"/>
+			<c:set var="businessObject" value="${foundEsiteSEOPropertyObjectList[param.storeId]}" scope="request"/>
+			<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+		</c:if>
+		
+		<objectStoreId><wcf:cdata data="${param.storeId}"/></objectStoreId>
+		<c:forEach var="language" items="${missingESiteURLLanguageList}">
+			<object objectType="CatalogGroupSeoURL">
+				<languageId><wcf:cdata data="${language.value}"/></languageId>
+				<objectStoreId><wcf:cdata data="${param.storeId}"/></objectStoreId>
+			</object>
+		</c:forEach>
+	</object>
+</c:if>
+
+<c:remove var="foundESiteURLLanguageList"/>
+<c:remove var="foundAssetStoreURLLanguageList"/>
+<c:remove var="missingESiteURLLanguageList"/>
+<c:remove var="missingAssetStoreURLLanguageList"/>
+<c:remove var="foundAssetURLObjectList"/>
+<c:remove var="foundEsiteURLObjectList"/>
+
+<c:remove var="foundEsiteSEOPropertiesLanguageList"/>
+<c:remove var="foundAssetStoreSEOPropertiesLanguageList"/>
+<c:remove var="missingEsiteSEOPropertiesLanguageList"/>
+<c:remove var="missingAssetStoreSEOPropertiesLanguageList"/>
+<c:remove var="foundAssetSEOPropertyObjectList"/>
+<c:remove var="foundEsiteSEOPropertyObjectList"/>

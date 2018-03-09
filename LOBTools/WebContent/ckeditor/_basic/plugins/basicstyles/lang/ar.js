@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","ar",{bold:"عريض",italic:"مائل",strike:"تشطيب",subscript:"رمز سفلي",superscript:"رمز علوي",underline:"تسطير"});

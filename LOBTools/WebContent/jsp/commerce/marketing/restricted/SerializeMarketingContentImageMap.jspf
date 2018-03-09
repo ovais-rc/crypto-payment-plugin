@@ -1,0 +1,138 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf"%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
+<%@ page import="java.net.URLDecoder" %>
+
+<c:forEach var="imageMap" items="${content.marketingContentImageMap}">
+	<object objectType="MarketingContentImageMap">
+		<languageId><wcf:cdata data="${imageMap.language}"/></languageId>
+		<c:choose>
+			<c:when test="${not empty imageMap.source}">
+				<source><wcf:cdata data="${imageMap.source}"/></source>
+			</c:when>
+			<c:otherwise>
+				<c:forEach var="area" items="${imageMap.area}">
+					<object objectType="MarketingContentImageMapArea">
+						<imgMapAreaId><wcf:cdata data="${area.uniqueID}"/></imgMapAreaId>
+						<sequence><wcf:cdata data="${area.displaySequence}"/></sequence>
+						<shape><wcf:cdata data="${area.shape}"/></shape>
+						<coordinates><wcf:cdata data="${area.coordinates}"/></coordinates>
+						<title><wcf:cdata data="${area.title}"/></title>
+						<areaUrl><wcf:cdata data="${area.url}"/></areaUrl>
+						<target><wcf:cdata data="${area.target}"/></target>
+						<alt><wcf:cdata data="${area.alternateText}"/></alt>
+						<c:forEach var="userDataField" items="${area.userData.userDataField}">
+							<xarea_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xarea_${userDataField.typedKey}>
+						</c:forEach>
+						<%-- Look up catalog entries and categories for URL generator --%>
+						<c:if test="${!empty area.url}">
+							<c:choose>
+								<c:when test="${fn:contains(area.url, 'partNumber=') || fn:contains(area.url, 'catEntryId=') || fn:contains(area.url, 'productId=')}">
+									<c:set var="partNumber" value=""/>
+									<c:set var="catEntryId" value=""/>
+									<c:choose>
+										<c:when test="${fn:contains(area.url, 'partNumber=')}">
+											<c:set var="endOfUrl" value="${fn:substringAfter(area.url, 'partNumber=')}"/>
+											<c:set var="indexOfNextAmp" value="${fn:indexOf(endOfUrl, '&')}"/>
+											<c:set var="partNumber" value="${fn:substring(endOfUrl, 0, indexOfNextAmp)}"/>
+											<% String decodedPartNumber = URLDecoder.decode((String)pageContext.getAttribute("partNumber"));%>
+											<% pageContext.setAttribute("partNumber", decodedPartNumber);%>
+										</c:when>
+										<c:when test="${fn:contains(area.url, 'catEntryId=')}">
+											<c:set var="endOfUrl" value="${fn:substringAfter(area.url, 'catEntryId=')}"/>
+											<c:set var="indexOfNextAmp" value="${fn:indexOf(endOfUrl, '&')}"/>
+											<c:set var="catEntryId" value="${fn:substring(endOfUrl, 0, indexOfNextAmp)}"/>
+										</c:when>
+										<c:when test="${fn:contains(area.url, 'productId=')}">
+											<c:set var="endOfUrl" value="${fn:substringAfter(area.url, 'productId=')}"/>
+											<c:set var="indexOfNextAmp" value="${fn:indexOf(endOfUrl, '&')}"/>
+											<c:set var="catEntryId" value="${fn:substring(endOfUrl, 0, indexOfNextAmp)}"/>
+										</c:when>
+									</c:choose>
+									
+									<c:choose>
+										<c:when test="${!empty partNumber}">
+											<wcf:getData type="com.ibm.commerce.catalog.facade.datatypes.CatalogEntryType[]"
+												var="catentries" expressionBuilder="getCatalogEntryDetailsByPartNumbers"
+												varShowVerb="showVerbContent">
+												<wcf:contextData name="storeId" data="${param.storeId}" />
+												<wcf:contextData name="catalogId" data="${param.masterCatalogId}" />
+												<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}"/>
+												<wcf:param name="PartNumber" value="${partNumber}" />
+											</wcf:getData>
+										</c:when>
+										<c:when test="${!empty catEntryId}">
+											<wcf:getData type="com.ibm.commerce.catalog.facade.datatypes.CatalogEntryType[]"
+												var="catentries" expressionBuilder="getCatalogEntryDetailsByIDs"
+												varShowVerb="showVerbContent">
+												<wcf:contextData name="storeId" data="${param.storeId}" />
+												<wcf:contextData name="catalogId" data="${param.masterCatalogId}" />
+												<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}"/>
+												<wcf:param name="UniqueID" value="${catEntryId}" />
+											</wcf:getData>
+										</c:when>
+									</c:choose>
+									
+									<c:if test="${!empty catentries}">
+										<c:forEach var="catentry" items="${catentries}">
+											<c:choose>
+												<c:when test="${catentry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+													<c:choose>
+														<c:when test="${fn:contains(area.url, 'ProductDisplay')}">
+															<c:set var="referenceObjectType" value="ChildInheritedProducts" />
+														</c:when>
+														<c:otherwise>
+															<c:set var="referenceObjectType" value="ChildInheritedItems" />
+														</c:otherwise>
+													</c:choose>
+												</c:when>
+												<c:otherwise>
+													<c:choose>
+														<c:when test="${fn:contains(area.url, 'ProductDisplay')}">
+															<c:set var="referenceObjectType" value="ChildProducts" />
+														</c:when>
+														<c:otherwise>
+															<c:set var="referenceObjectType" value="ChildItems" />
+														</c:otherwise>
+													</c:choose>
+												</c:otherwise>
+											</c:choose>
+											<object objectType="${referenceObjectType}">
+												<childCatentryId>${catentry.catalogEntryIdentifier.uniqueID}</childCatentryId>
+												<c:set var="showVerb" value="${showVerbContent}" scope="request" />
+												<c:set var="businessObject" value="${catentry}" scope="request"/>
+												<jsp:directive.include file="../../catalog/restricted/serialize/SerializeGenericCatalogEntry.jspf" />
+											</object>
+										</c:forEach>
+									</c:if>
+								</c:when>
+								<c:when test="${fn:contains(area.url, 'categoryId=')}">
+									<c:set var="endOfUrl" value="${fn:substringAfter(area.url, 'categoryId=')}"/>
+									<c:set var="indexOfNextAmp" value="${fn:indexOf(endOfUrl, '&')}"/>
+									<c:set var="uniqueIDs" value="${fn:substring(endOfUrl, 0, indexOfNextAmp)}"/>
+									
+									<c:if test="${!empty uniqueIDs}">
+										<jsp:directive.include file="GetCategoriesById.jsp" />
+									</c:if>
+								</c:when>
+							</c:choose>
+						</c:if>
+					</object>
+				</c:forEach>
+			</c:otherwise>
+		</c:choose>
+	</object>
+</c:forEach>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","th",{indent:"เพิ่มย่อหน้า",outdent:"ลดย่อหน้า"});

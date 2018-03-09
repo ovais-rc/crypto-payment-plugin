@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","zh-cn",{options:"特殊字符选项",title:"特殊字符",toolbar:"插入特殊字符"});

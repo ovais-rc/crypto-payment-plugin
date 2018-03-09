@@ -1,0 +1,850 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<Node classDefinition="true" definitionName="cmc/foundation/BaseDragSource">
+		<dependency localName="DragAndDropManagerUtils" moduleName="cmc/foundation/DragAndDropManagerUtils"/>
+		<!--- the object that is dragged  -->
+		<variable name="dragObject" value="${null}"/>
+		<!--- The drag source parent. This can be used by the drop target to prevent dropping
+				a source object onto the same parent from which it was dragged. -->
+		<variable name="dragParent" value="${null}"/>
+		<!---
+			@keywords private
+		-->	
+		<method args="dragger" name="getDragableView">
+			<![CDATA[
+			return DragAndDropManagerUtils.Singleton.cloneView(this.dragObject, dragger, 0, 0);
+			]]>
+		</method>
+		
+	</Node>
+
+	<!--- @keywords private -->
+	<BaseDragSource classDefinition="true" definitionName="cmc/foundation/DragSource">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!--- the object target that is dragged  -->
+		<variable name="dragObjectTarget" value="${null}"/>
+		<!--- the drop target keys, used to determine which drop targets this source can be dropped on -->
+		<variable name="targetKeys" value="${[]}"/>
+		<!--- the drag and drop manager this drag source is associated with -->
+		<variable name="dragAndDropManager" value="${null}"/>
+		<!--- Whether this drag source is enabled -->
+		<variable name="enabled" type="boolean" value="true"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			if (this.dragObject == null) {
+				this.dragObject = this.immediateParent;
+			}
+			if (this.dragObjectTarget == null) {
+				this.dragObjectTarget = this.dragObject;
+			}
+			this.dragAndDropManager.registerDragSource(this);
+			this.startDragDel = new EventHandler.Class(this, "startDrag");
+			this.addSubViewDel = new EventHandler.Class(this, "registerOnMouseDown");
+			this.dragObjectTarget.setVariable('clickable', true);
+			this.registerOnMouseDown(this.dragObjectTarget);
+			]]>
+		</handler>
+
+	    <method args="pView" name="registerOnMouseDown">
+			<![CDATA[
+			this.startDragDel.connect(pView, "onmousedown");
+			this.addSubViewDel.connect(pView, "onaddsubview");
+			if (pView.childComponents) {
+				for (var i = 0; i < pView.childComponents.length; i++) {
+					this.registerOnMouseDown(pView.childComponents[i]);
+				}
+			}
+			]]>
+		</method>
+
+		<method name="isEnabled">
+			<![CDATA[
+			return this.enabled;
+			]]>
+		</method>
+	    
+	    <method args="e" name="startDrag">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.isEnabled()) {
+				this.dragAndDropManager.startDrag(this, RootComponent.Singleton.getMouse("x"), RootComponent.Singleton.getMouse("y"));
+			}
+			]]>
+		</method>
+	    
+	    <method args="e" name="stopDrag">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+	    
+	    <method name="destroy">
+			<![CDATA[
+			if (this.startDragDel) {
+				this.startDragDel.disconnectAll();
+				delete this.startDragDel;
+			}
+			if (this.addSubViewDel) {
+				this.addSubViewDel.disconnectAll();
+				delete this.addSubViewDel;
+			}
+			if (this.dragAndDropManager != null) {
+				this.dragAndDropManager.unregisterDragSource(this);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+	    
+		<!---
+			Returns the drag source objects to be dragged
+		-->	
+	    <method name="getDragSources">
+			<![CDATA[
+			var dragSources = new Array();
+			dragSources.push(this);
+			return dragSources;
+			]]>
+		</method>
+		
+	</BaseDragSource>
+
+	<!--- @keywords private -->
+	<Node classDefinition="true" definitionName="cmc/foundation/DropTarget">
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="TrackUtil" moduleName="cmc/foundation/TrackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- the object where it's dropped  -->
+		<variable name="dropObject" value="${null}"/>
+		<!--- the drop target key  -->
+		<variable name="targetKey" value="${null}"/>
+		<!--- the drag and drop manager this drop target is associated with -->
+		<variable name="dragAndDropManager" value="${null}"/>    	
+		
+		<!--- drop target bg color  -->		
+    	<variable name="originalBGColor" value="${null}"/>
+		<!--- the bgcolor when an appropriate item is dragged over a view  -->		
+    	<variable name="dropMouseOverBGColor" value="${&quot;#CCCCCC&quot;}"/>
+		<!--- true if the target is enabled as a drop target, false if it's been disabled  -->		
+    	<variable name="enabled" type="boolean" value="true"/>
+    	<!--- true if this target has been checked for enablement -->
+    	<variable name="enablementChecked" type="boolean" value="false"/>
+
+		<!--- this event is fired for this class when drag sources have been dropped in this target  -->				
+    	
+	
+		<handler name="oninit">
+			<![CDATA[
+			if (this.dropObject == null) {
+				this.dropObject = this.immediateParent;
+			}
+			this.dragAndDropManager.registerDropTarget(this);
+			this.trackMouseOverDel = new EventHandler.Class(this, "sourceDraggedIn");
+			this.trackMouseOutDel = new EventHandler.Class(this, "sourceDraggedOut");
+			this.trackMouseUpDel = new EventHandler.Class(this, "sourceDroppedIn");
+			]]>
+		</handler>
+
+	    <method name="destroy">
+			<![CDATA[
+			this.dragAndDropManager.unregisterDropTarget(this);
+			if (this.trackMouseOverDel) {
+				this.trackMouseOverDel.disconnectAll();
+				delete this.trackMouseOverDel;
+			}
+			if (this.trackMouseOutDel) {
+				this.trackMouseOutDel.disconnectAll();
+				delete this.trackMouseOutDel;
+			}
+			if (this.trackMouseUpDel) {
+				this.trackMouseUpDel.disconnectAll();
+				delete this.trackMouseUpDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+	    
+		<!---
+			Dragging has started for drop targets with this targets target key
+		-->		    	
+    	<method name="registerDropTarget">
+			<![CDATA[
+			this._trackingRegistered = true;
+			this.enablementChecked = false;
+			TrackUtil.register(this.dropObject, "wcfDndManagerTrack");
+			this.trackMouseOverDel.connect(this.dropObject, "onmousetrackover");
+			this.trackMouseOutDel.connect(this.dropObject, "onmousetrackout");
+			this.trackMouseUpDel.connect(this.dropObject, "onmousetrackup");
+			]]>
+		</method>
+
+		<!---
+			Dragging has stopped
+		-->		    			
+    	<method name="unregisterDropTarget">
+			<![CDATA[
+			if (this._trackingRegistered) {
+				this._trackingRegistred = false;
+				this.enablementChecked = false;
+				TrackUtil.unregister(this.dropObject, "wcfDndManagerTrack");
+				this.trackMouseOverDel.disconnectAll();
+				this.trackMouseOutDel.disconnectAll();
+				this.trackMouseUpDel.disconnectAll();
+			}
+			]]>
+		</method>
+
+		<!---
+			A source object is dragged over the drag object
+		-->		    			
+    	<method args="currentDragSource" name="isEnabled">
+			<![CDATA[
+			return this.enabled;
+			]]>
+		</method>
+    	
+		<!---
+			A source object is dragged over the drag object
+		-->		    			
+		<method args="e" name="sourceDraggedIn">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var enabled = true;
+			if (!this.enablementChecked) {
+				this.enablementChecked = true;
+				enabled = this.isEnabled(this.dragAndDropManager.currentDragSource.getDragSources());
+			}
+			if (enabled) {
+				this.originalBGColor = this.dropObject.bgcolor;
+				this.dropObject.setVariable('bgcolor', this.dropMouseOverBGColor);
+				CursorUtil.restoreCursor();
+			}
+			else {
+				this.unregisterDropTarget();
+			}
+			]]>
+		</method>
+    	
+		<!---
+			A source object is dragged out of the drag object
+		-->		    			
+    	<method args="e" name="sourceDraggedOut">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			CursorUtil.setCursorGlobal("no-drop");
+			this.dropObject.setVariable('bgcolor', this.originalBGColor);
+			this.dropObject.bgcolor = this.originalBGColor;
+			]]>
+		</method>
+		
+		<method args="e" name="sourceDroppedIn">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.sourceDraggedOut();
+			CursorUtil.restoreCursor();
+			this.dragAndDropManager.droppedInTarget(this);
+			]]>
+		</method>
+
+	</Node>
+	
+	<!--- @keywords private -->
+	<DropTarget classDefinition="true" definitionName="cmc/foundation/TrackingDropTarget" targetKey="${'TRACKING_DROP_TARGET'}">
+		<!---
+			A source object is dragged over the drag object
+		-->		    			
+    	<method args="e" name="sourceDraggedIn">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method> 
+		<!---
+			A source object is dragged out of the drag object
+		-->		    			
+    	<method args="e" name="sourceDraggedOut">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+	</DropTarget>
+
+	<!--- @keywords private -->
+	<Node classDefinition="true" definitionName="cmc/foundation/DragAndDropManager">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="TrackUtil" moduleName="cmc/foundation/TrackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Dragger" moduleName="cmc/foundation/Dragger"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!-- An index to determine the next identifier to set on a drag source/drop target -->
+		<variable name="nextIdentifier" type="number" value="0"/>
+		<!-- An array of the drag source objects -->
+		<variable name="dragSources" value="${[]}"/>
+		<!--- An array of the drop target objects -->
+		<variable name="dropTargets" value="${[]}"/>
+		<!--- The currently dragged drag source	-->
+		<variable name="currentDragSource" value="${null}"/>
+		<!--- The currently dragged drag source	starting x position -->		
+		<variable name="startDragX" value="${null}"/>
+		<!--- The currently dragged drag source	starting y position -->		
+		<variable name="startDragY" value="${null}"/>
+		<!--- True if the currently dragged drag source is being dragged -->	
+		<variable name="dragging" type="boolean" value="false"/>
+		<!--- The view that drags.  This view clones the visual aspects of the drag sources views. -->	
+		<variable name="dragger" value="${null}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.stopDragDel = new EventHandler.Class(this, "stopDrag");
+			this.stopDragDel.connect(MouseUtil, "onmouseup");
+			this.trackMouseDel = new EventHandler.Class(this, "trackMouse");
+			]]>
+		</handler>
+		
+	    <method name="destroy">
+			<![CDATA[
+			if (this.stopDragDel) {
+				this.stopDragDel.disconnectAll();
+				delete this.stopDragDel;
+			}
+			if (this.trackMouseDel) {
+				this.trackMouseDel.disconnectAll();
+				delete this.trackMouseDel;
+			}
+			if (this.dragger != null) {
+				this.dragger.destroy();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Generates the next unique id
+		-->		
+	    <method name="idGen">
+			<![CDATA[
+			this.nextIdentifier++;
+			return this.nextIdentifier;
+			]]>
+		</method>
+		
+		<!---
+			Register a drag source
+			@param dragSource : the drag source
+		-->
+		<method args="dragSource" name="registerDragSource">
+			<![CDATA[
+			dragSource.identifier = this.idGen();
+			this.dragSources.push(dragSource);
+			]]>
+		</method>
+		
+		<!---
+			Register a drop target
+			@param dropTarget : the drop target
+		-->
+		<method args="dropTarget" name="registerDropTarget">
+			<![CDATA[
+			dropTarget.identifier = this.idGen();
+			this.dropTargets.push(dropTarget);
+			]]>
+		</method>
+		
+		<!---
+			unregisters a drag source
+			@param dragSource : the drag source
+		-->
+		<method args="dragSource" name="unregisterDragSource">
+			<![CDATA[
+			for (var i = 0; i < this.dragSources.length; i++) {
+				if (this.dragSources[i] != null && this.dragSources[i].identifier == dragSource.identifier) {
+					this.dragSources[i] = null;
+					this.dragSources.splice(i, 1);
+					return;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			unregisters a drop target
+			@param dropTarget : the drop target
+		-->
+		<method args="dropTarget" name="unregisterDropTarget">
+			<![CDATA[
+			for (var i = 0; i < this.dropTargets.length; i++) {
+				if (this.dropTargets[i] != null && this.dropTargets[i].identifier == dropTarget.identifier) {
+					this.dropTargets[i] = null;
+					this.dropTargets.splice(i, 1);
+					return;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Starts dragging a drag source if one is selected
+		-->
+        <method args="dragSource, mouseX, mouseY" name="startDrag">
+			<![CDATA[
+			this.currentDragSource = dragSource;
+			this.startDragX = mouseX;
+			this.startDragY = mouseY;
+			Timer.addTimer(this.trackMouseDel, 100);
+			]]>
+		</method>
+        
+        <!--
+			Checks if the given drag source target keys contain the givent target key
+		-->
+		<method args="dragSource, targetKey" name="containsTargetKey">
+			<![CDATA[
+			if (dragSource != null && dragSource.targetKeys != null) {
+				for (var i = 0; i < dragSource.targetKeys.length; i++) {
+					if (dragSource.targetKeys[i] == targetKey) {
+						return true;
+					}
+				}
+			}
+			return false;
+			]]>
+		</method>
+		
+        <!--
+			Checks if the given view is visible
+		-->
+		<method args="v" name="isViewVisible">
+			<![CDATA[
+			if (v == RootComponent.Singleton) {
+				return true;
+			}
+			else if (!v.visible) {
+				return false;
+			}
+			else {
+				return this.isViewVisible(v.immediateParent);
+			}
+			]]>
+		</method>
+
+		<method args="parent, child" name="isAncestor">
+			<![CDATA[
+			if (parent == child) {
+				return true;
+			}
+			else if (child == RootComponent.Singleton) {
+				return false;
+			}
+			else {
+				return this.isAncestor(parent, child.immediateParent);
+			}
+			]]>
+		</method>
+		
+		<method args="o1, o2" name="compare">
+			<![CDATA[
+			if (this.isAncestor(o1.dropObject, o2.dropObject)) {
+				return -1;
+			}
+			else if (this.isAncestor(o2.dropObject, o1.dropObject)) {
+				return 1;
+			}
+			var commonAncestor = o1.dropObject;
+			var o1AncestorChild = null;
+			while (!this.isAncestor(commonAncestor, o2.dropObject)) {
+				o1AncestorChild = commonAncestor;
+				commonAncestor = commonAncestor.immediateParent;
+			}
+			var o2AncestorChild = o2.dropObject;
+			while (o2AncestorChild.immediateParent != commonAncestor) {
+				o2AncestorChild = o2AncestorChild.immediateParent;
+			}
+			var depthList = commonAncestor.getDepthList();
+			for (var i = 0; i < depthList.length; i++) {
+				if (depthList[i] == o1AncestorChild) {
+					return -1;
+				}
+				else if (depthList[i] == o2AncestorChild) {
+					return 1;
+				}
+			}
+			return 0;
+			]]>
+		</method>
+
+		<!---
+			Tracks the mouse, detecting movement to begin the dragging.
+		-->        
+		<method name="trackMouse">
+			<![CDATA[
+			if (!this.dragging && (this.startDragX != RootComponent.Singleton.getMouse('x') || this.startDragY != RootComponent.Singleton.getMouse('y'))) {
+				CursorUtil.setCursorGlobal("no-drop");
+				Timer.removeTimer(this.trackMouseDel);
+				var availableDropTargets = new Array();
+				for (var i = 0; i < this.dropTargets.length; i++) {
+					if ((this.dropTargets[i].targetKey == "TRACKING_DROP_TARGET" || this.containsTargetKey(this.currentDragSource, this.dropTargets[i].targetKey)) && this.isViewVisible(this.dropTargets[i].dropObject)) {
+						availableDropTargets.push(this.dropTargets[i]);
+					}
+				}
+				var comparator = function(o1, o2) {
+					return arguments.callee.dndm.compare(o1, o2);
+				};
+				comparator.dndm = this;
+				availableDropTargets.sort(comparator);
+				for (var k = 0; k < availableDropTargets.length; k++) {
+					availableDropTargets[k].registerDropTarget();
+				}
+				TrackUtil.activate("wcfDndManagerTrack");
+				this.dragging = true;
+				this.createAndStartDragger();
+			}
+			else if (this.dragging) {
+				Timer.removeTimer(this.trackMouseDel);
+			}
+			else {
+				Timer.resetTimer(this.trackMouseDel, 100);
+			}
+			]]>
+		</method>
+		
+		<method name="createAndStartDragger">
+			<![CDATA[
+			if (this.dragger == null) {
+				this.dragger = new Dragger.Class(RootComponent.Singleton);
+			}
+			var currentDragSources = this.currentDragSource.getDragSources();
+			for (var i = 0; i < currentDragSources.length; i++) {
+				var dx = 0;
+				var dy = 0;
+				if (currentDragSources[i].dragObject != null) {
+					dx = currentDragSources[i].dragObject.getVariableRelative("x", this.currentDragSource.dragObject) - this.currentDragSource.dragObject.getVariableRelative("x", this.currentDragSource.dragObject);
+					dy = currentDragSources[i].dragObject.getVariableRelative("y", this.currentDragSource.dragObject) - this.currentDragSource.dragObject.getVariableRelative("y", this.currentDragSource.dragObject);
+					var newView = currentDragSources[i].getDragableView(this.dragger);
+					if (newView != null) {
+						newView.setVariable("x", newView.x + dx);
+						newView.setVariable("y", newView.y + dy);
+						newView.setVariable('opacity', 0.5);
+					}
+				}
+			}
+			this.dragger.deltaX = this.startDragX - this.currentDragSource.dragObject.getVariableRelative("x", RootComponent.Singleton);
+			this.dragger.deltaY = this.startDragY - this.currentDragSource.dragObject.getVariableRelative("y", RootComponent.Singleton);
+			this.dragger.startDragging();
+			]]>
+		</method>
+		
+		<!---
+			Stops dragging the current drag source
+		-->
+        <method args="e" name="stopDrag">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			Timer.removeTimer(this.trackMouseDel);
+			if (!this.dragging) {
+				return;
+			}
+			CursorUtil.restoreCursor();
+			this.dragging = false;
+			this.currentDragSource.stopDrag();
+			for (var i = 0; i < this.dropTargets.length; i++) {
+				this.dropTargets[i].unregisterDropTarget();
+			}
+			this.dragger.stopDragging();
+			]]>
+		</method>
+
+		<!---
+			The current drag source has been dropped in the given drop target
+			@param dropTarget: the drop target
+		-->
+        <method args="dropTarget" name="droppedInTarget">
+			<![CDATA[
+			EventUtil.trigger(dropTarget, "ondroppedintarget", this.currentDragSource.getDragSources());
+			TrackUtil.deactivate("wcfDndManagerTrack");
+			]]>
+		</method>
+
+	</Node>
+	
+	<DragAndDropManager definitionName="cmc/foundation/DndManager" singletonDefinition="true"/>
+	
+	<!--- @keywords private -->		
+	<Component classDefinition="true" definitionName="cmc/foundation/DropFloatingListPane">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="BaseTextListItem" moduleName="cmc/foundation/BaseTextListItem"/>
+		<variable name="targetX" value="${null}"/>
+		<variable name="targetY" value="${null}"/>
+		<variable name="objects" value="${[]}"/>
+		<variable name="menuItems" value="${[]}"/>		
+		<Component align="right" clip="true" height="0" name="floatParentView" width="${this.actionList.width}">
+		<variable initialValue="${this.classroot.targetY}" name="y"/>
+		<variable initialValue="${this.classroot.targetX}" name="x"/> <!--  y="$once{canvas.getMouse('y')}" x="$once{canvas.getMouse('x')}"> -->
+			<FloatingList attach="bottom" name="actionList" visible="false">
+      			<method name="updateAttachLocation">
+					<![CDATA[
+					this.inherited(arguments);
+					]]>
+				</method>
+				
+				<!--- @keywords private -->
+				<method name="getNextSelection">
+					<![CDATA[
+
+					]]>
+				</method>
+				<!--- @keywords private -->
+		        <method name="getPrevSelection">
+					<![CDATA[
+
+					]]>
+				</method>
+		        
+			</FloatingList>
+		</Component>
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			]]>
+		</method>		
+						
+		<handler args="k" eventSource="this.floatParentView.actionList" name="onkeydown">
+			<![CDATA[
+			if (k == 27) {
+				this.closeActionList();
+			}
+			]]>
+		</handler>
+		
+		<handler args="v" eventSource="this.floatParentView.actionList" name="onselect">
+			<![CDATA[
+			var delegate = v.value;
+			delegate.execute(this.objects);
+			this.closeActionList();
+			]]>
+		</handler>
+		
+		<method name="openAction">
+			<![CDATA[
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			var items = this.menuItems;
+			if (items) {
+				for (var i = 0; i < items.length; i++) {
+					var item = items[i];
+					var item = new BaseTextListItem.Class(this.floatParentView.actionList, {
+						text: item.action,
+						value: item.delegate
+					});
+				}
+				this.floatParentView.actionList.setVariable('visible', true);
+				FocusUtil.setFocus(this.floatParentView.actionList);
+			}
+			]]>
+		</method>
+		
+		<method name="destroy">
+			<![CDATA[
+			if (this.checkMouseDel) {
+				this.checkMouseDel.disconnectAll();
+				delete this.checkMouseDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.floatParentView.actionList.containsPt(this.floatParentView.actionList.getMouse("x"), this.floatParentView.actionList.getMouse("y"))) this.closeActionList();
+			]]>
+		</method>
+		
+		<method name="closeActionList">
+			<![CDATA[
+			this.setVariable("actionListOpen", false);
+			this.floatParentView.actionList.setVariable("visible", false);
+			FocusUtil.clearFocus();
+			this.checkMouseDel.disconnectAll();
+			this.destroy();
+			]]>
+		</method>
+				
+		<method args="action, delegate" name="addMenuItem">
+			<![CDATA[
+			var item = {
+				action: action,
+				delegate: delegate
+			};
+			this.menuItems.push(item);
+			]]>
+		</method>
+	</Component>
+	
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/DragAndDropManagerUtils" singletonDefinition="true">
+		<dependency localName="DraggerClippedView" moduleName="cmc/foundation/DraggerClippedView"/>
+		<dependency localName="TextComponent" moduleName="cmc/foundation/TextComponent"/>
+		<dependency localName="DraggerClippedText" moduleName="cmc/foundation/DraggerClippedText"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		
+		<!---
+			Release the dragger
+		-->		  
+        <method args="v" name="release">
+			<![CDATA[
+			v.setVariable("visible", false);
+			v.dndused = false;
+			for (var i = 0; i < v.childComponents.length; i++) {
+				this.release(v.childComponents[i]);
+			}
+			]]>
+		</method>
+	
+		<!---
+			Returns a cloned view from the pool or creates a new one
+		-->
+		<method args="owner, textView, clippedView, hasFontsize, hasFontstyle" name="getClonedView">
+			<![CDATA[
+			var clonedView = null;
+			for (var i = 0; i < owner.childComponents.length; i++) {
+				var v = owner.childComponents[i];
+				if (("dndtext" in v && v.dndtext == textView) && ("dndclip" in v && v.dndclip == clippedView) && !("dndused" in v && v.dndused) && (("fontsize" in v) == hasFontsize) && (("fontstyle" in v) == hasFontstyle)) {
+					clonedView = v;
+					break;
+				}
+			}
+			if (clonedView == null) {
+				if (textView && clippedView) {
+					clonedView = new DraggerClippedText.Class(owner, {
+						dndtext: true,
+						dndclip: true
+					});
+				}
+				else if (textView && !clippedView) {
+					clonedView = new TextComponent.Class(owner, {
+						dndtext: true,
+						dndclip: false
+					});
+				}
+				else if (!textView && clippedView) {
+					clonedView = new DraggerClippedView.Class(owner, {
+						dndtext: false,
+						dndclip: true
+					});
+				}
+				else if (!textView && !clippedView) {
+					clonedView = new Component.Class(owner, {
+						dndtext: false,
+						dndclip: false
+					});
+				}
+			}
+			return clonedView;
+			]]>
+		</method>
+
+		<!---
+			Clones the visual aspects of a single view item
+			@param view : the view being cloned
+			@param owner: the owner of the new cloned view
+			@param dx: the delta x position to the dragger view
+			@param dy: the delta y position to the dragger view
+		-->	
+		<method args="view, owner, dx, dy" name="cloneViewItem">
+			<![CDATA[
+			if (!owner) {
+				return null;
+			}
+			if (view instanceof Component.Class) {
+				var clonedView = this.getClonedView(owner, (view instanceof TextComponent.Class), !("dndclip" in view && view.dndclip == false), ("fontsize" in view), ("fontstyle" in view));
+				clonedView.dndused = true;
+				clonedView.bringToFront();
+				if (view instanceof TextComponent.Class) {
+					clonedView.setVariable('text', view.getText());
+				}
+				else if (view.imageSet && !("dndIgnoreResource" in view && view.dndIgnoreResource)) {
+					clonedView.setVariable("imageSet", view.imageSet);
+				}
+				else if (clonedView.imageSet) {
+					clonedView.setVariable("imageSet", null);
+				}
+				if ("dndvisible" in view) {
+					clonedView.setVariable("visible", view.dndvisible == "true");
+				}
+				else {
+					clonedView.setVariable("visible", view.visible);
+				}
+				if ("dndstretches" in view) {
+					clonedView.setVariable("stretches", view.dndstretches);
+				}
+				else {
+					clonedView.setVariable("stretches", "none");
+				}
+				clonedView.setVariable('x', dx);
+				clonedView.setVariable('y', dy);
+				clonedView.setVariable('width', view.width);
+				clonedView.setVariable('height', view.height);
+				clonedView.setVariable('bgcolor', view.bgcolor);
+				clonedView.setVariable('opacity', view.opacity);
+				clonedView.setVariable("xoffset", view.xoffset);
+				clonedView.setVariable("yoffset", view.yoffset);
+				if (clonedView.fontsize != view.fontsize) {
+					clonedView.setVariable("fontsize", view.fontsize);
+				}
+				if (clonedView.fontstyle != view.fontstyle) {
+					clonedView.setVariable("fontstyle", view.fontstyle);
+				}
+				return clonedView;
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+
+		<!---
+			Clones the visual aspects of the dragged view for dragging
+			@param view : the view being cloned
+			@param owner: the owner of the new cloned view
+			@param dx: the delta x position to the dragger view
+			@param dy: the delta y position to the dragger view
+		-->	
+		<method args="view, owner, dx, dy" name="cloneView">
+			<![CDATA[
+			var clonedView = this.cloneViewItem(view, owner, dx, dy);
+			if (view.childComponents) {
+				for (var i = 0; i < view.childComponents.length; i++) {
+					var child = view.childComponents[i];
+					this.cloneView(child, clonedView, child.x, child.y);
+				}
+			}
+			return clonedView;
+			]]>
+		</method>
+	</Node>
+	
+</Definitions>

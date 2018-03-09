@@ -1,0 +1,5482 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This class defines the checkbox used by the column settings window of a grid column.
+	-->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/foundation/GridColumnSettingsCheckBox" focusable="false">
+		<dependency localName="GridColumnSettings" moduleName="cmc/foundation/GridColumnSettings"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<!---
+			A reference to the column of the grid that this checkbox represents.
+		-->
+		<variable name="column" value="${null}"/>
+		<!---
+			This variable indicates that this column has been selected. The selected column can be
+			moved up and down within the column list.
+		-->
+		<variable name="isSelected" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Store the minimum width of the column
+		-->
+		<variable name="minimumColumnWidth" type="number"/>
+
+		<!---
+			@keywords private
+			Store the maximum width of the column
+		-->
+		<variable name="maximumColumnWidth" type="number" value="1000"/>
+		
+		<!---
+			@keywords private
+			Store the current width of the column
+		-->
+		<variable name="currentColumnWidth" type="number"/>
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.column != null) {
+				this.minimumColumnWidth = this.column.minwidth;
+				if (this.column.visible) {
+					this.currentColumnWidth = this.column.width;
+				}
+				else if (this.column.originalColumn) {
+					this.currentColumnWidth = this.column.originalColumn.restoreWidth ? this.column.originalColumn.restoreWidth : this.column.originalColumn.width;
+				}
+				else {
+					this.currentColumnWidth = this.column.restoreWidth ? this.column.restoreWidth : this.column.width;
+				}
+			}
+			]]>
+		</handler>
+		
+		<TextComponent name="checkBoxName" resize="true" selectable="true" text="${this.parent.text}" x="${this.classroot.text_x}" y="${this.classroot.text_y}">
+			<!---
+				The handler for mouse clicks.
+			-->
+			<handler name="onclick">
+				<![CDATA[
+				this.classroot.parent.clearSelection();
+				this.classroot.setVariable("isSelected", true);
+				this.classroot.parent.valignCheckBox(this.classroot);
+				FocusUtil.setFocus(this.classroot.parent.parent, false);
+				]]>
+			</handler>
+			
+			<!---
+				The handler for changes to the "isSelected" attribute.
+			-->
+			<handler eventSource="this.classroot" name="onisSelected">
+				<![CDATA[
+				if (this.classroot.isSelected) {
+					this.setVariable("bgcolor", "#4178be");
+					this.setVariable("fgcolor", "#ffffff");
+					GridColumnSettings.Singleton.setVariable("selectedCheckbox", this.classroot);
+					GridColumnSettings.Singleton.pixeltext.columnWidth.setVariable("minimumValue", this.classroot.minimumColumnWidth);
+					GridColumnSettings.Singleton.pixeltext.columnWidth.setVariable("maximumValue", this.classroot.maximumColumnWidth);
+					GridColumnSettings.Singleton.pixeltext.columnWidth.setVariable("enabled", this.classroot.value && this.classroot.column.resizable);
+					GridColumnSettings.Singleton.pixeltext.columnWidth.setVariable("value", this.classroot.currentColumnWidth);
+				}
+				else {
+					this.setVariable("bgcolor", null);
+					this.setVariable("fgcolor", null);
+				}
+				]]>
+			</handler>
+		</TextComponent>
+			
+		<handler name="onvalue">
+			<![CDATA[
+			this.parent.updateVisibleColumns(this.value);
+			GridColumnSettings.Singleton.pixeltext.columnWidth.setVariable("enabled", this.value);
+			]]>
+		</handler>
+	</BaseCheckbox>
+
+	<!---
+		@keywords private
+		
+		This class defines the grid column settings dialog.
+	-->
+	<Dialog definitionName="cmc/foundation/GridColumnSettings" singletonDefinition="true" title="${foundationResources.Singleton.gridColumnSettingsTitle.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="GridColumnSettingsCheckBox" moduleName="cmc/foundation/GridColumnSettingsCheckBox"/>
+		<dependency localName="GridUtil" moduleName="cmc/foundation/GridUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			A reference to the grid that this settings dialog affects.
+		-->
+		<variable name="grid"/>
+		<!---
+			An array of column checkboxes.
+		-->
+		<variable name="columnCheckBoxes" value="${[]}"/>
+		<!---
+			A counter that indicates how many columns are selected in the column settings pane.
+		-->
+		<variable name="numColumnsVisible" type="number" value="0"/>
+		<!---
+			 This variable points to the one column that is selected to be visible. If there is more than one column
+			 selected, this variable is null.
+		-->
+		<variable name="onlyVisibleColumn" value="${null}"/>
+
+		<!---
+			The currently selected checkbox.
+		-->
+		<variable name="selectedCheckbox" value="${null}"/>
+				
+		<!---
+			Select first column in list.
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			EventUtil.trigger(this.column.columnList.contents.checkBoxLayout.components[0].checkBoxName, "onclick");
+			]]>
+		</method>
+		
+		<!---
+			Handler for setting the grid attribute.
+		-->
+		<handler name="ongrid">
+			<![CDATA[
+			while (this.columnCheckBoxes.length > 0) {
+				this.columnCheckBoxes.shift().destroy();
+			}
+			this.columnsInitialized = false;
+			this.numColumnsVisible = 0;
+			this.onlyVisibleColumn = null;
+			this.selectedCheckbox = null;
+			this.pixeltext.columnWidth.setVariable("enabled", false);
+			this.pixeltext.columnWidth.setVariable("value", 0);
+			if (this.grid) {
+				var columns = this.grid.columns;
+				for (var i = 0; i < columns.length; i++) {
+					var columnCheckBox = new GridColumnSettingsCheckBox.Class(this.column.columnList.contents, {
+						name: columns[i].name,
+						column: columns[i],
+						text: columns[i].displayText,
+						x: 10,
+						value: columns[i].visible
+					});
+					if (columns[i].visible) {
+						this.numColumnsVisible++;
+					}
+					if (columns[i].required) {
+						columnCheckBox.setVariable('enabled', false);
+					}
+					this.columnCheckBoxes.push(columnCheckBox);
+				}
+				this.column.columnList.contents.updateResourceSize();
+			}
+			this.columnsInitialized = true;
+			if (this.numColumnsVisible == 1) {
+				this.disableLastColumn();
+			}
+			]]>
+		</handler>
+
+		<!---
+			A method to apply the column changes and dismiss the dialog.
+		-->
+		<method name="ok">
+			<![CDATA[
+			this.applySettings();
+			this.closeWindow();
+			]]>
+		</method>
+		
+		<!---
+			A method to close the dialog and release the grid.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("grid", null);
+			]]>
+		</method>
+
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.grid.restoreFocus();
+			}
+			]]>
+		</method>
+
+		<!---
+			This method will apply the column changes to the grid and save the preferences.
+		-->
+		<method name="applySettings">
+			<![CDATA[
+			var newColumns = [];
+			var checkBoxLayout = this.column.columnList.contents.checkBoxLayout;
+			for (var i = 0; i < checkBoxLayout.components.length; i++) {
+				newColumns.push(checkBoxLayout.components[i].column);
+			}
+			this.grid.columns = newColumns;
+			for (var i = 0; i < this.columnCheckBoxes.length; i++) {
+				this.grid.columns[i].setVariable("visible", this.columnCheckBoxes[i].value);
+				if (this.columnCheckBoxes[i].value) {
+					this.grid.columns[i].setVariable("width", this.columnCheckBoxes[i].currentColumnWidth);
+				}
+			}
+			this.grid.updateColumnOrder();
+			this.grid.savePreferences();
+			]]>
+		</method>
+
+		<!---
+			This method will move the selected column up one position in the list.
+		-->
+		<method name="moveUp">
+			<![CDATA[
+			var checkBoxLayout = this.column.columnList.contents.checkBoxLayout;
+			for (var i = 1; i < checkBoxLayout.components.length; i++) {
+				var currentCheckBox = checkBoxLayout.components[i];
+				if (currentCheckBox.isSelected) {
+					var previousCheckBox = checkBoxLayout.components[i - 1];
+					var clipView = currentCheckBox.parent.immediateParent;
+					var viewHeight = clipView.height - (this.column.columnList.objectsHScrollbar.visible ? this.column.columnList.objectsHScrollbar.height : 0);
+					var checkboxTop = previousCheckBox.getVariableRelative("y", clipView);
+					var checkboxEnd = currentCheckBox.getVariableRelative("y", clipView) + currentCheckBox.height;
+					GridUtil.Singleton.swap(this.columnCheckBoxes, i - 1, i);
+					checkBoxLayout.swapComponentOrder(previousCheckBox, currentCheckBox);
+					if (checkboxTop < 0) {
+						this.column.columnList.objectsVScrollbar.step(Math.floor(checkboxTop / this.column.columnList.objectsVScrollbar.stepsize));
+					}
+					else if (checkboxEnd > viewHeight) {
+						this.column.columnList.objectsVScrollbar.step(Math.ceil((checkboxEnd - viewHeight) / this.column.columnList.objectsVScrollbar.stepsize));
+					}
+					break;
+				}
+			}
+			checkBoxLayout.update();
+			]]>
+		</method>
+		
+		<!---
+			This method will move the selected column down one position in the list.
+		-->
+		<method name="moveDown">
+			<![CDATA[
+			var checkBoxLayout = this.column.columnList.contents.checkBoxLayout;
+			for (var i = checkBoxLayout.components.length - 2; i >= 0; i--) {
+				var currentCheckBox = checkBoxLayout.components[i];
+				if (currentCheckBox.isSelected) {
+					var nextCheckBox = checkBoxLayout.components[i + 1];
+					var clipView = currentCheckBox.parent.immediateParent;
+					var viewHeight = clipView.height - (this.column.columnList.objectsHScrollbar.visible ? this.column.columnList.objectsHScrollbar.height : 0);
+					var checkboxTop = currentCheckBox.getVariableRelative("y", clipView);
+					var checkboxEnd = nextCheckBox.getVariableRelative("y", clipView) + nextCheckBox.height;
+					GridUtil.Singleton.swap(this.columnCheckBoxes, i, i + 1);
+					checkBoxLayout.swapComponentOrder(nextCheckBox, currentCheckBox);
+					if (checkboxTop < 0) {
+						this.column.columnList.objectsVScrollbar.step(Math.floor(checkboxTop / this.column.columnList.objectsVScrollbar.stepsize));
+					}
+					else if (checkboxEnd > viewHeight) {
+						this.column.columnList.objectsVScrollbar.step(Math.ceil((checkboxEnd - viewHeight) / this.column.columnList.objectsVScrollbar.stepsize));
+					}
+					break;
+				}
+			}
+			checkBoxLayout.update();
+			]]>
+		</method>
+
+		<!---
+			return the selected checkbox
+		-->
+		<method name="getSelected">
+			<![CDATA[
+			var checkBoxLayout = this.column.columnList.contents.checkBoxLayout;
+			var len = checkBoxLayout.components.length;
+			for (var i = 0; i < len; i++) {
+				var currentCheckBox = checkBoxLayout.components[i];
+				if (currentCheckBox.isSelected) {
+					return currentCheckBox;
+				}
+			}
+			return null;
+			]]>
+		</method>
+
+		<!---
+			return checkbox under the selected checkbox
+			return first checkbox if none selected
+		-->		
+		<method name="getNext">
+			<![CDATA[
+			var checkBoxLayout = this.column.columnList.contents.checkBoxLayout;
+			var len = checkBoxLayout.components.length;
+			for (var i = 0; i < len; i++) {
+				var currentCheckBox = checkBoxLayout.components[i];
+				if (currentCheckBox.isSelected) {
+					var nextCheckBox;
+					if ((i + 1) == len) {
+						nextCheckBox = currentCheckBox;
+					}
+					else {
+						nextCheckBox = checkBoxLayout.components[i + 1];
+					}
+					return nextCheckBox;
+				}
+			}
+			return checkBoxLayout.components[0];
+			]]>
+		</method>
+		
+		<!---
+			return checkbox above the selected checkbox
+			return last checkbox if none selected
+		-->		
+		<method name="getPrevious">
+			<![CDATA[
+			var checkBoxLayout = this.column.columnList.contents.checkBoxLayout;
+			var len = checkBoxLayout.components.length;
+			for (var i = 0; i < len; i++) {
+				var currentCheckBox = checkBoxLayout.components[i];
+				if (currentCheckBox.isSelected) {
+					var nextCheckBox;
+					if (i == 0) {
+						nextCheckBox = currentCheckBox;
+					}
+					else {
+						nextCheckBox = checkBoxLayout.components[i - 1];
+					}
+					return nextCheckBox;
+				}
+			}
+			return checkBoxLayout.components[len - 1];
+			]]>
+		</method>		
+
+		<!---
+			This method re-enables the checkbox of what was the only column selected to be visible. It will have no effect
+			if it is a required column.
+		-->
+		<method name="enableLastColumn">
+			<![CDATA[
+			if (this.onlyVisibleColumn != null) {
+				this.onlyVisibleColumn.setVariable("enabled", true);
+				this.setVariable("onlyVisibleColumn", null);
+			}
+			]]>
+		</method>
+
+		<!---
+			This method disables the checkbox of what is the only column selected for visibility. It will have no affect if it is a
+			required column.
+		-->		
+		<method name="disableLastColumn">
+			<![CDATA[
+			for (var i = 0; i < this.columnCheckBoxes.length; i++) {
+				if (this.columnCheckBoxes[i].value && this.columnCheckBoxes[i].enabled) {
+					this.setVariable("onlyVisibleColumn", this.columnCheckBoxes[i]);
+					this.onlyVisibleColumn.setVariable("enabled", false);
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<AxisLayout axis="y" spacing="1"/>
+		<TextComponent text="${foundationResources.Singleton.gridColumnSettingsPrompt.string}"/>
+		<Component name="column">	
+			<AxisLayout axis="x" spacing="10"/>	
+				
+			<BorderedView borderSize="1" borderColor="#d9d9d9" clip="true" focusable="true" height="140" name="columnList" width="${this.parent.parent.pixeltext.width}">
+
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<!---
+					The handler for move selection and toggle checkbox selection
+				-->
+				<handler args="k" name="onkeydown">
+					<![CDATA[
+					if (k == 38) {
+						var cb = this.parent.parent.getPrevious();
+						EventUtil.trigger(cb.checkBoxName, "onclick");
+					}
+					else if (k == 40) {
+						var cb = this.parent.parent.getNext();
+						EventUtil.trigger(cb.checkBoxName, "onclick");
+					}
+					else if (k == 32) {
+						var cb = this.parent.parent.getSelected();
+						if (cb != null && cb.enabled) {
+							cb.setVariable("value", !cb.value);
+							this.contents.valignCheckBox(cb);
+						}
+					}
+					]]>
+				</handler>
+				<Component name="contents" x="2" y="2">
+					<AxisLayout axis="y" inset="2" name="checkBoxLayout" spacing="4"/>
+					
+					<!---
+						@keywords private
+					-->
+					<method args="currentCheckBox" name="valignCheckBox">
+						<![CDATA[
+						var checkBoxLayout = this.checkBoxLayout;
+						var clipView = currentCheckBox.parent.immediateParent;
+						var viewHeight = clipView.height - (this.parent.objectsHScrollbar.visible ? this.parent.objectsHScrollbar.height : 0);
+						var checkboxTop = currentCheckBox.getVariableRelative("y", clipView);
+						var checkboxEnd = checkboxTop + currentCheckBox.height;
+						if (checkboxTop < 0) {
+							this.parent.objectsVScrollbar.step(Math.floor(checkboxTop / this.parent.objectsVScrollbar.stepsize));
+						}
+						else if (checkboxEnd > viewHeight) {
+							this.parent.objectsVScrollbar.step(Math.ceil((checkboxEnd - viewHeight) / this.parent.objectsVScrollbar.stepsize));
+						}
+						checkBoxLayout.update();
+						]]>
+					</method>
+					
+					<!---
+						A method to clear the current selection.
+					-->
+					<method name="clearSelection">
+						<![CDATA[
+						var checkBoxes = this.parent.parent.parent.columnCheckBoxes;
+						for (var i = 0; i < checkBoxes.length; i++) {
+							var cb = checkBoxes[i];
+							if (cb.isSelected) {
+								cb.setVariable("isSelected", false);
+							}
+						}
+						]]>
+					</method>
+					<method args="value" name="updateVisibleColumns">
+						<![CDATA[
+						if (this.parent.parent.parent.columnsInitialized) {
+							if (value) {
+								this.parent.parent.parent.numColumnsVisible++;
+								if (this.parent.parent.parent.numColumnsVisible == 2) {
+									this.parent.parent.parent.enableLastColumn();
+								}
+							}
+							else {
+								this.parent.parent.parent.numColumnsVisible--;
+								if (this.parent.parent.parent.numColumnsVisible == 1) {
+									this.parent.parent.parent.disableLastColumn();
+								}
+							}
+						}
+						]]>
+					</method>
+					<Component height="2" ignoreLayout="true" name="bottomPadding" x="0" y="${this.parent.height - 2}"/>
+				</Component>
+				<HorizontalScrollbar height="18" name="objectsHScrollbar" visible="${this.scrollable}"/>
+				<Component bgcolor="#f0f0f0" height="${this.parent.objectsHScrollbar.height}" ignoreLayout="true" name="objectsVScrollbarBottom" visible="${this.parent.objectsVScrollbar.visible &amp;&amp; this.parent.objectsHScrollbar.visible}" width="${this.parent.objectsVScrollbar.width}" x="${this.parent.objectsVScrollbar.x}" y="${this.parent.objectsVScrollbar.y + this.parent.objectsVScrollbar.height}">
+				</Component>
+				<VerticalScrollbar ignoreLayout="true" name="objectsVScrollbar" stepsize="11" visible="${this.scrollable}"/>
+			</BorderedView>
+			<Component name="UpDownButtons">
+				<AxisLayout axis="y" spacing="3"/>
+				<BaseButton focusable="true" imageSet="upArrowIcon" name="up" bgcolor="#a0a2a6">
+					<!--- @keywords private -->
+					<handler name="onfocus">
+						<![CDATA[
+						if (!this.indicator) {
+							new FocusIndicator.Class(this, {
+								name: "indicator",
+								focusableView: this,
+								indicatorView: this,
+								offset: 1
+							});
+						}
+						]]>
+					</handler>
+					<handler name="onclick">
+						<![CDATA[
+						this.parent.parent.parent.moveUp();
+						]]>
+					</handler>
+					<handler name="onmousedown">
+						<![CDATA[
+						this.setVariable("currentImage", 3);
+						]]>
+					</handler>
+					<handler name="onmouseout">
+						<![CDATA[
+						this.setVariable("currentImage", 1);
+						]]>
+					</handler>
+					<handler name="onmouseover">
+						<![CDATA[
+						this.setVariable("currentImage", 2);
+						]]>
+					</handler>
+				</BaseButton>
+				<BaseButton focusable="true" imageSet="downArrowIcon" name="down" bgcolor="#a0a2a6">
+					<!--- @keywords private -->
+					<handler name="onfocus">
+						<![CDATA[
+						if (!this.indicator) {
+							new FocusIndicator.Class(this, {
+								name: "indicator",
+								focusableView: this,
+								indicatorView: this
+							});
+						}
+						]]>
+					</handler>
+					<handler name="onclick">
+						<![CDATA[
+						this.parent.parent.parent.moveDown();
+						]]>
+					</handler>
+					<handler name="onmousedown">
+						<![CDATA[
+						this.setVariable("currentImage", 3);
+						]]>
+					</handler>
+					<handler name="onmouseout">
+						<![CDATA[
+						this.setVariable("currentImage", 1);
+						]]>
+					</handler>
+					<handler name="onmouseover">
+						<![CDATA[
+						this.setVariable("currentImage", 2);
+						]]>
+					</handler>
+				</BaseButton>
+			</Component>	
+		</Component>
+		<Component height="5" name="blank"/>
+		<Component name="pixeltext">	
+			<AxisLayout axis="x" spacing="10"/>
+			<TextComponent text="${foundationResources.Singleton.gridColumnSettingsColumnWidth.string}"/>
+			<BaseStepper enabled="false" minimumValue="1" name="columnWidth" value="0" width="70">
+				<handler name="onvalue">
+					<![CDATA[
+					if (this.classroot.selectedCheckbox != null) {
+						var newWidth = parseInt(this.value);
+						if (isNaN(newWidth) || newWidth < this.classroot.selectedCheckbox.minimumColumnWidth) {
+							this.classroot.selectedCheckbox.currentColumnWidth = this.classroot.selectedCheckbox.minimumColumnWidth;
+						}
+						else if (newWidth > this.classroot.selectedCheckbox.maximumColumnWidth) {
+							this.classroot.selectedCheckbox.currentColumnWidth = this.classroot.selectedCheckbox.maximumColumnWidth;
+							;
+						}
+						else {
+							this.classroot.selectedCheckbox.currentColumnWidth = newWidth;
+						}
+					}
+					]]>
+				</handler>
+			</BaseStepper>
+		</Component>
+		
+		<Component name="buttons" placement="footer">
+			<AxisLayout axis="x" spacing="10"/>
+			<Button name="cancel" text="${foundationResources.Singleton.gridColumnSettingsCancelButton.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<Button name="ok" text="${foundationResources.Singleton.gridColumnSettingsOkButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.ok();
+					]]>
+				</handler>
+			</Button>
+		</Component>
+	</Dialog>
+
+	<!---
+		@keywords abstract
+		Base class for a grid that displays a list of objects. Each row represents an object in the list. Each column displays an attribute
+		or property of that object. This class should not be used directly for a list of cmc/foundation/ModelObject instances. Use {@link cmc/foundation/ObjectGrid}
+		for model objects.
+	-->
+	<FocusableComponent classDefinition="true" clip="true" definitionName="cmc/foundation/Grid" focusable="false" showhandcursor="false" bgcolor="#ffffff">
+		<dependency localName="GridFilterSelector" moduleName="cmc/foundation/GridFilterSelector"/>
+		<dependency localName="GridColumnSettings" moduleName="cmc/foundation/GridColumnSettings"/>
+		<dependency localName="GridFooter" moduleName="cmc/foundation/GridFooter"/>
+		<dependency localName="Panel" moduleName="cmc/foundation/Panel"/>
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="GridExtendedHelpIcon" moduleName="cmc/foundation/GridExtendedHelpIcon"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Preferences key for this grid instance. When the columns in the grid are reconfigured, the new column settings will
+			be saved in the preference manager using this key. If the key is null, then the configuration will not be saved.
+		-->
+		<variable name="preferenceKey" type="string" value="${null}"/>
+		<!---
+			This flag indicates whether the columns of the grid can be reconfigured. By default all grids are configurable.
+		-->
+		<variable name="isConfigurable" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			This flag indicates whether find and replace operates on this grid. By default, grids are not findable..
+		-->
+		<variable name="findable" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Array of cmc/foundation/GridColumn to show in the cmc/foundation/Grid.
+		-->
+		<variable name="columns" value="${[]}"/>
+		<!---
+			@keywords private
+			Array of disabled columns.
+		-->
+		<variable name="disabledColumns" value="${[]}"/>
+		<!---
+			@keywords private
+			The class used to create rows for all the objects contained in the grid.
+		-->
+		<variable name="objectClass" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			The grid content view.
+		-->
+		<variable name="content" value="${this.borderView.clippedContent.gridContent.content}"/>
+		<!---
+			@keywords private
+			The grid header view.
+		-->
+		<variable name="header" value="${this.borderView.clippedContent.gridContent.header}"/>
+		<!---
+			@keywords private
+			The grid clipped content view.
+		-->
+		<variable name="clippedContent" value="${this.borderView.clippedContent}"/>
+		<!---
+			@keywords private
+			The grid footer view.
+		-->
+		<variable name="footer" value="${this.borderView.footer}"/>
+		<!---
+			@keywords private
+			Reference to the column layout instance.
+		-->
+		<variable name="columnLayout" value="${this.borderView.clippedContent.gridContent.header.columns.columnLayout}"/>
+		<!---
+			@keywords private
+			Border color.
+		-->
+		<variable name="borderColor" type="string" value="#d9d9d9"/>
+		<!---
+			@keywords private
+			Header background color.
+		-->
+		<variable name="headerBackgroundColor" type="string" value="#ffffff"/>
+		<!---
+			@keywords private
+			Header selected color.
+		-->
+		<variable name="headerSelectedColor" type="string" value="#a3b2d5"/>
+		<!---
+			@keywords private
+			Border size of the list.
+		-->
+		<variable name="listBorderSize" type="number" value="0"/>
+		<!---
+			@keywords private
+			Show horizontal lines between cells.
+		-->
+		<variable name="showhlines" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Show vertical lines between cells.
+		-->
+		<variable name="showvlines" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Context menu class for grid rows.
+		-->
+		<variable name="rowMenuClass" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			Context menu class for the background of the grid.
+		-->
+		<variable name="menuClass" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			Grid footer class.
+		-->
+		<variable name="footerClass" type="module" value="${GridFooter}"/>
+		<!---
+			@keywords private
+			Model object list {@link cmc/foundation/ModelObjectList}. This list of Model Objects displayed in the grid.
+		-->
+		<variable name="oList" value="${null}"/>
+		<!---
+			@keywords private
+			Array of user selectable filters.  These will filter out which the oList objects are displayed in the grid.
+		-->
+		<variable name="filters" value="${[]}"/>
+		<!---
+			@keywords private
+			Default filter applied to the oList.
+		-->
+		<variable name="defaultFilter" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates that this grid will be sized to fit the existing rows.
+		-->
+		<variable name="fitExistingRows" value="false"/>
+		<!---
+			@keywords private
+			Shows the dummy column. Default value for this attribute is "true".
+		-->
+		<variable name="showDummyColumn" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Shows the prefix column. Default value for this attribute is "false".
+		-->
+		<variable name="showPrefixColumn" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Controls the display of the horizontal scroll bar.
+		-->
+		<variable name="showHorizontalScrollbar" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			The available height.
+		-->
+		<variable name="availableHeight" type="number" value="300"/>
+		<!---
+			@keywords private
+			Minimum height.
+		-->
+		<variable name="minimumHeight" type="number" value="60"/>
+		<!---
+			@keywords private
+			The grid content height.
+		-->
+		<variable name="contentHeight" type="number" value="300"/>
+		<!---
+			@keywords private
+			Available width.
+		-->
+		<variable name="availableWidth" type="number" value="${null}"/>
+		<!---
+			@keywords private
+			Minimum width.
+		-->	
+		<variable name="minimumWidth" type="number" value="0"/>
+		<!---
+			@keywords private
+			Start index for displayed rows used in scrolling and paging.
+		-->
+		<variable name="startIndex" type="number" value="0"/>
+		<!---
+			@keywords private
+			End index for displayed rows used in scrolling and paging.
+		-->
+		<variable name="endIndex" type="number" value="0"/>
+		<!---
+			@keywords private
+			Total number of rows in the grid.
+		-->
+		<variable name="numberOfItems" type="number" value="0"/>
+		<!---
+			@keywords private
+			Average row height.
+		-->
+		<variable name="averageRowHeight" type="number" value="0"/>
+		<!---
+			@keywords private
+			Parent panel that contains the grid view.
+		-->
+		<variable name="panel" value="${null}"/>
+		<!---
+			@keywords private
+			Vertical padding used in the spacing of the grid title elements.
+		-->
+		<variable name="padding" type="number" value="8"/>
+		<!---
+			@keywords private
+			Filter selector control {@link cmc/foundation/GridFilterSelector}. Combobox to control which filter is
+			applied to the grid.
+		-->
+		<variable name="filterSelector" value="${null}"/>
+		<!---
+			@keywords private
+			Filter help text to show on {@link cmc/foundation/ExtendedHelpIcon} display.
+		-->
+		<variable name="filterHelpText" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Filter extended help text to show on {@link cmc/foundation/ExtendedHelpIcon} display.
+		-->
+		<variable name="filterExtendedHelpText" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Help link text for this properties view component to show on {@link cmc/foundation/ExtendedHelpIcon} display.
+		-->
+		<variable name="filterHelpLinkText" type="string" value=""/>
+		<!---
+			@keywords private
+			Help link URL for this properties view component to show on {@link cmc/foundation/ExtendedHelpIcon} display.
+		-->
+		<variable name="filterHelpLinkURL" type="string" value=""/>
+		<!---
+			@keywords private
+			Top padding used in the spacing of the grid filter selector.
+		-->
+		<variable name="filterTopPadding" type="number" value="0"/>
+		<!---
+			@keywords private
+			Left padding used in the spacing of the grid filter selector.
+		-->
+		<variable name="filterLeftPadding" type="number" value="3"/>
+		<!---
+			@keywords private
+			The default configuration of this grid before any preference is applied.
+		-->
+		<variable name="defaultConfiguration" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			
+			The closest ancestor view that defines an "availableHeight" attribute. This
+			is used to calculate the list view's available height.
+		-->
+		<variable name="availableHeightView" value="${ViewUtil.Singleton.getAvailableHeightView(this)}"/>
+		<!---
+			@keywords private
+			
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the list view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			@keywords private
+			Indicates that this grid can have more than one selected row
+		-->
+		<variable name="multiSelect" type="boolean" value="true"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="currentObject" value="${null}"/>
+		<!---
+			@keywords private
+			The cell currently in focus.
+		-->
+		<variable name="currentCell" value="${null}"/>
+		<!---
+			@keywords private
+			An ancestor view that will be updated with the currently selected object.
+		-->
+		<variable name="selectedObjectView" value="${null}"/>
+		<!---
+			@keywords private
+			The name of the attribute of the selectedObjectView that will be updated with the currently selected object.
+		-->
+		<variable name="selectedObjectName" type="string" value="${null}"/>
+		
+		<!---
+			@keywords private
+			A flag that indicates sorting should be turned off for the grid. 
+		-->
+		<variable name="sortingOff" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that this grid supports displaying object details for the currently selected object. 
+		-->
+		<variable name="displaySelectedObjectDetails" type="boolean" value="false"/>
+		<!---
+			@keywords private
+		-->
+		
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.updateVerticalDimensionsDel = new EventHandler.Class(this, "updateVerticalDimensions");
+			if (this.availableHeightView) {
+				this.updateVerticalDimensionsDel.connect(this.availableHeightView, "onavailableHeight");
+			}
+			this.updateVerticalDimensionsDel.connect(this.borderView.horizontalScroll, "onvisible");
+			this.updateVerticalDimensionsDel.connect(this.header, "onheight");
+			this.updateVerticalDimensionsDel.connect(this.borderView.footer, "onheight");
+			this.updateVerticalDimensionsDel.connect(this.filterSelectorArea, "onheight");
+			this.updateVerticalDimensionsDel.connect(this, "onpadding");
+			this.updateVerticalDimensionsDel.connect(this.borderView.clippedContent.gridContent.content.rowparent, "onheight");
+			this.updateVerticalDimensions();
+			this.registerScrollbarDel = new EventHandler.Class(this, "registerScrollbar");
+			this.registerScrollbarDel.connect(this.borderView.rowScroll, "onvisible");
+			ViewUtil.Singleton.registerVisibilityDelegate(this, this.registerScrollbarDel);
+			this.registerScrollbar();
+			var ip = this.immediateParent;
+			while (!(ip instanceof Panel.Class) && ip != RootComponent.Singleton) {
+				ip = ip.immediateParent;
+			}
+			if (ip != RootComponent.Singleton) {
+				this.panel = ip;
+			}
+			this.oListUpdatedDel = new EventHandler.Class(this, "oListUpdated");
+			this.oListUpdatedDel.connect(this, "onoList");
+			this.oListUpdated();
+			if (this.footerClass) {
+				new this.footerClass.Class(this.borderView.footer, {
+					name: "footerView",
+					grid: this
+				});
+			}
+			this.updateHorizontalDimensionsDel = new EventHandler.Class(this, "updateHorizontalDimensions");
+			if (this.availableWidthView) {
+				this.updateHorizontalDimensionsDel.connect(this.availableWidthView, "onavailableWidth");
+			}
+			this.updateHorizontalDimensionsDel.connect(this.borderView.rowScroll, "onvisible");
+			this.updateHorizontalDimensionsDel.connect(this.borderView.clippedContent.gridContent, "onwidth");
+			this.updateHorizontalDimensionsDel.connect(this, "onminimumWidth");
+			this.updateHorizontalDimensions();
+			this.checkVisibilityDel = new EventHandler.Class(this, "checkVisibility");
+			this.checkVisibility();
+			this.defaultConfiguration = this.getConfiguration();
+			this.loadPreferences();
+			if (this.menuClass != null) {
+				new this.menuClass.Class(this, {
+					name: "menu",
+					grid: this
+				});
+				this.menu.addView(this.content.emptyArea);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when the visibility of the grid changes. When the grid is made visible, the list of filtered objects is refreshed.
+			When the grid is made invisible the currentCell of the grid is set to null.
+		-->
+		<method args="e" name="checkVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkVisibilityDel.disconnectAll();
+			var visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+			if (visibilityView != null) {
+				this.checkVisibilityDel.connect(visibilityView, "onvisible");
+				this.currentCell = null;
+			}
+			else if (!this.visible) {
+				this.checkVisibilityDel.connect(this, "onvisible");
+				this.currentCell = null;
+			}
+			else {
+				ViewUtil.Singleton.registerVisibilityDelegate(this, this.checkVisibilityDel);
+				if (this.oList != null) {
+					this.oList.refreshFilteredObjects();
+				}
+				if (this.selectedObjectView != null) {
+					this.selectedObjectView.setVariable(this.selectedObjectName, this.getSelectedObject());
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Destroy delegates.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateVerticalDimensionsDel) {
+				this.updateVerticalDimensionsDel.disconnectAll();
+				delete this.updateVerticalDimensionsDel;
+			}
+			if (this.updateHorizontalDimensionsDel) {
+				this.updateHorizontalDimensionsDel.disconnectAll();
+				delete this.updateHorizontalDimensionsDel;
+			}
+			if (this.oListUpdatedDel) {
+				this.oListUpdatedDel.disconnectAll();
+				delete this.oListUpdatedDel;
+			}
+			if (this.updateIndicesDel) {
+				this.updateIndicesDel.disconnectAll();
+				delete this.updateIndicesDel;
+			}
+			if (this.registerScrollbarDel) {
+				this.registerScrollbarDel.disconnectAll();
+				delete this.registerScrollbarDel;
+			}
+			this.checkVisibilityDel.disconnectAll();
+			delete this.checkVisibilityDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Handle onconstruct event.
+		-->
+		<handler name="onconstruct">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "FINER", "cmc/foundation/Grid", "onconstruct", "Initialize begin...");
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Handle oninit event.
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "FINER", "cmc/foundation/Grid", "oninit", "Initialize end.");
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Display the first page of rows.
+		-->
+		<method name="top">
+			<![CDATA[
+			this.setStartIndex(0);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Display the last page of rows.
+		-->
+		<method name="bottom">
+			<![CDATA[
+			this.setEndIndex(this.numberOfItems - 1);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns currently displayed rows.
+			@return cmc/foundation/GridRow
+		 -->
+		<method name="getRows">
+			<![CDATA[
+			var rows = [];
+			var views = this.content.rowparent.childComponents;
+			for (var i = 0; i < views.length; i++) {
+				var view = views[i];
+				if (view.parentOList == this.oList && view.o != null) {
+					rows.push(view);
+				}
+			}
+			return rows;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Select the specified object.
+			@param cmc/foundation/ModelObject o: the model object.
+		-->
+		<method args="o" name="selectObject">
+			<![CDATA[
+			this.oList.showObjectInView(o);
+			var rows = this.getRows();
+			for (var i = 0; i < rows.length; i++) {
+				if (rows[i].o == o) {
+					this.selectRow(rows[i]);
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Release a grid column
+			@param cmc/foundation/GridColumn column: The grid column
+		-->
+		<method args="column" name="releaseColumn">
+			<![CDATA[
+			for (var i = 0; i < this.columns.length; i++) {
+				if (this.columns[i] == column) {
+					this.columns.splice(i, 1);
+					break;
+				}
+			}
+			column.setVariable("pooled", true);
+			column.setVariable("visible", false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Adds a grid column
+			@param cmc/foundation/GridColumn column: The grid column
+			@param boolean visible: display the column
+		-->
+		<method args="column, visible" name="addColumn">
+			<![CDATA[
+			if (typeof(visible) == "undefined") visible = true;
+			this.columns.push(column);
+			column.setVariable("pooled", false);
+			if (visible) {
+				column.setVariable("visible", true);
+			}
+			else {
+				column.setVariable("visible", false);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the model object list to that specified by the filterSelector.
+		-->
+		<method args="e" name="oListUpdated">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.oList) {
+				if (this.filters.length > 0) {
+					if (this.filterSelector == null) {
+						this.filterSelector = new GridFilterSelector.Class(this.filterSelectorArea, {
+							name: "filterSelector",
+							grid: this,
+							oList: this.oList,
+							width: 150
+						});
+						if ((this.filterHelpText != null && this.filterHelpText != "") || (this.filterExtendedHelpText != null && this.filterExtendedHelpText != "")) {
+							new GridExtendedHelpIcon.Class(this.filterSelectorArea, {
+								name: "extendedHelpIcon",
+								valign: "middle",
+								grid: this
+							});
+						}
+					}
+					else {
+						this.filterSelector.setVariable("oList", this.oList);
+					}
+				}
+				if (this.updateIndicesDel) {
+					this.updateIndicesDel.disconnectAll();
+				}
+				else {
+					this.updateIndicesDel = new EventHandler.Class(this, "updateIndices");
+				}
+				this.updateIndicesDel.connect(this.oList, "objectViewsUpdated");
+				this.updateIndices();
+				this.content.rowparent.selector.setVariable("oList", this.oList);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the start and end indices for the current rows.
+		-->
+		<method args="e" name="updateIndices">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.oList && this.oList.filteredObjects) {
+				this.startIndex = this.oList.fromIndex;
+				this.endIndex = this.oList.toIndex;
+				this.numberOfItems = this.oList.filteredObjects.length;
+				this.averageRowHeight = this.oList.averageViewHeight;
+				this.content.emptyRowView.setVariable("visible", (this.numberOfItems == 0 ? true : false));
+				if (this.content.rowparent.height > this.availableHeight) {
+					if (this.oList.increment > 0) {
+						this.content.rowparent.setVariable("y", -this.oList.pivotIndexOffset);
+					}
+					else {
+						this.content.rowparent.setVariable("y", -(this.content.rowparent.height - this.availableHeight - this.oList.pivotIndexOffset));
+					}
+				}
+				else {
+					this.content.rowparent.setVariable("y", 0);
+				}
+				EventUtil.trigger(this, "onupdateIndices");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the start index for the currently displayed rows.
+			@param number startIndex: the start index.
+			@param number offset: the number of pixels that will be clipped off the top of the start index view
+		-->
+		<method args="startIndex, offset" name="setStartIndex">
+			<![CDATA[
+			if (typeof(offset) == "undefined") offset = 0;
+			this.verticalLock = true;
+			this.oList.setFromIndex(startIndex, offset);
+			this.verticalLock = false;
+			this.updateVerticalDimensions();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the end index for the currently displayed rows.
+			@param number endIndex: the end index
+			@param number offset: the number of pixels that will be clipped off the bottom of the end index view
+		-->
+		<method args="endIndex, offset" name="setEndIndex">
+			<![CDATA[
+			if (typeof(offset) == "undefined") offset = 0;
+			this.verticalLock = true;
+			this.oList.setToIndex(endIndex, offset);
+			this.verticalLock = false;
+			this.updateVerticalDimensions();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the available height of the grid.
+		-->
+		<method name="updateAvailableHeight">
+			<![CDATA[
+			if (!this.fitExistingRows) {
+				var newGridHeight = this.availableHeightView.availableHeight;
+				if (newGridHeight < this.minimumHeight) {
+					newGridHeight = this.minimumHeight;
+				}
+				if (newGridHeight != this.height) {
+					this.setVariable('height', newGridHeight);
+				}
+			}
+			var newAvailableHeight = Math.max(this.minimumHeight, this.availableHeightView.availableHeight) - this.filterSelectorArea.height - this.header.height - this.borderView.footer.height - (this.listBorderSize * 2) - (this.listBorderSize > 0 ? 0 : 1) - 1;
+			if (this.filterSelectorArea.height > 0) {
+				newAvailableHeight = newAvailableHeight - this.filterTopPadding - this.padding;
+			}
+			if (this.borderView.horizontalScroll.visible) {
+				newAvailableHeight = newAvailableHeight - this.borderView.horizontalScroll.height;
+			}
+			if (newAvailableHeight != this.availableHeight) {
+				this.setVariable("availableHeight", Math.max(newAvailableHeight, 0));
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the available width of the grid.
+		-->
+		<method name="updateAvailableWidth">
+			<![CDATA[
+			if (!this.fitExistingRows) {
+				if (this.availableWidthView.availableWidth != this.width) {
+					this.setVariable('width', this.availableWidthView.availableWidth);
+				}
+			}
+			var newAvailableWidth = this.availableWidthView.availableWidth;
+			if (this.borderView.rowScroll.visible) {
+				newAvailableWidth = newAvailableWidth - this.borderView.rowScroll.width;
+			}
+			if (newAvailableWidth != this.availableWidth) {
+				this.setVariable("availableWidth", newAvailableWidth);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the vertical dimensions of the grid.
+		-->
+		<method args="e" name="updateVerticalDimensions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.verticalLock) {
+				if (this.availableHeightView) {
+					this.updateAvailableHeight();
+				}
+				var newHeight = null;
+				if (this.fitExistingRows) {
+					newHeight = Math.max(22, Math.min(this.borderView.clippedContent.gridContent.content.rowparent.height, this.availableHeight));
+				}
+				else {
+					newHeight = this.availableHeight;
+				}
+				if (newHeight != this.contentHeight) {
+					this.setVariable("contentHeight", newHeight);
+				}
+				if (this.content.rowparent.height < this.availableHeight) {
+					this.content.rowparent.setVariable("y", 0);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the horizontal dimensions of the grid.
+		-->
+		<method args="e" name="updateHorizontalDimensions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.availableWidthView) {
+				this.updateAvailableWidth();
+			}
+			var newWidth = null;
+			if (!this.fitExistingRows && this.availableWidth != null) {
+				newWidth = this.availableWidth;
+			}
+			else {
+				newWidth = Math.max(this.borderView.clippedContent.gridContent.width, this.minimumWidth);
+			}
+			if (newWidth != this.borderView.clippedContent.width) {
+				this.borderView.clippedContent.setVariable('width', newWidth);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the column position for the specified column relative to the other columns then persist as a grid preference.
+			@param cmc/foundation/GridColumn c: the grid column
+			@param number pos: new index
+			@param boolean update: update the columns
+		-->
+		<method args="c, pos, update" name="setColumnPosition">
+			<![CDATA[
+			if (typeof(update) == "undefined") update = true;
+			var oldPos = this.columns.indexOf(c);
+			if (oldPos != pos) {
+				this.columns.splice(oldPos, 1);
+				this.columns.splice(pos, 0, c);
+				if (update) {
+					this.updateColumnOrder();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the index of the specified column.
+			@param cmc/foundation/GridColumn c: the grid column
+			@return number: column position
+		-->
+		<method args="c" name="getColumnPosition">
+			<![CDATA[
+			return this.columns.indexOf(c);
+			]]>
+		</method>		
+		
+		<!---
+			@keywords private
+			Update the columns to display in the proper order.
+		-->
+		<method name="updateColumnOrder">
+			<![CDATA[
+			var columnParent = this.header.columns;
+			columnParent.columnLayout.lock();
+			var currentLayoutView = "first";
+			for (var i = 0; i < this.columns.length; i++) {
+				var column = this.columns[i];
+				var index = columnParent.childComponents.indexOf(column);
+				if (index != i) {
+					columnParent.childComponents.swap(index, i);
+				}
+				columnParent.columnLayout.setLayoutOrder(currentLayoutView, column);
+				currentLayoutView = column;
+			}
+			var rows = this.getRows();
+			for (var i = 0; i < rows.length; i++) {
+				if (rows[i].updateCellOrder) {
+					rows[i].updateCellOrder();
+				}
+			}
+			columnParent.columnLayout.unlock();
+			columnParent.columnLayout.update();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Launch the column configure dialog for this grid.
+		-->
+		<method name="configure">
+			<![CDATA[
+			GridColumnSettings.Singleton.openWindow();
+			GridColumnSettings.Singleton.setVariable("grid", this);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Determine the placement for this grid.
+			@param cmc/foundation/Component v: indicates view
+			@param placement p: placment name
+			@param args a: The initialization args for the view
+			@return view: the placement for the view
+		-->
+		<method args="v, p, a" name="determinePlacement">
+			<![CDATA[
+			if (p == "content") {
+				return this.borderView.clippedContent.gridContent.content;
+			}
+			else if (p == "rowparent") {
+				return this.borderView.clippedContent.gridContent.content.rowparent;
+			}
+			else if (p == "columns") {
+				return this.borderView.clippedContent.gridContent.header.columns;
+			}
+			else if (p == "gridContent") {
+				return this.borderView.clippedContent.gridContent;
+			}
+			return this;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Save the column preferences for this grid.
+		-->
+		<method name="savePreferences">
+			<![CDATA[
+			if (this.preferenceKey != null) {
+				PreferenceManager.Singleton.setPreference(this.preferenceKey, this.getConfiguration());
+			}
+			]]>
+		</method>		
+
+		<!---
+			@keywords private
+			Load the column preferences for this grid.
+		-->
+		<method name="loadPreferences">
+			<![CDATA[
+			if (this.preferenceKey != null) {
+				this.applyConfiguration(PreferenceManager.Singleton.getPreference(this.preferenceKey));
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the currently selected object. This method will return null if there
+			is no selection, or if more than one object is selected.
+			@return cmc/foundation/ModelObject: the selected object
+		-->
+		<method name="getSelectedObject">
+			<![CDATA[
+			var o = null;
+			var selectedObjects = this.content.rowparent.selector.getSelectedObjects();
+			if (selectedObjects && selectedObjects.length == 1) {
+				o = selectedObjects[0];
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns an array of the current selected objects.
+			@return array: array of model objects
+		-->
+		<method name="getSelectedObjects">
+			<![CDATA[
+			return this.content.rowparent.selector.getSelectedObjects();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Select all objects displayed in the grid.
+		-->
+		<method name="selectAll">
+			<![CDATA[
+			var selector = this.content.rowparent.selector;
+			selector.clearSelection();
+			selector.setVariable("rangeSelect", true);
+			selector.selectAllObjects();
+			selector.setVariable("rangeSelect", false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Deselect all currently selected objects in the grid.
+		-->
+		<method name="deselectAll">
+			<![CDATA[
+			this.content.rowparent.selector.clearSelection();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Select the specified row.
+			@param cmc/foundation/GridRow row
+		-->
+		<method args="row" name="selectRow">
+			<![CDATA[
+			this.content.rowparent.selector.select(row);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle new selection.
+		-->
+		<handler name="onselect">
+			<![CDATA[
+			if (!this.multiSelect) {
+				this.setVariable("currentObject", this.getSelectedObject());
+			}
+			if (this.selectedObjectView != null) {
+				this.selectedObjectView.setVariable(this.selectedObjectName, this.getSelectedObject());
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Toggle the display of the details view for the specified object.
+			@param cmc/foundation/ModelObject o The model object for the row
+		-->
+		<method args="o" name="toggleDetailsView">
+			<![CDATA[
+			if (this.displaySelectedObjectDetails && this.oList != null) {
+				this.oList.setVariable("detailsViewObject", this.oList.detailsViewObject == o ? null : o);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the selection state of the specified row.
+			@param cmc/foundation/GridRow row
+			@return boolean: true if the row is selected.
+		-->
+		<method args="row" name="isSelectedRow">
+			<![CDATA[
+			return this.content.rowparent.selector.isSelected(row);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Unselect the specified row.
+			@param cmc/foundation/GridRow row
+		-->
+		<method args="row" name="unselectRow">
+			<![CDATA[
+			this.content.rowparent.selector.unselect(row);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			refresh the oList
+		-->
+		<method name="refresh">
+			<![CDATA[
+			var rows = this.getRows();
+			for (var i = 0; i < rows.length; i++) {
+				rows[i].refreshRow();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Reset the filter on each column.
+		-->		
+		<method name="resetColumnFilters">
+			<![CDATA[
+			for (var i = 0; i < this.columns.length; i++) {
+				if (this.columns[i].enableFilter && this.columns[i].columnFilter != null) {
+					this.columns[i].title.filterButton.resetFilter();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method tests if the column passed in is the only visible column in the grid. It will return
+			true if it is, and false otherwise.
+			@param cmc/foundation/GridColumn columnToCheck
+			@return boolean
+		-->		
+		<method args="columnToCheck" name="isOnlyColumnVisible">
+			<![CDATA[
+			for (var i = 0; i < this.columns.length; i++) {
+				if (this.columns[i].visible && this.columns[i] != columnToCheck) {
+					return false;
+				}
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			register the scrollbar for the grid
+		-->
+		<method args="e" name="registerScrollbar">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var panelView = PanelManager.Singleton.findPanel(this);
+			if (panelView != null) {
+				if (ViewUtil.Singleton.getInvisibleAncestor(this) == null && this.borderView.rowScroll.visible) panelView.registerScrollableDescendant(this);
+				else panelView.unregisterScrollableDescendant(this);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Show the view in clipped content of the grid.
+			@param cmc/foundation/Component showView: the view that needs to be display
+		-->
+		<method args="showView" name="show">
+			<![CDATA[
+			if (this.oList.objectDetailsView != null && ViewUtil.Singleton.containsView(this.oList.objectDetailsView, showView)) {
+				var focusedView = FocusUtil.getFocus();
+				var showFocusView = ViewUtil.Singleton.containsView(showView, focusedView);
+				var pad = 10;
+				var targetPos = showView.getVariableRelative("y", this.content.rowparent) - this.content.rowparent.y;
+				var targetSize = showView.height;
+				var clipPos = -this.content.rowparent.y;
+				var clipSize = this.availableHeight;
+				if (targetPos - pad < clipPos || targetSize + 2 * pad > clipSize) {
+					clipPos = targetPos - pad;
+				}
+				else if (targetPos + targetSize + pad > clipPos + clipSize) {
+					clipPos = targetPos + targetSize + pad - clipSize;
+				}
+				if (showFocusView) {
+					targetPos = focusedView.getVariableRelative("y", this.content.rowparent) - this.content.rowparent.y;
+					targetSize = focusedView.height;
+					if (targetPos - pad < clipPos || targetSize + 2 * pad > clipSize) {
+						clipPos = targetPos - pad;
+					}
+					else if (targetPos + targetSize + pad > clipPos + clipSize) {
+						clipPos = targetPos + targetSize + pad - clipSize;
+					}
+				}
+				if (clipPos < 0 || this.content.rowparent.height <= clipSize) {
+					clipPos = 0;
+				}
+				else if (clipPos > this.content.rowparent.height - clipSize) {
+					clipPos = this.content.rowparent.height - clipSize;
+				}
+				if (clipPos != -this.content.rowparent.y) {
+					var newStartIndex = this.startIndex;
+					var offset = clipPos;
+					var rowCount = this.oList.getViewsLength();
+					for (var i = 0; i < rowCount; i++) {
+						var row = this.oList.getView(i);
+						if (row != null) {
+							var rowHeight = this.oList.getViewHeight(row);
+							if (offset > rowHeight) {
+								newStartIndex++;
+								offset -= rowHeight;
+							}
+							else {
+								break;
+							}
+						}
+					}
+					this.setStartIndex(newStartIndex, offset);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Applies the given configuration to this grid.
+			@param gridConfig The grid configuration to be applied.
+		-->
+		<method args="gridConfig" name="applyConfiguration">
+			<![CDATA[
+			if (gridConfig != null) {
+				var gridPreferences = XMLUtil.parseXML(gridConfig);
+				var nodes = gridPreferences.childNodes;
+				var newOrderedColumns = [];
+				var newOrderedColPos = [];
+				var numOfColumns = 0;
+				for (var i = 0; i < this.columns.length; i++) {
+					var column = this.columns[i];
+					var pos = i;
+					if (column.name) {
+						var isVisible = column.required ? true : false;
+						for (var j = 0; j < nodes.length; j++) {
+							var columnElement = nodes[j];
+							var columnName = columnElement.getAttribute("name");
+							if (column.name == columnName) {
+								isVisible = true;
+								column.setVariable('width', parseInt(columnElement.getAttribute("width")));
+								pos = parseInt(columnElement.getAttribute("pos"));
+								break;
+							}
+						}
+						column.setVariable("visible", isVisible);
+					}
+					var k = 0;
+					while (k < numOfColumns && newOrderedColPos[k] < pos) {
+						k++;
+					}
+					if (k < numOfColumns) {
+						newOrderedColPos.splice(k, 0, pos);
+						newOrderedColumns.splice(k, 0, column);
+					}
+					else {
+						newOrderedColPos.push(pos);
+						newOrderedColumns.push(column);
+					}
+					numOfColumns++;
+				}
+				this.columns = newOrderedColumns;
+				this.updateColumnOrder();
+				for (var i = 0; i < this.disabledColumns.length; i++) {
+					var column = this.disabledColumns[i];
+					if (column.name) {
+						var isVisible = column.required ? true : false;
+						for (var j = 0; j < nodes.length; j++) {
+							var columnElement = nodes[j];
+							var columnName = columnElement.getAttribute("name");
+							if (column.name == columnName) {
+								isVisible = true;
+								column.setVariable('width', parseInt(columnElement.getAttribute("width")));
+								column.savedColumnPos = columnElement.getAttribute("pos");
+								break;
+							}
+						}
+						column.savedVisible = isVisible;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Gets the current configuration of this grid.
+			@return The current configuration of this grid.
+		-->
+		<method name="getConfiguration">
+			<![CDATA[
+			var gridPreferences = "<gridPreferences>";
+			for (var i = 0; i < this.columns.length; i++) {
+				var column = this.columns[i];
+				if (column.visible && column.name != null) {
+					gridPreferences += "<column name=\"" + column.name + "\" pos=\"" + i + "\" width=\"" + column.width + "\"/>";
+				}
+			}
+			for (var i = 0; i < this.disabledColumns.length; i++) {
+				var column = this.disabledColumns[i];
+				if (column.savedVisible && column.name != null) {
+					gridPreferences += "<column name=\"" + column.name + "\" pos=\"" + column.savedColumnPos + "\" width=\"" + column.width + "\"/>";
+				}
+			}
+			gridPreferences += "</gridPreferences>";
+			return gridPreferences;
+			]]>
+		</method>
+		
+		<!---
+			Set the focus to the grid header.
+			@keywords private
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			FocusUtil.setFocus(this.header.columns, false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="code" name="keyDown">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o" name="activateObject">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler will load the configuration for this grid based on preference if it exists.
+		-->
+		<handler eventSource="PreferenceManager.Singleton" name="onload">
+			<![CDATA[
+			this.loadPreferences();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This handler will reset this grid to its original configuration.
+		-->
+		<handler eventSource="PreferenceManager.Singleton" name="onreset">
+			<![CDATA[
+			this.applyConfiguration(this.defaultConfiguration);
+			]]>
+		</handler>
+		
+		<AxisLayout axis="y" spacing="0"/>
+
+		<Component bgcolor="${this.classroot.headerBackgroundColor}" height="${this.classroot.filterTopPadding}" name="filterTopPaddView" visible="${this.parent.filterSelectorArea.height &gt; 0}" width="${this.parent.borderView.width}"/>
+
+		<Component bgcolor="${this.classroot.headerBackgroundColor}" name="filterSelectorArea" width="${this.parent.borderView.width}">
+			<Component name="filterLeftPaddView" visible="${this.width &gt; 0}" width="${this.classroot.filterLeftPadding}"/>
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>
+
+		<Component bgcolor="${this.classroot.headerBackgroundColor}" height="${this.classroot.padding}" name="paddView" visible="${this.parent.filterSelectorArea.height &gt; 0}" width="${this.parent.borderView.width}"/>
+		
+		<BorderedView borderSize="${this.classroot.listBorderSize}" borderColor="#d9d9d9" name="borderView">
+			<Component clip="true" name="clippedContent" x="0">
+				<Component name="gridContent" x="0" y="0">
+					<AxisLayout axis="y"/>
+					<Component bgcolor="#c8c8c8" height="${this.classroot.listBorderSize > 0 ? 0 : 1}" width="${this.parent.header.width}"/>
+					<Component name="header" bgcolor="#efefef">
+						<AxisLayout axis="x"/>
+						<Component height="${this.parent.height}" name="prefixColumn" stretches="both" width="${this.classroot.showPrefixColumn ? 15 : 0}">
+							<method name="init">
+								<![CDATA[
+								this.inherited(arguments);
+								if (this.classroot.columns.length > 0) {
+									var column = this.classroot.columns[0];
+									if (column.columnHeaderMenuClass) {
+										new column.columnHeaderMenuClass.Class(this, {
+											name: "menu",
+											dummyColumn: true,
+											column: column
+										});
+										this.menu.addView(this);
+									}
+								}
+								]]>
+							</method>
+						</Component>
+						<Component name="columns">
+							<AxisLayout axis="x" name="columnLayout">
+								<method args="newsub" name="addComponent">
+									<![CDATA[
+									this.inherited(arguments);
+									if (!newsub.visible) {
+										this.update();
+									}
+									]]>
+								</method>
+							</AxisLayout>
+						</Component>
+						<Component height="${this.parent.height}" name="dummyColumn">
+							<method name="init">
+								<![CDATA[
+								this.inherited(arguments);
+								if (this.classroot.columns.length > 0) {
+									var column = this.classroot.columns[0];
+									if (column.columnHeaderMenuClass) {
+										new column.columnHeaderMenuClass.Class(this, {
+											name: "menu",
+											dummyColumn: true,
+											column: column
+										});
+										this.menu.addView(this);
+									}
+								}
+								this.adjustWidthDel = new EventHandler.Class(this, "adjustWidth");
+								if (this.classroot.showDummyColumn) {
+									this.adjustWidth();
+								}
+								else {
+									this.setVariable("width", 0);
+								}
+								]]>
+							</method>
+							<method name="destroy">
+								<![CDATA[
+								this.adjustWidthDel.disconnectAll();
+								delete this.adjustWidthDel;
+								this.inherited(arguments);
+								]]>
+							</method>	
+							<method args="e" name="adjustWidth">
+								<![CDATA[
+								if (typeof(e) == "undefined") e = null;
+								var newWidth = 0;
+								this.adjustWidthDel.disconnectAll();
+								if (this.classroot.fitExistingRows) {
+									newWidth = this.classroot.minimumWidth;
+									this.adjustWidthDel.connect(this.classroot, "onminimumWidth");
+									this.adjustWidthDel.connect(this.classroot, "onoList");
+									if (this.classroot.oList != null) {
+										this.adjustWidthDel.connect(this.classroot.oList, "objectViewsUpdated");
+										if (this.classroot.oList.objectDetailsView != null) {
+											this.adjustWidthDel.connect(this.classroot.oList.objectDetailsView, "onwidth");
+											newWidth = Math.max(newWidth, this.classroot.oList.objectDetailsView.width);
+										}
+									}
+								}
+								else {
+									this.adjustWidthDel.connect(this.classroot.borderView.clippedContent, "onwidth");
+									newWidth = this.classroot.borderView.clippedContent.width - 1;
+								}
+								this.adjustWidthDel.connect(this.parent.columns, "onwidth");
+								this.adjustWidthDel.connect(this.parent.prefixColumn, "onwidth");
+								var newWidth = Math.max(0, newWidth - this.parent.columns.width - this.parent.prefixColumn.width);
+								if (this.width != newWidth) {
+									this.setVariable("width", newWidth);
+								}
+								]]>
+							</method>
+						</Component>	
+					</Component>
+					<Component bgcolor="#c8c8c8" height="1" width="${this.parent.header.width}"/>
+					<FocusableComponent clip="true" doesenter="true" focusable="${!this.classroot.multiSelect}" height="${this.classroot.contentHeight}" name="content">
+						<!---
+							@keywords private
+						-->
+						<handler name="onfocus">
+							<![CDATA[
+							if (!this.parent.indicator) {
+								new FocusIndicator.Class(this.parent, {
+									name: "indicator",
+									focusableView: this,
+									indicatorView: this
+								});
+							}
+							]]>
+						</handler>
+						
+						<handler name="onmousedown">
+                                <![CDATA[
+                                if (this.parent.parent.parent.parent.menu) {
+                                    var caller = this;                             
+				                    this.parent.parent.parent.parent.menu.addView(this.emptyArea);
+                                     }
+                                ]]>
+                         </handler>
+						<!---
+							@keywords private
+							Handle key down events.
+						-->
+						<handler args="code" name="onkeydown">
+							<![CDATA[
+							this.classroot.keyDown(code);
+							]]>
+						</handler>
+						<!---
+							@keywords private
+						-->
+						<method name="doEnterDown">
+							<![CDATA[
+							if (this.classroot.currentObject) {
+								this.classroot.activateObject(this.classroot.currentObject);
+							}
+							]]>
+						</method>
+						<Component bgcolor="${this.classroot.style.emptyareacolor}" height="${this.parent.height}" name="emptyArea" width="${this.classroot.borderView.clippedContent.gridContent.header.width - 1}"/>
+						<Component bgcolor="${this.classroot.borderColor}" height="1" name="emptyRowView" width="${this.classroot.borderView.clippedContent.gridContent.header.width}" y="24"/>
+						<Component name="rowparent">
+							<AxisLayout/>
+							<ModelObjectListSelectionManager multiSelect="${this.classroot.multiSelect}" name="selector">
+								<!--- @keywords private -->
+								<variable name="rangeSelect" type="boolean" value="false"/>
+								
+								<!--- @keywords private -->
+								<method name="isRangeSelect">
+									<![CDATA[
+									var result = false;
+									if (this.multiSelect) {
+										result = this.rangeSelect ? true : this.inherited(arguments);
+									}
+									return result;
+									]]>
+								</method>
+								<!--- @keywords private -->
+								<handler name="onselectedObjects">
+									<![CDATA[
+									EventUtil.trigger(this.classroot, "onselect");
+									]]>
+								</handler>
+							</ModelObjectListSelectionManager>
+						</Component>
+					</FocusableComponent>
+				</Component>
+			</Component>
+			<GridScrollBar grid="${this.classroot}" height="${this.parent.clippedContent.height + (this.parent.horizontalScroll.visible ? 1 : 0)}" name="rowScroll" visible="false" x="${this.parent.clippedContent.width}" y="${this.parent.clippedContent.y}"/>
+			<Component bgcolor="#f0f0f0" height="${this.classroot.borderView.horizontalScroll.height - 1}" name="rowScrollBottom" visible="${this.parent.rowScroll.visible &amp;&amp; this.parent.horizontalScroll.visible}" width="${this.parent.rowScroll.width}" x="${this.parent.rowScroll.x}" y="${this.parent.rowScroll.y + this.parent.rowScroll.height}"/>			
+			<HorizontalScrollbar name="horizontalScroll" scrolltarget="${this.parent.clippedContent.gridContent}" visible="${this.classroot.showHorizontalScrollbar &amp;&amp; this.parent.clippedContent.width + 1 &lt; this.parent.clippedContent.gridContent.width}" width="${this.parent.clippedContent.width}" y="${this.parent.clippedContent.y + this.parent.clippedContent.height}"/>
+			<Component name="footer" width="${this.parent.clippedContent.width + (this.parent.rowScroll.visible ? this.parent.rowScroll.width : 0)}" x="0" y="${this.parent.clippedContent.y + this.parent.clippedContent.height + (this.parent.horizontalScroll.visible ? this.parent.horizontalScroll.height : 0)}"/>
+		</BorderedView>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		
+		Grid cell.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/GridCell" focusable="false">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="MessageViewer" moduleName="cmc/foundation/MessageViewer"/>
+		<!---
+			The grid that owns this cell.
+		-->
+		<variable name="grid"/>
+		<!---
+			The grid column for this cell.
+		-->
+		<variable name="column"/>
+		<!---
+			The grid row for this cell.
+		-->
+		<variable name="row"/>
+		<!---
+			The default placement for content added to this cell.
+		-->
+		<variable name="defaultplacement" value="content"/>
+		<!---
+			x position. This is bound to the associated column's x position.
+		-->
+		<variable name="x" value="${this.column.x + (this.grid.showPrefixColumn ? 15 : 0)}"/>
+		<!---
+			Cell visibility. This is bound to the column's visibility.
+		-->
+		<variable name="visible" value="${this.column.visible}"/>
+		<!---
+			Cell width. This is bound to the column's width.
+		-->
+		<variable name="width" value="${this.column.width}"/>
+		<!---
+			cmc/foundation/ModelProperty instance associated with this cell.
+		-->
+		<variable name="property" value="${null}"/>
+		<!---
+			cmc/foundation/ModelObject instance associated with this cell.
+		-->
+		<variable name="o" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.grid.rowMenuClass != null) {
+				new this.grid.rowMenuClass.Class(this, {
+					name: "menu",
+					row: this.row,
+					cell: this
+				});
+				this.menu.addView(this);
+			}
+			else if (this.grid.menu) {
+				this.grid.menu.addView(this);
+			}
+			this.updateObjectDel = new EventHandler.Class(this, "updateObject");
+			this.updateObject();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			ViewUtil.Singleton.releaseLayouts(this);
+			if (this.updateValidationErrorDel) {
+				this.updateValidationErrorDel.disconnectAll();
+				delete this.updateValidationErrorDel;
+			}
+			if (this.resetFilterDel) {
+				this.resetFilterDel.unregisterAll();
+				delete this.resetFilterDel;
+			}
+			if (this.updateObjectDel) {
+				this.updateObjectDel.disconnectAll();
+				delete this.updateObjectDel;
+			}
+			if (this.updateLayoutDel) {
+				this.updateLayoutDel.disconnectAll();
+				delete this.updateLayoutDel;
+			}
+			if (this.updateMessageTextDel) {
+				this.updateMessageTextDel.disconnectAll();
+				delete this.updateMessageTextDel;
+			}
+			if (this.updateEnablementDel) {
+				this.updateEnablementDel.disconnectAll();
+				delete this.updateEnablementDel;
+			}
+			if (this.updateCurrentCellDel) {
+				this.updateCurrentCellDel.disconnectAll();
+				delete this.updateCurrentCellDel;
+			}
+			if (this.updatePropertyDel) {
+				this.updatePropertyDel.disconnectAll();
+				delete this.updatePropertyDel;
+			}
+			if (this.loadChildrenDel) {
+				this.loadChildrenDel.disconnectAll();
+				delete this.loadChildrenDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onvisible">
+			<![CDATA[
+			if (!this.visible && this == this.grid.currentCell) {
+				this.grid.currentCell = null;
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Calls the layouts update delegates. Must first call to update the width, and then to update the
+			height since the change in width can affect the height.
+		-->
+		<method args="e" name="updateLayouts">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.row.o != null) {
+				if (this.viewer && this.viewer.visible) {
+					this.updateLayoutDel.connect(this.viewer, "onvisible");
+					this.updateLayoutDel.connect(this.viewer, "onwidth");
+					this.updateLayoutDel.connect(this.viewer, "onheight");
+				}
+				if (this.editor && this.editor.visible) {
+					this.updateLayoutDel.connect(this.editor, "onvisible");
+					this.updateLayoutDel.connect(this.editor, "onheight");
+				}
+				this.cellWidthLayout.update();
+				this.cellHeightLayout.update();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the new cmc/foundation/ModelProperty instance.
+			@param cmc/foundation/ModelProperty newProperty: the new property instance
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || this.property != newProperty) {
+				this.property = newProperty;
+				this.updateCurrentCellDel.disconnectAll();
+				if (this.property != null) {
+					this.updateCurrentCellDel.connect(FocusUtil, "onfocus");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Refresh the display of the validation error.
+		 -->
+		<method args="e" name="updateValidationError">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.grid.editable) {
+				this.updateValidationErrorDel.disconnectAll();
+				var validationErrors = null;
+				if (this.property) {
+					if (this.column.isEditable(this.row.o)) {
+						validationErrors = this.property.getValidationErrors();
+						this.updateValidationErrorDel.connect(this.property, "onvalidationErrors");
+					}
+					this.updateValidationErrorDel.connect(this.property, "onreadOnly");
+				}
+				else if (this.column.validatorTypes != "" && this.o) {
+					if (!this.o.readOnly) {
+						validationErrors = this.o.getValidationErrorsByValidatorTypes(StringUtil.Singleton.splitAndTrim(this.column.validatorTypes, ","));
+						this.updateValidationErrorDel.connect(this.o, "onvalidationErrors");
+					}
+					this.updateValidationErrorDel.connect(this.o, "onreadOnly");
+				}
+				if (validationErrors == null || validationErrors.length == 0) {
+					validationErrors = this.column.getValidationErrors(this, this.updateValidationErrorDel);
+				}
+				if (validationErrors != null && validationErrors.length > 0) {
+					this.updateValidationErrorDel.connect(FocusUtil, "onfocus");
+					if (ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+						var caller = this;
+						require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+							ErrorMessage.Singleton.setVariable("attachTarget", caller);
+						});
+						require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+							ErrorMessage.Singleton.show(validationErrors[0]);
+						});
+					}
+					else {
+						var caller = this;
+						require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+							ErrorMessage.Singleton.hide(caller);
+						});
+					}
+					this.border.setVariable("borderColor", this.style.errorreminderbordercolor);
+					this.border.setVariable("borderSize", this.style.errorreminderbordersize);
+				}
+				else {
+					var caller = this;
+					require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+						ErrorMessage.Singleton.hide(caller);
+					});
+					if (this.border && this.border.borderSize > 0) {
+						this.border.setVariable("borderSize", 0);
+					}
+				}
+			}
+			]]>
+		</method>
+		<!---
+			Update the current cell of the {@link cmc/foundation/Grid}. 
+		-->
+		<method args="e" name="updateCurrentCell">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				this.grid.setVariable("currentCell", this);
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle object changed event.
+		-->
+		<handler eventSource="this.row" name="objectChanged">
+			<![CDATA[
+			this.updateObject();
+			]]>
+		</handler>
+
+		
+		<!--- @keywords private -->		
+		<handler name="onconstruct">
+			<![CDATA[
+			this.updateValidationErrorDel = new EventHandler.Class(this, "updateValidationError");
+			this.updateCurrentCellDel = new EventHandler.Class(this, "updateCurrentCell");
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayouts");
+			]]>
+		</handler>
+		
+		<!---
+			Update the object associated with this cell.
+		-->
+		<method args="e" name="updateObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateObjectDel.disconnectAll();
+			this.updateObjectDel.connect(this.column, "onpooled");
+			if (this.row.o == null || this.row.o.objectDefinition == null) {
+				this.o = null;
+			}
+			else {
+				this.o = this.column.getObject(this.row.o, this.updateObjectDel);
+			}
+			if (this.row.o != null && this.column.loadChildren) {
+				this.loadChildren();
+			}
+			this.updateProperty();
+			this.updateMessageText();
+			this.updateEnablement();
+			if (this.grid.currentCell == this) {
+				this.grid.setVariable("currentCell", null);
+			}
+			]]>
+		</method>
+
+		
+		<!--- @keywords private -->		
+		<method name="loadChildren">
+			<![CDATA[
+			if (!this.loadChildrenDel) {
+				this.loadChildrenDel = new EventHandler.Class(this, "loadChildren");
+			}
+			else {
+				this.loadChildrenDel.disconnectAll();
+			}
+			if (this.row.o.objectDefinition.primary || this.row.o.objectDefinition.reference) {
+				var referencedObject = this.row.o.getReferencedObject(this.loadChildrenDel);
+				if (referencedObject != null) {
+					var loadDefs = [];
+					var cellDescriptors = this.column.getCellDescriptorMap().getCellDescriptors(this.row.o);
+					for (var i = 0; i < cellDescriptors.length; i++) {
+						if (cellDescriptors[i].objectPath) {
+							var primaryObjectTypeFound = this.row.o.objectDefinition.primary;
+							var types = cellDescriptors[i].objectPath.split("/");
+							for (var j = 0; j < types.length; j++) {
+								var type = types[j];
+								var index = type.indexOf("[");
+								if (index != -1) {
+									type = type.substring(0, index);
+								}
+								if (!primaryObjectTypeFound) {
+									if (referencedObject.objectDefinition.matchesType(type)) {
+										primaryObjectTypeFound = true;
+									}
+									else {
+										break;
+									}
+								}
+								else {
+									for (var k = 0; k < referencedObject.objectDefinition.objectDefinitions.length; k++) {
+										var childDef = referencedObject.objectDefinition.getChildDefinition(referencedObject.objectDefinition.objectDefinitions[k].objectType);
+										if (childDef.matchesType(type)) {
+											loadDefs.push(childDef);
+										}
+									}
+									break;
+								}
+							}
+						}
+					}
+					referencedObject.loadChildren(loadDefs, false, false, true);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update message text
+		-->
+		<method args="e" name="updateMessageText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.updateMessageTextDel) {
+				this.updateMessageTextDel = new EventHandler.Class(this, "updateMessageText");
+			}
+			else {
+				this.updateMessageTextDel.disconnectAll();
+			}
+			if (this.row.o == null || this.row.o.objectDefinition == null || this.o != null) {
+				if (this.messageViewer && this.messageViewer.visible) {
+					this.messageViewer.setVariable("messageText", "");
+					this.messageViewer.setVariable("visible", false);
+				}
+			}
+			else {
+				var referencedObject = this.row.o.getReferencedObject(this.updateMessageTextDel);
+				if (referencedObject != null) {
+					var messageText = null;
+					if (this.column.loadChildren && referencedObject.getChildrenServicesLoading.length > 0) {
+						messageText = "";
+						this.updateMessageTextDel.connect(referencedObject, "onGetChildrenServiceCompleted");
+						this.updateMessageTextDel.connect(referencedObject, "onGetChildrenServiceError");
+					}
+					else if (this.column.isDisabled(this.row.o)) {
+						messageText = "";
+					}
+					else if (this.column.isMultipleMatch(this.row.o, this.updateMessageTextDel)) {
+						messageText = this.column.multipleMatchText;
+						this.updateMessageTextDel.connect(this.column, "onmultipleMatchText");
+					}
+					else {
+						messageText = this.column.noMatchText;
+						this.updateMessageTextDel.connect(this.column, "onnoMatchText");
+					}
+					if (!this.messageViewer && messageText) {
+						new MessageViewer.Class(this, {
+							name: "messageViewer"
+						});
+					}
+					if (this.messageViewer) {
+						this.messageViewer.setVariable("messageText", messageText);
+						if (!this.messageViewer.visible) {
+							this.messageViewer.setVariable("visible", true);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update this cell with the new property.
+		-->
+		<method args="e" name="updateProperty">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.updatePropertyDel) {
+				this.updatePropertyDel = new EventHandler.Class(this, "updateProperty");
+			}
+			else {
+				this.updatePropertyDel.disconnectAll();
+			}
+			if (this.o == null || this.row.o.objectDefinition == null || this.column.isDisabled(this.row.o, this.updatePropertyDel)) {
+				this.setVariable("property", null);
+				if (this.editor && this.editor.visible && this.column.editable) {
+					this.column.releaseEditor(this);
+				}
+				this.column.releaseViewer(this);
+			}
+			else {
+				var propertyName = this.column.getPropertyName(this.row.o, this.updatePropertyDel);
+				if (propertyName != null) {
+					var newProperty = propertyName == "" ? null : this.o.getProperty(propertyName);
+					if (newProperty != this.property) {
+						this.setVariable("property", newProperty);
+					}
+					if (this.column.editable) {
+						this.column.createEditor(this, this.property, this.o);
+					}
+					if (this.editor && this.editor.visible) {
+						this.column.releaseViewer(this);
+					}
+					else {
+						this.column.createViewer(this, this.property, this.o);
+					}
+				}
+				else {
+					this.setVariable("property", null);
+					this.column.createViewer(this, this.property, this.o);
+					this.column.releaseEditor(this);
+				}
+			}
+			this.updateValidationError();
+			CallbackUtil.Singleton.addDeferredCallback(this.updateLayoutDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the enabled attribute based on whether the object is readonly.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateEnablementDel == undefined) {
+				this.updateEnablementDel = new EventHandler.Class(this, "updateEnablement");
+			}
+			else {
+				this.updateEnablementDel.disconnectAll();
+			}
+			if (this.editor && this.parent.visible) {
+				if (this.property != null) {
+					this.editor.setVariable("enabled", !this.property.readOnly);
+					this.updateEnablementDel.connect(this.property, "onreadOnly");
+				}
+				else if (this.o != null) {
+					this.editor.setVariable("enabled", !this.o.readOnly);
+					this.updateEnablementDel.connect(this.o, "onreadOnly");
+				}
+				else {
+					this.editor.setVariable("enabled", false);
+				}
+			}
+			else {
+				this.updateEnablementDel.connect(this.parent, "onvisible");
+			}
+			]]>
+		</method>
+		
+		<Layout name="cellWidthLayout">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				this.updateHandler.connect(this.parent, "onwidth");
+				this.updateHandler.connect(this.parent, "onx");
+				this.updateHandler.connect(this.parent.border, "onborderSize");
+				]]>
+			</method>
+			
+			<!---
+				Update the cell layout.
+			-->
+			<method args="e" name="update">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (!this.locked && this.classroot.row.o != null) {
+					this.lock();
+					var padding = this.classroot.style.gridcellpaddingsize;
+					var rightBorderWidth = this.parent.grid.showvlines ? 1 : 0;
+					var viewerWidth = this.parent.viewer ? this.parent.viewer.width : 0;
+					var viewerVisible = this.parent.viewer ? this.parent.viewer.visible : false;
+					var availableWidth = this.parent.width - (2 * padding) - rightBorderWidth;
+					if (availableWidth < 0) {
+						availableWidth = 0;
+					}
+					var contentX;
+					var contentWidth;
+					var columnAlignment = this.parent.column.getAlignment(this.classroot.row.o);
+					if (columnAlignment == "center" && viewerVisible) {
+						contentX = (this.parent.width - viewerWidth - rightBorderWidth) / 2;
+						contentWidth = viewerWidth;
+					}
+					else if (columnAlignment == "right" && viewerVisible) {
+						contentX = this.parent.width - viewerWidth - rightBorderWidth - padding;
+						contentWidth = this.parent.width - contentX - padding - rightBorderWidth;
+					}
+					else {
+						contentX = padding;
+						contentWidth = this.parent.width - contentX - padding - rightBorderWidth;
+					}
+					if (contentX < padding) {
+						contentX = padding;
+					}
+					if (contentWidth > this.parent.width - contentX - padding - rightBorderWidth) {
+						contentWidth = this.parent.width - contentX - padding - rightBorderWidth;
+						if (contentWidth < 0) {
+							contentWidth = 0;
+						}
+					}
+					if (this.parent.content.availableWidth != availableWidth) {
+						this.parent.content.setVariable("availableWidth", availableWidth);
+					}
+					if (this.parent.content.x != contentX) {
+						this.parent.content.setVariable("x", contentX);
+					}
+					if (this.parent.content.width != contentWidth) {
+						this.parent.content.setVariable("width", contentWidth);
+					}
+					var rightBorderX = this.parent.width - rightBorderWidth;
+					if (rightBorderX != this.parent.rightBorder.x) {
+						this.parent.rightBorder.setVariable('x', rightBorderX);
+					}
+					if (rightBorderWidth != this.parent.rightBorder.width) {
+						this.parent.rightBorder.setVariable('width', rightBorderWidth);
+					}
+					this.parent.rightBorder.bringToFront();
+					var cellWidth = this.parent.width - rightBorderWidth;
+					if (cellWidth != this.parent.menuView.width) {
+						this.parent.menuView.setVariable('width', cellWidth);
+					}
+					this.parent.border.render();
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+		
+		<Layout name="cellHeightLayout">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				]]>
+			</method>
+			
+			<!---
+				Update the cell layout.
+			-->
+			<method args="e" name="update">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (!this.locked && this.classroot.row.o != null) {
+					this.lock();
+					var padding = this.classroot.style.gridcellpaddingsize;
+					var contentHeight = 0;
+					if (this.parent.editor && this.parent.editor.visible) {
+						contentHeight = this.parent.editor.height;
+					}
+					else if (this.parent.viewer && this.parent.viewer.visible) {
+						contentHeight = this.parent.viewer.height;
+					}
+					if (contentHeight > this.parent.content.maximumHeight) {
+						contentHeight = this.parent.content.maximumHeight;
+					}
+					if (contentHeight < 20) {
+						contentHeight = 20;
+					}
+					var contentY = padding;
+					if (contentY != this.parent.content.y) {
+						this.parent.content.setVariable("y", contentY);
+					}
+					if (contentHeight != this.parent.content.height) {
+						this.parent.content.setVariable("height", contentHeight);
+					}
+					var cellHeight = contentHeight + (2 * padding);
+					if (this.parent.height != cellHeight) {
+						this.parent.setVariable('height', cellHeight);
+						this.parent.menuView.setVariable('height', cellHeight);
+					}
+					this.parent.border.render();
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+		
+		<DrawComponent clip="true" height="${this.parent.height}" name="border" width="${this.parent.width - this.parent.rightBorder.width}">
+			<variable name="borderSize" type="number" value="0"/>
+			<variable name="borderColor" type="string" value="#000000"/>
+			
+			<method name="render">
+				<![CDATA[
+				this.clear();
+				if (this.borderSize > 0) {
+					this.beginPath();
+					this.lineTo(this.width - this.borderSize, 0);
+					this.lineTo(this.width - this.borderSize, this.height - this.borderSize);
+					this.lineTo(0, this.height - this.borderSize);
+					this.lineTo(0, 0);
+					this.strokeStyle = this.borderColor;
+					this.lineWidth = this.borderSize;
+					this.stroke();
+				}
+				]]>
+			</method>
+		</DrawComponent>
+		<Component bgcolor="white" name="menuView" opacity="0.001"/>
+		<Component clip="true" name="content">
+			<variable name="availableWidth" type="number" value="0"/>
+			<variable name="maximumHeight" type="number" value="150"/>
+		</Component>
+		<Component bgcolor="${this.parent.grid.borderColor}" height="${this.classroot.row.height}" name="rightBorder"/>
+		<!--- @keywords private -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		Grid row.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/GridRow" doesenter="true" focusable="${this.parent.multiSelect}">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="GridCell" moduleName="cmc/foundation/GridCell"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<!---
+			By default, children of a grid row instance are added to the "content" view.
+		-->
+		<variable name="defaultplacement" value="content"/>
+		<!---
+			Place grid rows under the "rowparent" view.
+		-->
+		<variable name="placement" value="rowparent"/>
+		<!---
+			Indicates that this row is currently selected.
+		-->
+		<variable name="selected" value="false"/>
+		<!---
+			Indicates the row will accept click events.
+		-->
+		<variable name="clickable" value="true"/>
+		<!---
+			cmc/foundation/ModelObject instances associated with this row instance.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Array of cells.
+		-->
+		<variable name="cells" value="${[]}"/>
+		<!---
+			Array of released cells.
+		-->
+		<variable name="releasedCells" value="${[]}"/>
+		<!---
+			Width of the row is constrained to the grid row columns width.
+		-->
+		<variable name="width" value="${this.parent.header.width}"/>
+		<!---
+			Indicates that the mouse is over this row.
+		-->
+		<variable name="mouseIn" type="boolean" value="false"/>
+		
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.parent.rowMenuClass != null) {
+				new this.parent.rowMenuClass.Class(this, {
+					name: "menu",
+					row: this
+				});
+				this.menu.addView(this);
+			}
+			else if (this.parent.menu) {
+				this.parent.menu.addView(this);
+			}
+			this.updateBackgroundColorDel = new EventHandler.Class(this, "updateBackgroundColor");
+			this.updateBackgroundColorDel.connect(this, "onmouseIn");
+			this.updateBackgroundColorDel.connect(this, "onselected");
+			this.updateBackgroundColorDel.connect(this.parent, "onactivated");
+			this.updateBackgroundColorDel.connect(this.parentOList, "objectViewsUpdated");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			ViewUtil.Singleton.releaseLayouts(this);
+			this.updateBackgroundColorDel.disconnectAll();
+			delete this.updateBackgroundColorDel;
+			if (this.o != null && this.parent.currentObject == this.o) {
+				this.parent.setVariable("currentObject", null);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the background color.
+		-->
+		<method args="e" name="updateBackgroundColor">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newColor = this.parent.bgcolor;
+			var newFGColor = null;
+			if (this.selected) {
+				newColor = "#4178be";
+				newFGColor = "#ffffff";
+			}
+			else if (this.mouseIn) {
+				newColor = "#e6effb";
+			}
+			else if (this._objectIndex % 2) {
+				newColor = "#f9f9f9";
+			}
+			if (this.bgcolor != newColor) {
+				this.setVariable("bgcolor", newColor);
+			}
+			if (this.fgcolor != newFGColor) {
+				this.setVariable("fgcolor", newFGColor);
+			}
+			if (this.indicator) {
+				this.indicator.setVariable("focusIndicatorColor", this.selected ? "#ffffff" : "#000000");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Creates all the grid cells
+		-->
+		<method name="createGridCells">
+			<![CDATA[
+			this.verticalLayout.lock();
+			var column = this.getNextCreateColumn();
+			while (column != null) {
+				var cell = null;
+				for (var i = 0; i < this.releasedCells.length; i++) {
+					if (this.releasedCells[i].column == column) {
+						cell = this.releasedCells[i];
+						this.releasedCells.splice(i, 1);
+					}
+				}
+				if (cell == null) {
+					cell = new GridCell.Class(this, {
+						grid: this.parent,
+						row: this,
+						column: column
+					});
+				}
+				this.cells.push(cell);
+				column = this.getNextCreateColumn();
+			}
+			this.verticalLayout.unlock();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the next visible column for which no cell exists.
+		-->
+		<method name="getNextCreateColumn">
+			<![CDATA[
+			var columns = this.parent.columns;
+			var column = null;
+			for (var i = 0; i < columns.length && column == null; i++) {
+				if (columns[i].visible) {
+					column = columns[i];
+					var cells = this.cells;
+					for (var j = 0; j < cells.length; j++) {
+						if (cells[j].column == column) {
+							column = null;
+							break;
+						}
+					}
+				}
+			}
+			return column;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object instance for this row.
+			@param cmc/foundation/ModelObject newObject: the new model object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				var oldObject = this.o;
+				this.o = newObject;
+				EventUtil.trigger(this, "objectChanged", newObject);
+				if (oldObject && oldObject.objectDefinition != null) {
+					oldObject.releaseReleasableProperties();
+					var referencedObject = oldObject.getReferencedObject();
+					if (referencedObject != null && referencedObject != oldObject) {
+						referencedObject.releaseReleasableProperties();
+					}
+				}
+				if (this.o) {
+					this.createGridCells();
+					this.setSelected(this.parent.isSelectedRow(this));
+				}
+				if (FocusUtil.getFocus() == this) {
+					this.parent.setVariable("currentObject", this.o);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Refresh this row to match the visible columns.
+		-->
+		<method name="refreshRow">
+			<![CDATA[
+			var cells = this.cells;
+			var columns = this.parent.columns;
+			for (var i = 0; i < cells.length; i++) {
+				if (columns.indexOf(cells[i].column) == -1) {
+					var cell = cells[i];
+					cells.splice(i, 1);
+					i--;
+					this.releasedCells.push(cell);
+				}
+			}
+			if (this.o) {
+				this.createGridCells();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the order of the cells to match the order of the columns.
+		-->
+		<method name="updateCellOrder">
+			<![CDATA[
+			for (var i = 0; i < this.cells.length; i++) {
+				var cell = this.cells[i];
+				var subviewIndex = this.content.childComponents.indexOf(cell);
+				if (subviewIndex != i) {
+					this.content.childComponents.swap(subviewIndex, i);
+				}
+				var columnIndex = this.parent.columns.indexOf(cell.column);
+				if (columnIndex != -1) {
+					for (var j = i - 1; j >= 0 && columnIndex < this.parent.columns.indexOf(this.cells[j].column); j--) {
+						this.content.childComponents.swap(j, j + 1);
+						this.cells.swap(j, j + 1);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Select this row.
+		-->
+		<method name="select">
+			<![CDATA[
+			this.parent.selectRow(this);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the selected attribute for the row.
+		-->
+		<method args="isSelected" name="setSelected">
+			<![CDATA[
+			this.setVariable("selected", isSelected);
+			if (isSelected && this.parent.panel != null) {
+				this.parent.model.setVariable("activeSelectionView", this.parent);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Handle single click.
+		-->
+		<handler name="onclick">
+			<![CDATA[
+			this.select();
+			if (!this.parent.multiSelect) {
+				FocusUtil.setFocus(this.parent.borderView.clippedContent.gridContent.content, false);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle double click.
+		-->
+		<handler name="ondblclick">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start(this.parent + " ondblclick: " + this.o.objectDisplayName);
+			this.parent.activateObject(this.o);
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle mouse over.
+		-->
+		<handler name="onmouseover">
+			<![CDATA[
+			if (ViewUtil.Singleton.getLastMouseMove() < 100) {
+				this.setVariable("mouseIn", true);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle mouse out.
+		-->
+		<handler name="onmouseout">
+			<![CDATA[
+			this.setVariable("mouseIn", false);
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle opening a modal dialog.
+		-->
+		<handler args="m" eventSource="ModalUtil" name="onmode">
+			<![CDATA[
+			this.setVariable("mouseIn", false);
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle focus.
+		-->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				this.indicator = new FocusIndicator.Class(this.immediateParent.immediateParent, {
+					focusableView: this,
+					indicatorView: this,
+					offset: 1,
+					focusIndicatorColor: this.selected ? "#ffffff" : "#000000"
+				});
+			}
+			if (this.menu) {
+				var caller = this;
+				require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+					ContextMenuUtil.Singleton.setAsDefault(caller.menu);
+				});
+			}
+			if (this.parent.currentObject != this.o) {
+				this.parent.setVariable("currentObject", this.o);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle onblur.
+		-->
+		<handler name="onblur">
+			<![CDATA[
+			if (this.menu) {
+				var caller = this;
+				require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+					ContextMenuUtil.Singleton.resetDefault(caller.menu);
+				});
+			}
+			if (this.o != null && this.parent.currentObject == this.o) {
+				this.parent.setVariable("currentObject", null);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle key down events.
+		-->
+		<handler args="code" name="onkeydown">
+			<![CDATA[
+			this.parent.keyDown(code);
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="doEnterDown">
+			<![CDATA[
+			this.parent.activateObject(this.o);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle space down events.
+		-->
+		<method name="doSpaceDown">
+			<![CDATA[
+			this.select();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Return the next tab view.
+		-->
+		<method name="getNextSelection">
+			<![CDATA[
+			var nextView = FocusUtil.getNext(this);
+			if (!ViewUtil.Singleton.containsView(this, nextView) && (this.parent.oList.objectDetailsView == null || !ViewUtil.Singleton.containsView(this.parent.oList.objectDetailsView, nextView))) {
+				if (this._objectIndex + 1 < this.parent.oList.filteredObjects.length) {
+					var o = this.parent.oList.filteredObjects[this._objectIndex + 1];
+					this.parent.showObjectInView(o);
+					nextView = this.parent.locateRow(o);
+				}
+			}
+			return nextView;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Return the previous tab view.
+		-->
+		<method name="getPrevSelection">
+			<![CDATA[
+			var prevView = FocusUtil.getPrev(this);
+			if (!ViewUtil.Singleton.containsView(this, prevView)) {
+				if (this._objectIndex > 0) {
+					var o = this.parent.oList.filteredObjects[this._objectIndex - 1];
+					this.parent.showObjectInView(o);
+					prevView = FocusUtil.getPrev(this);
+				}
+			}
+			return prevView;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Return the cell in the given column.
+			@args cmc/foundation/GridColumn col The column whose cell to find.
+			@return cmc/foundation/GridCell The cell that is in the given row and column
+		-->
+		<method args="col" name="getCell">
+			<![CDATA[
+			var cell = null;
+			for (var i = 0; i < this.cells.length; i++) {
+				if (this.cells[i].column == col) {
+					cell = this.cells[i];
+					break;
+				}
+			}
+			return cell;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Return the object details view for this row.
+			@return cmc/foundation/GridObjectProperties the object details view
+		-->
+		<method name="getObjectDetailsView">
+			<![CDATA[
+			var objectDetailsView = null;
+			if (this.o != null) {
+				objectDetailsView = this.o.objectDefinition.getGridPropertiesView(this.parent, this.o);
+			}
+			return objectDetailsView;
+			]]>
+		</method>
+		
+		<AxisLayout name="verticalLayout"/>
+		<Component name="content">
+			<Component bgcolor="${this.parent.bgcolor}" focusable="true" imageSet="propertyDrawerResource" name="headbutton" visible="${this.classroot.parent.displaySelectedObjectDetails}" y="10" x="2">
+								
+				<!---
+					Indicates whether the object associated with the row is the current detailViewObject of parentOList.
+				-->
+				<variable name="isCurrentDetailView" type="boolean" value="false"/>
+			
+				<!---
+					@keywords private
+				-->
+				<method name="init">
+					<![CDATA[
+					this.inherited(arguments);
+					this.checkDetailViewDel = new EventHandler.Class(this, "checkDetailView");
+					this.checkDetailViewDel.connect(this.classroot.parentOList, "ondetailsViewObject");
+					this.checkDetailViewDel.connect(this.classroot, "objectChanged");
+					this.checkDetailViewDel.connect(this.classroot, "onselected");
+					]]>
+				</method>
+				
+				<!---
+					@keywords private
+					Handle onclick event.
+				-->
+				<handler name="onclick">
+					<![CDATA[
+					this.toggleDetailsView();
+					]]>
+				</handler>
+				
+				<!---
+					@keywords private
+					Handle focus event.
+				-->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+
+				<handler args="code" name="onkeydown">
+					<![CDATA[
+					if (code == 13 || code == 32) {
+						EventUtil.trigger(this, "onclick");
+					}
+					]]>
+				</handler>
+
+				<!---
+					@keywords private
+					Toggle the display of the details view for the specified object.
+				-->
+				<method name="toggleDetailsView">
+					<![CDATA[
+					this.classroot.parent.toggleDetailsView(this.classroot.o);
+					]]>
+				</method>
+				
+				<!---
+					@keywords private
+					When the Object at this row is detailsViewObject, the detail view of the Object will be open by framework.
+					Set isCurrentDetailView status by testing whether the Object is detailsViewObject and update the Head Button frame accordingly.
+				-->
+				<method args="e" name="checkDetailView">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					if (this.classroot.o == this.classroot.parentOList.detailsViewObject) {
+						this.isCurrentDetailView = true;
+						this.setVariable("currentImage", this.classroot.selected ? 4 : 2);
+					}
+					else {
+						this.isCurrentDetailView = false;
+						this.setVariable("currentImage", this.classroot.selected ? 3 : 1);
+					}
+					]]>
+				</method>
+
+				<!--- @keywords private -->
+				<method name="destroy">
+					<![CDATA[
+					this.checkDetailViewDel.disconnectAll();
+					delete this.checkDetailViewDel;
+					this.inherited(arguments);
+					]]>
+				</method>
+			</Component>
+		</Component>
+
+		<Component bgcolor="${this.classroot.parent.borderColor}" height="${this.classroot.parent.showhlines &amp;&amp; this.classroot.content.height &gt; 0 ? 1 : 0}" name="bottomBorder" width="${this.parent.width}"/>
+				
+		<DragSource dragAndDropManager="${DndManager.Singleton}" dragParent="${this.classroot.parent}" enabled="${this.classroot.parent.dragEnabled}" name="dragSource" targetKeys="${['element', 'browseElement']}">
+			<!---
+				Returns the drag source objects to be dragged. If the this row is part of the grid selection, then
+				all of the selected rows will be added as drag objects.
+			-->	
+			<method name="getDragSources">
+				<![CDATA[
+				var dragSources = null;
+				if (this.classroot.selected) {
+					dragSources = this.classroot.parent.getDragSources();
+				}
+				else {
+					dragSources = this.inherited(arguments);
+				}
+				return dragSources;
+				]]>
+			</method>
+			
+			<method args="v" name="startDrag">
+				<![CDATA[
+				if (typeof(v) == "undefined") v = null;
+				var po = this.classroot.o.getReferencedObject();
+				if (po.objectDefinition.primary && (v == null || v == this.parent || !v.focusable)) {
+					this.inherited(arguments);
+				}
+				]]>
+			</method>		
+		</DragSource>
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		
+		Standard grid footer class.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/GridFooter" width="${this.parent.width}" height="20">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<!---
+			Reference to object grid.
+		-->
+		<variable name="grid"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.updateSummaryDel = new EventHandler.Class(this, "updateSummary");
+			this.updateSummaryDel.connect(this.grid, "onupdateIndices");
+			this.updateSummaryDel.connect(this.grid, "onselect");
+			this.updateSummaryDel.connect(foundationResources.Singleton.objectgrid_visibleRowsMsg, "onstring");
+			this.updateSummary();
+			this.updatePagingControlsDel = new EventHandler.Class(this, "updatePagingControls");
+			this.updatePagingControls();
+			]]>
+		</handler>
+
+		<method name="destroy">
+			<![CDATA[
+			this.updateSummaryDel.disconnectAll();
+			delete this.updateSummaryDel;
+			this.updatePagingControlsDel.disconnectAll();
+			delete this.updatePagingControlsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<method args="e" name="updateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newSummary = "";
+			if (this.grid.numberOfItems > 0) {
+				newSummary = foundationResources.Singleton.replaceValues("objectgrid_visibleRowsMsg", [(this.grid.getSelectedObjects().length), (this.grid.numberOfItems)]);
+			}
+			else if (this.grid.numberOfItems == 0) {
+				newSummary = foundationResources.Singleton.replaceValues("objectgrid_visibleRowsMsg", [0, 0]);
+			}
+			if (newSummary != this.summary.text) {
+				this.summary.setVariable("text", newSummary);
+				this.checkMinimumWidth();
+			}
+			]]>
+		</method>
+
+		<method args="e" name="updatePagingControls">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updatePagingControlsDel.disconnectAll();
+			this.updatePagingControlsDel.connect(this.grid, "onoList");
+			var statusObject = null;
+			if (this.grid.oList) {
+				this.updatePagingControlsDel.connect(this.grid.oList, "onstatusObject");
+				statusObject = this.grid.oList.statusObject;
+			}
+			var control = this.pagingControls.previousPageArrow;
+			var controlVisible = statusObject != null && statusObject.currPageNum > 1;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			control = this.pagingControls.firstPage;
+			controlVisible = statusObject != null && statusObject.currPageNum > 1;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			control = this.pagingControls.previousEllipsis;
+			controlVisible = statusObject != null && statusObject.currPageNum > 3;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			control = this.pagingControls.previousPage;
+			controlVisible = statusObject != null && statusObject.currPageNum > 2;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			if (controlVisible) {
+				var controlText = String(statusObject.currPageNum - 1);
+				if (controlText != control.text) {
+					control.setVariable("text", controlText);
+				}
+			}
+			control = this.pagingControls.currentPage;
+			controlVisible = statusObject != null && statusObject.lastPageNum > 1;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			if (controlVisible) {
+				var controlText = String(statusObject.currPageNum);
+				if (controlText != control.text) {
+					control.setVariable("text", controlText);
+				}
+			}
+			control = this.pagingControls.nextPage;
+			controlVisible = statusObject != null && statusObject.currPageNum + 1 < statusObject.lastPageNum;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			if (controlVisible) {
+				var controlText = String(statusObject.currPageNum + 1);
+				if (controlText != control.text) {
+					control.setVariable("text", controlText);
+				}
+			}
+			control = this.pagingControls.nextEllipsis;
+			controlVisible = statusObject != null && statusObject.currPageNum + 2 < statusObject.lastPageNum;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			control = this.pagingControls.lastPage;
+			controlVisible = statusObject != null && statusObject.currPageNum < statusObject.lastPageNum;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			if (controlVisible) {
+				var controlText = String(statusObject.lastPageNum);
+				if (controlText != control.text) {
+					control.setVariable("text", controlText);
+				}
+			}
+			var control = this.pagingControls.nextPageArrow;
+			var controlVisible = statusObject != null && statusObject.lastPageNum > statusObject.currPageNum;
+			if (controlVisible != control.visible) {
+				control.setVariable("visible", controlVisible);
+			}
+			if (ViewUtil.Singleton.containsView(this.pagingControls, FocusUtil.getFocus()) && !FocusUtil.getFocus().visible) {
+				this.grid.restoreFocus();
+			}
+			this.checkMinimumWidth();
+			]]>
+		</method>
+		
+		<method name="checkMinimumWidth">
+			<![CDATA[
+			var newMinimumWidth = 9 + this.summary.width + 9 + this.pagingControls.width + 9;
+			if (this.grid.minimumWidth != newMinimumWidth) {
+				this.grid.setVariable("minimumWidth", newMinimumWidth);
+			}
+			]]>
+		</method>
+	
+		<Component name="pagingControls" x="${this.classroot.width - this.width - 9}" valign="middle">
+			<AxisLayout axis="x" spacing="2"/>
+			<FocusableBaseButton doesenter="true" imageSet="previousPageArrow" name="previousPageArrow">
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("previousPageArrow onclick");
+					this.classroot.grid.oList.doLoadPage(this.classroot.grid.oList.statusObject.currPageNum - 1);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+			</FocusableBaseButton>
+			<GridPagingControlButton doesenter="true" name="firstPage" text="1">
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("firstPage onclick");
+					this.classroot.grid.oList.doLoadPage(1);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+			</GridPagingControlButton>
+			<TextComponent fgcolor="#909090" fontsize="12" name="previousEllipsis" text="..."/>
+			<GridPagingControlButton doesenter="true" name="previousPage">
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("previousPage onclick");
+					this.classroot.grid.oList.doLoadPage(this.classroot.grid.oList.statusObject.currPageNum - 1);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+			</GridPagingControlButton>
+			<TextComponent fgcolor="#464646" fontsize="12" fontstyle="bold" name="currentPage"/>
+			<GridPagingControlButton doesenter="true" name="nextPage">
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("nextPage onclick");
+					this.classroot.grid.oList.doLoadPage(this.classroot.grid.oList.statusObject.currPageNum + 1);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+			</GridPagingControlButton>
+			<TextComponent fgcolor="#909090" fontsize="12" name="nextEllipsis" text="..."/>
+			<GridPagingControlButton doesenter="true" name="lastPage">
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("lastPage onclick");
+					this.classroot.grid.oList.doLoadPage(this.classroot.grid.oList.statusObject.lastPageNum);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+			</GridPagingControlButton>
+			<FocusableBaseButton doesenter="true" imageSet="nextPageArrow" name="nextPageArrow">
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("nextPageArrow onclick");
+					this.classroot.grid.oList.doLoadPage(this.classroot.grid.oList.statusObject.currPageNum + 1);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+			</FocusableBaseButton>
+		</Component>
+					
+		<TextComponent fgcolor="#909090" fontsize="12" name="summary" x="9" valign="middle"/>
+	</Component>
+
+	<Image name="previousPageArrow" src="/images/commerce/foundation/restricted/resources/arrow_previous.png" rtlSrc="/images/commerce/foundation/restricted/resources/arrow_next.png"/>
+	<Image name="nextPageArrow" src="/images/commerce/foundation/restricted/resources/arrow_next.png" rtlSrc="/images/commerce/foundation/restricted/resources/arrow_previous.png"/>
+
+	<!---
+		@keywords private
+		Paging control button.
+	-->
+	<FocusableBaseButton classDefinition="true" definitionName="cmc/foundation/GridPagingControlButton">
+		<TextComponent fgcolor="#909090" fontsize="12" name="title" text="${this.parent.text}"/>
+	</FocusableBaseButton>
+	
+	<!---
+		@keywords private
+		
+		Grid vertical scrollbar.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/GridScrollBar" bgcolor="#efefef">
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			Reference to the object grid.
+		-->
+		<variable name="grid"/>
+
+		<handler name="oninit">
+			<![CDATA[
+			this.updateScrollerPositionDel = new EventHandler.Class(this, "updateScrollerPosition");
+			this.updateScrollerPositionDel.connect(this.grid, "onupdateIndices");
+			this.updateScrollerPositionDel.connect(this, "onheight");
+			this.updateScrollerVisibilityDel = new EventHandler.Class(this, "updateScrollerVisibility");
+			this.registerResizers(this.classroot);
+			this.updateScrollerPosition();
+			]]>
+		</handler>
+					
+		<method args="v" name="registerResizers">
+			<![CDATA[
+			if (v.splitViewLayout) {
+				this.updateScrollerVisibilityDel.connect(v.splitViewLayout.resizer, "ondragging");
+			}
+			if (v.parent != RootComponent.Singleton) {
+				this.registerResizers(v.parent);
+			}
+			]]>
+		</method>
+				
+		
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateScrollerPositionDel) {
+				this.updateScrollerPositionDel.disconnectAll();
+				delete this.updateScrollerPositionDel;
+			}
+			if (this.updateScrollerVisibilityDel) {
+				this.updateScrollerVisibilityDel.disconnectAll();
+				delete this.updateScrollerVisibilityDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method args="dragging" name="updateScrollerVisibility">
+			<![CDATA[
+			if (dragging) {
+				this.setVariable("visible", false);
+			}
+			else {
+				this.updateScrollerPosition();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Calculates the maximum height of the scroller
+			@return Number the maximum height the scroller can possibly have for this grid
+		 -->
+		<method name="getMaxScrollerHeight">
+			<![CDATA[
+			return this.downArrow.y - this.upArrow.height;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Updates the position and the height of the scroller. The height of the updated scroller roughly represents how much
+			content is being displayed, and the position of the scroller roughly represents how much more can be displayed. The
+			scrollbar will be set visible only if there is hidden content.
+		-->
+		<method args="e" name="updateScrollerPosition">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var pageSize = this.grid.endIndex - this.grid.startIndex + 1;
+			var moreObjectsThanView = false;
+			if (this.grid.oList && this.grid.oList.filteredObjects) {
+				moreObjectsThanView = this.grid.oList.filteredObjects.length > this.grid.oList.getViewsLength();
+			}
+			this.setVariable("visible", moreObjectsThanView || this.grid.content.rowparent.height > this.grid.content.height);
+			var newDownArrowY = this.height - this.downArrow.height;
+			if (this.downArrow.y != newDownArrowY) {
+				this.downArrow.setVariable("y", newDownArrowY);
+			}
+			var estimatedGridHeight = this.grid.numberOfItems * this.grid.averageRowHeight;
+			var estimatedGridY = this.grid.startIndex * this.grid.averageRowHeight;
+			if (this.grid.oList) {
+				if (this.grid.oList.objectDetailsView != null) {
+					estimatedGridHeight += this.grid.oList.objectDetailsView.height;
+					if (this.grid.startIndex > this.grid.oList.objectDetailsView._objectIndex) {
+						estimatedGridY += this.grid.oList.objectDetailsView.height;
+					}
+				}
+			}
+			estimatedGridY -= this.grid.content.rowparent.y;
+			var scrollerHeight = this.getMaxScrollerHeight();
+			var newY = this.upArrow.height;
+			if (estimatedGridHeight > this.grid.availableHeight) {
+				scrollerHeight = Math.max((this.grid.availableHeight / estimatedGridHeight) * scrollerHeight, 10);
+				newY += ((estimatedGridY / estimatedGridHeight) * this.getMaxScrollerHeight());
+			}
+			this.scroller.setVariable("height", scrollerHeight);
+			if (newY < this.upArrow.height) {
+				newY = this.upArrow.height;
+			}
+			else if (newY + scrollerHeight > this.downArrow.y) {
+				scrollerHeight -= this.downArrow.y - newY + scrollerHeight;
+			}
+			this.scroller.setVariable("y", newY);
+			]]>
+		</method>
+		
+		<method name="upClick">
+			<![CDATA[
+			this.scrollUp();
+			]]>
+		</method>
+		
+		<method name="downClick">
+			<![CDATA[
+			this.scrollDown();
+			]]>
+		</method>
+
+		<method args="count" name="scrollUp">
+			<![CDATA[
+			if (typeof(count) == "undefined") count = 1;
+			if (count < 1) {
+				count = 1;
+			}
+			var newStartIndex = this.grid.startIndex - count;
+			if (this.grid.content.rowparent.y < 0) {
+				newStartIndex++;
+			}
+			var offset = 0;
+			if (this.grid.oList.objectDetailsView != null) {
+				newStartIndex = this.grid.startIndex;
+				if (this.grid.startIndex == this.grid.oList.objectDetailsView._objectIndex) {
+					offset = -this.grid.content.rowparent.y;
+					for (var i = 0; i < count; i++) {
+						if (offset - this.grid.averageRowHeight > 0) {
+							newStartIndex = this.grid.startIndex;
+							offset = offset - this.grid.averageRowHeight;
+						}
+						else {
+							newStartIndex -= count - i;
+							offset = 0;
+							break;
+						}
+					}
+				}
+				else {
+					if (this.grid.content.rowparent.y < 0) {
+						newStartIndex++;
+					}
+					for (var i = 0; i < count; i++) {
+						newStartIndex--;
+						if (newStartIndex == this.grid.oList.objectDetailsView._objectIndex) {
+							offset = this.grid.oList.objectDetailsView.height;
+							while (i + 1 < count && offset - this.grid.averageRowHeight > 0) {
+								offset -= this.grid.averageRowHeight;
+								i++;
+							}
+						}
+						else {
+							offset = 0;
+						}
+					}
+				}
+			}
+			this.grid.setStartIndex(newStartIndex, offset);
+			]]>
+		</method>
+
+		<method args="count" name="scrollDown">
+			<![CDATA[
+			if (typeof(count) == "undefined") count = 1;
+			if (count < 1) {
+				count = 1;
+			}
+			var newEndIndex = this.grid.endIndex + count;
+			if (this.grid.content.rowparent.y + this.grid.content.rowparent.height > this.grid.availableHeight) {
+				newEndIndex--;
+			}
+			var offset = 0;
+			if (this.grid.oList.objectDetailsView != null) {
+				newEndIndex = this.grid.endIndex;
+				if (this.grid.endIndex == this.grid.oList.objectDetailsView._objectIndex) {
+					offset = this.grid.content.rowparent.height - this.grid.availableHeight + this.grid.content.rowparent.y;
+					for (var i = 0; i < count; i++) {
+						if (offset - this.grid.averageRowHeight > 0) {
+							offset -= this.grid.averageRowHeight;
+						}
+						else {
+							newEndIndex += count - i;
+							offset = 0;
+							break;
+						}
+					}
+				}
+				else {
+					if (this.grid.content.rowparent.y + this.grid.content.rowparent.height > this.grid.availableHeight) {
+						newEndIndex--;
+					}
+					for (var i = 0; i < count; i++) {
+						newEndIndex++;
+						if (newEndIndex == this.grid.oList.objectDetailsView._objectIndex) {
+							offset = this.grid.oList.objectDetailsView.height;
+							while (i + 1 < count && offset - this.grid.averageRowHeight > 0) {
+								offset -= this.grid.averageRowHeight;
+								i++;
+							}
+						}
+						else {
+							offset = 0;
+						}
+					}
+				}
+			}
+			this.grid.setEndIndex(newEndIndex, offset);
+			]]>
+		</method>
+		
+		<handler args="k" eventSource="KeyUtil" name="onmousewheeldelta">
+			<![CDATA[
+			if (this.visible) {
+				if (ViewUtil.Singleton.isMouseOver(this.grid) && ViewUtil.Singleton.containedInModalView(this.grid)) {
+					var childrenMouseOver = false;
+					if (this.grid.panel != null) {
+						for (var i = 0; i < this.grid.panel.scrollableDescendants.length; i++) {
+							var scrollableDescendant = this.grid.panel.scrollableDescendants[i];
+							if (scrollableDescendant != this.grid && ViewUtil.Singleton.isMouseOver(scrollableDescendant) && ViewUtil.Singleton.containsView(this.grid, scrollableDescendant)) {
+								childrenMouseOver = true;
+							}
+						}
+					}
+					if (!childrenMouseOver) {
+						if (k < 0) {
+							this.scrollDown(-Math.round(k / 200 - 0.5));
+						}
+						else if (k > 0) {
+							this.scrollUp(Math.round(k / 200 + 0.5));
+						}
+					}
+				}
+			}
+			]]>
+		</handler>
+		
+		<RepeaterButton height="${this.parent.height}" imageSet="verticalScrollBack" name="scrollback" stretches="height">
+
+			<handler name="onmousestilldown">
+				<![CDATA[
+				this.pageScroll();
+				]]>
+			</handler>
+
+			<handler name="onmousedown">
+				<![CDATA[
+				this.pageScroll();
+				]]>
+			</handler>
+			
+			<!---
+				@keywords private
+				Display the previous page of rows.
+			-->
+			<method name="pageUp">
+				<![CDATA[
+				if (ViewUtil.Singleton.containedInModalView(this.classroot.grid) && this.classroot.grid.oList.filteredObjects.length > 0 && this.classroot.grid.averageRowHeight > 0) {
+					this.classroot.scrollUp(Math.floor(this.classroot.grid.availableHeight / this.classroot.grid.averageRowHeight));
+				}
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Display the next page of rows.
+			-->
+			<method name="pageDown">
+				<![CDATA[
+				if (ViewUtil.Singleton.containedInModalView(this.classroot.grid) && this.classroot.grid.oList.filteredObjects.length > 0 && this.classroot.grid.averageRowHeight > 0) {
+					this.classroot.scrollDown(Math.floor(this.classroot.grid.availableHeight / this.classroot.grid.averageRowHeight));
+				}
+				]]>
+			</method>
+			
+			<method name="pageScroll">
+				<![CDATA[
+				var mouseY = this.classroot.getMouse("y");
+				if (mouseY < this.classroot.scroller.y) {
+					this.pageUp();
+				}
+				else if (mouseY > (this.classroot.scroller.y + this.classroot.scroller.height)) {
+					this.pageDown();
+				}
+				]]>
+			</method>
+		</RepeaterButton>
+		
+		<RepeaterButton imageSet="verticalScrollUpArrow" name="upArrow" normalImage="1" overImage="2" y="0" bgcolor="#efefef">
+			<handler name="onmousestilldown">
+				<![CDATA[
+				this.classroot.upClick();
+				]]>
+			</handler>
+			<handler name="onmousedown">
+				<![CDATA[
+				this.classroot.upClick();
+				]]>
+			</handler>
+		</RepeaterButton>
+
+		<RepeaterButton imageSet="verticalScrollDownArrow" name="downArrow" normalImage="1" overImage="2" bgcolor="#efefef">
+			<handler name="onmousestilldown">
+				<![CDATA[
+				this.classroot.downClick();
+				]]>
+			</handler>
+			<handler name="onmousedown">
+				<![CDATA[
+				this.classroot.downClick();
+				]]>
+			</handler>
+		</RepeaterButton>
+		
+		<Component height="10" name="scroller" width="${this.parent.width}">
+		
+			<Component align="center" height="${this.parent.height}" imageSet="verticalScroller" name="scrollerMid" stretches="height">
+				
+				<handler name="onmousedown">
+					<![CDATA[
+					this.parent.startDragging();
+					]]>
+				</handler>	
+				
+				<handler name="onmouseup">
+					<![CDATA[
+					this.parent.stopDragging();
+					]]>
+				</handler>	
+
+				<handler name="onmouseout">
+					<![CDATA[
+					this.setVariable("currentImage", 1);
+					]]>
+				</handler>
+
+				<handler name="onmouseover">
+					<![CDATA[
+					this.setVariable("currentImage", 2);
+					]]>
+				</handler>
+			</Component>
+			
+			<method args="e" name="startDragging">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (this.classroot.grid.panel) {
+					this.classroot.grid.panel.lockAvailableCalcs();
+				}
+				this.deltaY = RootComponent.Singleton.getMouse("y") - this.getVariableRelative("y", RootComponent.Singleton);
+				this.dragging = true;
+				CursorUtil.lock();
+				this.classroot.updateScrollerPositionDel.disconnectAll();
+				this.dragger.setVariable("active", true);
+				if (!this.updateGridDel) {
+					this.updateGridDel = new EventHandler.Class(this, "updateGrid");
+				}
+				CallbackUtil.Singleton.addDeferredCallback(this.updateGridDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				]]>
+			</method>
+			
+			<method args="e" name="stopDragging">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				this.dragging = false;
+				CursorUtil.unlock();
+				this.dragger.setVariable("active", false);
+				this.classroot.updateScrollerPositionDel.connect(this.classroot.grid, "onupdateIndices");
+				this.classroot.updateScrollerPositionDel.connect(this.classroot, "onheight");
+				CallbackUtil.Singleton.cancelCallback(this.updateGridDel);
+				this.updateGrid();
+				if (this.classroot.grid.panel) {
+					this.classroot.grid.panel.unlockAvailableCalcs();
+				}
+				]]>
+			</method>
+			
+			<method args="e" name="updateGrid">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if ((this.y - this.classroot.upArrow.height) <= 0) {
+					this.classroot.grid.setStartIndex(-1);
+				}
+				else if ((this.y + this.height) >= this.classroot.downArrow.y) {
+					this.classroot.grid.setEndIndex(this.classroot.grid.numberOfItems);
+				}
+				else {
+					var totalSize = this.classroot.grid.numberOfItems;
+					var detailsViewSize = 0;
+					if (this.classroot.grid.oList != null && this.classroot.grid.oList.objectDetailsView != null && this.classroot.grid.averageRowHeight > 0) {
+						detailsViewSize = this.classroot.grid.oList.objectDetailsView.height / this.classroot.grid.averageRowHeight;
+						totalSize += detailsViewSize;
+					}
+					var estimatedIndex = (this.y - this.classroot.upArrow.height) / this.classroot.getMaxScrollerHeight() * totalSize;
+					var offset = 0;
+					if (detailsViewSize > 0) {
+						var detailsIndex = this.classroot.grid.oList.objectDetailsView._objectIndex;
+						if (estimatedIndex > detailsIndex + detailsViewSize + 1) {
+							estimatedIndex -= detailsViewSize;
+						}
+						else if (estimatedIndex > detailsIndex) {
+							offset = (estimatedIndex - detailsIndex) * this.classroot.grid.averageRowHeight;
+							estimatedIndex = detailsIndex;
+						}
+					}
+					this.classroot.grid.setStartIndex(Math.floor(estimatedIndex), offset);
+				}
+				if (this.dragging) {
+					CallbackUtil.Singleton.addDeferredCallback(this.updateGridDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				}
+				]]>
+			</method>
+ 				
+			<method args="mouseY" name="checkDrag">
+				<![CDATA[
+				if (mouseY < this.classroot.upArrow.height) {
+					return this.classroot.upArrow.height;
+				}
+				else if ((mouseY + this.height) > this.classroot.downArrow.y) {
+					return this.classroot.downArrow.y - this.height;
+				}
+				return mouseY;
+				]]>
+			</method>
+			
+			<State name="dragger">
+				<variable name="y" value="${this.checkDrag(this.parent.getMouse('y') - this.deltaY)}"/>
+			</State>
+		</Component>
+	</Component>
+	
+	<!---
+		@keywords private
+		
+		Grid filter selector.
+	-->
+	<BaseComboBox classDefinition="true" definitionName="cmc/foundation/GridFilterSelector">
+		<dependency localName="GridShowAllFilter" moduleName="cmc/foundation/GridShowAllFilter"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Reference to object grid instance.
+		-->
+		<variable name="grid"/>
+		<!---
+			Current model object list.
+		-->
+		<variable name="oList"/>
+		<!---
+			Show all filter.
+		-->
+		<variable name="showAllFilter" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/GridFilterSelector", "init");
+			}
+			this.inherited(arguments);
+			var filters = this.grid.filters;
+			this.showAllFilter = new GridShowAllFilter.Class(this);
+			this.addValue(this.showAllFilter);
+			for (var i = 0; i < filters.length; i++) {
+				this.addValue(filters[i]);
+			}
+			this.resetFilterDel = new EventHandler.Class(this, "resetFilter");
+			this.resetFilter();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/GridFilterSelector", "init");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.resetFilterDel.disconnectAll();
+			delete this.resetFilterDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Handle changes to the model object list.
+		-->
+		<handler name="onoList">
+			<![CDATA[
+			this.resetFilter();
+			]]>
+		</handler>
+
+		<!---
+			Handle selection of a new value.
+		-->
+		<handler name="onselectedValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/GridFilterSelector", "onselectedValue");
+			}
+			if (this.grid.oList) {
+				if (this.selectedValue == this.showAllFilter) {
+					this.grid.oList.setVariable("filterList", []);
+				}
+				else {
+					this.grid.oList.setVariable("filterList", [this.selectedValue]);
+				}
+				this.grid.resetColumnFilters();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/GridFilterSelector", "onselectedValue");
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Resets the filter to its default value.
+		-->
+		<method args="e" name="resetFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/GridFilterSelector", "resetFilter");
+			}
+			this.resetFilterDel.disconnectAll();
+			if (this.oList.filterList.length == 0) {
+				this.setVariable("selectedValue", this.grid.defaultFilter == null ? this.showAllFilter : this.grid.defaultFilter);
+			}
+			this.resetFilterDel.connect(this.oList, "onfilterList");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/GridFilterSelector", "resetFilter");
+			}
+			]]>
+		</method>
+	</BaseComboBox>
+	
+	<!---
+		@keywords private
+		"Show all" item in grid filter.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/GridShowAllFilter">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Display name.
+		-->
+		<variable name="displayName" value="${foundationResources.Singleton.gridFilterShowAll.string}"/>
+	</Node>
+		
+	<!---
+		@keywords abstract
+		<p>
+		The cmc/foundation/ObjectGrid class is the base class for all business object list views. cmc/foundation/ObjectGrid must not be instantiated directly.
+		Definitions that extend cmc/foundation/ObjectGrid may be declared as the "listDefinition" attribute of definitions that extend from
+		{@link cmc/foundation/ChildListViewer}, {@link cmc/foundation/ChildListEditor}, {@link cmc/foundation/PropertyChildListEditor}, {@link cmc/foundation/SearchDefinition},
+		{@link cmc/foundation/ReferenceList} and {@link cmc/foundation/PropertyReferenceList}. The framework will determine when the list view is required and instantiate the specified cmc/foundation/ObjectGrid
+		definition to display a list of business objects. The grid instance will create a row for every object in the list of business objects.
+		</p><p>
+		Grid columns are defined by declaring instances of {@link cmc/foundation/GridColumn} as children of the cmc/foundation/ObjectGrid definition.
+		Each column displays an attribute or property of that object.  A grid can also include a filter selector. Filters are defined by
+		declaring instances of {@link cmc/foundation/Filter} as children of the cmc/foundation/ObjectGrid instance. If no filters are declared, then the filter
+		selector will not be visible.
+		</p><p>
+		The following example demonstrates the declaration of a grid definition that will display a list of catalog entries columns.
+		When an instance of this grid is created, it will use the specified preference key to load the
+		grid preferences for the current user. The grid includes columns that display the object type
+		and some catalog entry properties. The grid will display a filter selector at the top that will
+		allow the user to select between the declared filters.
+		</p>
+		@START_CODE
+		    <ObjectGrid definitionName="cmc/catalog/CatalogEntrySearchGrid" preferenceKey="catCatalogEntrySearchGrid">
+		        <GridIconTypeImage name="typeIcon" propertyName="null" text="${catalogResources.productType_ColumnHeader}"
+		                visible="true" required="true" width="60" sortable="false"/>
+		        <GridText editable="true" name="partnumber" propertyName="partnumber" required="true"
+		                text="${catalogResources.productPartnumber_ColumnHeader}" visible="true" width="90"/>
+		        <GridRichText name="lDesc" objectPath="CatalogEntryDescription" propertyName="lDesc"
+		                text="${catalogResources.productLongDesc_ColumnHeader}" visible="false" width="200"/>
+		        <GridImage name="thumbnailImage" objectPath="CatalogEntryDescription" propertyName="tImage"
+		                text="${catalogResources.productThumbnail_ColumnHeader}" visible="true" sortable="false"/>
+		        <GridCheckbox trueValue="1" falseValue="0" name="xdesc_published" objectPath="CatalogEntryDescription"
+		                propertyName="xdesc_published" text="${catalogResources.productPublished_ColumnHeader}"
+		                visible="true" width="140" alignment="center"/>
+
+		        <ObjectTypeFilter displayName="${catalogResources.catalogEntryGridFilter_Products}"
+		                objectTypes="Product"/>
+		        <ObjectTypeFilter displayName="${catalogResources.catalogEntryGridFilter_SKUs}"
+		                objectTypes="SKU"/>
+		    </ObjectGrid>
+		@END_CODE
+		<p>	
+		In the example below a search definition is defined and the listDefinition attribute is set to the class cmc/catalog/CatalogEntrySearchGrid created in the
+		example above.  This will generate a list of search results for search type Kits to display inside the cmc/catalog/CatalogEntrySearchGrid.
+		@START_CODE	
+		<SearchDefinition definitionName="cmc/catalog/FindKitsSearchDefinition"
+				searchType="FindKits"
+				displayName="${catalogResources.findKitsSearchDefinition_DisplayName}"
+				isDefault="false"
+				listDefinition="cmc/catalog/CatalogEntrySearchGrid"
+				listTitle="${catalogResources.catalogGroupChildListTitle}">
+			<SearchService name="findKits" url="/cmc/FindKits">
+				<ServiceParam name="storeId"/>
+				<ServiceParam name="masterCatalogId"/>
+			</SearchService>
+		</SearchDefinition>
+		@END_CODE	
+		</p>		
+		@see cmc/foundation/GridColumn
+		@see cmc/foundation/Filter
+	-->
+	<Grid classDefinition="true" definitionName="cmc/foundation/ObjectGrid" objectClass="${GridRow}" showPrefixColumn="${this.editable}">
+		<dependency localName="ObjectPropertiesUtil" moduleName="cmc/foundation/ObjectPropertiesUtil"/>
+		<dependency localName="GridObjectDragSource" moduleName="cmc/foundation/GridObjectDragSource"/>
+		<dependency localName="GridRow" moduleName="cmc/foundation/GridRow"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="GridCell" moduleName="cmc/foundation/GridCell"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			@keywords private
+			Model instance for this view {@link cmc/foundation/ModelObject} used to change actived state.
+		-->
+		<variable name="model" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates that this grid is the active selection view. When activated is true button and shortcut key actions
+			will be applied to currently selected object within this grid view.
+		-->
+		<variable name="activated" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Array of drag sources used when objects are selected and dragged
+		-->
+		<variable name="objectDragSources" value="${null}"/>
+		<!---
+			@keywords private
+			Array of pooled drag sources that are available for re-use.
+		-->
+		<variable name="availableObjectDragSources" value="${[]}"/>
+		<!---
+			@keywords private
+			Indicates that this grid currently has registered shortcut keys.
+		-->
+		<variable name="registeredShortcutKeys" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that cells in this grid can be edited.
+		-->
+		<variable name="editable" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that drag action is enabled.
+		-->
+		<variable name="dragEnabled" type="boolean" value="true"/>
+				
+		<!--- @keywords private -->
+        <handler name="onconstruct">
+			<![CDATA[
+			this.model = ModelUtil.Singleton.findModelForView(this);
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateActivatedDel = new EventHandler.Class(this, "updateActivated");
+			this.updateActivatedDel.connect(this.model, "onactiveSelectionView");
+			this.updateLanguageColumnsDel = new EventHandler.Class(this, "updateLanguageColumns");
+			this.oView = ModelUtil.Singleton.findObjectView(this);
+			this.nextRowDel = new EventHandler.Class(this, "nextRow");
+			this.prevRowDel = new EventHandler.Class(this, "prevRow");
+			this.focusCellDel = new EventHandler.Class(this, "focusCell");
+			this.updateLanguageColumns();
+			if (this.panel == null) {
+				this.setVariable("activated", true);
+			}
+			if (!this.editable) {
+				for (var i = 0; i < this.columns.length; i++) {
+					var column = this.columns[i];
+					if (column.editable) {
+						column.setVariable("editable", false);
+					}
+				}
+			}
+			if (this.sortingOff) {
+				for (var i = 0; i < this.columns.length; i++) {
+					var column = this.columns[i];
+					if (column.sortable) {
+						column.setVariable("sortable", false);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateLanguageColumnsDel.disconnectAll();
+			delete this.updateLanguageColumnsDel;
+			this.updateActivatedDel.disconnectAll();
+			delete this.updateActivatedDel;
+			if (this.resetDragSourcesDel) {
+				this.resetDragSourcesDel.disconnectAll();
+				delete this.resetDragSourcesDel;
+			}
+			if (this.checkTabDel) {
+				this.checkTabDel.disconnectAll();
+				delete this.checkTabDel;
+			}
+			this.nextRowDel.disconnectAll();
+			delete this.nextRowDel;
+			this.prevRowDel.disconnectAll();
+			delete this.prevRowDel;
+			this.focusCellDel.disconnectAll();
+			delete this.focusCellDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="code" name="keyDown">
+			<![CDATA[
+			switch (code) {			
+				case 33:
+					this.pageUp();
+					break;
+				case 34:
+					this.pageDown();
+					break;
+				case 35:
+					this.end();
+					break;
+				case 36:
+					this.home();
+					break;
+				case 37:
+					this.left();
+					break;
+				case 38:
+					if (KeyUtil.isKeyDown("shift") && this.multiSelect) {
+						this.selectUp();
+					}
+					else {
+						this.up();
+					}
+					break;
+				case 39:
+					this.right();
+					break;
+				case 40:
+					if (KeyUtil.isKeyDown("shift") && this.multiSelect) {
+						this.selectDown();
+					}
+					else {
+						this.down();
+					}
+					break;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets this view as the active selection view and registers the shortcut keys.
+		-->
+		<method args="e" name="updateActivated">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.panel != null) {
+				this.setVariable("activated", this.model.activeSelectionView == this);
+				this.checkShortcutKeys();
+				if (this.activated && !ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+					this.restoreFocus();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check whether the selected objects has any column editable.
+		-->
+		<method args="del" name="isEditColumnEnabled">
+			<![CDATA[
+			var actionEnabled = false;
+			var selectedObjects = this.getSelectedObjects();
+			if (this.editable && selectedObjects && selectedObjects.length > 0) {
+				for (var i = 0; i < this.columns.length; i++) {
+					var column = this.columns[i];
+					if (del) {
+						del.connect(column, "onvisible");
+					}
+					if (column.visible && column.editable && column.columnEditorClass) {
+						actionEnabled = true;
+						break;
+					}
+				}
+			}
+			return actionEnabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Checks whether find is enabled. 
+		-->
+		<method args="del" name="isFindEnabled">
+			<![CDATA[
+			var actionEnabled = false;
+			if (this.findable && this.editable) {
+				for (var i = 0; i < this.columns.length; i++) {
+					var column = this.columns[i];
+					if (del) {
+						del.connect(column, "onvisible");
+					}
+					if (column.visible && column.editable && column.findable) {
+						actionEnabled = true;
+						break;
+					}
+				}
+			}
+			return actionEnabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check the short cut keys and register/unregister as necessary.
+		-->
+		<method name="checkShortcutKeys">
+			<![CDATA[
+			if (this.activated) {
+				if (!this.registeredShortcutKeys) {
+					this.nextRowDel.connect(KeyUtil, "onkeydown");
+					this.prevRowDel.connect(KeyUtil, "onkeydown");
+					this.setVariable("registeredShortcutKeys", true);
+				}
+			}
+			else {
+				if (this.registeredShortcutKeys) {
+					this.nextRowDel.disconnectAll();
+					this.prevRowDel.disconnectAll();
+					this.setVariable("registeredShortcutKeys", false);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Display the previous page of rows.
+		-->
+		<method args="e" name="pageUp">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentObject != null) {
+				this.showObjectInView(this.currentObject);
+				var relativeIndex = this.endIndex - this.oList.filteredObjects.indexOf(this.currentObject);
+				var start = this.startIndex;
+				this.setEndIndex(start - 1);
+				if (start == 0) {
+					relativeIndex = 0;
+				}
+				else {
+					relativeIndex = Math.max(this.endIndex - relativeIndex, 0);
+				}
+				var newRow = this.locateRow(this.oList.filteredObjects[relativeIndex]);
+				if (newRow == null) {
+					newRow = this.locateRow(this.oList.filteredObjects[this.startIndex]);
+				}
+				this.moveToRow(newRow);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Display the next page of rows.
+		-->
+		<method args="e" name="pageDown">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentObject != null) {
+				this.showObjectInView(this.currentObject);
+				var relativeIndex = this.oList.filteredObjects.indexOf(this.currentObject) - this.startIndex;
+				var end = this.endIndex;
+				this.setStartIndex(end + 1);
+				if (end == this.oList.filteredObjects.length - 1) {
+					relativeIndex = end;
+				}
+				else {
+					relativeIndex = Math.min(relativeIndex + this.startIndex, this.oList.filteredObjects.length - 1);
+				}
+				var newRow = this.locateRow(this.oList.filteredObjects[relativeIndex]);
+				if (newRow == null) {
+					newRow = this.locateRow(this.oList.filteredObjects[this.endIndex]);
+				}
+				this.moveToRow(newRow);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Display the end row.
+		-->
+		<method args="e" name="end">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentObject != null) {
+				var o = this.oList.filteredObjects[this.oList.filteredObjects.length - 1];
+				this.showObjectInView(o);
+				var newRow = this.locateRow(o);
+				this.moveToRow(newRow);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Display the first row.
+		-->
+		<method args="e" name="home">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentObject != null) {
+				var o = this.oList.filteredObjects[0];
+				this.showObjectInView(o);
+				var newRow = this.locateRow(o);
+				this.moveToRow(newRow);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets this view as the active selection view.
+		-->
+		<handler name="onmousedown">
+			<![CDATA[
+			if (this.panel != null) {
+				this.model.setVariable("activeSelectionView", this);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This method will call the updateLanguageColumns method inside {@link cmc/foundation/GridColumn} for each
+			column that is language sensitive.
+		-->
+		<method args="e" name="updateLanguageColumns">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateLanguageColumnsDel.disconnectAll();
+			if (this.oView) {
+				this.updateLanguageColumnsDel.connect(this.oView, "ono");
+				var o = this.oView.o;
+				if (o != null) {
+					ContextUtil.Singleton.findContextValue(o, "inputLanguageIds", this.updateLanguageColumnsDel);
+				}
+			}
+			else {
+				ContextUtil.Singleton.findContextValue(this.model.oEditor, "inputLanguageIds", this.updateLanguageColumnsDel);
+			}
+			var languageColumns = [];
+			for (var i = 0; i < this.columns.length; i++) {
+				var column = this.columns[i];
+				if (column.languageSensitive) {
+					languageColumns.push(column);
+				}
+			}
+			for (var i = 0; i < languageColumns.length; i++) {
+				languageColumns[i].updateLanguageColumns();
+			}
+			this.refresh();
+			this.updateColumnOrder();
+			]]>
+		</method>
+		
+		
+		<!---
+			@keywords private
+			Move focus to the same cell on the next row if enter was pressed.
+			@param Number kc: The keycode for the key that is down.
+		-->
+		<method args="kc" name="nextRow">
+			<![CDATA[
+			if (kc != 13 || KeyUtil.isKeyDown('shift') || KeyUtil.isKeyDown('control')) {
+				return;
+			}
+			if (this.multiSelect && this.currentObject == null && this.oList.filteredObjects.length > 0) {
+				var v = FocusUtil.getFocus();
+				if (ViewUtil.Singleton.containsView(this, v)) {
+					var cell = null;
+					var col = null;
+					var objects = this.oList.filteredObjects;
+					var objectIndex = objects.length;
+					while (v.parent != this) {
+						v = v.parent;
+						if (v instanceof GridCell.Class) {
+							if (v.editor) {
+								FocusUtil.clearFocus();
+								cell = v;
+								col = v.column;
+								objectIndex = v.row._objectIndex + 1;
+							}
+							break;
+						}
+					}
+					if (col != null) {
+						while (objectIndex < objects.length) {
+							if (col.isEditable(objects[objectIndex])) {
+								this.showObjectInView(objects[objectIndex]);
+								var row = this.locateRow(objects[objectIndex]);
+								cell = row.getCell(col);
+								break;
+							}
+							objectIndex++;
+						}
+						if (cell != null) {
+							CallbackUtil.Singleton.addDeferredCallback(this.focusCellDel, cell, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Move focus to the same cell on the previous row if enter was pressed and shift is down.
+			@param Number kc: The keycode for the key that is down.
+		-->
+		<method args="kc" name="prevRow">
+			<![CDATA[
+			if (kc != 13 || !KeyUtil.isKeyDown('shift')) {
+				return;
+			}
+			if (this.multiSelect && this.currentObject == null && this.oList.filteredObjects.length > 0) {
+				var v = FocusUtil.getFocus();
+				if (ViewUtil.Singleton.containsView(this, v)) {
+					var cell = null;
+					var col = null;
+					var objects = this.oList.filteredObjects;
+					var objectIndex = -1;
+					while (v.parent != this) {
+						v = v.parent;
+						if (v instanceof GridCell.Class) {
+							if (v.editor) {
+								FocusUtil.clearFocus();
+								cell = v;
+								col = v.column;
+								objectIndex = v.row._objectIndex - 1;
+							}
+							break;
+						}
+					}
+					if (col != null) {
+						while (objectIndex >= 0) {
+							if (col.isEditable(objects[objectIndex])) {
+								this.showObjectInView(objects[objectIndex]);
+								var row = this.locateRow(objects[objectIndex]);
+								cell = row.getCell(col);
+								break;
+							}
+							objectIndex--;
+						}
+						if (cell != null) {
+							CallbackUtil.Singleton.addDeferredCallback(this.focusCellDel, cell, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set focus on the specified cell.
+		-->
+		<method args="cell" name="focusCell">
+			<![CDATA[
+			if (cell.editor) {
+				FocusUtil.setFocus(cell.editor, false);
+			}
+			else {
+				FocusUtil.setFocus(cell.row, false);
+			}
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			Check if paste is enabled for this grid. This method delegates the check to the grid's parent.
+			@return boolean: true if the "paste" action is allowed
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			return this.parent.isPasteEnabled ? this.parent.isPasteEnabled() : false;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Perform paste for this grid. This method delegates the paste action to the grid's parent.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			if (this.parent.doPaste) {
+				this.parent.doPaste();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if delete is enabled for this grid. This method delegates the check to the grid's parent.
+		-->
+		<method name="isDeleteEnabled">
+			<![CDATA[
+			return this.parent.isDeleteEnabled ? this.parent.isDeleteEnabled() : false;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Perform delete for this grid. This method delegates the delete action to the grid's parent.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			if (this.parent.doDelete) {
+				this.parent.doDelete();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if sequence up is enabled for this grid. This method delegates the check to the grid's parent.
+		-->
+		<method name="isSequenceUpEnabled">
+			<![CDATA[
+			return this.parent.isSequenceUpEnabled ? this.parent.isSequenceUpEnabled() : false;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Perform sequence up for this grid. This method delegates the sequence up action to the grid's parent.
+		-->
+		<method name="doSequenceUp">
+			<![CDATA[
+			if (this.parent.doSequenceUp) {
+				this.parent.doSequenceUp();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if sequence down is enabled for this grid. This method delegates the check to the grid's parent.
+		-->
+		<method name="isSequenceDownEnabled">
+			<![CDATA[
+			return this.parent.isSequenceDownEnabled ? this.parent.isSequenceDownEnabled() : false;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Perform sequence down for this grid. This method delegates the sequence down action to the grid's parent.
+		-->
+		<method name="doSequenceDown">
+			<![CDATA[
+			if (this.parent.doSequenceDown) {
+				this.parent.doSequenceDown();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the custom services available for this grid. This method delegates to the grid's parent to
+			get the list of custom services.
+			@return array: Array of cmc/foundation/CustomService instances.
+		-->
+		<method name="getCustomServices">
+			<![CDATA[
+			var customServices;
+			if (this.parent.getCustomServices) {
+				customServices = this.parent.getCustomServices();
+			}
+			else {
+				customServices = [];
+			}
+			return customServices;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the client actions available for this grid. This method delegates to the grid's parent to
+			get the list of client actions.
+			@return array: Array of cmc/foundation/ClientAction instances.
+		-->
+		<method name="getClientActions">
+			<![CDATA[
+			var clientActions;
+			if (this.parent.getClientActions) {
+				clientActions = this.parent.getClientActions();
+			}
+			else {
+				clientActions = [];
+			}
+			return clientActions;
+			]]>
+		</method>
+		
+		
+		<!---
+			@keywords private
+			Show an object in the properties view pane.	This is for paging and scrolling, as the business user
+			navigates through a large list of grid rows, not all objects can be displayed at once.  This method
+			manages the visibility of the object.		
+			@param cmc/foundation/ModelObject o: object to display in properties view.
+			@param boolean setFocus: if true, set the focus of object o in it's own properties view.
+				Else, set the focus in the first visible cell for o.
+		-->		
+		<method args="o, setFocus" name="showObjectInView">
+			<![CDATA[
+			if (typeof(setFocus) == "undefined") setFocus = false;
+			this.oList.showObjectInView(o);
+			if (setFocus) {
+				if (o.objectDefinition.openGroupTop && o.objectDefinition.propertiesClass_moduleName != null) {
+					o.model.oEditor.selectOpenObject(o);
+				}
+				else {
+					this.selectObject(o);
+					if (this.displaySelectedObjectDetails && this.oList != null) {
+						this.oList.setVariable("detailsViewObject", o);
+					}
+					var row = this.locateRow(o);
+					var cells = row.cells;
+					for (var i = 0; i < cells.length; ++i) {
+						var cell = cells[i];
+						if (cell.editor && cell.editor.visible) {
+							FocusUtil.setFocus(cell.editor, false);
+							break;
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Locate the row that represents the given object. Returns null if no such row is found.
+			@param cmc/foundation/ModelObject o: the model object
+			@return cmc/foundation/GridRow: the row for this object
+		-->
+		<method args="o" name="locateRow">
+			<![CDATA[
+			var rows = this.getRows();
+			for (var i = 0; i < rows.length; i++) {
+				if (rows[i].o == o) {
+					return rows[i];
+				}
+			}
+			return null;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			Returns the left most visible column.
+			@return cmc/foundation/GridColumn: left most visible column.		
+		-->
+		<method name="getFirstVisibleColumn">
+			<![CDATA[
+			var columns = this.columns;
+			for (var i = 0; i < columns.length; ++i) {
+				if (columns[i].visible) {
+					return columns[i];
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Returns the right most visible column
+			@return cmc/foundation/GridColumn: right most visible column.			
+		-->
+		<method name="getLastVisibleColumn">
+			<![CDATA[
+			var columns = this.columns;
+			for (var i = columns.length - 1; i >= 0; --i) {
+				if (columns[i].visible) {
+					return columns[i];
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Move to the specified row 
+		-->
+		<method args="row" name="moveToRow">
+			<![CDATA[
+			if (this.multiSelect) {
+				FocusUtil.setFocus(row, false);
+			}
+			else {
+				row.select();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Move the focus up one row
+		-->
+		<method name="up">
+			<![CDATA[
+			if (this.currentObject != null) {
+				var o = this.currentObject;
+				var oIndex = this.oList.filteredObjects.indexOf(o);
+				if (oIndex > 0) {
+					o = this.oList.filteredObjects[oIndex - 1];
+					this.showObjectInView(o);
+					var newRow = this.locateRow(o);
+					this.moveToRow(newRow);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			Move the focus down one row
+		-->
+		<method name="down">
+			<![CDATA[
+			if (this.currentObject != null) {
+				var o = this.currentObject;
+				var oIndex = this.oList.filteredObjects.indexOf(o);
+				if (oIndex + 1 < this.oList.filteredObjects.length) {
+					o = this.oList.filteredObjects[oIndex + 1];
+					this.showObjectInView(o);
+					var newRow = this.locateRow(o);
+					this.moveToRow(newRow);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Move to the next focused cell left
+			@return cmc/foundation/GridCell: the focused cell left
+		-->
+		<method name="left">
+			<![CDATA[
+			this.borderView.horizontalScroll.setPosRelative(-Math.floor(this.borderView.clippedContent.width / 2));
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Move to the next focused cell right
+			@return cmc/foundation/GridCell: the focused cell right
+		-->
+		<method name="right">
+			<![CDATA[
+			this.borderView.horizontalScroll.setPosRelative(Math.floor(this.borderView.clippedContent.width / 2));
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			Select a the next row above while keeping current selections
+		-->
+		<method name="selectUp">
+			<![CDATA[
+			if (this.currentObject != null) {
+				var selector = this.content.rowparent.selector;
+				selector.setVariable("rangeSelect", true);
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				this.up();
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				selector.setVariable("rangeSelect", false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Select a the next row below while keeping current selections
+		-->
+		<method name="selectDown">
+			<![CDATA[
+			if (this.currentObject != null) {
+				var selector = this.content.rowparent.selector;
+				selector.setVariable("rangeSelect", true);
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				this.down();
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				selector.setVariable("rangeSelect", false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Reset the array of drag sources.
+		-->
+		<method args="e" name="resetDragSources">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.resetDragSourcesDel.disconnectAll();
+			if (this.objectDragSources != null) {
+				while (this.objectDragSources.length > 0) {
+					var dragSource = this.objectDragSources.shift();
+					if (dragSource.dragObject == null) {
+						dragSource.o = null;
+						this.availableObjectDragSources.push(dragSource);
+					}
+				}
+				this.objectDragSources = null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Returns array of draggable sources.
+			@return array: draggable sources.
+		-->
+		<method name="getDragSources">
+			<![CDATA[
+			if (this.objectDragSources == null) {
+				var selector = this.content.rowparent.selector;
+				this.objectDragSources = [];
+				var objects = selector.getSelectedObjects();
+				var hasViewDragSource = false;
+				for (var i = 0; i < objects.length; i++) {
+					var dragSource = null;
+					var objectView = selector.getObjectView(objects[i]);
+					if (objectView != null) {
+						dragSource = objectView.dragSource;
+						hasViewDragSource = true;
+					}
+					if (dragSource == null) {
+						if (this.availableObjectDragSources.length > 0) {
+							dragSource = this.availableObjectDragSources.shift();
+						}
+						else {
+							dragSource = new GridObjectDragSource.Class(this, {
+								dragParent: this
+							});
+						}
+						dragSource.o = objects[i];
+					}
+					this.objectDragSources.push(dragSource);
+				}
+				if (this.resetDragSourcesDel) {
+					this.resetDragSourcesDel.disconnectAll();
+				}
+				else {
+					this.resetDragSourcesDel = new EventHandler.Class(this, "resetDragSources");
+				}
+				this.resetDragSourcesDel.connect(selector, "onselectedObjects");
+				if (hasViewDragSource) {
+					this.resetDragSourcesDel.connect(this.oList, "objectViewsUpdated");
+				}
+			}
+			return this.objectDragSources;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the error message from the first visible cell that contains an error
+			@param cmc/foundation/EventHandler del This method will register the specified delegate to be called if the returned error changes.
+			
+			@return string The error message
+		-->
+		<method args="del" name="getFirstError">
+			<![CDATA[
+			if (this.editable) {
+				if (!this.oList) {
+					if (del) {
+						del.connect(this, "onoList");
+					}
+				}
+				else {
+					var rowIndex = 0;
+					var row = this.oList.getView(0);
+					var columns = this.columns;
+					if (del) {
+						del.connect(this.oList, "objectViewsUpdated");
+					}
+					while (row) {
+						for (var i = 0; i < row.cells.length; i++) {
+							var cell = row.cells[i];
+							var column = cell.column;
+							if (del) {
+								del.connect(column, "onvisible");
+							}
+							if (column.visible) {
+								if (cell.property && cell.column.isEditable(cell.row.o)) {
+									if (del) {
+										del.connect(cell.property, "onvalidationErrors");
+									}
+									var validationErrors = cell.property.getValidationErrors();
+									if (validationErrors != null && validationErrors.length > 0) {
+										return validationErrors[0];
+									}
+								}
+							}
+						}
+						rowIndex++;
+						row = this.oList.getView(rowIndex);
+					}
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handles ondblclick action from the row.  This method will open the objects property view.
+			@param modelObject o: The object to activate.
+		-->
+		<method args="o" name="activateObject">
+			<![CDATA[
+			o.doOpen();
+			]]>
+		</method>
+		
+		<!---
+			Handle focus change.
+		-->
+		<handler eventSource="FocusUtil" name="onfocus">
+			<![CDATA[
+			if (this.checkTabDel) {
+				this.checkTabDel.disconnectAll();
+			}
+			else {
+				this.checkTabDel = new EventHandler.Class(this, "checkTab");
+			}
+			var v = FocusUtil.getFocus();
+			if (ViewUtil.Singleton.containsView(this, v)) {
+				if (v instanceof GridRow.Class && v.parent == this) {
+					if (KeyUtil.isKeyDown("tab")) {
+						this.selectRow(v);
+						this.showObjectInView(v.o);
+					}
+				}
+				else {
+					while (v.parent != this) {
+						v = v.parent;
+						if (v instanceof GridCell.Class) {
+							if (v.row.parent == this) {
+								this.selectRow(v.row);
+								this.showObjectInView(v.row.o);
+								v.column.show();
+							}
+							this.checkTabDel.connect(FocusUtil.getFocus(), "onkeydown");
+							break;
+						}
+					}
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="key" name="checkTab">
+			<![CDATA[
+			if (key == KeyUtil.keyCodes.tab && !KeyUtil.isKeyDown("shift")) {
+				var v = FocusUtil.getFocus();
+				var nextView = FocusUtil.getNext(v);
+				while (v.parent != this) {
+					v = v.parent;
+					if (v.parent == this && (v instanceof GridRow.Class || v == this.oList.objectDetailsView)) {
+						if (!ViewUtil.Singleton.containsView(v, nextView)) {
+							if (v._objectIndex + 1 < this.oList.filteredObjects.length) {
+								var o = this.oList.filteredObjects[v._objectIndex + 1];
+								this.showObjectInView(o);
+							}
+						}
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the focus to the editor that matches the specified error object and error property or the specified error object
+			and validator type.
+			@param cmc/foundation/ModelObject rowObject the row object that contains the error
+			@param cmc/foundation/ModelObject errorObject the model object that has an error
+			@param cmc/foundation/ModelProperty errorProperty the model property that has an error
+			@param string validatorType the validator type of the validator that reported the error
+			@return boolean true if the focus was set to the specified error
+		-->
+		<method args="rowObject, errorObject, errorProperty, validatorType" name="setFocusToError">
+			<![CDATA[
+			var errorFound = false;
+			this.oList.showObjectInView(rowObject);
+			this.selectObject(rowObject);
+			if (this.displaySelectedObjectDetails) {
+				this.oList.setVariable("detailsViewObject", rowObject);
+			}
+			if (this.editable) {
+				var row = this.locateRow(rowObject);
+				if (row != null) {
+					var cells = row.cells;
+					for (var i = 0; i < cells.length; ++i) {
+						var cell = cells[i];
+						if (cell.property) {
+							if (cell.property == errorProperty && cell.column.isEditable(rowObject)) {
+								ObjectPropertiesUtil.Singleton.setDeferredFocus(cell);
+								errorFound = true;
+								break;
+							}
+						}
+						else if (cell.column.validatorTypes != "" && cell.o && !cell.o.readOnly) {
+							if (cell.o == errorObject) {
+								var validatorTypes = StringUtil.Singleton.splitAndTrim(cell.column.validatorTypes, ",");
+								if (validatorTypes.indexOf(validatorType) != -1) {
+									ObjectPropertiesUtil.Singleton.setDeferredFocus(cell);
+									errorFound = true;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+			if (!errorFound && this.oList.objectDetailsView != null) {
+				errorFound = this.oList.objectDetailsView.setFocusToError(errorObject, errorProperty, validatorType);
+			}
+			return errorFound;
+			]]>
+		</method>
+	</Grid>
+	
+	<!--- @keywords private -->
+	<BaseDragSource classDefinition="true" definitionName="cmc/foundation/GridObjectDragSource">
+		<variable name="o" value="${null}"/>
+		
+		<!---
+			@keywords private
+		-->	
+		<method args="dragger" name="getDragableView">
+			<![CDATA[
+			return null;
+			]]>
+		</method>
+	</BaseDragSource>	
+	
+	<!---
+		@keywords private
+		
+		Message viewer class for internal use by the grid column to display messages.
+	-->
+	<TextComponent classDefinition="true" definitionName="cmc/foundation/MessageViewer" multiline="true" resize="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- A string for the message text -->
+		<variable name="messageText" type="string" value=""/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.updateFGColorDel = new EventHandler.Class(this, "updateFGColor");
+			this.updateFGColorDel.connect(this.parent.row, "onselected");
+			this.updateFGColorDel.connect(this.parent, "onfocused");
+			this.updateFGColor();
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateFGColorDel.disconnectAll();
+			delete this.updateFGColorDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Update the foreground color.
+		-->
+		<method args="e" name="updateFGColor">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var c = this.parent.style.textcolor;
+			if (this.parent.focused) {
+				c = this.parent.style.texthilitecolor;
+			}
+			else if (this.parent.row.selected) {
+				c = this.parent.style.textselectedcolor;
+			}
+			this.setVariable("fgcolor", c);
+			]]>
+		</method>
+		
+		<!---
+			Sets the text of this viewer to the message text
+			@param string newMessageText: new message text associated with this text box
+		-->
+		<method args="newMesssageText" name="setMessageText">
+			<![CDATA[
+			if (this.messageText != newMesssageText) {
+				this.messageText = newMesssageText;
+				this.setVariable("text", this.messageText);
+			}
+			]]>
+		</method>
+		
+		<Layout name="viewerLayout">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				this.updateHandler.connect(this.parent.immediateParent, "onavailableWidth");
+				this.updateHandler.connect(this.parent, "ontext");
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Update the cell layout.
+			-->
+			<method args="e" name="update">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (!this.locked) {
+					this.lock();
+					var newWidth = this.parent.getTextWidth() + 1;
+					var availableWidth = this.parent.immediateParent.availableWidth;
+					if (availableWidth < 75) {
+						availableWidth = 75;
+					}
+					if (newWidth > availableWidth) {
+						newWidth = availableWidth;
+					}
+					if (this.parent.width != newWidth) {
+						this.parent.setVariable("width", newWidth);
+					}
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+		<!--- @keywords private -->
+		<method args="messageText" name="set_messageText">
+			<![CDATA[
+			this.setMessageText(messageText);
+			]]>
+		</method>
+	</TextComponent>
+
+	<!---
+		@keywords private
+		Grid utilities methods
+	-->
+	<Node definitionName="cmc/foundation/GridUtil" singletonDefinition="true">
+		
+		<!---
+			Swap the reference of 2 items in an array
+			@a Array: target array
+			@i1 number: first index in the the target array
+			@i2 number: second index in the target array
+		-->		
+		<method args="a, i1, i2" name="swap">
+			<![CDATA[
+			var temp = a[i2];
+			a[i2] = a[i1];
+			a[i1] = temp;
+			]]>
+		</method>
+
+	</Node>
+	
+	<!---
+		@keywords private
+		Grid object properties view.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/GridObjectProperties" placement="rowparent">
+		<dependency localName="ObjectPropertiesUtil" moduleName="cmc/foundation/ObjectPropertiesUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			@keywords private
+			A reference to the instance of the {@link cmc/foundation/ModelObject} whose properties are being displayed by the view.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			@keywords private
+			An array of enablement condition delegates that exist in any of this view's descendants. This array
+			is populated by the descendant that contains an {@link cmc/foundation/EnablementCondition enablement condition}.
+		-->
+		<variable name="enablementConditionDels" value="${[]}"/>
+		<!---
+			@keywords private
+			This attribute indicates the prompt location. Valid values are "left" and "above". The default value is "left".
+		-->
+		<variable name="promptLocation" type="string" value="above"/>
+		<!---
+			This attribute defines the width of the left column in the property pane which contains the prompt. The default value is 0px.
+		-->
+		<variable name="promptWidth" type="number" value="0"/>
+		
+		<!---
+			@keywords private
+			This attribute indicates whether or not a {@link cmc/foundation/DividerLine} will be shown under a property's HeaderText, set this to <code>true</code> 
+			will also remove the Header background. Default value is <code>true</code>.
+		-->
+		<variable name="showHeaderDivider" type="boolean" value="true"/>
+		
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.releaseModelObjectDel) {
+				this.releaseModelObjectDel.disconnectAll();
+				delete this.releaseModelObjectDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the {@link cmc/foundation/ModelObject} for this properties view. This method is declared as the setter for
+			{@link cmc/foundation/ObjectProperties#o}.
+			@param cmc/foundation/ModelObject newObject The new object to set for this properties view.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+				}
+				if (this.enablementConditionDels) {
+					for (var i = 0; i < this.enablementConditionDels.length; i++) {
+						this.enablementConditionDels[i].execute(this.o);
+					}
+				}
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the model object from this properties view by setting {@link cmc/foundation/ObjectProperties#o} to null.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			<p>This method searches the object properties view looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one 
+			of an {@link cmc/foundation/ModelProperty object property} or a {@link cmc/foundation/Validator#validatorType validator type}. The matching properties component must
+			match either the specified property, or the specified object and validator type.
+			
+			<p>If a match is found, this method ensures that the {@link cmc/foundation/PropertiesComponent properties component} is visible by making
+			it and all of its ancestors visible. This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and the changing of {@link cmc/foundation/PropertyTab tabs}. The method then sets the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and returns true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or display.
+						
+			@param cmc/foundation/ModelObject errorObject the model object that contains the error
+			@param cmc/foundation/ModelProperty errorProperty the model property that contains the error
+			@param string validatorType the validator type of the validator that reported the error
+			@return boolean true if the focus was set to the specified error, false otherwise
+		-->
+		<method args="errorObject, errorProperty, validatorType" name="setFocusToError">
+			<![CDATA[
+			return ObjectPropertiesUtil.Singleton.setFocusToError(this, errorObject, errorProperty, validatorType);
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</Component>
+</Definitions>

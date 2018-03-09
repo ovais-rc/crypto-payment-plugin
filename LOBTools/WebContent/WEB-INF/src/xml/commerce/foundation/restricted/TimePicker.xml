@@ -1,0 +1,991 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		This class implements a time picker that allows a user to select time. The time
+		picker consists an input field for a user to enter time, an panel for a user to select time
+		using mouse, and an icon for a user to toggle the time picker panel. The following code
+		shows how to instantiate a time picker. The time picker instance binds the the property
+		parent.property, and will display time in the format "HH:MM"
+		
+		@START_CODE
+			new TimePicker(parent, {
+				name: "timepicker",
+				property: parent.property,
+			});
+		@END_CODE
+	 -->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/TimePicker" focusable="false">
+		<dependency localName="TimePickerPanel" moduleName="cmc/foundation/TimePickerPanel"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Reference to {@link cmc/foundation/ModelProperty} instance that is being edited. The
+			value of this property will be updated with the selected time.
+		-->
+		<variable name="property" value="${null}"/>
+		
+		<!--- The time format for setting and retrieving the property -->
+		<variable name="timeFormat" type="string" value="${DateUtil.Singleton.TIME_FORMAT}"/>
+		
+		<!---
+			The pattern used to format the time for display. This value should not be
+			set directly. It is taken from the current user preference.
+		-->
+		<variable initialValue="${DateUtil.Singleton.getTimePreferenceFormat()}" name="displayFormat"/>
+		<!---
+			The prompt text displayed when no time has been entered. This value should
+			not be set directly. It is taken from the current user preference.
+		-->
+		<variable initialValue="${DateUtil.Singleton.getTimePreferenceFormatDisplayKey().string}" name="promptText"/>
+		<!--- @keywords private -->
+		<variable name="useCompactPadding" type="boolean" value="false"/>
+		
+		<!---
+			Display the preferred time zone next to the time picker. The default value is <code>true<code>.
+		-->
+		<variable name="showTimeZone" type="boolean" value="true"/>
+		
+		<!--- @keywords private -->
+		<variable name="showReverseImage" type="boolean" value="false"/>
+		
+		<!--
+			@keywords private
+		 -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			if (this.updatePromptDel) {
+				this.updatePromptDel.disconnectAll();
+				delete this.updatePromptDel;
+			}
+			if (this.updateTimeZoneDisplayNameDel) {
+				this.updateTimeZoneDisplayNameDel.disconnectAll();
+				delete this.updateTimeZoneDisplayNameDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		 -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.property) {
+				this.updateValue();
+			}
+			this.updatePrompt();
+			this.updateTimeZoneDisplayNameDel = new EventHandler.Class(this, "updateTimeZoneDisplayName");
+			ContextUtil.Singleton.findContextValue(null, "timeZoneDisplayName", this.updateTimeZoneDisplayNameDel);
+			this.updateTimeZoneDisplayName();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Updates the displayed prompt text in the time picker's text box
+		 -->
+		<method args="e" name="updatePrompt">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updatePromptDel) {
+				this.updatePromptDel.disconnectAll();
+			}
+			else {
+				this.updatePromptDel = new EventHandler.Class(this, "updatePrompt");
+			}
+			this.updatePromptDel.connect(DateUtil.Singleton.getTimePreferenceFormatDisplayKey(), "onstring");
+			var timeString = this.getTimeString();
+			this.promptText = DateUtil.Singleton.getTimePreferenceFormatDisplayKey().string;
+			if (this.enabled && timeString == "" && !ViewUtil.Singleton.containsView(this.timeInput.timeText, FocusUtil.getFocus())) {
+				this.timeInput.timeText.setText(this.promptText);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler will update the time field if the user changes their time format
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCTimeFormat") {
+				var time = this.getTime();
+				this.displayFormat = DateUtil.Singleton.getTimePreferenceFormat();
+				this.timeInput.amPmCombo.setVariable("visible", this.displayFormat == "12HR");
+				if (time != null) {
+					this.setTime(time);
+				}
+				this.updatePrompt();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateTimeZoneDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.showTimeZone) {
+				this.timeInput.timeZoneDisplayName.setVariable("text", ContextUtil.Singleton.findContextValue(null, "timeZoneDisplayName").value);
+			}
+			]]>
+		</method>	
+
+		<!---
+			@keywords private
+			Sets the selected time with the given new time.
+			@param Date newTime the new time
+		-->
+		<method args="newTime" name="setTime">
+			<![CDATA[
+			var timeString = "";
+			if (newTime != null) {
+				timeString = DateUtil.Singleton.getFormattedTime(newTime, false, this.displayFormat);
+			}
+			this.setTimeString(timeString);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Gets the selected time as a date object.
+			@return Date the selected time of this time picker
+		-->
+		<method name="getTime">
+			<![CDATA[
+			var timeString = this.getTimeString();
+			return DateUtil.Singleton.parseFormattedTime(timeString, this.displayFormat);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Gets the selected time as a string.
+			@return string the selected time as a string
+		-->
+		<method name="getTimeString">
+			<![CDATA[
+			var timeString = this.timeInput.timeText.getText();
+			if (timeString == this.promptText) {
+				timeString = "";
+			}
+			else if (this.displayFormat == "12HR") {
+				var value = this.timeInput.amPmCombo.getValue();
+				if (value != null) {
+					timeString += " " + value;
+				}
+			}
+			return timeString;
+			]]>
+		</method>
+		
+		<!---
+			Set the time to the specified string.
+			@keywords private
+		-->
+		<method args="timeString" name="setTimeString">
+			<![CDATA[
+			this._settingTimeString = true;
+			if (this.displayFormat == "12HR") {
+				var index = timeString.indexOf(" AM");
+				if (index != -1) {
+					timeString = timeString.substring(0, index);
+					this.timeInput.amPmCombo.selectItem("AM");
+				}
+				else {
+					index = timeString.indexOf(" PM");
+					if (index != -1) {
+						timeString = timeString.substring(0, index);
+						this.timeInput.amPmCombo.selectItem("PM");
+					}
+					else {
+						this.timeInput.amPmCombo.clearSelection();
+					}
+				}
+			}
+			this.timeInput.timeText.setText(timeString);
+			this.updatePrompt();
+			this._settingTimeString = false;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Binds a new {@link cmc/foundation/ModelProperty} instance to this time picker.
+			@param cmc/foundation/Property the new property to be bound to this time picker.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else if (this.isinited) {
+					this.setTimeString("");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Updates the widget with a new property value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this._updateValueLock = true;
+			if (this.isinited) {
+				var value = this.property.value;
+				var newTime = DateUtil.Singleton.parse(value, this.timeFormat);
+				if (newTime != null) {
+					this.setTime(newTime);
+				}
+				else {
+					this.setTimeString(value);
+				}
+				this._updateValueLock = false;
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Stores the selected time to the value of the bound model property
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			var newValue = null;
+			var time = this.getTime();
+			if (time != null) {
+				this.setTime(time);
+				newValue = DateUtil.Singleton.format(time, this.timeFormat);
+			}
+			else {
+				newValue = this.getTimeString();
+			}
+			if (this.property && !this._updateValueLock) {
+				this.property.change(newValue);
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/TimePicker", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.property.o.logString());
+				}
+			}
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Rounds the current time to the multiple of 15 minutes.
+			@return Date the time whose minute is multiple of 15
+		 -->
+		<method name="getTimeRoundedToQuarterHour">
+			<![CDATA[
+			var now = new Date();
+			now.setMinutes(Math.round(now.getMinutes() / 15) * 15);
+			now.setSeconds(0);
+			now.setMilliseconds(0);
+			return now;
+			]]>
+		</method>
+
+		<!--
+			@keyword private
+			Closes time picker panel if a mouse click happens outside of this panel
+		 -->
+		<method args="e" name="mouseDownHandler">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var button = this.timeInput.toggleButton;
+			if (button.containsPt(button.getMouse("x"), button.getMouse("y"))) {
+				return;
+			}
+			if (!TimePickerPanel.Singleton.containsPt(TimePickerPanel.Singleton.getMouse("x"), TimePickerPanel.Singleton.getMouse("y"))) {
+				this.closeTimePickerPanel();
+			}
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Attaches a time picker panel to this time picker
+		 -->
+		<method name="attachTimePickerPanel">
+			<![CDATA[
+			if (!this.updateAttachmentDel) {
+				this.updateAttachmentDel = new EventHandler.Class(this, "updateAttachment");
+				this.updateAttachmentDel.connect(this, "ony");
+				this.updateAttachmentDel.connect(this, "onx");
+			}
+			if (!TimePickerPanel.Singleton.isinited) {
+				TimePickerPanel.Singleton.completeInstantiation();
+			}
+			TimePickerPanel.Singleton.setVariable("visible", true);
+			TimePickerPanel.Singleton.setVariable("timePicker", this);
+			TimePickerPanel.Singleton.bringToFront();
+			this.updateAttachment();
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Updates the location of the attached time picker panel
+		 -->
+		<method args="e" name="updateAttachment">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			TimePickerPanel.Singleton.setVariable('x', this.timeInput.getVariableRelative("x", RootComponent.Singleton));
+			if (this.timeInput.getVariableRelative("y", RootComponent.Singleton) + this.timeInput.height - 1 + TimePickerPanel.Singleton.height > RootComponent.Singleton.height) {
+				TimePickerPanel.Singleton.setVariable('y', this.timeInput.getVariableRelative("y", RootComponent.Singleton) - TimePickerPanel.Singleton.height + 7);
+			}
+			else {
+				TimePickerPanel.Singleton.setVariable('y', this.timeInput.getVariableRelative("y", RootComponent.Singleton) + this.timeInput.height - 1);
+			}
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Shows the currently selected time in the time picker panel.
+		 -->
+		<method name="showTimeInTimePickerPanel">
+			<![CDATA[
+			var time = this.getTime();
+			if (time == null) {
+				time = this.getTimeRoundedToQuarterHour();
+			}
+			TimePickerPanel.Singleton.showTime(time);
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Opens the time picker panel attached to this time picker.
+		 -->
+		<method name="openTimePickerPanel">
+			<![CDATA[
+			var newTime = this.getTime();
+			this.setTime(newTime);
+			this.attachTimePickerPanel();
+			if (!this.mouseDownDel) {
+				this.mouseDownDel = new EventHandler.Class(this, "mouseDownHandler");
+			}
+			this.mouseDownDel.connect(MouseUtil, "onmousedown");
+			if (!this.cancelTimePickerPanelDel) {
+				this.cancelTimePickerPanelDel = new EventHandler.Class(this, "cancelTimePickerPanel");
+			}
+			KeyUtil.callOnKeyCombo(this.cancelTimePickerPanelDel, ['esc']);
+			this.showTimeInTimePickerPanel();
+			FocusUtil.setFocus(TimePickerPanel.Singleton.timeIndicator, false);
+			ModalUtil.makeModal(TimePickerPanel.Singleton);
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Closes the time picker panel, and sets the selected time to the value of the panel.
+		 -->
+		<method name="closeTimePickerPanel">
+			<![CDATA[
+			this.setTime(TimePickerPanel.Singleton.selectedTime);
+			this.storeValue();
+			this.cancelTimePickerPanel();
+			]]>
+		</method>
+		
+		<!--
+			@keywords private
+			Closes the time picker panel.
+		 -->
+		<method args="e" name="cancelTimePickerPanel">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			ModalUtil.release(TimePickerPanel.Singleton);
+			KeyUtil.removeKeyComboCall(this.cancelTimePickerPanelDel, ['esc']);
+			TimePickerPanel.Singleton.setVariable("visible", false);
+			TimePickerPanel.Singleton.setVariable("timePicker", null);
+			this.mouseDownDel.disconnectAll();
+			this.updateAttachmentDel.disconnectAll();
+			FocusUtil.setFocus(this.timeInput.toggleButton, false);
+			]]>
+		</method>
+		
+		<Component name="timeInput">
+			<AxisLayout axis="x" spacing="3"/>
+			
+			<InputText enabled="${this.classroot.enabled}" name="timeText" width="${this.classroot.useCompactPadding ? 46 : 56}" inputTextPadding="${this.classroot.useCompactPadding ? 5 : 8}" height="${this.classroot.useCompactPadding ? 26 : 30}">
+				<handler name="onfocus">
+					<![CDATA[
+					if (this.enabled && this.getText() == this.classroot.promptText) {
+						this.setText("");
+					}
+					]]>
+				</handler>
+					
+				<handler name="onblur">
+					<![CDATA[
+					if (this.enabled) {
+						this.classroot.storeValue();
+						if (this.getText() == "") {
+							this.setText(this.classroot.promptText);
+						}
+					}
+					]]>
+				</handler>
+					
+				<handler name="ontext">
+					<![CDATA[
+					this.classroot.storeValue();
+					]]>
+				</handler>
+					
+				<handler name="onenabled">
+					<![CDATA[
+					if (!this.enabled && this.getText() == this.classroot.promptText) {
+						this.setText("");
+					}
+					else if (this.enabled && this.getText() == "") {
+						this.setText(this.classroot.promptText);
+					}
+					]]>
+				</handler>
+			</InputText>
+
+			<BaseComboBox enabled="${this.classroot.enabled}" name="amPmCombo" visible="false" width="${this.classroot.useCompactPadding ? 55 : 65}" useCompactPadding="${this.classroot.useCompactPadding}">
+				<handler name="oninit">
+					<![CDATA[
+					this.addItem(foundationResources.Singleton.timePickerAMTimeSymbol.string, "AM", foundationResources.Singleton.timePickerAMTimeSymbol);
+					this.addItem(foundationResources.Singleton.timePickerPMTimeSymbol.string, "PM", foundationResources.Singleton.timePickerPMTimeSymbol);
+					if (this.classroot.displayFormat == "12HR") {
+						this.setVariable("visible", true);
+					}
+					]]>
+				</handler>
+				<handler name="onselectedValue">
+					<![CDATA[
+					if (!this.classroot._settingTimeString) {
+						this.classroot.storeValue();
+					}
+					]]>
+				</handler>
+			</BaseComboBox>
+			
+			<FocusableBaseButton enabled="${this.classroot.enabled}" imageSet="timePickerToggleIcon" name="toggleButton" valign="middle"
+					normalImage="${this.classroot.showReverseImage ? 3 : 1}" overImage="${this.classroot.showReverseImage ? 3 : 1}"
+					downImage="${this.classroot.showReverseImage ? 3 : 1}" disabledImage="2">
+				<Tooltip text="${foundationResources.Singleton.timePickerTip.string}"/>				
+				<handler name="onclick">
+					<![CDATA[
+					if (!TimePickerPanel.Singleton.visible && this.classroot.enabled) {
+						this.classroot.openTimePickerPanel();
+					}
+					]]>
+				</handler>
+			</FocusableBaseButton>
+			<TextComponent name="timeZoneDisplayName" valign="middle"/>
+		</Component>	
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<Image name="timePickerUpArrow" src="/images/commerce/foundation/restricted/resources/timepicker/chevron_up_12_grey.png"/>
+	<Image name="timePickerDownArrow" src="/images/commerce/foundation/restricted/resources/timepicker/chevron_down_12_grey.png"/>
+	
+	<Image name="timeSlotIndicator" src="/images/commerce/foundation/restricted/resources/timepicker/timepicker_selector.png" rtlSrc="/images/commerce/foundation/restricted/resources/timepicker/timepicker_selector_rtl.png"/>
+	
+	<ImageSet name="timePickerToggleIcon">
+		<Image src="/images/commerce/foundation/restricted/resources/timepicker/time.png"/>
+		<Image src="/images/commerce/foundation/restricted/resources/timepicker/time_disabled.png"/>
+		<Image src="/images/commerce/foundation/restricted/resources/timepicker/time_reverse.png"/>
+	</ImageSet>
+	
+	<!--- @keywords private -->
+	<BaseWindow classDefinition="true" definitionName="cmc/foundation/TimePickerPanelClass" focustrap="true" initstage="defer">
+		<dependency localName="TimeIndicator" moduleName="cmc/foundation/TimeIndicator"/>
+		<dependency localName="TimePickerSlot" moduleName="cmc/foundation/TimePickerSlot"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<variable name="timeSlotStart" value="0"/>
+		<variable name="timeSlotTotal" value="10"/>
+		<variable name="timeInterval" value="15"/>
+		<!--  Each time slot counts for an hour -->
+		<variable name="timeSlotMaxNumber" value="24"/>
+		<variable name="selectedTime" value="${null}"/>
+		<variable name="timeSlots" value="${[]}"/>
+		
+		<variable name="timeSlotsTrackName" type="string" value="timeslots"/>
+		<variable name="timePicker"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			for (var i = this.timeSlotStart; i < this.timeSlotTotal; ++i) {
+				this.addTimeSlot(i);
+			}
+			]]>
+		</handler>
+		
+		<method name="getLastTimeSlot">
+			<![CDATA[
+			return this.timeSlots[this.timeSlots.length - 1];
+			]]>
+		</method>
+		
+		<method name="getFirstTimeSlot">
+			<![CDATA[
+			return this.timeSlots[0];
+			]]>
+		</method>
+		
+		<method args="delta" name="updateSelectedTime">
+			<![CDATA[
+			var time = new Date(this.selectedTime);
+			if (!!delta.hours) {
+				time.setHours(time.getHours() + delta.hours);
+			}
+			if (!!delta.minutes) {
+				time.setMinutes(time.getMinutes() + delta.minutes);
+			}
+			if (!!delta.seconds) {
+				time.setSeconds(time.getSeconds() + delta.seconds);
+			}
+			this.setVariable("selectedTime", time);
+			return time;
+			]]>
+		</method>
+
+		<method args="slotIndex" name="addTimeSlot">
+			<![CDATA[
+			var slot = new TimePickerSlot.Class(this.content.timeSlots, {
+				slotIndex: slotIndex,
+				timePicker: this
+			});
+			this.timeSlots.push(slot);
+			]]>
+		</method>
+		
+		<method args="direction" name="getNextTimeSlotStart">
+			<![CDATA[
+			direction = direction > 0 ? 1 : -1;
+			return (this.timeSlotStart + direction) % this.timeSlotMaxNumber;
+			]]>
+		</method>
+
+		<method args="time" name="showTime">
+			<![CDATA[
+			var hour = time.getHours();
+			var minutes = time.getMinutes();
+			TimePickerPanel.Singleton.setVariable("timeSlotStart", (hour - 4 + 24) % 24);
+			this.setVariable("selectedTime", time);
+			this.updateTimeIndicatorY();
+			this.timeIndicator.setVariable("visible", true);
+			]]>
+		</method>
+		
+		<method name="getTimeIndicator">
+			<![CDATA[
+			if (!this.timeIndicator) {
+				this.timeIndicator = new TimeIndicator.Class(this, {
+					name: 'timeIndicator',
+					timePicker: this,
+					imageSet: 'timeSlotIndicator',
+					x: 1,
+					visible: false
+				});
+			}
+			return this.timeIndicator;
+			]]>
+		</method>
+		
+		<method name="updateTimeIndicatorY">
+			<![CDATA[
+			var hour = this.selectedTime.getHours();
+			var minutes = this.selectedTime.getMinutes();
+			var newY = ((hour - this.timeSlotStart + 24) % 24) * 21 + (21 / 60 * minutes) + this.content.timeSlots.y + 1;
+			var indicator = this.getTimeIndicator();
+			indicator.setVariable("y", newY);
+			if (newY > this.content.timeSlots.y + 1 + this.content.timeSlots.height - indicator.height) {
+				indicator.setVariable("visible", false);
+			}
+			else {
+				indicator.setVariable("visible", true);
+			}
+			]]>
+		</method>
+		
+		<method name="getTimeIndicatorTime">
+			<![CDATA[
+			var indicatorOffset = this.getTimeIndicator().y - this.content.timeSlots.y - 1;
+			var hours = (this.timeSlotStart + (indicatorOffset / 21) + 24) % 24;
+			var minutes = Math.round((indicatorOffset % 21) / 5.25) * 15;
+			var today = new Date();
+			today.setHours(hours);
+			today.setMinutes(minutes);
+			today.setSeconds(0);
+			today.setMilliseconds(0);
+			return today;
+			]]>
+		</method>
+		
+		<!--
+			Updates all the time slots based on the current starting point of time slot.
+			
+			@param direction -1 if all the time slots will be decreased, 1 otherwise.
+		 -->
+		<method args="direction" name="updateTimeSlots">
+			<![CDATA[
+			this.setVariable("timeSlotStart", this.getNextTimeSlotStart(direction));
+			]]>
+		</method>
+		
+		<Component height="${this.parent.content.height + 2}" bgcolor="#676767" width="1" x="0" y="0"/>
+		<Component height="${this.parent.content.height + 2}" bgcolor="#676767" width="1" x="${this.parent.content.width + 1}" y="0"/>
+		<Component bgcolor="#676767" height="1" width="${this.parent.content.width + 2}" x="0" y="0"/>
+		<Component bgcolor="#676767" height="1" width="${this.parent.content.width + 2}" x="0" y="${this.parent.content.height + 1}"/>
+		<Component name="content" width="75" x="1" y="1" bgcolor="#ffffff">
+			<AxisLayout axis="y"/>
+			<Component height="5"/>
+			<TimeSlotsUpdater direction="${-1}" imageSet="timePickerUpArrow" name="upArrow" timePicker="${this.classroot}" align="center"/>
+			<Component name="timeSlots">
+				<AxisLayout axis="y"/>
+			</Component>
+			<TimeSlotsUpdater direction="1" imageSet="timePickerDownArrow" name="downArrow" timePicker="${this.classroot}" align="center"/>
+			<Component height="5"/>
+		</Component>
+	</BaseWindow>
+
+	<!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/foundation/TimePickerSlot">
+		<dependency localName="TimePickerPanel" moduleName="cmc/foundation/TimePickerPanel"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<variable name="slotIndex" value="0"/>
+		<variable name="height" value="21"/>
+		<variable name="width" value="75"/>
+		<variable name="timePicker"/>
+		
+		<TextComponent name="cellText" text="${this.classroot.getTimeString()}" valign="middle" align="center">
+			<handler eventSource="this.classroot.timePicker" name="ontimeSlotStart">
+				<![CDATA[
+				this.setVariable("text", this.classroot.getTimeString());
+				]]>
+			</handler>
+		</TextComponent>
+		
+		<method name="getTime">
+			<![CDATA[
+			var today = new Date();
+			today.setHours(this.getNormalizedHour());
+			today.setMinutes(0);
+			today.setSeconds(0);
+			today.setMilliseconds(0);
+			return today;
+			]]>
+		</method>
+		
+		<method name="getTimeString">
+			<![CDATA[
+			return DateUtil.Singleton.getFormattedTime(this.getTime());
+			]]>
+		</method>
+		
+		<!--  Normalized hour ranges from 0 to 23. 0 is corresponding to 12:00 in the morning -->
+		<method name="getNormalizedHour">
+			<![CDATA[
+			return (this.timePicker.timeSlotStart + this.slotIndex + 24) % 24;
+			]]>
+		</method>
+		
+		<method name="getHourString">
+			<![CDATA[
+			return DateUtil.Singleton.get12HourFormattedHours(this.getNormalizedHour());
+			]]>
+		</method>
+		
+		<handler name="onclick">
+			<![CDATA[
+			this.timePicker.setVariable("selectedTime", this.getTime());
+			this.timePicker.updateTimeIndicatorY();
+			]]>
+		</handler>
+		
+		<handler name="onmouseover">
+			<![CDATA[
+			this.setVariable("fgcolor", "#4178be");
+			]]>
+		</handler>
+
+		<handler name="onmouseout">
+			<![CDATA[
+			this.setVariable("fgcolor", null);
+			]]>
+		</handler>
+	</Component>
+
+	<!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/foundation/TimeSlotsUpdater">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<!-- @keywords private -->
+		<variable name="timePicker" type="expression" value="${null}"/>
+		<variable name="direction" value="1"/>
+		<variable name="initialDelay" value="1000"/> <!-- 1000ms = 1 second -->
+		<variable name="acceleration" value="100"/>
+		<variable name="minDelay" value="50"/>
+		
+		<method name="resetMouseDownTimer">
+			<![CDATA[
+			this.mouseDownDelay = -1;
+			if (this.repeatDownDel) {
+				Timer.removeTimer(this.repeatDownDel);
+			}
+			]]>
+		</method>
+		<handler name="onmouseup">
+			<![CDATA[
+			this.resetMouseDownTimer();
+			]]>
+		</handler>
+		<handler name="onmousedown">
+			<![CDATA[
+			this.mouseDownDelay = this.initialDelay;
+			this.updateTimeSlotsWithTimer();
+			]]>
+		</handler>
+		<method args="e" name="updateTimeSlotsWithTimer">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.timePicker.updateTimeSlots(this.direction);
+			this.timePicker.updateTimeIndicatorY();
+			if (this.mouseDownDelay >= 0) {
+				this.repeatDownDel = new EventHandler.Class(this, "updateTimeSlotsWithTimer");
+				Timer.addTimer(this.repeatDownDel, this.mouseDownDelay);
+				this.mouseDownDelay -= this.acceleration;
+				if (this.mouseDownDelay < this.minDelay) {
+					this.mouseDownDelay = this.minDelay;
+				}
+			}
+			]]>
+		</method>
+	</Component>
+	
+	<!--- @keywords private -->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/TimeIndicator" doesenter="true" focusable="true" fgcolor="#ffffff">
+		<dependency localName="TimePickerPanel" moduleName="cmc/foundation/TimePickerPanel"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		
+		<variable name="timePicker"/>
+		
+		<variable name="timeString" type="string" value=""/>
+		
+		<State name="dragger">
+			<variable name="drag_min_y" type="number" value="0"/>
+			<variable initialValue="${this.parent.height - this.height}" name="drag_max_y" type="number"/>
+			<variable name="offset" initialValue="${this.getMouse('y')}"/>
+			<variable name="y" value="${this.getNewY(this.immediateParent.getMouse('y') - this.offset)}"/>
+			<variable name="mousePosY" value="${this.immediateParent.getMouse('y') - this.offset}"/>
+		</State>
+          	
+		<!--- @keywords private -->
+	    <method args="newpos" name="getNewY">
+			<![CDATA[
+			var min = this.drag_min_y;
+			var max = this.drag_max_y;
+			if ((min != null) && (newpos < min)) {
+				newpos = min;
+			}
+			if ((max != null) && (newpos > max)) {
+				newpos = max;
+			}
+			return newpos;
+			]]>
+		</method>
+			
+		<method name="isOverTop">
+			<![CDATA[
+			var mouseY = this.immediateParent.getMouse("y");
+			var firstTimeSlot = this.timePicker.getFirstTimeSlot();
+			return mouseY < this.drag_min_y && !firstTimeSlot.containsPt(firstTimeSlot.getMouse("x"), firstTimeSlot.getMouse("y"));
+			]]>
+		</method>
+			
+		<method name="isBelowBottom">
+			<![CDATA[
+			var mouseY = this.immediateParent.getMouse("y");
+			var lastTimeSlot = this.timePicker.getLastTimeSlot();
+			return mouseY > this.drag_max_y && !lastTimeSlot.containsPt(lastTimeSlot.getMouse("x"), lastTimeSlot.getMouse("y"));
+			]]>
+		</method>
+		
+		<method name="updateTimeIndicator">
+			<![CDATA[
+			var mouseY = this.immediateParent.getMouse("y");
+			if (this.isBelowBottom()) {
+				if (mouseY % 2 == 0) {
+					this.timePicker.updateSelectedTime({
+						minutes: 15
+					});
+				}
+			}
+			else if (this.isOverTop()) {
+				if (mouseY % 2 == 0) {
+					this.timePicker.updateSelectedTime({
+						minutes: -15
+					});
+				}
+			}
+			else {
+				this.timePicker.setVariable("selectedTime", this.timePicker.getTimeIndicatorTime());
+			}
+			]]>
+		</method>
+			
+		<handler name="ony">
+			<![CDATA[
+			if (this.dragger.active) {
+				this.updateTimeIndicator();
+			}
+			]]>
+		</handler>
+			
+		<handler name="onmousePosY">
+			<![CDATA[
+			if (this.dragger.active) {
+				if (this.isBelowBottom()) {
+					this.timePicker.setVariable("timeSlotStart", this.timePicker.getNextTimeSlotStart(1));
+					this.timePicker.updateSelectedTime({
+						hours: 1
+					});
+					return;
+				}
+				if (this.isOverTop()) {
+					this.updateTimeIndicator();
+					this.timePicker.setVariable("timeSlotStart", this.timePicker.getNextTimeSlotStart(-1));
+					this.timePicker.updateSelectedTime({
+						hours: -1
+					});
+				}
+			}
+			]]>
+		</handler>
+
+		<handler name="onmousedown">
+			<![CDATA[
+			this.dragger.setVariable("active", true);
+			]]>
+		</handler>
+		
+		<handler name="onmouseup">
+			<![CDATA[
+			this.dragger.setVariable("active", false);
+			this.timePicker.updateTimeIndicatorY();
+			if (!this.visible) {
+				this.timePicker.showTime(this.timePicker.selectedTime);
+			}
+			]]>
+		</handler>
+		
+		<handler args="key" name="onkeydown">
+			<![CDATA[
+			if (key == 40) {
+				var minutes = this.timePicker.selectedTime.getMinutes();
+				var delta = (15 - minutes % 15) == 0 ? 15 : (15 - minutes % 15);
+				this.timePicker.updateSelectedTime({
+					minutes: delta
+				});
+				var curMinutes = this.timePicker.selectedTime.getMinutes();
+				if (curMinutes == 0) {
+					var curHours = this.timePicker.selectedTime.getHours();
+					if ((curHours - this.timePicker.timeSlotStart + 24) % 24 >= this.timePicker.timeSlotTotal - 1) {
+						this.timePicker.updateTimeSlots(1);
+					}
+				}
+				this.timePicker.updateTimeIndicatorY();
+			}
+			else if (key == 38) {
+				var minutes = this.timePicker.selectedTime.getMinutes();
+				var delta = minutes % 15 == 0 ? 15 : (minutes % 15);
+				this.timePicker.updateSelectedTime({
+					minutes: -delta
+				});
+				var curMinutes = this.timePicker.selectedTime.getMinutes();
+				if (curMinutes == 0) {
+					var curHours = this.timePicker.selectedTime.getHours();
+					if ((curHours - this.timePicker.timeSlotStart + 24) % 24 <= 0) {
+						this.timePicker.updateTimeSlots(-1);
+					}
+				}
+				this.timePicker.updateTimeIndicatorY();
+			}
+			]]>
+		</handler>
+      	
+      	<method name="doEnterDown">
+			<![CDATA[
+			this.timePicker.timePicker.closeTimePickerPanel();
+			]]>
+		</method>
+		
+		<TextComponent name="time" x="(75 - this.width) / 2" valign="middle">
+			<handler name="oninit">
+				<![CDATA[
+				this.updateText();
+				]]>
+			</handler>
+			<handler eventSource="this.classroot.timePicker" name="onselectedTime">
+				<![CDATA[
+				this.updateText();
+				]]>
+			</handler>
+			<method name="updateText">
+				<![CDATA[
+				if (!this.classroot.timePicker.selectedTime) {
+					this.setVariable("text", DateUtil.Singleton.getFormattedTime(new Date()));
+				}
+				else {
+					this.setVariable("text", DateUtil.Singleton.getFormattedTime(this.classroot.timePicker.selectedTime));
+				}
+				]]>
+			</method>
+		</TextComponent>
+	</FocusableComponent>
+		
+	<TimePickerPanelClass definitionName="cmc/foundation/TimePickerPanel" singletonDefinition="true" visible="false"/>
+</Definitions>

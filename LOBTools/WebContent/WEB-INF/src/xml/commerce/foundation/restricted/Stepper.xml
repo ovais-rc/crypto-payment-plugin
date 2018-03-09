@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This is a basic stepper widget for integer values. An input box is provided for user input of values
+		as well as spinners/arrows to increment and decrement the value based on the defined step.
+	-->
+	<BaseValueComponent classDefinition="true" definitionName="cmc/foundation/BaseStepper" focusable="false" width="87" height="${this.useCompactPadding ? 26 : 30}" bgcolor="#ffffff">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<!--- The smallest allowable value for this input -->
+		<variable name="minimumValue" type="number" value="0"/>
+		<!--- The largest allowable value for this input -->
+		<variable name="maximumValue" type="number" value="10000"/>
+		<!--- The size of increment or decrement when user clicks on the up/down arrow button. Default value is 1. -->
+		<variable name="step" type="number" value="1"/>
+		<!--- @keywords private -->
+		<variable name="useCompactPadding" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="upImage" type="string" value="${this.useCompactPadding ? 'compactStepperUpButton' : 'stepperUpButton'}"/>
+		<!--- @keywords private -->
+		<variable name="downImage" type="string" value="${this.useCompactPadding ? 'compactStepperDownButton' : 'stepperDownButton'}"/>
+		<!---
+			@keywords private
+			The border color used when the stepper is disabled.
+		-->
+		<variable name="disabledBorderColor" type="string" value="#b1b1b1"/>
+		<!---
+			@keywords private
+			The border color used when the stepper is enabled.
+		-->
+		<variable name="enabledBorderColor" type="string" value="#959595"/>
+		<!---
+			@keywords private
+			The borderColor attribute indicates which color to use as the border for the stepper.
+		-->
+		<variable name="borderColor" type="string" value="${this._enabled ? this.enabledBorderColor : this.disabledBorderColor}"/>
+		
+		<!---
+			@keywords private
+			Rounds the given value to the nearest multiple of the given step
+			@param number value: the value to be normalized
+			@returns integer: The normalized integer value closest to the step size. If the input value is not a number,
+				or the value is longer than 16 digits, the original value is returned.
+		-->
+		<method args="value" name="roundToStep">
+			<![CDATA[
+			var strValue = String(value);
+			if (strValue.length >= 16) {
+				return value;
+			}
+			var isNum = StringUtil.Singleton.isNumber(strValue);
+			if (!isNum) {
+				return value;
+			}
+			else {
+				return Math.round(value / this.step) * this.step;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			If the current value is less than the maximum value, this will increment the value. 
+			If no value is set, then it sets the value to the maximumValue if it is less than 0 
+			or the minimum value if it is greater than 0 or else 0. If the value set is less 
+			than the minimum value, the value will be changed to the minimum. This method is called 
+			when the up arrow icon is clicked and when the user presses the up key on their keyboard.
+		-->
+		<method name="incrementValue">
+			<![CDATA[
+			if (this.value == null || this.value == "" || isNaN(this.value)) {
+				if (this.maximumValue < 0) {
+					this.setVariable("value", String(this.maximumValue));
+				}
+				else if (this.minimumValue > 0) {
+					this.setVariable("value", String(this.minimumValue));
+				}
+				else {
+					this.setVariable("value", 0);
+				}
+			}
+			else if (Number(this.value) < this.minimumValue) {
+				this.setVariable("value", String(this.minimumValue));
+			}
+			else if (Number(this.value) < this.maximumValue) {
+				var newValue = this.roundToStep(Number(this.value) + this.step);
+				if (newValue >= this.maximumValue) {
+					this.setVariable("value", String(this.maximumValue));
+				}
+				else {
+					this.setVariable("value", String(newValue));
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			If the current value is greater than the minimum value, this will decrement the value. 
+			If no value is set, then it sets the value to the maximumValue if it is less than 0 
+			or the minimum value if it is greater than 0 or else 0. If the value set is greater 
+			than the maximum value, the value will be changed to the maximum. This method is called 
+			when the down arrow icon is clicked and when the user presses the down key on their keyboard.
+		-->
+		<method name="decrementValue">
+			<![CDATA[
+			if (this.value == null || this.value == "" || isNaN(this.value)) {
+				if (this.maximumValue < 0) {
+					this.setVariable("value", String(this.maximumValue));
+				}
+				else if (this.minimumValue > 0) {
+					this.setVariable("value", String(this.minimumValue));
+				}
+				else {
+					this.setVariable("value", 0);
+				}
+			}
+			else if (Number(this.value) > this.maximumValue) {
+				this.setVariable("value", String(this.maximumValue));
+			}
+			else if (Number(this.value) > this.minimumValue) {
+				var newValue = this.roundToStep(Number(this.value) - this.step);
+				if (newValue <= this.minimumValue) {
+					this.setVariable("value", String(this.minimumValue));
+				}
+				else {
+					this.setVariable("value", String(newValue));
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method updates takes the display value from the input field, formats it into canonical data format
+			and saves it into the <code>value</code> attribute.
+			@listen cmc/foundation/InputText#ontext When the text in the input field changes either due to user input or by some other method,
+				this method is called to update the display text.
+			@listen cmc/foundation/InputText#onblur This method is also invoked when the user moves focus from the input field to something else
+				to ensure consistency in the saved value.
+		-->
+		<method name="handleText">
+			<![CDATA[
+			if (this.textInput) {
+				this.valueLocked = true;
+				var newValue = GlobalizationUtil.Singleton.formatNumberToDataFormat(this.textInput.getText());
+				if (newValue != "" && !isNaN(newValue)) {
+					newValue = String(this.roundToStep(newValue));
+				}
+				this.setVariable("value", newValue);
+				this.valueLocked = false;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateInputDel) {
+				this.updateInputDel.disconnectAll();
+				delete this.updateInputDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Updates the display text in the input field to a globalized value.
+			The display text will only be updated if the user is not typing
+			into the input field.
+		-->
+		<method args="e" name="updateInput">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.updateInputDel) == "undefined") {
+				this.updateInputDel = new EventHandler.Class(this, "updateInput");
+			}
+			else {
+				this.updateInputDel.disconnectAll();
+			}
+			this.updateInputDel.connect(this, "onvalue");
+			var localizedValue = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.value, null, this.updateInputDel);
+			if (!this.valueLocked) {
+				if (this.textInput) {
+					if (localizedValue != this.textInput.getText()) {
+						this.textInput.setText(localizedValue);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<InputText doesenter="true" enabled="${this.classroot.enabled}" name="textInput" pattern="[\-0-9,. ]*" width="${Math.max(this.parent.width - this.parent.arrowView.width - (this.classroot.useCompactPadding ? 5 : 8), 0)}" borderSize="0" inputTextPadding="${this.classroot.useCompactPadding ? 5 : 8}" y="1" height="${this.parent.height - 2}">
+			<handler name="oninit">
+				<![CDATA[
+				this._inited = true;
+				this.classroot.updateInput();
+				]]>
+			</handler>
+
+			<handler args="code" name="onkeydown">
+				<![CDATA[
+				if (code == 38) {
+					this.classroot.incrementValue();
+				}
+				else if (code == 40) {
+					this.classroot.decrementValue();
+				}
+				]]>
+			</handler>
+			
+			<handler name="ontext">
+				<![CDATA[
+				if (this._inited) {
+					this.classroot.handleText();
+				}
+				]]>
+			</handler>
+			
+			<handler name="onblur">
+				<![CDATA[
+				this.classroot.updateInput();
+				]]>
+			</handler>
+		</InputText>
+		
+		<Component name="arrowView" x="${this.parent.width - this.width - (this.classroot.useCompactPadding ? 5 : 8)}" opacity="${this.parent._enabled ? null : 0.50}" valign="middle">
+			<AxisLayout axis="y" spacing="0"/>
+			<RepeaterButton focusable="false" imageSet="${this.classroot.upImage}" name="stepperUpArrow">
+				<handler name="onmousedown">
+					<![CDATA[
+					this.classroot.incrementValue();
+					]]>
+				</handler>
+				<handler name="onmousestilldown">
+					<![CDATA[
+					this.classroot.incrementValue();
+					]]>
+				</handler>
+			</RepeaterButton>
+		    <RepeaterButton focusable="false" imageSet="${this.classroot.downImage}" name="stepperDownArrow">
+				<handler name="onmousedown">
+					<![CDATA[
+					this.classroot.decrementValue();
+					]]>
+				</handler>
+				<handler name="onmousestilldown">
+					<![CDATA[
+					this.classroot.decrementValue();
+					]]>
+				</handler>
+			</RepeaterButton>
+		</Component>
+	
+		<Component height="${this.parent.height}" bgcolor="${this.parent.borderColor}" width="1" x="0" y="0"/>
+		<Component height="${this.parent.height}" bgcolor="${this.parent.borderColor}" width="1" x="${this.parent.width - 1}" y="0"/>
+		<Component bgcolor="${this.parent.borderColor}" height="1" width="${this.parent.width}" x="0" y="0"/>
+		<Component bgcolor="${this.parent.borderColor}" height="1" width="${this.parent.width}" x="0" y="${this.parent.height - 1}"/>
+			
+	</BaseValueComponent>
+	
+	<!---
+		@keywords private
+		This class wraps the {@link cmc/foundation/BaseStepper BaseStepper} widget in order to enable the widget to work
+		within the object model.
+	-->
+	<BaseStepper classDefinition="true" definitionName="cmc/foundation/Stepper">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<!---
+			Reference to object property that is being edited.
+			@type cmc/foundation/ModelProperty
+		-->
+		<variable name="property" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			This setter method for the property will unregister any existing delegates assigned to the old
+			property. A new delegate is registered to the new property so that when the property value
+			changes (either by user input or by the model), the <code>updateValue</code> method is called.
+			
+			@param cmc/foundation/ModelProperty newProperty: The new object property that this widget will modify.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					this.setVariable("value", "");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateInput">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.property) {
+				this.updateInputDel.connect(this.property.o.openGroupObject, "beingSaved");
+			}
+			]]>
+		</method>
+
+		<!--- Updates the widget value to match the stored property value stored. -->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property) {
+				if (this.property.value != this.value) {
+					this.setVariable("value", this.property.value);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onvalue">
+			<![CDATA[
+			if (this.property) {
+				if (this.value == null || this.value == "") {
+					this.property.change("");
+				}
+				else {
+					this.property.change(GlobalizationUtil.Singleton.formatNumberToDataFormat(this.value));
+				}
+			}
+			]]>
+		</handler>
+		<!--- @keywords private  -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</BaseStepper>
+	
+	<!---
+		@keywords final
+		This class extends {@link cmc/foundation/PropertyEditor PropertyEditor} for use so that it can be used within an
+		object properties view.
+		@see cmc/foundation/ObjectProperties
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyStepper">
+		<dependency localName="Stepper" moduleName="cmc/foundation/Stepper"/>
+		<!--- The minimum allowable value for this stepper. The default value is "0". -->
+		<variable name="minimumValue" type="number" value="0"/>
+		<!--- The maximum allowable value for this stepper. The default value is "10000". -->
+		<variable name="maximumValue" type="number" value="10000"/>
+		
+		<!---
+			@keywords private
+			This method instantiates a {@link cmc/foundation/Stepper Stepper} widget with the minimum and maximum
+			values defined in this class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+			@see cmc/foundation/PropertiesComponent#createEditor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new Stepper.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				minimumValue: this.minimumValue,
+				maximumValue: this.maximumValue,
+				width: 230
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords final
+		This class defines a widget to be used as a column in an {@link cmc/foundation/ObjectGrid object grid}.
+		The column cells display property values formatted based on the current setting
+		of the number format preference.
+		When a cell is in edit mode, a stepper widget will be displayed to allow
+		the business user to edit the value.
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridStepper">
+		<dependency localName="GridNumericViewer" moduleName="cmc/foundation/GridNumericViewer"/>
+		<dependency localName="ColumnStepperEditor" moduleName="cmc/foundation/ColumnStepperEditor"/>
+		<dependency localName="GridStepperEditor" moduleName="cmc/foundation/GridStepperEditor"/>
+		<!---
+			@keywords private
+			The class name of the viewer widget to use in order to display the property value. The default is
+			{@link cmc/foundation/GridNumericViewer GridNumericViewer}.
+		-->
+		<variable name="cellViewerClass" value="${GridNumericViewer}"/>
+		<!---
+			@keywords private
+			The class name of the editor widget to use in order to change the property value. The default is
+			{@link cmc/foundation/GridStepperEditor GridStepperEditor}.
+		-->
+		<variable name="cellEditorClass" value="${GridStepperEditor}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/ColumnStepperEditor" to create Column Editor editor.
+		-->
+		<variable name="columnEditorClass" value="${ColumnStepperEditor}"/>
+		<!--- The minimum allowable value for this stepper. The default value is "0". -->
+		<variable name="minimumValue" type="number" value="0"/>
+		<!--- The maximum allowable value for this stepper. The default value is "10000". -->
+		<variable name="maximumValue" type="number" value="10000"/>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				minimumValue: this.minimumValue,
+				maximumValue: this.maximumValue
+			};
+			]]>
+		</method>
+	</GridColumn>
+	
+	<!---
+		@keywords final
+		Use this class to display a stepper widget in a grid cell. Use this class instead of cmc/foundation/GridStepper
+		if you need to display a stepper for some rows and something else for other rows. 
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/foundation/GridStepperCellDescriptor">
+		<dependency localName="GridNumericViewer" moduleName="cmc/foundation/GridNumericViewer"/>
+		<dependency localName="GridStepperEditor" moduleName="cmc/foundation/GridStepperEditor"/>
+		<!---
+			@keywords private
+			The class name of the viewer widget to use in order to display the property value. The default is
+			{@link cmc/foundation/GridNumericViewer GridNumericViewer}.
+		-->
+		<variable name="cellViewerClass" value="${GridNumericViewer}"/>
+		<!---
+			@keywords private
+			The class name of the editor widget to use in order to change the property value. The default is
+			{@link cmc/foundation/GridStepperEditor GridStepperEditor}.
+		-->
+		<variable name="cellEditorClass" value="${GridStepperEditor}"/>
+		<!--- The minimum allowable value for this stepper. The default value is "0". -->
+		<variable name="minimumValue" type="number" value="0"/>
+		<!--- The maximum allowable value for this stepper. The default value is "10000". -->
+		<variable name="maximumValue" type="number" value="10000"/>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				minimumValue: this.minimumValue,
+				maximumValue: this.maximumValue
+			};
+			]]>
+		</method>
+	</GridCellDescriptor>
+	
+	<!---
+		@keywords private
+		This class extends {@link cmc/foundation/Stepper Stepper} so that it can be used as an editor in an object grid. It provides
+		delegates that listen for mouse and keyboard focus on the grid, and key such as Esc and Tab which will close the
+		editor and redirect the grid focus to another cell.
+	-->
+	<Stepper classDefinition="true" definitionName="cmc/foundation/GridStepperEditor" width="${this.immediateParent.availableWidth}" useCompactPadding="true"/>
+	
+	<!--- 
+		@keywords private
+		This editor is used to edit the integer type of {@link cmc/foundation/GridStepper} column
+	 -->
+	<BaseStepper classDefinition="true" definitionName="cmc/foundation/ColumnStepperEditor" value="${''}">
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<!--- 
+			@keywords private
+			The column being edited by {@link cmc/foundation/ColumnStepperEditor} 
+		 -->
+		<variable name="column" value="${null}"/>
+		
+		<!--- Selected objects {@link cmc/foundation/ModelObject} in grid -->
+		<variable name="selectedObjects" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="getValue">
+			<![CDATA[
+			return (this.value == null || this.value == "") ? "" : GlobalizationUtil.Singleton.formatNumberToDataFormat(this.value);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="initialValue" name="resetValue">
+			<![CDATA[
+			this.setVariable("minimumValue", this.column.minimumValue ? this.column.minimumValue : 0);
+			this.setVariable("maximumValue", this.column.maximumValue ? this.column.maximumValue : 10000);
+			this.setVariable("value", initialValue);
+			]]>
+		</method>
+	</BaseStepper>
+
+</Definitions>

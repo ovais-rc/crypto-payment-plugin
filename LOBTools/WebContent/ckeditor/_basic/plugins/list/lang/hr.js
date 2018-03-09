@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","hr",{bulletedlist:"Označena lista",numberedlist:"Numerirana lista",ibm:{numberedTitle:"Numerirana lista",bulletedTitle:"Označena lista",description:"Postavke će se primijeniti na razinu trenutne liste",fontsize:"Veličina fonta:"}});

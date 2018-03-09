@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","hu",{options:"Speciális karakter lehetőség",title:"Speciális karakter",toolbar:"Speciális karakter beszúrása"});

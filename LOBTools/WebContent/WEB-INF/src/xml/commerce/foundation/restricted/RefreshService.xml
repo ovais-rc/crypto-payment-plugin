@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		A service that will refresh a business object. A refresh service may only be declared
+		as an immediate	child of an instance of cmc/foundation/ObjectDefinition. A refresh service
+		must return an updated version of the object from the server. A refresh service is
+		only required for object definitions for which the {@link cmc/foundation/ObjectDefinition#openGroupTop}
+		attribute has been set to true. Normally this is an instance of {@link cmc/foundation/PrimaryObjectDefinition}.
+		
+		<p>The refresh service may, but is not required to return the current object's child objects.
+		When the reload action is triggered by the user, the framework will discard all of the current
+		object's child objects and issue the refresh service and any declared get children services.
+		If the get children services return all of the child objects, then the refresh service
+		does not need to return any embedded child objects.
+		
+		<p>The reload action will also cause the framework to discard any {@link cmc/foundation/ReferenceObjectDefinition reference objects}
+		and any {@link cmc/foundation/ParentReferenceObjectDefinition parent reference objects}
+		for which the current object is the referenced object. These will be reloaded by
+		invoking the {@link cmc/foundation/GetReferencesService get references services} for the current object.
+		References may optionally be included in the refresh service response using the "parent" tag in the
+		same fashion required by the get references service.
+
+		<p>The reload action will discard any unsaved property changes to the current object before invoking
+		the refresh service.
+		
+		<p>Refresh services can expect an implicit parameter named "dataLanguageIds". The value of the "dataLanguageIds"
+		parameter will be set to the default language ID of the currently selected store. Refresh services that return
+		translated data must respect this parameter and only return the translated data that matches the specified
+		language ID.
+		
+		<p>Additional required service parameters can be defined by declaring instances of
+		{@link cmc/foundation/ServiceParam} as children of the cmc/foundation/RefreshService instance.
+		
+		<p>The following example demonstrates the declaration of a refresh service
+		that reloads a catalog entry.
+		
+		@START_CODE
+		<RefreshService url="/cmc/GetCatalogEntry">
+			<ServiceParam name="storeId" />
+			<ServiceParam name="catalogId" parentProperty="true" parentType="Catalog" propertyName="catalogId" />
+			<ServiceParam name="catentryId" propertyName="catentryId" />
+		</RefreshService>
+		@END_CODE
+
+		<p>The successful response from a create service must be an XML document
+		that has "object" as the name of the root element. The child elements
+		must include updated property values for all of the object's properties. The
+		"object" element may optionally include embedded child objects.
+		
+		<p>Object and property elements returned from a refresh service may optionally include a "readonly" attribute.
+		If the value is set to "true", then the framework will prevent the user from making changes to that object
+		or property instance.
+		
+		<p>The following sample demonstrates the expected format
+		for a successful response. It includes updated property values
+		and an embedded child object.
+		
+		@START_CODE
+		<object>
+			<type>Product</type>
+			<catenttypeId readonly="true">ProductBean</catenttypeId>
+			<catentryId>10275</catentryId>
+			<partnumber readonly="true">FUCO-01</partnumber>
+			<object objectType="CatalogEntryDescription">
+				<languageId>-1</languageId>
+				<name>Sleek Occasional Table</name>
+				<sDesc>The sleek styling makes this occasional table a perfect addition to your home.</sDesc>
+			</object>
+		</object>
+		@END_CODE
+		
+		<p>If an exception occurs while processing a refresh service, the response must be an XML document that
+		has a root element named "errors". The "errors" element must include one child element named "exception".
+		The "exception" element includes a message suitable for display to the user. The following example demonstrates
+		a valid error response for a refresh service.
+
+		@START_CODE
+		<errors>
+			<exception>You do not have the required access rights to perform this operation.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/RefreshService" getService="true" retryOnError="true" sendDefaultLanguageId="true" sendObjectVersionId="true">
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.refreshService = this;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when a service response is successfuly returned from the server. This does
+			not necessarily mean that the service completed successfully, it just means that there were no
+			communication errors. The specified dataset contains the response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceComplete">
+			<![CDATA[
+			var requestParent = ds.requestParent;
+			this.inherited(arguments);
+			requestParent.refreshing = false;
+			requestParent.updateLogMessages();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when a communication error occurs during the service request.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: error message
+		-->
+		<method args="ds, message" name="handleServiceError">
+			<![CDATA[
+			var requestParent = ds.requestParent;
+			this.inherited(arguments);
+			requestParent.refreshing = false;
+			requestParent.updateLogMessages();
+			]]>
+		</method>
+	</Service>
+</Definitions>

@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright, International Business Machines Corporation 2004
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+
+ <Report reportName="biEMailActivityEventsReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+ <SQLvalue>
+
+SELECT distinct
+"E-mail Activity Name",
+"Campaign Name",
+"Number of Recipients",
+COALESCE("Open Rate",0.00),
+COALESCE("Clickthrough Rate",0.00),
+COALESCE("Hard Bounce Rate",0.00),
+COALESCE("Soft Bounce Rate",0.00),
+COALESCE("Opt Out Rate",0.00),
+COALESCE("Conversion Rate",0.00),
+COALESCE("Shopcart Abandonment Rate",0.00)
+
+
+FROM
+	    
+	    	(
+	    	  
+	    		SELECT distinct
+	    
+	    		FES.EMLPROMO_ID AS EML_ID,
+	    
+	    		EMLP.NAME as "E-mail Activity Name",
+	    		coalesce(CMP.CAMPAIGN_NAME,' ') AS "Campaign Name",
+	    		coalesce(EMLP.RECEPIENTSCOUNT, 0) AS "Number of Recipients",
+	    
+	    		ROUND(   DEC(SUM(FES.OPENED))/case when (EMLP.RECEPIENTSCOUNT-SUM(FES.HARD_BOUNCED) - SUM(FES.SOFT_BOUNCED)=0 ) 
+	    						     then null 
+	    						     else DEC(EMLP.RECEPIENTSCOUNT - SUM(FES.HARD_BOUNCED) - SUM(FES.SOFT_BOUNCED))  
+	    					       end     ,4) *100 AS "Open Rate",
+	    
+	    		ROUND(   DEC(SUM(FES.CLICKED))/case when (EMLP.RECEPIENTSCOUNT-SUM(FES.HARD_BOUNCED) - SUM(FES.SOFT_BOUNCED)=0 )
+	    						     then null 
+	    						     else DEC(EMLP.RECEPIENTSCOUNT - SUM(FES.HARD_BOUNCED) - SUM(FES.SOFT_BOUNCED)) 
+	    					       end   ,4) *100 AS "Clickthrough Rate",
+	    
+	    		ROUND(   DEC(SUM(FES.HARD_BOUNCED))/case when (EMLP.RECEPIENTSCOUNT = 0) 
+	    						     then null  
+	    						     else DEC(EMLP.RECEPIENTSCOUNT ) 
+	    					       end  ,4)*100  AS "Hard Bounce Rate",
+	    
+	    		ROUND(   DEC(SUM(FES.SOFT_BOUNCED))/ case when (EMLP.RECEPIENTSCOUNT = 0) 
+	    						     then null 
+	    						     else DEC(EMLP.RECEPIENTSCOUNT ) 
+	    					       end  ,4)*100 AS "Soft Bounce Rate",
+	    					       
+	    					       
+	    		
+	    
+	    		ROUND(   DEC(SUM(FES.OPTEDOUT))/ case when (EMLP.RECEPIENTSCOUNT - SUM(FES.HARD_BOUNCED) - SUM(FES.SOFT_BOUNCED)=0 ) 
+	    						     then null  
+	    						     else DEC(EMLP.RECEPIENTSCOUNT - SUM(FES.HARD_BOUNCED) - SUM(FES.SOFT_BOUNCED))  
+	    					       end  ,4) *100 AS "Opt Out Rate"
+	       
+	       	  
+	   	 from
+	      	      (SELECT DISTINCT
+	      	          EMLPROMO_ID,
+	      	          MEMBER_ID,
+	      	          OPENED,
+	      	          CLICKED,
+	      	          HARD_BOUNCED,
+	      	          SOFT_BOUNCED,
+	      	          OPTEDOUT, 
+	      	          CAMPAIGN_ID,
+	      	          STORE_ID
+
+
+	      	        FROM
+	    		  	 WCA.FACT_EMAIL_STATS FEML, WCA.PERIOD P
+	    		  WHERE  P.PER_ID=FEML.PER_ID
+	    		         AND p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+	    			 AND p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+	    			 AND FEML.STORE_ID IN ({storeent_id})
+
+	    		  ) AS FES
+
+	                	JOIN WCA.EMLPROMO EMLP
+	                	 ON (EMLP.EMLPROMO_ID=FES.EMLPROMO_ID AND EMLP.STOREENT_ID=FES.STORE_ID)
+	                    
+	             		    LEFT OUTER JOIN( SELECT NAME as CAMPAIGN_NAME, CAMPAIGN_ID,STORE_ID  from WCA.CAMPAIGN ) AS CMP
+	             		      ON (CMP.CAMPAIGN_ID = FES.CAMPAIGN_ID AND CMP.STORE_ID=FES.STORE_ID) 
+
+
+	                        
+	                       
+	    	where
+	            lower(EMLP.NAME) like lower('{eMailActivityName}%')
+	            AND lower(coalesce(CMP.CAMPAIGN_NAME,' ')) like lower('{campaignName}%')
+	           
+	    	 
+	    	  
+	   	 GROUP BY FES.EMLPROMO_ID, EMLP.NAME, EMLP.RECEPIENTSCOUNT,CAMPAIGN_NAME
+	    	  
+	    	  	
+	    	) AS EVENT
+	    
+	 	 LEFT OUTER JOIN
+
+		(SELECT distinct
+
+			 FES.EMLPROMO_ID AS EML_ID,
+
+			 ROUND(  DEC( COUNT(FES.ORDER_ID)) /case  when SUBQUERY1.ASSUMED_RECIPIENTS is null
+			  					  then null
+			  					  when 	SUBQUERY1.ASSUMED_RECIPIENTS=0
+			  					  then null
+			  					  else DEC(SUBQUERY1.ASSUMED_RECIPIENTS)
+			  					  end ,4) *100 AS "Conversion Rate"
+
+	 
+		 FROM
+	    		  WCA.FACT_EMAIL_STATS FES 
+
+	        	       JOIN WCA.EMLPROMO EMLP
+	        	        ON (EMLP.EMLPROMO_ID=FES.EMLPROMO_ID AND EMLP.STOREENT_ID = FES.STORE_ID)
+
+	        	        LEFT OUTER JOIN( SELECT NAME as CAMPAIGN_NAME, CAMPAIGN_ID, STORE_ID  from WCA.CAMPAIGN ) AS CMP
+	        	          ON (CMP.CAMPAIGN_ID = FES.CAMPAIGN_ID AND CMP.STORE_ID = FES.STORE_ID) 
+
+	        	           JOIN WCA.PERIOD P 
+	        	               ON ( P.PER_ID=FES.PER_ID ) 
+
+	        	               LEFT OUTER JOIN WCA.FACT_ORDERS FO
+	        	               	ON (FES.ORDER_ID = FO.ORDER_ID AND FO.STORE_ID = FES.STORE_ID)
+
+	        	               	     JOIN (SELECT FEML.EMLPROMO_ID, FEML.STORE_ID, (case when (EMLPROMO.RECEPIENTSCOUNT - SUM(FEML.HARD_BOUNCED) - SUM(FEML.SOFT_BOUNCED)=0) 
+					    							   		   then null    
+					    							                   else DEC(EMLPROMO.RECEPIENTSCOUNT - SUM(FEML.HARD_BOUNCED) - SUM(FEML.SOFT_BOUNCED))
+					    							                   end) as ASSUMED_RECIPIENTS
+					    					      from WCA.FACT_EMAIL_STATS FEML
+					    					            JOIN WCA.EMLPROMO EMLPROMO
+					    					              ON(EMLPROMO.EMLPROMO_ID=FEML.EMLPROMO_ID AND EMLPROMO.STOREENT_ID=FEML.STORE_ID)
+
+					    					               JOIN WCA.PERIOD PER
+					    					                ON(PER.PER_ID=FEML.PER_ID )
+
+					    					                   LEFT OUTER JOIN WCA.CAMPAIGN CAMPAIGN
+					    					                     ON(FEML.CAMPAIGN_ID = CAMPAIGN.CAMPAIGN_ID AND CAMPAIGN.STORE_ID=FEML.STORE_ID)
+
+					    					      WHERE   lower(EMLPROMO.NAME) like lower('{eMailActivityName}%')
+											      AND lower(coalesce(CAMPAIGN.NAME,' ')) like lower('{campaignName}%')
+	        	   								      AND FEML.STORE_ID IN ({storeent_id})
+					    						      AND PER.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+			 								      AND PER.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+
+
+					    					      GROUP BY FEML.EMLPROMO_ID,EMLPROMO.RECEPIENTSCOUNT, FEML.STORE_ID
+					    					      ) AS SUBQUERY1
+					   ON (SUBQUERY1.EMLPROMO_ID = FES.EMLPROMO_ID AND SUBQUERY1.STORE_ID = FES.STORE_ID)
+	                       	    
+	                       
+	                      
+	 	  where
+	           lower(EMLP.NAME) like lower('{eMailActivityName}%')
+	           AND lower(coalesce(CMP.CAMPAIGN_NAME,' ')) like lower('{campaignName}%')
+	           AND FES.STORE_ID IN ({storeent_id})
+	   	   AND p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+	   	   AND p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+	   	   AND WCA.PARAM_VALUE_IN(CHAR(FO.ORDER_STATUS_ID),'FE_EFFECTIVE_ORD_STATUS')=1
+	            	  
+	   	  
+	  	 GROUP BY FES.EMLPROMO_ID,EMLP.RECEPIENTSCOUNT, SUBQUERY1.ASSUMED_RECIPIENTS
+	   
+	   	
+		
+		) AS CONV
+		
+	     ON (CONV.EML_ID = EVENT.EML_ID)
+	     
+		LEFT OUTER JOIN
+   	 	(
+  	 	 SELECT
+  	              FES.EMLPROMO_ID AS EML_ID,
+
+  	  		ROUND(  DEC(SUM(FES.ABANDONEDORDERS))/case when SUM(FES.PLACEDORDERS) =0
+  	  							   then null
+								   else DEC( SUM(FES.PLACEDORDERS))
+								   end ,4) *100  AS "Shopcart Abandonment Rate"
+		FROM
+			(SELECT DISTINCT
+			    EMLPROMO_ID,
+			    MEMBER_ID,
+			    STORE_ID,
+			    CAMPAIGN_ID,
+			    ABANDONEDORDERS,
+			    PLACEDORDERS
+
+			  FROM
+				 WCA.FACT_EMAIL_STATS FEML, WCA.PERIOD P
+			  WHERE  P.PER_ID=FEML.PER_ID
+				 AND p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+				 AND p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+				 AND STORE_ID IN ({storeent_id})
+
+			  ) AS FES
+
+			    JOIN WCA.EMLPROMO EMLP
+			     ON (EMLP.EMLPROMO_ID=FES.EMLPROMO_ID AND EMLP.STOREENT_ID=FES.STORE_ID)
+
+			     LEFT OUTER JOIN( SELECT NAME as CAMPAIGN_NAME, CAMPAIGN_ID,STORE_ID  from WCA.CAMPAIGN ) AS CMP
+			       ON (CMP.CAMPAIGN_ID = FES.CAMPAIGN_ID AND CMP.STORE_ID=FES.STORE_ID) 
+
+
+  	     where
+		lower(EMLP.NAME) like lower('{eMailActivityName}%')
+		AND lower(coalesce(CMP.CAMPAIGN_NAME,' ')) like lower('{campaignName}%')
+	
+
+
+		GROUP BY FES.EMLPROMO_ID,CAMPAIGN_NAME                   	  
+
+  	    ) AS ABANDONMENT
+		ON (ABANDONMENT.EML_ID= EVENT.EML_ID)
+
+
+	ORDER BY
+	{sortBy} {sortOrder}  
+
+
+		</SQLvalue>
+ <display>
+			<standardInfo>
+				<resourceBundle>bi.biNLS</resourceBundle>
+				<title>eMailActivityEvents</title>
+				<message>eMailActivityEvents</message>
+			</standardInfo>
+			<userDefinedParameters>
+				<THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+				<TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+				<spaceBetweenColumns>20</spaceBetweenColumns>
+				<columnDefaultAttributes>
+					<displayInReport>true</displayInReport>
+					<columnWidth>0</columnWidth>
+					<maxEntryLength>999</maxEntryLength>
+					<columnType>string</columnType>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columnDefaultAttributes>
+
+								 
+
+				<columns>
+					<columnKey>C0</columnKey>
+					<columnName>eMailActivityName</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C1</columnKey>
+					<columnName>campaignName</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+
+				<columns>
+					<columnKey>C2</columnKey>
+					<columnName>numberOfRecipients</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+
+				<columns>
+					<columnKey>C3</columnKey>
+					<columnName>column_openRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				</columns>
+
+				<columns>
+					<columnKey>C4</columnKey>
+					<columnName>column_clickThruRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+                </columns>
+
+				<columns>
+					<columnKey>C5</columnKey>
+					<columnName>column_hardBounceRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+                </columns>
+
+				<columns>
+					<columnKey>C6</columnKey>
+					<columnName>column_softBounceRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+                </columns>
+
+				<columns>
+					<columnKey>C7</columnKey>
+					<columnName>column_optOutRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				</columns>
+
+				<columns>
+					<columnKey>C8</columnKey>
+					<columnName>column_conversionRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				</columns>
+
+				<columns>
+					<columnKey>C9</columnKey>
+					<columnName>column_shopCartAbandonRate</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				</columns>
+
+	
+	
+
+				
+			</userDefinedParameters>
+		</display>
+  </Report>
+
+   
+
+</Reporting>

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report reportName="biIndividualPromotionPerformanceReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+SELECT
+	PR.PROMO_NAME AS "Promotion Name",
+	COALESCE(PR.PROMO_CODE, wca.locale_string('NA')) AS  "Promotion Code",
+	COUNT(DISTINCT FA.ORDER_ID) AS "# of Orders",
+	(SUM(FOI.RPT_SALES_VALUE)+SUM(FA.ADJUST_AMOUNT)) AS "Order Amount (With Promotion)",
+	SUM(FOI.RPT_SALES_VALUE) AS "Amount (Without Promotion)",
+	SUM(FA.ADJUST_AMOUNT) AS "Adjustment Amount",
+	ROUND(DOUBLE(SUM(FOI.RPT_SALES_VALUE)+SUM(FA.ADJUST_AMOUNT))/
+		DOUBLE((
+			SELECT
+				COALESCE(SUM(WFOI.RPT_SALES_VALUE + WFOI.DISCOUNTS), 0)
+			FROM
+				WCA.FACT_ORDERITEMS WFOI,
+				WCA.PERIOD PER
+			WHERE
+				WFOI.STORE_ID=PR.STORE_ID AND
+				WFOI.PER_ID=PER.PER_ID AND
+				WFOI.order_status_id in (select int(param_value) from wca.parameters where param_type in ('ORDER_STATUS_SHIPPED', 'ORDER_STATUS_SUBMITTED')) AND
+				PER.CALENDAR_DATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+				PER.CALENDAR_DATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+		)), 4)*100 AS "% Sales Amount",
+	FOI.REPORT_CURRENCY AS "Currency"
+FROM
+	(SELECT DISTINCT(PRO.PROMO_NAME),PRO.PROMO_CODE,PRO.STORE_ID,PRO.CALCODE_ID,PRO.PROMO_GR_NAME  FROM WCA.PROMOTION PRO WHERE PRO.STORE_ID=({storeent_id})) PR,
+	WCA.FACT_ADJUSTMENT FA,
+	WCA.FACT_ORDERITEMS FOI,
+	WCA.PERIOD P
+WHERE
+
+	FA.ORDERITEMS_ID=FOI.ORDERITEMS_ID AND
+	PR.PROMO_GR_NAME = '{promotiongrp}' AND
+	PR.CALCODE_ID=FA.CALCODE_ID AND FA.ADJUST_AMOUNT &lt;&gt; 0 AND
+	PR.STORE_ID=({storeent_id}) AND
+	FA.STORE_ID in ({storeent_id}) AND
+	FOI.STORE_ID in ({storeent_id}) AND
+	P.PER_ID=FA.PER_ID AND
+	FOI.order_status_id in (select int(param_value) from wca.parameters where param_type in ('ORDER_STATUS_SHIPPED', 'ORDER_STATUS_SUBMITTED')) AND
+	P.CALENDAR_DATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+ 	P.CALENDAR_DATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+GROUP BY
+	PR.PROMO_NAME, PR.PROMO_CODE, PR.STORE_ID, FOI.REPORT_CURRENCY
+ORDER BY
+	{sortBy} {sortOrder}
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>biIndividualPromotionPerformance</title>
+         <message>biIndividualPromotionPerformance</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+			<displayInHeader>false</displayInHeader>
+			<displayInSummary>false</displayInSummary>
+			<displayTotal>false</displayTotal>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>promoName</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>promoCode</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>numOfOrders</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+          </columns>
+          <columns>
+            <columnKey>C3</columnKey>
+            <columnName>orderAmountWithPromotion</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	     <columns>
+            <columnKey>C4</columnKey>
+            <columnName>orderAmountWithoutPromotion</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	     <columns>
+            <columnKey>C5</columnKey>
+            <columnName>adjustAmount</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	  	<columns>
+            <columnKey>C6</columnKey>
+            <columnName>salesAmountRate</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+      	</columns> 
+		<columns>
+            <columnKey>C7</columnKey>
+            <columnName>currency</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>      	      
+	</userDefinedParameters>
+   </display>
+  </Report>
+   <Report reportName="biIndividualPromotionPerformanceAllReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+SELECT
+	PR.PROMO_NAME AS "Promotion Name",
+	FA.ADJUST_TYPE,
+	COALESCE(PR.PROMO_CODE, wca.locale_string('NA')) AS  "Promotion Code",
+	COUNT(DISTINCT FA.ORDER_ID) AS "# of Orders",
+	(SUM(FOI.RPT_SALES_VALUE)+SUM(FA.ADJUST_AMOUNT)) AS "Order Amount (With Promotion)",
+	SUM(FOI.RPT_SALES_VALUE) AS "Amount (Without Promotion)",
+	SUM(FA.ADJUST_AMOUNT) AS "Adjustment Amount",
+	ROUND(DOUBLE(SUM(FOI.RPT_SALES_VALUE)+SUM(FA.ADJUST_AMOUNT))/
+		DOUBLE((
+			SELECT
+				COALESCE(SUM(WFOI.RPT_SALES_VALUE + WFOI.DISCOUNTS), 0)
+			FROM
+				WCA.FACT_ORDERITEMS WFOI,
+				WCA.PERIOD PER
+			WHERE
+				WFOI.STORE_ID=PR.STORE_ID AND
+				WFOI.PER_ID=PER.PER_ID AND
+				WFOI.order_status_id in (select int(param_value) from wca.parameters where param_type in ('ORDER_STATUS_SHIPPED', 'ORDER_STATUS_SUBMITTED')) AND
+				PER.CALENDAR_DATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+				PER.CALENDAR_DATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+		)), 4)*100 AS "% Sales Amount",
+	FOI.REPORT_CURRENCY AS "Currency"
+FROM
+	(SELECT DISTINCT(PRO.PROMO_NAME),PRO.PROMO_CODE,PRO.STORE_ID,PRO.CALCODE_ID,PRO.PROMO_GR_NAME FROM WCA.PROMOTION PRO WHERE PRO.STORE_ID=({storeent_id})) PR,
+	WCA.FACT_ADJUSTMENT FA,
+	WCA.FACT_ORDERITEMS FOI,
+	WCA.PERIOD P
+WHERE
+	FA.ORDERITEMS_ID=FOI.ORDERITEMS_ID AND
+	PR.CALCODE_ID=FA.CALCODE_ID AND FA.ADJUST_AMOUNT &lt;&gt; 0 AND
+	PR.STORE_ID=({storeent_id}) AND
+	FA.STORE_ID in ({storeent_id}) AND
+	FOI.STORE_ID in ({storeent_id}) AND
+	P.PER_ID=FA.PER_ID AND
+	FOI.order_status_id in (select int(param_value) from wca.parameters where param_type in ('ORDER_STATUS_SHIPPED', 'ORDER_STATUS_SUBMITTED')) AND
+	P.CALENDAR_DATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+ 	P.CALENDAR_DATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+GROUP BY
+	PR.PROMO_NAME, FA.ADJUST_TYPE, PR.PROMO_CODE, PR.STORE_ID, FOI.REPORT_CURRENCY
+ORDER BY
+	{sortBy} {sortOrder}
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>biIndividualPromotionPerformance</title>
+         <message>biIndividualPromotionPerformance</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+			<displayInHeader>false</displayInHeader>
+			<displayInSummary>false</displayInSummary>
+			<displayTotal>false</displayTotal>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>promoName</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>adjustType</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>promoCode</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>         
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>numOfOrders</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+          </columns>
+          <columns>
+            <columnKey>C4</columnKey>
+            <columnName>orderAmountWithPromotion</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	     <columns>
+            <columnKey>C5</columnKey>
+            <columnName>orderAmountWithoutPromotion</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	     <columns>
+            <columnKey>C6</columnKey>
+            <columnName>adjustAmount</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	  	<columns>
+            <columnKey>C7</columnKey>
+            <columnName>salesAmountRate</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+      	</columns>              
+      	<columns>
+            <columnKey>C8</columnKey>
+            <columnName>currency</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+	</userDefinedParameters>
+   </display>
+  </Report>
+ </Reporting>

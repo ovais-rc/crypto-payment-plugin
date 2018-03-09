@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		This class provides helper methods for number formatting based on various number preferences and for currency formating. There is a node
+		declared named <CODE>cmc/foundation/GlobalizationUtil</CODE> that can be used when necessary in the code. 	
+		
+		The {@link cmc/foundation/NumberFormatPreference number formats} each specify a <code>decimalSeparator</code> and the and a <code>thousandsSeparator</code>.
+		The <code>decimalSeparator</code> is a character that will be used to mark the boundary between the integral and the fractional parts of a number in CMC. 
+		The <code>thousandsSeparator</code> is a character that will be used to separate between groups of three digits in the integral part of a number in CMC.
+	-->
+	<Node definitionName="cmc/foundation/GlobalizationUtil" singletonDefinition="true">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>		
+		<!-- 	
+			The decimal separator to use for formatting the number. It is a character that will be used to mark the boundary
+			between the integral and the fractional parts of the number.  This value is determined based on the 
+			{@link cmc/foundation/NumberFormatPreference number format preference} chosen by the user.
+			The default value is ".".
+		-->
+		<variable name="decimalSeparator" type="string" value="."/>
+		<!-- 	
+			The thousands separator to use for formatting the number. It is a character that will be used to separate between 
+			groups of three digits in the integral part of the number.  This value is determined based on the 
+			{@link cmc/foundation/NumberFormatPreference number format preference} chosen by the user.
+			The default value is ",".
+		-->
+		<variable name="thousandsSeparator" type="string" value=","/>
+		<!-- 
+			@keywords private
+			This map stores the mapping between the currency code and the number of decimal places for that currency.
+		 -->
+		<variable name="CURRENCY_DECIMALS_MAP" value="${[]}"/>	
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.CURRENCY_DECIMALS_MAP = {
+				'ALL': 2,
+				'DZD': 2,
+				'ARS': 2,
+				'AUD': 2,
+				'EUR': 2,
+				'BHD': 2,
+				'BYR': 2,
+				'BOB': 2,
+				'BAM': 2,
+				'BRL': 2,
+				'BGN': 2,
+				'CAD': 2,
+				'CLP': 2,
+				'CNY': 2,
+				'COP': 2,
+				'CRC': 2,
+				'HRK': 2,
+				'CZK': 2,
+				'DKK': 2,
+				'DOP': 2,
+				'USD': 2,
+				'EGP': 2,
+				'SVC': 2,
+				'EEK': 2,
+				'GTQ': 2,
+				'HNL': 2,
+				'HKD': 2,
+				'HUF': 2,
+				'ISK': 2,
+				'INR': 2,
+				'IDR': 2,
+				'ILS': 2,
+				'JPY': 0,
+				'JOD': 2,
+				'KZT': 2,
+				'KRW': 0,
+				'KWD': 2,
+				'LVL': 2,
+				'LBP': 2,
+				'LTL': 2,
+				'MKD': 2,
+				'MYR': 2,
+				'MXN': 2,
+				'MAD': 2,
+				'NZD': 2,
+				'NIO': 2,
+				'NOK': 2,
+				'OMR': 2,
+				'PAB': 2,
+				'BYG': 2,
+				'PEN': 2,
+				'PHP': 2,
+				'PLN': 2,
+				'QAR': 2,
+				'RON': 2,
+				'RUB': 2,
+				'SAR': 2,
+				'RSD': 2,
+				'SGD': 2,
+				'SKK': 2,
+				'SIT': 2,
+				'ZAR': 2,
+				'SEK': 2,
+				'CHF': 2,
+				'SYP': 2,
+				'TWD': 2,
+				'THB': 2,
+				'TND': 2,
+				'TRY': 2,
+				'UAH': 2,
+				'AED': 2,
+				'GBP': 2,
+				'UYU': 2,
+				'VEB': 2,
+				'VEF': 2,
+				'VND': 2,
+				'YER': 2,
+				'MKN': 2,
+				'ROL': 2,
+				'RUR': 2
+			};
+			]]>
+		</method>
+									
+		<!---
+			This method converts a given number in normalized number format to the formatting specified by the number format preference.
+			@param string x: The number to be formatted in normalized (xxxx.yy) format.
+			@param number numDecimalPlaces: the number of decimals to pad this number out to. By default, no padding will occur. 
+			@param cmc/foundation/EventHandler delegate: a delegate that will be registered so that it is called when the display format changes. 
+			@returns string The formatted number, or x if the input number is invalid.
+		-->
+		<method args="x, numDecimalPlaces, delegate" name="formatNumberToDisplayFormat">
+			<![CDATA[
+			if (typeof(numDecimalPlaces) == "undefined") numDecimalPlaces = 0;
+			if (typeof(delegate) == "undefined") delegate = null;
+			var decPlaces;
+			if (numDecimalPlaces && numDecimalPlaces != null && numDecimalPlaces > 0) {
+				decPlaces = numDecimalPlaces;
+			}
+			else {
+				decPlaces = 0;
+			}
+			if (typeof (x) != "string") {
+				x = String(x);
+			}
+			var isNum = StringUtil.Singleton.isNumber(x);
+			if (!isNum) {
+				return x;
+			}
+			var strNum = StringUtil.Singleton.replace(x, " ", "");
+			var wholeNumber = "";
+			var fraction = "";
+			var decimal = strNum.indexOf(".");
+			if (decimal != -1) {
+				wholeNumber = strNum.substring(0, decimal);
+				fraction = strNum.substring(decimal + 1);
+				fraction = fraction == 0 ? "" : fraction;
+			}
+			else {
+				wholeNumber = strNum;
+			}
+			var separatedNum = "";
+			var negative = strNum.indexOf("-");
+			if (negative != -1) {
+				wholeNumber = wholeNumber.substring(negative + 1);
+			}
+			var cnt = 0;
+			for (var i = wholeNumber.length - 1; i >= 0; i--) {
+				if (cnt == 3) {
+					separatedNum = this.thousandsSeparator + separatedNum;
+					cnt = 0;
+				}
+				separatedNum = wholeNumber.charAt(i) + separatedNum;
+				cnt++;
+			}
+			if (negative != -1) {
+				separatedNum = "-" + separatedNum;
+			}
+			if (delegate != null) {
+				delegate.connect(this, "ondecimalSeparator");
+			}
+			while (fraction.length > 0 && fraction.substring(fraction.length - 1, fraction.length) == '0') {
+				fraction = fraction.substring(0, fraction.length - 1);
+			}
+			fraction = StringUtil.Singleton.padright(fraction, "0", decPlaces);
+			if (fraction.toString().length > 0) {
+				return separatedNum + this.decimalSeparator + fraction;
+			}
+			else {
+				return separatedNum;
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method converts the specified number from its localized display format to normalized number format. If the number
+			is not valid, it will return the input. 
+			
+			Valid numbers have all of the thousands separators in the correct spot, or no thousands separators at all. There cannot
+			  be any characters in the number other than digits, the specified thousand separator and the specified decimal separator. 
+			  
+			Numbers without a decimal part are valid.
+			@param string x The number that is formatted. This means that the number can include the thousands separator, 
+				and decimal separator for that number format preference.			
+			@returns string The number in the normalized format or x if the input number is invalid
+		-->
+		<method args="x" name="formatNumberToDataFormat">
+			<![CDATA[
+			var strNum = x.toString();
+			var wholeNumber = "";
+			var fraction = "";
+			var decimal = strNum.indexOf(this.decimalSeparator);
+			if (decimal != -1) {
+				wholeNumber = strNum.substring(0, decimal);
+				fraction = strNum.substring(decimal + 1);
+			}
+			else {
+				wholeNumber = strNum;
+			}
+			var negative = strNum.indexOf("-");
+			if (negative == 0) {
+				wholeNumber = wholeNumber.substring(negative + 1);
+			}
+			var isNum = StringUtil.Singleton.isNumber(fraction);
+			if (fraction != "" && !isNum) {
+				return x;
+			}
+			wholeNumber = StringUtil.Singleton.replace(wholeNumber, this.thousandsSeparator, "");
+			isNum = StringUtil.Singleton.isNumber(wholeNumber);
+			if (!isNum) {
+				return x;
+			}
+			strNum = StringUtil.Singleton.replace(strNum, " ", "");
+			strNum = StringUtil.Singleton.replace(strNum, this.thousandsSeparator, "");
+			if (this.decimalSeparator != ".") {
+				strNum = StringUtil.Singleton.replace(strNum, this.decimalSeparator, ".");
+			}
+			var decimal = strNum.indexOf(".");
+			if (decimal != -1) {
+				var newLength = strNum.length;
+				var lastChar = strNum.charAt(newLength - 1);
+				while (lastChar == "0") {
+					newLength--;
+					lastChar = strNum.charAt(newLength - 1);
+				}
+				if (lastChar == ".") {
+					newLength--;
+				}
+				strNum = strNum.substr(0, newLength);
+			}
+			var numStart = 0;
+			var minSize = 1;
+			if (negative == 0) {
+				numStart = 1;
+				minSize = 2;
+			}
+			var decimal = strNum.indexOf(".");
+			if (decimal != -1) {
+				minSize += strNum.length - decimal;
+			}
+			while (strNum.length > minSize && strNum.charAt(numStart) == "0") {
+				strNum = (negative == 0 ? "-" : "") + strNum.substr(numStart + 1);
+			}
+			return strNum;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This handler will update the number displayed if the user changes their number format preference.
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCNumberFormat") {
+				var numberFormat = PreferenceManager.Singleton.getPreference("CMCNumberFormat");
+				numberFormat = StringUtil.Singleton.replace(numberFormat, "b", " ");
+				this.setVariable("thousandsSeparator", numberFormat.length > 1 ? numberFormat.charAt(1) : "");
+				this.setVariable("decimalSeparator", numberFormat.charAt(0));
+			}
+			]]>
+		</handler>
+		
+		<!---
+			This method gets the number of decimal places for a given currency code. If this currency is not found, it returns null.
+			@param string currencyCode The currency code. For example 'USD', 'JPY'.
+			@returns number The number of decimal places for the currency code. For example 2 for 'USD', 0 for 'JPY'. The method
+				returns null if the currencyCode is not found.
+		-->
+		<method args="currencyCode" name="getCurrencyDecimalPlaces">
+			<![CDATA[
+			var decimalPlaces = this.CURRENCY_DECIMALS_MAP[currencyCode];
+			if (typeof (decimalPlaces) == "undefined") {
+				decimalPlaces = null;
+			}
+			return decimalPlaces;
+			]]>
+		</method>
+		
+		<!---
+			This method takes a number and truncates it to the desired number of decimal places with no rounding. For example, if the number
+			is 123.4567 and should be truncated to 3 decimal places, the value 123.456 is returned. If the input number has less decimal places
+			than the desired length, no truncation nor padding will occur. For example, if the number 123.4 is to be truncated to 2 decimal places,
+			123.4 will be returned.
+			
+			@param string x The number to be formatted in normalized (xxxx.yy) format.
+			@param number numDecimalPlaces The number of decimals that the number should be truncated to.
+			@returns string The truncated value of <code>x</code> to <code>numDecimalPlaces</code> decimal places. If the input is invalid, the
+				original value of <code>x</code> is returned.
+		-->
+		<method args="x, numDecimalPlaces" name="truncateDecimals">
+			<![CDATA[
+			var newX = x;
+			if ((x != undefined) && (numDecimalPlaces != undefined) && StringUtil.Singleton.isNumber(x.toString()) && StringUtil.Singleton.isNumber(numDecimalPlaces)) {
+				var strNum = x.toString();
+				var decimal = strNum.indexOf(".");
+				if (decimal != -1) {
+					var wholeNumber = "";
+					var fraction = "";
+					wholeNumber = strNum.substring(0, decimal);
+					fraction = strNum.substring(decimal + 1);
+					if (fraction.length <= numDecimalPlaces) {
+						newX = strNum;
+					}
+					else {
+						for (var i = 0; i < numDecimalPlaces; i++) {
+							if (i == 0) {
+								wholeNumber = wholeNumber + ".";
+							}
+							wholeNumber = wholeNumber + fraction.charAt(i);
+						}
+						newX = wholeNumber;
+					}
+				}
+				else {
+					newX = strNum;
+				}
+			}
+			return newX;
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

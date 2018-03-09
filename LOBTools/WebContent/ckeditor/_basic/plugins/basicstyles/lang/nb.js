@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","nb",{bold:"Halvfet",italic:"Kursiv",strike:"Gjennomstreking",subscript:"Senket skrift",superscript:"Hevet skrift",underline:"Understreking"});

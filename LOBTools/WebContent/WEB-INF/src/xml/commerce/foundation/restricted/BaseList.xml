@@ -1,0 +1,996 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseListComponent" focusable="true" defaultplacement="content">
+		<dependency moduleName="cmc/foundation/KeyUtil" localName="KeyUtil"/>
+		<dependency moduleName="cmc/foundation/FocusIndicator" localName="FocusIndicator"/>
+		<variable name="itemClass" value="${null}" type="module"/>
+		<variable name="multiSelect" value="false" type="boolean"/>
+		<variable name="toggleselected" value="false" type="boolean"/>
+		<variable name="hilitedItem" value="${null}"/>
+		<variable name="shownitems" value="-1" type="number"/>
+		<variable name="autoscrollbar" value="true" type="boolean"/>
+		<variable name="scrollBarClass" value="${null}" type="module"/>
+		<variable name="selection" value="${[]}"/>
+		<variable name="content" value="${this}"/>
+		<event name="onselect"/>
+		
+		<method name="doEnterDown">
+			<![CDATA[
+			if (this.hilitedItem && this.hilitedItem._enabled) {
+				this.select(this.hilitedItem);
+			}
+			]]>
+		</method>
+		
+		<handler name="onfocus">
+			<![CDATA[
+			this._doFocus();
+			]]>
+		</handler>
+		
+		<method name="_doFocus">
+			<![CDATA[
+			if (this.selection && this.selection.length > 0) {
+				this.hilitedItem = this.selection[0];
+				this.hilitedItem.setHilite(true);
+				this.ensureItemInView(this.hilitedItem);
+			}
+			]]>
+		</method>
+		
+		<handler name="onblur">
+			<![CDATA[
+			this._doBlur();
+			]]>
+		</handler>
+
+		<method name="_doBlur">
+			<![CDATA[
+			if (this.hilitedItem) {
+				this.hilitedItem.setHilite(false);
+			}
+			this.hilitedItem = null;
+			]]>
+		</method>
+
+		<method name="setHilite" args="item">
+			<![CDATA[
+			if (this.hilitedItem) {
+				this.hilitedItem.setHilite(false);
+			}
+			this.hilitedItem = item;
+			if (item) {
+				item.setHilite(true);
+			}
+			]]>
+		</method>
+		
+		<handler name="onkeydown" args="kc">
+			<![CDATA[
+			this._dokeydown(kc);
+			]]>
+		</handler>
+
+		<method name="_dokeydown" args="kc">
+			<![CDATA[
+			if (this.focusable) {
+				var item = this.hilitedItem;
+				if (item == null && this.selection.length > 0) {
+					item = this.selection[this.selection.length - 1];
+				}
+				if (kc == 32) {
+					if (item._enabled) {
+						item.setVariable("selected", true);
+						item.setHilite(true);
+						this.hilitedItem = item;
+					}
+				}
+				else if (kc >= 37 && kc <= 40) {	
+					this.setVariable("doesenter", true);
+					var next = null;
+					if (kc == 39 || kc == 40) {
+						next = this.getNextItem(item);
+					}
+					else if (kc == 37  || kc == 38) {
+						next = this.getPreviousItem(item);
+					}
+					if (item) {
+						item.setHilite(false);
+					}
+					if (next) {
+						if (next._enabled && this.multiSelect && KeyUtil.isKeyDown("shift")) {
+							next.setVariable("selected", true);
+						}
+						next.setHilite(true);
+					}
+					this.hilitedItem = next;
+				}
+				else if (kc == 35) {
+					if (item) {
+						item.setHilite(false);
+					}
+					var last = this.getItemAt(this.getNumItems() - 1);
+					if (last) {
+						this.ensureItemInView(last);
+						last.setHilite(true);
+					}
+					this.hilitedItem = last;
+				}
+				else if (kc == 36) {
+					if (item) {
+						item.setHilite(false);
+					}
+					var first = this.getItemAt(0);
+					if (first) {
+						this.ensureItemInView(first);
+						first.setHilite(true);
+					}
+					this.hilitedItem = first;
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="getNextItem" args="referenceItem">
+			<![CDATA[
+			var nextItem = null;
+			if (this.content && this.content.childComponents) {
+				var items = [];
+				for (var i=0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))){
+						items.push(c);
+					}
+				}
+				if (items.length > 0) {
+					if (referenceItem == null) {
+						nextItem = items[0];
+					}
+					else {
+						nextItem = items[items.length - 1];
+						for (var i = 0; i < items.length - 1; i++) {
+							if (items[i] == referenceItem) {
+								nextItem = items[i + 1];
+								break;
+							}
+						}
+					}
+				}
+			}
+			this.ensureItemInView(nextItem);
+			return nextItem;
+			]]>
+		</method>
+		
+		<method name="getPreviousItem" args="referenceItem">
+			<![CDATA[
+			var prevItem = null;
+			if (this.content && this.content.childComponents) {
+				var items = [];
+				for (var i=0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))) {
+						items.push(c);
+					}
+				}
+				if (items.length > 0) {
+					if (referenceItem == null) {
+						prevItem = items[items.length - 1];
+					}
+					else {
+						prevItem = items[0];
+						for (var i = items.length - 1; i > 0; i--) {
+							if (items[i] == referenceItem) {
+								prevItem = items[i - 1];
+								break;
+							}
+						}
+					}
+				}
+			}
+			this.ensureItemInView(prevItem);
+			return prevItem;
+			]]>
+		</method>
+		
+		<method name="ensureItemInView" args="item">
+			<![CDATA[
+			]]>
+		</method>
+
+		<method name="selectNext">
+			<![CDATA[
+			this.moveSelection(1);
+			]]>
+		</method>
+
+		<method name="selectPrev">
+			<![CDATA[
+			this.moveSelection(-1);
+			]]>
+		</method>
+
+		<method name="moveSelection" args="dir">
+			<![CDATA[
+			if (!dir) {
+				dir = 1;
+			}
+			var selection = this.selection;
+            var next = null;
+			if (selection.length == 0) {
+				for (var i = 0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))){
+						next = c;
+						break;
+					}
+				}
+			}
+			else {
+				if (dir > 0) {
+					next = this.getNextItem(this.selection[0]);
+				}
+				else {
+					next = this.getPreviousItem(this.selection[0]);
+				}
+			}
+			this.select(next);
+			]]>
+		</method>
+			
+		<method name="getNumItems">
+			<![CDATA[
+			var numItems = 0;
+			if (this.content && this.content.childComponents) {
+				for (var i = 0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))){
+						numItems++;
+					}
+				}
+			}
+			return numItems;
+			]]>
+		</method>
+		
+		<method name="getItemAt" args="index">
+			<![CDATA[
+			var item = null;
+			if (this.content && this.content.childComponents && index < this.content.childComponents.length) {
+				var count = 0;
+				for (var i = 0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))){
+						if (count == index) {
+							item = c;
+							break;
+						}
+						count++;
+					}
+				}
+			}
+			return item;
+			]]>
+		</method>
+
+		<method name="getItem" args="value">
+			<![CDATA[
+			var item = null;
+			if (this.content && this.content.childComponents != null) {
+				for (var i = 0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && c.value == value) {
+						item = c;
+						break;
+					}
+				}
+			}
+			return item;
+			]]>
+		</method>
+		
+		<method name="addItem" args="text, value">
+			<![CDATA[
+			new this.itemClass.Class(this, {text:text, value:value});
+			]]>
+		</method>
+		
+		<method name="removeItemAt" args="index">
+			<![CDATA[
+			if (this.content && this.content.childComponents != null && this.content.childComponents.length > index) {
+				var item = null;
+				var count = 0;
+				for (var i = 0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))) {
+						if (count == index) {
+							item = c;
+							break;
+						}
+						count++;
+					}
+				}
+				if (item != null) {
+					if (item == this.hilitedItem) {
+						this.hilitedItem = null;
+					}
+					var selectionIndex = this.selection.indexOf(item);
+					if (selectionIndex != -1) {
+						this.selection.splice(selectionIndex, 1);
+					}
+					item.destroy();
+				}
+			}
+			]]>
+		</method>
+			
+		<method name="selectItem" args="value">
+			<![CDATA[
+			this.select(this.getItem(value));
+			]]>
+		</method>
+			
+		<method name="selectItemAt" args="index">
+			<![CDATA[
+			this.select(this.getItemAt(index));
+			]]>
+		</method>
+			
+		<method name="clearSelection">
+			<![CDATA[
+			if (this.selection) {
+				for (var i = 0; i < this.selection.length; i++) {
+					this.selection[i].setSelected(false);
+				}
+				this.selection = [];
+			}
+			]]>
+		</method>
+
+		<method name="select" args="item">
+			<![CDATA[
+			if (item != null) {
+				if (!this.selection){
+					var selection = [];
+					this.setVariable("selection", selection);
+				}
+				if (!this.multiSelect) {
+					if ( !this.isSelected(item) ){
+						this.clearSelection();
+						this.selection.unshift(item);
+						item.setSelected(true);
+						this.setVariable("value", item.getValue());
+						EventUtil.trigger(this, "onselect", item);
+					}
+					else if (this.toggleselected){
+						this.unselect(item);
+						this.setVariable("value", item.getValue());
+						EventUtil.trigger(this, "onselect", item);
+					}
+				} 
+				else if (this.isRangeSelect()) {
+					this.clearSelection();
+					this.selectRange(this._lastSelectedItem, item);
+					EventUtil.trigger(this, "onselect", this.selection);
+				}
+				else if (this.isMultiSelect()) {
+					if (this.isSelected(item)){
+						this.unSelect(item)
+					}
+					else {
+						this.selection.unshift(item);
+						item.setSelected(true);
+					}
+					EventUtil.trigger(this, "onselect", this.selection);
+				}
+				else {
+					this.clearSelection();
+					this.selection.unshift(item);
+					item.setSelected(true);
+					this._lastSelectedItem = item;
+					EventUtil.trigger(this, "onselect", this.selection);
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="getSelection">
+			<![CDATA[
+			if (this.multiSelect){
+				return this.selection;
+			}
+			else {
+				if (this.selection.length > 0){
+					return this.selection[0];
+				}else {
+					return null;
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="getValue">
+			<![CDATA[
+			var selection = this.selection;
+            if (selection.length == 0) return null;
+
+            if ( selection.length == 1 && !this.multiSelect) {
+                return selection[0].getValue();
+            }
+            var valueArray = [];
+            for (var i = 0; i < selection.length; i++) {
+                valueArray[i] = selection[i].getValue();
+            }
+            return valueArray;
+			]]>
+		</method>
+		
+		<!-- multiselect and range select are not being used and tested, so commented out.-->
+		<method name="isRangeSelect">
+			<![CDATA[
+			//return this.multiSelect && KeyUtil.isKeyDown("shift") && this.selection.length > 0 && !KeyUtil.isKeyDown("enter") && !KeyUtil.isKeyDownisKeyDown("tab");
+			return false;
+			]]>
+		</method>
+		
+		<!-- multiselect and range select are not being used and tested, so commented out.-->
+		<method name="isMultiSelect">
+			<![CDATA[
+			//return this.multiSelect && KeyUtil.isKeyDown("control");
+			return false;
+			]]>
+		</method>
+		
+		<method name="isSelected" args="item">
+			<![CDATA[
+			return this.selection.indexOf(item) >= 0;
+			]]>
+		</method>
+		
+		 <method name="unSelect" args="item">
+		 	<![CDATA[
+			var i = this.selection.indexOf(item);
+			this.selection.splice(i, 1);
+			item.setSelected(false);
+			]]>
+	    </method>
+	    
+	    <method name="selectRange" args="firstItem, lastItem">
+	    	<![CDATA[
+			if (this.content && this.content.childComponents) {
+				var items = [];
+				for (var i=0; i < this.content.childComponents.length; i++) {
+					var c = this.content.childComponents[i];
+					if (c.visible && (!FocusIndicator.Class || !(c instanceof FocusIndicator.Class))){
+						items.push(c);
+					}
+				}
+				var ia = items.indexOf(firstItem) + 1;
+				var ib = items.indexOf(lastItem) + 1;
+				if (ia > ib )
+				{
+					ia = ia + ib;
+					ib = ia - ib;
+					ia = ia - ib;
+				}
+				if (items.length > 0) {
+					for (var i = ia; i < ib; i++)
+					{
+						items[i].setSelected(true);
+					}
+				}
+			}
+			]]>
+	    </method>
+	</Component>
+	
+	<BaseListComponent classDefinition="true" definitionName="cmc/foundation/BaseList" bgcolor="#959595">
+		<dependency moduleName="cmc/foundation/TrackComponent" localName="TrackComponent"/>
+		<dependency moduleName="cmc/foundation/VerticalScrollbar" localName="VerticalScrollbar"/>
+		<variable name="interiorBgColor" type="string" value="#ffffff"/>
+		<variable name="content" value="${this.interior.content}"/>
+		<variable name="rightinset" value="0" />
+        <variable name="bordersize"  value="1" />
+        <variable name="border_top" value="${this.bordersize}" />
+        <variable name="border_left" value="${this.bordersize}" />
+        <variable name="border_right" value="${this.bordersize}" />
+        <variable name="border_bottom" value="${this.bordersize}" />
+        <variable name="tracking" value="false" />
+        <variable name="spacing" value="0"/>
+        <variable name="minheight" value="24" type="number"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.interior.setVariable('height', this.height - this.border_top - this.border_bottom);
+			this.checkscrollbar();
+			]]>
+		</handler>
+		
+		<method name="ensureItemInView" args="item">
+			<![CDATA[
+			if (!item) return;
+			var content = this.content; //defaultplacement
+			var clipview = this.interior;
+			if ( (item.y+item.height) > clipview.height - content.y ) {
+			    var diff = clipview.height - content.y - (item.y + item.height);
+			    var newY = Math.max((clipview.height - content.height), (content.y + diff));
+			    content.setVariable("y",newY);
+			} 
+			else if ( (content.y*-1) > item.y ) {
+			    var diff = (content.y*-1)-item.y;
+			    var newY = Math.min(0, (content.y + diff));
+			    content.setVariable("y",newY);
+			}
+			]]>
+		</method>
+		
+		<method name="set_shownitems" args="value">
+        	<![CDATA[
+			this.shownitems = value;
+			EventUtil.trigger(this, "onshownitems");
+			if (this._initcomplete) this.adjustmyheight();
+			]]>
+		</method>
+		
+		<method name="adjustmyheight">
+        	<![CDATA[
+			if (!this._initcomplete) return;
+			if (this._hasSetHeight) {
+				this.checkscrollbar();
+			}
+			else {
+				var hgt = this.calcMyHeight();
+				this._heightinternal = true;
+				this._setVariable('height', hgt + this.border_top + this.border_bottom);
+				this._heightinternal = false;
+			}
+			]]>
+		</method>
+		
+		<method name="calcMyHeight">
+        	<![CDATA[
+			var len = this.getNumItems();
+			if (len == 0) {
+				return this.minheight;
+			}
+			var hgt;
+			if ((this.shownitems > -1) && (this.shownitems < len)) {
+				var iheight;
+				len = this.shownitems;
+				iheight = this.interior.content.childComponents[0].height;
+				hgt = iheight * len + this.spacing * (len - 1);
+			}
+			else {
+				hgt = this.interior.content.height;
+			}
+			return hgt;
+			]]>
+		</method>
+		
+		<method name="set_height" args="value" >
+        	<![CDATA[
+			if (value != null && !this._heightinternal) {
+				this._hasSetHeight = true;
+			}
+			else {
+				this._hasSetHeight = false;
+				if (!this._heightinternal) {
+					var hgt = this.calcMyHeight();
+					value = hgt + this.border_top + this.border_bottom;
+				}
+			}
+			this.inherited(arguments);
+			if (this._initcomplete) {
+				this.interior.setVariable('height', value - this.border_top - this.border_bottom);
+				this.checkscrollbar();
+			}
+			]]>
+		</method>
+		
+		<method name="checkscrollbar">
+         	<![CDATA[
+			if (this.autoscrollbar) {
+				if (this.content.height > this.interior.height) {
+					this.interior.showvscrollbar();
+				}
+				else {
+					this.interior.hidevscrollbar();
+				}
+			}
+			]]>
+		</method>
+
+		<method name="lockLayout">
+			<![CDATA[
+			this.content.lockUpdateSize();
+			this.content.layout.lock();
+			]]>
+		</method>
+		
+		<method name="unlockLayout">
+			<![CDATA[
+			this.content.layout.unlock();
+			this.content.unlockUpdateSize();
+			]]>
+		</method>
+		
+		<Component bgcolor="${this.classroot.interiorBgColor}" clip="true" name="interior" width="${this.classroot.width - this.classroot.border_right - this.classroot.border_left}" x="${this.classroot.border_left}" y="${this.classroot.border_top}">
+            <TrackComponent name="content" tracking="${this.classroot.tracking}" width="${this.immediateParent.width}">
+               <AxisLayout name="layout" axis="y" spacing="${this.classroot.spacing}"/>
+               <method name="addChildComponent" args="childComponent">
+               		<![CDATA[
+					this.inherited(arguments);
+					this.classroot.adjustmyheight();
+					]]>
+				</method>
+
+				<handler name="onheight">
+					<![CDATA[
+					this.classroot.adjustmyheight();
+					]]>
+				</handler>
+
+            </TrackComponent>
+
+            <method name="ensurevscrollbar">
+            	<![CDATA[
+				if (this._sbar == null) {
+					var bar = this.classroot.scrollbarclass;
+					if (!bar) {
+						bar = VerticalScrollbar;
+					}
+					if (bar.Class) {
+						this._sbar = new bar.Class(this, {
+							stepsize: "20"
+						});
+					}
+					else {
+						this._sbar = DefinitionUtil.createDefinitionInstance(bar, this, {
+							stepsize: "20"
+						});
+					}
+				}
+				]]>
+			</method>
+            
+            <method name="showvscrollbar">
+            	<![CDATA[
+				if (this._sbar == null) {
+					this.ensurevscrollbar();
+				}
+				this._sbar.setVariable('visible', true);
+				this.classroot.setVariable('rightinset', this._sbar.width);
+				]]>
+			</method>
+            
+            <method name="hidevscrollbar">	
+            	<![CDATA[
+				if (this._sbar != null) {
+					this._sbar.setVariable('visible', false);
+				}
+				this.classroot.setVariable('rightinset', 0);
+				]]>
+			</method>
+            
+            <method name="vscrollbarisvisible">
+            	<![CDATA[
+				return (this._sbar != null && this._sbar.visible);
+				]]>
+			</method>
+            
+            <handler name="onmousetrackoutbottom" args="y" >
+            	<![CDATA[
+				if (this.vscrollbarisvisible()) this._sbar.step(1);
+				]]>
+			</handler>
+
+            <handler name="onmousetrackouttop" args="y">
+	            <![CDATA[
+				if (this.vscrollbarisvisible()) this._sbar.step(-1);
+				]]>
+			</handler>
+
+        </Component>
+        
+	</BaseListComponent>
+	
+	<BaseList classDefinition="true" definitionName="cmc/foundation/FloatingList" >
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<variable name="owner" value="${null}"/>
+		<variable name="attach" value="bottom" type="string"/>
+		<variable name="attachtarget" value="${null}"/>
+		<variable name="attachoffset" value="0" type="number"/>
+		<variable name="attachxoffset" value="0" type="number"/>
+
+		<method name="constructor" args="parent,args">
+			<![CDATA[
+			this.owner = parent;
+			if (this.immediateParent) {
+				if (this.immediateParent.childComponents) {
+					this.immediateParent.removeChildComponent(this);
+				}
+				if (this.immediateParent.childNodes[this.immediateParent.childNodes.length - 1] == this) {
+					this.immediateParent.childNodes.pop();
+				}
+				this.immediateParent = RootComponent.Singleton;
+			}
+			RootComponent.Singleton.childNodes.push(this);
+			RootComponent.Singleton.addChildComponent(this);
+			this.updateAttachLocationDel = new EventHandler.Class(this, "updateAttachLocation");
+			]]>
+		</method>
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.attachtarget == null) {
+				this.setVariable("attachtarget", this.owner);
+			}
+			]]>
+		</method>
+
+		<method name="set_attachtarget" args="value">
+			<![CDATA[
+			this.attachtarget = value;
+			this.updateAttachLocation();
+			EventUtil.trigger(this, "onattachtarget", value);
+			]]>
+		</method>
+		
+		<method name="set_visible" args="value">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateAttachLocation();
+			if (this.visible) {
+				this.bringToFront();
+			}
+			EventUtil.trigger(this, "onvisible", value);
+			]]>
+		</method>
+		
+		<method name="updateAttachLocation">
+			<![CDATA[
+			this.updateAttachLocationDel.disconnectAll();
+			if (this.attachtarget != null && this.visible) {
+				var validattach = this.attach;
+				var own_x = this.attachtarget.getVariableRelative("x", RootComponent.Singleton);
+				if (validattach=="bottom" || validattach=="top" || validattach=="bottomleft") {
+					var tmp_x = own_x + this.attachxoffset;
+					if (validattach=="bottomleft") {
+						tmp_x = own_x + this.attachtarget.width - this.width + this.attachxoffset;
+					}
+					if (tmp_x < 0 || this.width > RootComponent.Singleton.width) {
+						tmp_x = 0;
+					}
+					else if (tmp_x + this.width > RootComponent.Singleton.width) {
+						tmp_x = RootComponent.Singleton.width - this.width;
+					}
+					this.setVariable("x", tmp_x);
+				} else if (validattach=="left") {
+					var tmp_x = own_x - this.width + this.attachxoffset;
+					if (tmp_x >= 0) {
+						this.setVariable("x", tmp_x);
+					}
+					else {
+						tmp_x = own_x + this.attachtarget.width;
+						if (tmp_x + this.width <= RootComponent.Singleton.width) {
+							this.setVariable("x", tmp_x);
+						}
+						else {
+							this.setVariable("x", 0);
+						}
+					}
+				}
+				else if (validattach=="right") {
+					var tmp_x = own_x + this.attachtarget.width + this.attachxoffset;
+					if (tmp_x + this.width <= RootComponent.Singleton.width ) {
+						this.setVariable("x", tmp_x);
+					}
+					else {
+						tmp_x = own_x - this.width;
+						if (tmp_x > 0) {
+							this.setVariable("x", tmp_x);
+						}
+						else {
+							this.setVariable("x", 0);
+						}
+					}
+				}
+				var own_y = this.attachtarget.getVariableRelative("y", RootComponent.Singleton);
+				if (validattach=="left" || validattach=="right") {
+					if (own_y + this.height <= RootComponent.Singleton.height) {
+						this.setVariable("y", own_y);
+					}
+					else if (this.height < RootComponent.Singleton.height) {
+						this.setVariable("y", RootComponent.Singleton.height - this.height);
+					}
+					else {
+						this.setVariable("y", 0);
+					}
+				} else if (validattach=="bottom" || validattach=="bottomleft") {
+					var tmp_y = own_y + this.attachtarget.height + this.attachoffset;
+					if (tmp_y + this.height <= RootComponent.Singleton.height) {
+						this.setVariable("y", tmp_y);
+					}
+					else {
+						tmp_y = own_y - this.height - this.attachoffset;
+						if (tmp_y > 0) {
+							this.setVariable("y", tmp_y);
+						}
+						else if (RootComponent.height <= this.height) {
+							this.setVariable("y", 0);
+						}
+						else {
+							this.setVariable("y", RootComponent.Singleton.height - this.height);
+						}
+					}
+				}
+				else if (validattach == "top") {
+					var tmp_y = own_y - this.height;
+					if (tmp_y > 0) {
+						this.setVariable("y", tmp_y);
+					}
+					else {
+						tmp_y = own_y + this.attachtarget.height + this.attachoffset;
+						if (tmp_y + this.height <= RootComponent.Singleton.height) {
+							this.setVariable("y", tmp_y);
+						}
+						else {
+							this.setVariable("y", 0);
+						}
+					}
+				}
+				this.updateAttachLocationDel.connect(this.attachtarget, "onx");
+				this.updateAttachLocationDel.connect(this.attachtarget, "onwidth");
+				this.updateAttachLocationDel.connect(RootComponent.Singleton, "onwidth");
+				this.updateAttachLocationDel.connect(this, "onwidth");
+				this.updateAttachLocationDel.connect(this.attachtarget, "ony");
+				this.updateAttachLocationDel.connect(this.attachtarget, "onheight");
+				this.updateAttachLocationDel.connect(RootComponent.Singleton, "onheight");
+				this.updateAttachLocationDel.connect(this, "onheight");
+			}
+			]]>
+		</method>
+	</BaseList>
+	
+	<BaseValueComponent classDefinition="true" definitionName="cmc/foundation/BaseListItem" focusable="false">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<variable name="hilited" value="false" type="boolean"/>
+		<variable name="selected" value="false" type="boolean"/>
+		<variable name="width" value="${this.immediateParent.width}" />
+		<event name="onselect"/>
+		
+		<handler name="onclick">
+			<![CDATA[
+			if (this.parent.select) {
+				this.parent.select(this);
+			}
+			]]>
+		</handler>
+		
+		<handler name="onmousetrackup">
+			<![CDATA[
+			if (this.parent.select) {
+				this.parent.select(this);
+			}
+			]]>
+		</handler>
+		
+		<method name="setSelected" args="value">
+			<![CDATA[
+			this.selected = value;
+			this._applystyle(this.style);
+			EventUtil.trigger(this, "onselected", value);
+			EventUtil.trigger(this, "onselect", this);
+			]]>
+		</method>
+		
+		<method name="set_selected" args="value">
+			<![CDATA[
+			this.selected = value;
+			if (value === true && this.parent.select){
+				this.parent.select(this);
+			}
+			]]>
+		</method>
+		
+		<method name="setHilite" args="value">
+			<![CDATA[
+			this.setVariable("hilited", value);
+			this._applystyle(this.style);
+			]]>
+		</method>
+		
+		<handler name="onmouseover">
+			<![CDATA[
+			if (this.parent.setHilite) {
+				this.parent.setHilite(this);
+			}
+			]]>
+        </handler>
+
+		<handler name="onmouseout">
+			<![CDATA[
+			if (this.parent.setHilite) {
+				this.parent.setHilite(null);
+			}
+			]]>
+		</handler>
+
+		<method name="_showEnabled">
+			<![CDATA[
+			this._applystyle(this.style); 
+			]]>
+		</method>
+				
+		<method name="_applystyle" args="s">
+			<![CDATA[
+			if (this.style != null) {
+				if (this._enabled) {
+					if (this.selected) {
+						this.setVariable("bgcolor", "#4178be");
+					}
+					else if (this.hilited) {
+						this.setVariable("bgcolor", "#e6effb");
+					}
+					else {
+						this.setVariable("bgcolor", "#ffffff");
+					}
+				}
+				else {
+					if (this.hilited) {
+						this.setVariable("bgcolor", "#e6effb");
+					}
+					else {
+						this.setVariable("bgcolor", "#ffffff");
+					}
+				}
+			}
+			]]>
+		</method>
+	</BaseValueComponent>
+	
+	<BaseListItem classDefinition="true" definitionName="cmc/foundation/BaseTextListItem" height="28">
+		<variable name="text" type="string"/>
+
+		<method name="_applystyle" args="s">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this._enabled) {
+				if (this.selected) {
+					this.setVariable("fgcolor", "#ffffff");
+				}
+				else {
+					this.setVariable("fgcolor", "#464646");
+				}
+			}
+			else {
+				if (this.hilited) {
+					this.setVariable("fgcolor", "#9d9d9d");
+				}
+				else {
+					this.setVariable("fgcolor", "#b1b1b1");
+				}
+			}
+			]]>
+		</method>
+
+		<TextComponent name="_title" x="8" text="${this.parent.text}" valign="middle"/>
+	</BaseListItem>
+</Definitions>

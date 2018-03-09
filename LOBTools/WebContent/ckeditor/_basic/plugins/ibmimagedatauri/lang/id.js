@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","id",{error:"Saat ini penempelan gambar tidak didukung. Gunakan opsi 'Masukkan Gambar' pada toolbar."});

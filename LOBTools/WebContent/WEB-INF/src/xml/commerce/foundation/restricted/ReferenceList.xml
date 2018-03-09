@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords abstract
+		
+		This class defines a read-only list of {@link cmc/foundation/PrimaryObjectDefinition primary objects} that
+		reference the current object through the specified {@link cmc/foundation/ReferenceObjectDefinition reference objects}.
+		The reference list class includes an option that allows the user to delete the primary objects.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/BaseReferenceList" focusable="false" visible="true">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ReferenceListMenu" moduleName="cmc/foundation/ReferenceListMenu"/>
+		<!---
+			@keywords private
+			Indicates that this reference list is embedded in a properties view.
+		-->
+		<variable name="embedded" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that find and replace can be performed on the grid
+		-->
+		<variable name="findable" type="boolean" value="false"/>
+		<!---
+			This attribute contains a comma separated list of reference object paths.
+			The list of reference object paths can be used to restrict the list of parent objects
+			to those that are referenced through the specified object path. An asterisk (*) can be used to replace
+			one or more object types in a reference object path. The asterisk will match all possible object types.
+			The following list of reference object paths displays the web activities that reference an e-Marketing spot:
+			<code>WebActivity/path/viewEMarketingSpot/ChildEMarketingSpot,WebActivity/path/branch/path/viewEMarketingSpot/ChildEMarketingSpot</code>.
+			The same result can be achieved by using an asterisk to replace the alternate paths to the reference object type:
+			<code>*/ChildEMarketingSpot</code>.
+		-->
+		<variable name="referenceObjectPaths" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Reference to model object.
+		-->
+		<variable name="o"/>
+		<!---
+			The name of the class to use for viewing this list.
+			This is often a class that extends {@link cmc/foundation/ObjectGrid}.
+			@type string
+		-->
+		<variable name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition to use for viewing this list. 
+			This is often a definition that extends {@link cmc/foundation/ObjectGrid}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+			@type string
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableHeight" attribute. This
+			is used to calculate the list view's available height.
+		-->
+		<variable name="availableHeightView" value="${ViewUtil.Singleton.getAvailableHeightView(this)}"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the list view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			@keywords private
+			Reference list status message.
+		-->
+		<variable name="statusMessage" type="string" value=""/>
+		<!---
+			@keywords private
+			Indicates that the status message should be displayed as an error.
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		<!---
+			Set this attribute to <code>true</code> to indicate that the framework should allow the business user to delete
+			the primary objects that are displayed in this list. The default is <code>false</code>.
+		-->
+		<variable name="allowDelete" type="boolean" value="false"/>
+		<!---
+			Set this attribute to <code>true</code> to indicate that the framework should allow the business user to duplicate
+			the primary objects that are displayed in this list. The default is <code>false</code>.
+		-->
+		<variable name="allowDuplicate" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.listClass == null) {
+				this.listClass = this.listDefinition;
+			}
+			if (this.availableHeightView != null) {
+				this.updateAvailableHeightDel = new EventHandler.Class(this, "updateAvailableHeight");
+				this.updateAvailableHeightDel.connect(this.availableHeightView, "onavailableHeight");
+				this.updateAvailableHeight();
+			}
+			if (this.availableWidthView != null) {
+				this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+				this.updateAvailableWidthDel.connect(this.availableWidthView, "onavailableWidth");
+				this.updateAvailableWidth();
+			}
+			this.updateMessageDel = new EventHandler.Class(this, "updateMessage");
+			if (this.listClass.Class) {
+				new this.listClass.Class(this, {
+					name: "list",
+					placement: "content",
+					rowMenuClass: ReferenceListMenu,
+					fitExistingRows: this.embedded,
+					padding: this.embedded ? 0 : 8,
+					filterLeftPadding: this.embedded ? 0 : 3,
+					listBorderSize: this.embedded ? 1 : 0,
+					findable: this.findable
+				});
+			}
+			else {
+				DefinitionUtil.createDefinitionInstance(this.listClass, this, {
+					name: "list",
+					placement: "content",
+					rowMenuClass: ReferenceListMenu,
+					fitExistingRows: this.embedded,
+					padding: this.embedded ? 0 : 8,
+					filterLeftPadding: this.embedded ? 0 : 3,
+					listBorderSize: this.embedded ? 1 : 0,
+					findable: this.findable
+				});
+			}
+			if (this.o) {
+				this.o.bindViewToReferences(this.list, null, this.referenceObjectPaths);
+			}
+			this.updateMessage();
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Check if delete is enabled for the selected primary objects in this list.
+		-->
+		<method name="isDeleteEnabled">
+			<![CDATA[
+			var deleteEnabled = false;
+			if (this.allowDelete) {
+				var selectedObjects = this.list.getSelectedObjects();
+				deleteEnabled = selectedObjects.length > 0;
+				for (var i = 0; deleteEnabled && i < selectedObjects.length; i++) {
+					deleteEnabled = selectedObjects[i].objectDefinition.primary && selectedObjects[i].isDeletable();
+				}
+			}
+			return deleteEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Invoke delete.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			var selectedObjects = this.list.getSelectedObjects();
+			var objects = [];
+			for (var i = 0; i < selectedObjects.length; i++) {
+				objects[i] = selectedObjects[i];
+			}
+			if (objects.length == 1) {
+				objects[0].deleteObject(true);
+			}
+			else if (objects.length > 0) {
+				require(["cmc/foundation/MultipleDeleteConfirmationDialog"], function(MultipleDeleteConfirmationDialog) {
+					MultipleDeleteConfirmationDialog.Singleton.openMultipleDeleteConfirmationDialog(objects);
+				});
+			}
+			]]>
+		</method>
+				
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.o) {
+				this.o.releaseViewFromReferences(this.list);
+			}
+			if (this.updateAvailableHeightDel) {
+				this.updateAvailableHeightDel.disconnectAll();
+				delete this.updateAvailableHeightDel;
+			}
+			if (this.updateAvailableWidthDel) {
+				this.updateAvailableWidthDel.disconnectAll();
+				delete this.updateAvailableWidthDel;
+			}
+			this.updateMessageDel.disconnectAll();
+			delete this.updateMessageDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the available height.
+		-->
+		<method args="e" name="updateAvailableHeight">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newHeight = this.availableHeightView.availableHeight - this.content.y;
+			if (this.embedded) {
+				newHeight -= 2;
+			}
+			if (this.content.availableHeight != newHeight) {
+				this.content.setVariable("availableHeight", newHeight);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the available width.
+		-->
+		<method args="e" name="updateAvailableWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = this.availableWidthView.availableWidth;
+			if (this.embedded) {
+				newWidth -= 2;
+			}
+			if (this.content.availableWidth != newWidth) {
+				this.content.setVariable("availableWidth", newWidth);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="getSelectedObject">
+			<![CDATA[
+			return this.list.getSelectedObject();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BaseReferenceList", "setModelObject(newObject)", [newObject]);
+			}
+			if (this.o !== newObject) {
+				if (this.o) {
+					if (this.list) {
+						this.o.releaseViewFromReferences(this.list);
+					}
+				}
+				this.o = newObject;
+				if (this.o) {
+					if (this.list) {
+						this.o.bindViewToReferences(this.list, null, this.referenceObjectPaths);
+					}
+				}
+				EventUtil.trigger(this, "ono", this.o);
+				this.updateMessage();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BaseReferenceList", "setModelObject(newObject)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the message.
+		-->
+		<method args="e" name="updateMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.list) {
+				this.updateMessageDel.disconnectAll();
+				this.hasError = false;
+				var newMessage = "";
+				if (this.o && this.list.oList) {
+					if (this.list.oList.statusObject != null) {
+						this.hasError = this.list.oList.statusObject.hasError;
+						newMessage = this.list.oList.statusObject.message;
+					}
+					this.updateMessageDel.connect(this.list.oList, "onstatusObject");
+				}
+				if (newMessage != this.statusMessage) {
+					this.setVariable("statusMessage", newMessage);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the available custom services of the selected objects.
+			@return cmc/foundation/CustomService[]
+		-->
+		<method name="getCustomServices">
+			<![CDATA[
+			var customServices = [];
+			var selectedObjects = this.list.getSelectedObjects();
+			if (selectedObjects != null && selectedObjects.length > 0) {
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var oDef = selectedObjects[i].getReferencedObject().objectDefinition;
+					for (var j = 0; j < oDef.customServices.length; j++) {
+						if (customServices.indexOf(oDef.customServices[j]) < 0) {
+							customServices.push(oDef.customServices[j]);
+						}
+					}
+				}
+			}
+			return customServices;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the available client actions of the selected objects.
+			@return cmc/foundation/ClientAction[]
+		-->
+		<method name="getClientActions">
+			<![CDATA[
+			var clientActions = [];
+			var selectedObjects = this.list.getSelectedObjects();
+			if (selectedObjects != null && selectedObjects.length > 0) {
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var oDef = selectedObjects[i].getReferencedObject().objectDefinition;
+					for (var j = 0; j < oDef.clientActions.length; j++) {
+						if (clientActions.indexOf(oDef.clientActions[j]) < 0 && ((this.embedded && oDef.clientActions[j].availableFromEmbeddedListView) || (!this.embedded && oDef.clientActions[j].availableFromMainListView))) {
+							clientActions.push(oDef.clientActions[j]);
+						}
+					}
+				}
+			}
+			return clientActions;
+			]]>
+		</method>
+		
+		<AxisLayout/>
+		<TextComponent multiline="true" name="message" text="${this.classroot.statusMessage}" visible="${this.classroot.embedded &amp;&amp; this.classroot.statusMessage != ''}" width="${this.parent.content.width}"/>
+		<Component name="content" visible="${this.classroot.statusMessage == ''}"/>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></FocusableComponent>
+	
+	<!---
+		This class defines a list of {@link cmc/foundation/ReferenceObjectDefinition reference objects}.
+		
+		The values for {@link cmc/foundation/BaseReferenceList#referenceObjectPaths} and {@link cmc/foundation/BaseReferenceList#listClass} used
+		to display the reference objects must be provided.
+	-->
+	<BaseReferenceList classDefinition="true" definitionName="cmc/foundation/ReferenceList">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<!---
+			@keywords private
+			The nearest ancestor view that defines a model object.
+		-->
+		<variable name="oView" value="${ModelUtil.Singleton.findObjectView(this.parent)}"/>
+
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateModelObjectDel = new EventHandler.Class(this, "updateModelObject");
+			this.updateModelObject();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateModelObjectDel.disconnectAll();
+			delete this.updateModelObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the model object.
+		-->
+		<method args="e" name="updateModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateModelObjectDel.disconnectAll();
+			this.updateModelObjectDel.connect(this.oView, "ono");
+			var newObject = this.oView.o;
+			this.setVariable("o", newObject);
+			]]>
+		</method>
+		
+	</BaseReferenceList>
+	
+	<!---
+		This class defines a {@link cmc/foundation/ReferenceList} for use in a properties view.
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyReferenceList">
+		<dependency localName="BaseReferenceList" moduleName="cmc/foundation/BaseReferenceList"/>
+		<!---
+			Comma separated list of reference object paths. The list of
+			reference object paths can be used to restrict the list of parent objects
+			to those that are referenced through the specified object path.
+			An asterisk (*) can be used to replace
+			one or more object types in a reference object path. The asterisk will match all possible object types.
+			The following list of reference object paths displays the web activities that reference an e-Marketing spot:
+			<code>WebActivity/path/viewEMarketingSpot/ChildEMarketingSpot,WebActivity/path/branch/path/viewEMarketingSpot/ChildEMarketingSpot</code>.
+			The same result can be achieved by using an asterisk to replace the alternate paths to the reference object type:
+			<code>*/ChildEMarketingSpot</code>.
+		-->
+		<variable name="referenceObjectPaths" type="string" value="${null}"/>
+		<!---
+			The name of the class to use for viewing this list.
+			This is often a class that extends {@link cmc/foundation/ObjectGrid}.
+			@type string
+		-->
+		<variable name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition to use for viewing this list. 
+			This is often a definition that extends {@link cmc/foundation/ObjectGrid}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+			@type string
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+		<!---
+			Set this attribute to <code>true</code> to indicate that the framework should allow the business user to delete
+			the primary objects that are displayed in this list. The default is <code>false</code>.
+		-->
+		<variable name="allowDelete" type="boolean" value="false"/>
+		<!---
+			Set this attribute to <code>true</code> to indicate that the framework should allow the business user to duplicate
+			the primary objects that are displayed in this list. The default is <code>false</code>.
+		-->
+		<variable name="allowDuplicate" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Property reference list should determine their enablement on its own.  Overwrites the
+			{@link cmc/foundation/PropertiesComponent#updateEnablement} method to do nothing.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new BaseReferenceList.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				enabled: parentComponent.enabled,
+				referenceObjectPaths: this.referenceObjectPaths,
+				listClass: this.listClass,
+				listDefinition: this.listDefinition,
+				allowDelete: this.allowDelete,
+				allowDuplicate: this.allowDuplicate,
+				embedded: true
+			});
+			]]>
+		</method>
+	
+	</PropertiesComponent>
+
+</Definitions>

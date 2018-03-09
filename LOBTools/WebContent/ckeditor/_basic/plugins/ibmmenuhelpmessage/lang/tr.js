@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","tr",{keystrokeForContextMenu:"Diğer seçenekler için Ctrl tuşunu basılı tutarak sağ tıklatın",keystrokeForContextMenuMac:"Diğer seçenekler için Cmd tuşunu basılı tutarak sağ tıklatın"});

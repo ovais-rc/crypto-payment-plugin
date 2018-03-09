@@ -1,0 +1,152 @@
+<!-- ========================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (c) Copyright IBM Corp. 2001, 2002
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ ===========================================================================-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+
+<%@page import="java.util.*" %>
+<%@page import="com.ibm.commerce.command.CommandContext"%>
+<%@page import="com.ibm.commerce.server.ECConstants"%>
+<%@page import="com.ibm.commerce.ordermanagement.beans.ReturnReasonDescriptionDataBean" %>
+<%@page import="com.ibm.commerce.ordermanagement.beans.ReturnReasonDataBean" %>
+<%@page import="com.ibm.commerce.ordermanagement.objects.ReturnReasonAccessBean" %>
+<%@page import="com.ibm.commerce.exception.ExceptionHandler" %>
+
+<jsp:useBean id="returnReasonDescriptionDataBean" scope="request" class="com.ibm.commerce.ordermanagement.beans.ReturnReasonDescriptionDataBean">
+</jsp:useBean>
+
+<%!
+  
+private String generateReturnReasonSelection(HttpServletRequest request, Hashtable reportsRB, String container, String title, String allReasons)
+{
+
+   CommandContext ReturnReasonHelperCC = (CommandContext) request.getAttribute(ECConstants.EC_COMMANDCONTEXT);
+
+   Iterator iter = null;
+   TreeMap sortedMap = new TreeMap();
+
+   try {
+      
+      sortedMap.put(reportsRB.get(allReasons), "ALL");
+
+      String jStoreID = ReturnReasonHelperCC.getStoreId().toString();
+      
+      com.ibm.commerce.common.beans.StoreDataBean storeDB = new com.ibm.commerce.common.beans.StoreDataBean();
+      storeDB.setStoreId(jStoreID);
+      com.ibm.commerce.beans.DataBeanManager.activate(storeDB, request);
+      String storeentId = storeDB.getStoreEntityId();
+    
+      Enumeration returnReasonDBEnum = new ReturnReasonDataBean().findByStoreentIdsForCustomer(new Integer(storeentId),new Integer(storeentId));
+      while (returnReasonDBEnum.hasMoreElements()) {
+	      ReturnReasonAccessBean returnReasonAB = (ReturnReasonAccessBean) returnReasonDBEnum.nextElement();
+	      String returnReasonId = returnReasonAB.getRtnReasonId();
+	      String returnReasonName = returnReasonAB.getCode();
+	      String description = "";
+	      try{
+	          description = " - " + returnReasonAB.getDescription(ReturnReasonHelperCC.getLanguageId()).getDescription();
+	      }catch(Exception e){
+	          description = "";
+	      }
+	      sortedMap.put(returnReasonName + description,returnReasonId);
+      }
+
+      //Hashtable returnReasonsAndCodes =  ReturnReasonDescriptionDataBean.getReturnReasonsForLanguage(ReturnReasonHelperCC.getLanguageId());
+	  //Enumeration enumerateElements = returnReasonsAndCodes.keys();
+      
+      //while (returnReasonDBEnum.hasMoreElements()) {
+          
+      //    String returnReasonDescription = (String)enumerateElements.nextElement();
+      //    String returnReasonID = (String) returnReasonsAndCodes.get(returnReasonDescription);
+       	
+      //    sortedMap.put(returnReasonDescription, returnReasonID);
+      
+      //}
+
+      iter = sortedMap.keySet().iterator();
+   } catch (Exception e) {
+      e.printStackTrace();
+   }
+
+   String resulttitle = "";
+   
+   if (iter == null) {
+      // System.out.println("Reporting Framework: No Reasons available for selection.");
+      return "";
+   }
+    
+   if (title != null)  resulttitle =
+                                     "    <TR>\n" +
+                                     "       <TD COLSPAN=9 ALIGN=LEFT VALIGN=CENTER HEIGHT=32>" + reportsRB.get(title) + "</TD>\n" +
+                                     "    </TR>\n";
+
+   String result = resulttitle + "<FORM NAME=" + container + ">\n <SELECT NAME=ReasonSelection ID=reasonSelection width=100> \n";
+   
+   while (iter.hasNext()) {
+      String desc = (String) iter.next();
+      String reasonCode = (String) sortedMap.get(desc);
+      result = result + "   <OPTION value=" + reasonCode + ">" + desc + "</OPTION> \n";
+   }
+   
+   result += " </SELECT> \n</FORM>";
+   
+   return result;
+}
+
+%>
+ 
+<SCRIPT>
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // save function for reason
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function saveReason(container)
+   {
+      with (document.forms[container]) {
+         parent.put("reasonSelectionIndex", ReasonSelection.selectedIndex);
+      }
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // initialize function for reason
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function onLoadReasons(container)
+   {
+      var curIndex = parent.get("reasonSelectionIndex", null);
+
+      if (curIndex != null) {
+         with (document.forms[container]) {
+            ReasonSelection.selectedIndex  = curIndex;
+         }
+      }
+      
+      return;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // This function returns the reason 
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnReason(container)
+   {
+      with (document.forms[container]) {
+         return ReasonSelection[ReasonSelection.selectedIndex].value;
+      }
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // This function returns the text associated with the reason code
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnReasonText(container)
+   {
+      with (document.forms[container]) {
+         return ReasonSelection[ReasonSelection.selectedIndex].text;
+      }
+   }
+
+
+</SCRIPT>

@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+========================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (c) Copyright IBM Corp. 2005
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+===========================================================================
+-->
+
+<Reporting>
+  <Report reportName="biOrderConversionRatioCSRLogonID" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+
+select distinct
+	usrg.logonid as CSRLogonID,
+	concat(coalesce(m.first_name,''),concat(concat(' ',coalesce(m.middle_name,'')),concat(' ',coalesce(m.last_name,'')))) as CSRName,
+	Result.Quotes as Quotes,
+	Result.Orders as ConvertedOrders,
+	Result.Orders *100 /Result.Quotes as Rate
+from
+	wca.userreg usrg,	
+	wca.member m,
+	(select 
+		quotes.creator_id as Creator,
+		quotes.orderCount as Quotes,
+		coalesce(converted.orderCount,0) as Orders
+	from
+		(select
+			fs.creator_id as creator_id,
+			count(distinct fs.order_id) as orderCount
+		from
+			wca.fact_sales fs
+		where
+			fs.store_id in ({storeent_id}) AND
+			WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), fs.PER_ID) = 1 AND			
+            		fs.type = 'QOT'
+		group by
+			fs.creator_id)
+	as quotes 
+	left outer join
+		(select
+			fs.creator_id as creator_id,
+			count(distinct fo.order_id) as orderCount
+		from
+			wca.fact_sales fs,
+			wca.fact_orders fo
+		where
+			fs.store_id in ({storeent_id}) AND
+			WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), fs.PER_ID) = 1 AND
+            fs.type = 'QOT' AND
+			fo.type = 'ORD' AND 
+            fo.timeplaced is not null AND       
+			fo.sourceid = fs.order_id
+		group by
+			fs.creator_id)
+	as converted
+	on quotes.creator_id = converted.creator_id) 
+	as Result
+where 
+	Result.Creator = usrg.users_id
+    	and usrg.logonid = '{CSRLogonID}'
+	and m.member_id = usrg.users_id
+	
+order by {sortColumn} {sortDirection}
+
+    </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>orderConversionRatioReportTitle</title>
+         <message>orderConversionRatioReportTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <displayInHeader>false</displayInHeader>
+            <displayInSummary>false</displayInSummary>
+            <displayTotal>false</displayTotal>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>orderConversionRatioActingIDColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>orderConversionRatioActingIDNameColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>orderConversionRatioQuotesColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <displayTotal>true</displayTotal>
+	     </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>orderConversionRatioOrdersColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <displayTotal>true</displayTotal>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>orderConversionRatioRatioColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+            <setMaximumFractionDigits>2</setMaximumFractionDigits>
+            <setMinimumFractionDigits>2</setMinimumFractionDigits>            
+         </columns>         
+      </userDefinedParameters>
+   </display>
+  </Report>
+  
+    <Report reportName="biOrderConversionRatioCSRTeamName" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+
+select distinct
+	usrg.logonid as CSRLogonID,
+	concat(coalesce(m.first_name,''),concat(concat(' ',coalesce(m.middle_name,'')),concat(' ',coalesce(m.last_name,'')))) as CSRName,
+	Result.Quotes as Quotes,
+	Result.Orders as ConvertedToOrders,
+	Result.Orders *100 /Result.Quotes as Rate
+from
+	wca.userreg usrg,	
+	wca.member m,
+	wca.mbrgrprel mg,
+	(select 
+		quotes.creator_id as Creator,
+        	quotes.orderCount as Quotes,
+		coalesce(converted.orderCount,0) as Orders
+	from
+		(select distinct
+			fs.creator_id as creator_id,
+			count(distinct fs.order_id) as orderCount
+		from
+			wca.fact_sales fs
+		where
+			fs.store_id in ({storeent_id})
+			and WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), fs.PER_ID) = 1			
+			and WCA.IN_CSR_GROUP(fs.creator_id, '{CSRTeamName}', fs.PER_ID) = 1
+            		and fs.type = 'QOT'
+		group by
+			fs.creator_id)
+	as quotes 
+	left outer join
+		(select distinct
+			fs.creator_id as creator_id,
+			count(distinct fo.order_id) as orderCount
+		from
+			wca.fact_sales fs,
+			wca.fact_orders fo
+		where
+			fs.store_id in ({storeent_id})
+			and WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), fs.PER_ID) = 1
+			and WCA.IN_CSR_GROUP(fs.creator_id, '{CSRTeamName}', fs.PER_ID) = 1  
+            		and fs.type = 'QOT' 
+			and fo.type = 'ORD' 
+            		and fo.timeplaced is not null
+			and fo.sourceid = fs.order_id
+		group by
+			fs.creator_id)
+	as converted
+	on quotes.creator_id = converted.creator_id) 
+	as Result
+where 
+	Result.Creator = usrg.users_id
+	and m.member_id = usrg.users_id
+	and mg.mbrgrptype = 'ServiceRepGroup'
+	and mg.member_id = usrg.users_id
+	and mg.mbrgrpname = '{CSRTeamName}'
+	
+	
+order by {sortColumn} {sortDirection}	
+
+    </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>orderConversionRatioReportTitle</title>
+         <message>orderConversionRatioReportTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <displayInHeader>false</displayInHeader>
+            <displayInSummary>false</displayInSummary>
+            <displayTotal>false</displayTotal>            
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>orderConversionRatioActingIDColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>orderConversionRatioActingIDNameColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>orderConversionRatioQuotesColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <displayTotal>true</displayTotal>
+	 </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>orderConversionRatioOrdersColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <displayTotal>true</displayTotal>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>orderConversionRatioRatioColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+            <setMaximumFractionDigits>2</setMaximumFractionDigits>
+            <setMinimumFractionDigits>2</setMinimumFractionDigits>            
+         </columns>         
+      </userDefinedParameters>
+   </display>
+  </Report>
+  
+   <Report reportName="biOrderConversionRatio" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+
+select distinct
+	usrg.logonid as CSRLogonID,
+	concat(coalesce(m.first_name,''),concat(concat(' ',coalesce(m.middle_name,'')),concat(' ',coalesce(m.last_name,'')))) as CSRName,
+	Result.Quotes as Quotes,
+	Result.Orders as ConvertedOrders,
+	Result.Orders *100 /Result.Quotes as Rate
+from
+	wca.userreg usrg,	
+	wca.member m,
+	(select distinct
+		quotes.creator_id as Creator,
+        	quotes.orderCount as Quotes,
+		coalesce(converted.orderCount,0) as Orders
+	from
+		(select
+			fs.creator_id as creator_id,
+			count(distinct fs.order_id) as orderCount
+		from
+			wca.fact_sales fs
+		where
+			fs.store_id in ({storeent_id}) AND
+			WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), fs.PER_ID) = 1 AND			
+            		fs.type = 'QOT'
+		group by
+			fs.creator_id)
+	as quotes 
+	left outer join
+		(select distinct
+			fs.creator_id as creator_id,
+			count(distinct fo.order_id) as orderCount
+		from
+			wca.fact_sales fs,
+			wca.fact_orders fo
+		where
+			fs.store_id in ({storeent_id}) AND
+			WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), fs.PER_ID) = 1 AND
+            fs.type = 'QOT' AND
+			fo.type = 'ORD' AND 
+            fo.timeplaced is not null AND       
+			fo.sourceid = fs.order_id
+		group by
+			fs.creator_id)
+	as converted
+	on quotes.creator_id = converted.creator_id) 
+	as Result
+where 
+	Result.Creator = usrg.users_id
+    and m.member_id = usrg.users_id
+	
+order by {sortColumn} {sortDirection}
+
+    </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>orderConversionRatioReportTitle</title>
+         <message>orderConversionRatioReportTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <displayInHeader>false</displayInHeader>
+            <displayInSummary>false</displayInSummary>
+            <displayTotal>false</displayTotal>            
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>orderConversionRatioActingIDColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>orderConversionRatioActingIDNameColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>orderConversionRatioQuotesColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <displayTotal>true</displayTotal>
+	 </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>orderConversionRatioOrdersColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <displayTotal>true</displayTotal>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>orderConversionRatioRatioColumnTitle</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+            <setMaximumFractionDigits>2</setMaximumFractionDigits>
+            <setMinimumFractionDigits>2</setMinimumFractionDigits>            
+         </columns>         
+      </userDefinedParameters>
+   </display>
+  </Report>
+</Reporting>

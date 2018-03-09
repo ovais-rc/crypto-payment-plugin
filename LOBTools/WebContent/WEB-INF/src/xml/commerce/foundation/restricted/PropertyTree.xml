@@ -1,0 +1,995 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		@keywords private
+		Property Browse object tree node for the property view of a primary object.
+	-->
+	<Tree classDefinition="true" definitionName="cmc/foundation/PropertyBrowseObjectTree" maxObjectViews="20">
+		<dependency localName="PropertyBrowseObjectTree" moduleName="cmc/foundation/PropertyBrowseObjectTree"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="PropertyBrowseObjectTreeMenu" moduleName="cmc/foundation/PropertyBrowseObjectTreeMenu"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="UtilitiesBrowseObjectTree" moduleName="cmc/foundation/UtilitiesBrowseObjectTree"/>
+		<!---
+			The class used to create child nodes.
+		-->
+		<variable name="objectClass" type="module" value="${PropertyBrowseObjectTree}"/>
+		<!---
+			Reference to the business object editor instance.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			Indicates that the children should be loaded recursively.
+		-->
+		<variable name="recurse" value="false"/>
+		<!---
+			Indicates that this node is a leaf node.
+		-->
+		<variable name="isTreeLeaf" type="boolean" value="false"/>
+		<!---
+			The model object associated with this tree node.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			The object being referenced through "o".
+		-->
+		<variable name="referencedObject" value="${null}"/>
+		<!---
+			Indicates that the child tree nodes have been created.
+		-->
+		<variable name="childrenCreated" type="boolean" value="false"/>
+		<!---
+			An array of the filtered child object definitions for this node. Only
+			child object definitions that will be visible in the tree view
+			will be included in this array.
+		-->
+		<variable name="objectDefinitions" value="${null}"/>
+		<!---
+			Indicates that this tree node can be used to navigate to the child objects.
+			Navigating to child objects is allowed for primary, organizational, parent reference,
+			and collection reference objects.
+		-->
+		<variable name="navigationEnabled" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.oEditor == null) {
+				this.oEditor = this.immediateParent.parent.oEditor;
+			}
+			this.updateDisplayNameDel = new EventHandler.Class(this, "updateDisplayName");
+			this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			this.updateFilterDel = new EventHandler.Class(this, "updateFilter");
+			if (this != this.getRoot()) {
+				this.updateFilterDel.connect(this.getRoot(), "onfilter");
+			}
+			if (this.item) {
+				new PropertyBrowseObjectTreeMenu.Class(this, {
+					name: "menu",
+					tree: this
+				});
+				this.menu.addView(this.item.contextMenuArea);
+			}
+			this.updateReferencedObjectDel = new EventHandler.Class(this, "updateReferencedObject");
+			this.checkStatusMessageDel = new EventHandler.Class(this, "checkStatusMessage");
+			this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+			this.checkLeafDel = new EventHandler.Class(this, "checkLeaf");
+			this.updateExpandedTreesDel = new EventHandler.Class(this, "updateExpandedTrees");
+			this.updateIconDel = new EventHandler.Class(this, "updateIcon");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="checkLeaf">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkLeafDel.disconnectAll();
+			var leaf = false;
+			if (this.navigationEnabled) {
+				this.checkLeafDel.connect(this, "onstatusMessage");
+				if (this.statusMessage == "" && this.objectDefinitions != null) {
+					var oDef = this.referencedObject.objectDefinition;
+					if (oDef.organizational) {
+						leaf = this.objectDefinitions.length == 0 && oDef.getOrganizedObjectDefinitions(this.checkLeafDel) != null && oDef.getOrganizedObjectDefinitions().length > 0;
+					}
+					else {
+						leaf = this.objectDefinitions.length == 0;
+					}
+					if (!leaf && this.childrenCreated && this.children.height == 0) {
+						this.checkLeafDel.connect(this.children, "onheight");
+						leaf = true;
+					}
+				}
+			}
+			else {
+				leaf = true;
+			}
+			if (leaf != this.isTreeLeaf) {
+				this.setVariable("isTreeLeaf", leaf);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.o) {
+				this.releaseChildObjectTree();
+				this.oList = null;
+				this.referencedObject = null;
+				this.o = null;
+			}
+			this.updateDisplayNameDel.disconnectAll();
+			delete this.updateDisplayNameDel;
+			this.updateDisplayNameStyleDel.disconnectAll();
+			delete this.updateDisplayNameStyleDel;
+			this.updateFilterDel.disconnectAll();
+			delete this.updateFilterDel;
+			this.updateReferencedObjectDel.disconnectAll();
+			delete this.updateReferencedObjectDel;
+			this.checkStatusMessageDel.disconnectAll();
+			delete this.checkStatusMessageDel;
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.checkLeafDel.disconnectAll();
+			delete this.checkLeafDel;
+			this.updateExpandedTreesDel.disconnectAll();
+			delete this.updateExpandedTreesDel;
+			this.updateIconDel.disconnectAll();
+			delete this.updateIconDel;
+			if (this.updateObjectDefinitionsDel) {
+				this.updateObjectDefinitionsDel.disconnectAll();
+				delete this.updateObjectDefinitionsDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			When the oList is updated, we listen to the objectViewsUpdated event to trigger an update.
+		-->		
+		<handler name="onoList">
+			<![CDATA[
+			this.updateExpandedTreesDel.disconnectAll();
+			if (this.oList) {
+				this.updateExpandedTreesDel.connect(this.oList, "objectViewsUpdated");
+			}
+			this.updateExpandedTrees();
+			]]>
+		</handler>
+
+		<!---
+			Set the model object for this tree node.
+			@param cmc/foundation/ModelObject newObject: the new model object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.releaseModelObjectDel.disconnectAll();
+				this.updateDisplayNameDel.disconnectAll();
+				this.updateDisplayNameStyleDel.disconnectAll();
+				this.updateReferencedObjectDel.disconnectAll();
+				this.updateIconDel.disconnectAll();
+				if (this.o) {
+					if (this.selected) {
+						this.setVariable("selected", false);
+					}
+					if (this.open) {
+						this.setVariable("open", false);
+					}
+					this.releaseChildObjectTree();
+					this.referencedObject = null;
+				}
+				this.o = newObject;
+				if (this.o) {
+					var oDef = this.o.objectDefinition;
+					this.navigationEnabled = oDef.primary || oDef.organizational || oDef.parentReference || oDef.collectionReference;
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					this.updateIcon();
+					if (this.o.objectDisplayName != null) {
+						this.setVariable("text", this.o.objectDisplayName);
+					}
+					this.updateDisplayNameDel.connect(this.o, "onobjectDisplayName");
+					this.updateDisplayNameStyleDel.connect(this.o, "ondisplayNameStyle");
+					this.referencedObject = this.o.getReferencedObject();
+					if (this.referencedObject == null) {
+						this.updateReferencedObjectDel.connect(this.o, "onchildObjects");
+					}
+					else {
+						this.updateReferencedObject();
+					}
+					this.updateDisplayNameStyle();
+					if (this.parent == this.getRoot() && !this.isTreeLeaf) {
+						var openSibling = false;
+						for (var i = 0; i < this.parent.children.childComponents.length; i++) {
+							var child = this.parent.children.childComponents[i];
+							if (child instanceof exports.Class && child.open) {
+								openSibling = true;
+								break;
+							}
+						}
+						if (!openSibling) {
+							this.setVariable("open", true);
+						}
+					}
+				}
+				else {
+					this.referencedObject = null;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register to updateIconDel for the events you want to trigger updating icon.
+		-->	
+		<method args="e" name="updateIcon">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateIconDel.disconnectAll();
+			var root = this.getRoot();
+			var customizer = root.parent.propertyTree.customizer;
+			this.updateIconDel.connect(root.parent, "ono");
+			var icon = null;
+			if (customizer && root.parent.o != null) {
+				icon = customizer.getIcon(root.parent.o, this.o, this.updateIconDel);
+			}
+			if (icon != null) {
+				this.setVariable("icon", icon);
+			}
+			else if (this.o.getIcon() != null) {
+				this.setVariable("icon", this.o.getIcon());
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method releases the {@link cmc/foundation/ModelObject model object} from this tree node.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			Update the referenced object.
+		-->
+		<method args="e" name="updateReferencedObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.referencedObject = this.o.getReferencedObject();
+			if (this.referencedObject != null) {
+				this.updateReferencedObjectDel.disconnectAll();
+				if (this.navigationEnabled) {
+					if (this.open) {
+						this.createChildObjectTree();
+					}
+				}
+				this.updateObjectDefinitions();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the child list nodes to match the current filter.
+		-->
+		<method args="e" name="updateFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.oList) {
+				var newFilter = this.getRoot().filter;
+				if (this.oList.baseFilter != newFilter) {
+					if (this.oList.getViewsLength() > 0) {
+						this.oList.setVariable("baseFilter", newFilter);
+					}
+					else if (this.open) {
+						this.setVariable("open", false);
+					}
+				}
+			}
+			this.updateObjectDefinitions();
+			]]>
+		</method>
+		
+		<!---
+			Update the array of child object definitions that match
+			the current filter.
+		-->
+		<method name="updateObjectDefinitions">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/PropertyBrowseObjectTree", "updateObjectDefinitions");
+			}
+			if (!this.updateObjectDefinitionsDel) {
+				this.updateObjectDefinitionsDel = new EventHandler.Class(this, "updateObjectDefinitions");
+			}
+			else {
+				this.updateObjectDefinitionsDel.disconnectAll();
+			}
+			if (this.referencedObject != null) {
+				this.objectDefinitions = [];
+				if (this.navigationEnabled) {
+					var filter = this.getRoot().filter;
+					var oDef = this.referencedObject.objectDefinition;
+					var defs = oDef.organizational ? oDef.getOrganizedObjectDefinitions(this.updateObjectDefinitionsDel) : oDef.getReferenceObjectDefinitions(this.updateObjectDefinitionsDel);
+					if (defs != null) {
+						for (var i = 0; i < defs.length; i++) {
+							var childDef = defs[i];
+							if (childDef != null && filter.objectTypeMatchesFilter(childDef.objectType)) {
+								this.objectDefinitions.push(childDef);
+							}
+						}
+					}
+				}
+				this.checkLeaf();
+			}
+			else {
+				this.objectDefinitions = null;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/PropertyBrowseObjectTree", "updateObjectDefinitions");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="createChildObjectTree">
+			<![CDATA[
+			if (!this.childrenCreated && this.navigationEnabled) {
+				this.childrenCreated = true;
+				this.referencedObject.bindViewToChildren(this, this.getRoot().filter, null, this);
+				this.checkStatusMessage();
+				this.checkLeaf();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="releaseChildObjectTree">
+			<![CDATA[
+			if (this.childrenCreated) {
+				this.childrenCreated = false;
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var v = this.children.childComponents[i];
+					if (v.releaseChildObjectTree) {
+						v.releaseChildObjectTree();
+					}
+				}
+				this.referencedObject.releaseViewFromChildren(this);
+				this.checkStatusMessage();
+				this.checkLeaf();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o1, o2, sortAscending" name="compare">
+			<![CDATA[
+			var currentFilter = this.getRoot().filter;
+			return currentFilter.objectCompare(o1, o2);
+			]]>
+		</method>		
+		
+		<!---
+			Handle the expand event. If this is the first time the
+			object's children have been expanded, then the child nodes will
+			be created.
+		-->
+		<handler name="onopen">
+			<![CDATA[
+			if (this.o) {
+				if (this.open) {
+					this.createChildObjectTree();
+				}
+				else {
+					this.releaseChildObjectTree();
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			When this tree is expanded, we store the time it was expanded with it and its parents.  We also close any other tree nodes
+			in the browse tree when we have more than the maximinum number of tree nodes expanded.
+		-->
+		<method args="e" name="updateExpandedTrees">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.open && this.oList && this.oList.getViewsLength() > 0) {
+				if (!this.__expandedTime) {
+					var rootObjectTree = this.getRootObjectTree();
+					var expandedTime = (new Date()).getTime();
+					var tree = this;
+					tree.__expandedTime = expandedTime;
+					while (tree && !tree.isRoot() && tree != rootObjectTree) {
+						tree = tree.parent;
+						tree.__expandedTime = expandedTime;
+					}
+					if (rootObjectTree) {
+						rootObjectTree.closeChildrenTreesLeastRecent();
+					}
+				}
+			}
+			else {
+				this.__expandedTime = null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the root object tree, the first tree under the "Top" tree node.
+		-->
+		<method name="getRootObjectTree">
+			<![CDATA[
+			var tree = null;
+			if (this.o && this.o.objectDefinition.objectType != "Top") {
+				tree = this;
+				while (tree && !tree.isRoot() && !tree.parent.o.objectDefinition.objectType != "Top") {
+					tree = tree.parent;
+				}
+			}
+			return tree;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calculates the ordered expanded times and updates the given array.  Iterating through the children of this tree, this method checks
+			the expanded time for expanded child tree nodes and updates the given expandedTimes array by inserting each expanded time in the appropriate
+			ordered position in the array.  This method recurses to this tree's leaf nodes.
+			@param Array expandedTimes: An ordered array of expanded times. The array is ordered in ascending order and does not have duplicate entries.
+		-->
+		<method args="expandedTimes" name="calculateOrderedExpandedTimes">
+			<![CDATA[
+			for (var i = 0; i < this.children.childComponents.length; i++) {
+				var child = this.children.childComponents[i];
+				if (child instanceof exports.Class && child.__expandedTime) {
+					var insertIdx = expandedTimes.length;
+					for (var j = 0; j < expandedTimes.length; j++) {
+						if (child.__expandedTime == expandedTimes[j]) {
+							insertIdx = -1;
+							break;
+						}
+						if (child.__expandedTime < expandedTimes[j]) {
+							insertIdx = j;
+							break;
+						}
+					}
+					if (insertIdx > -1) {
+						expandedTimes.splice(insertIdx, 0, child.__expandedTime);
+					}
+					child.calculateOrderedExpandedTimes(expandedTimes);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method closes all the children trees least recently expanded.  Closing trees will occur when we have a number expanded greater than the maximum number
+			of browse tree nodes expanded, the maxBrowseTreesExpanded context value.
+		-->
+		<method name="closeChildrenTreesLeastRecent">
+			<![CDATA[
+			var contextValue = ContextUtil.Singleton.findContextValue(null, "maxBrowseTreesExpanded");
+			if (contextValue) {
+				var maxBrowseTreesExpanded = contextValue.value;
+				if (maxBrowseTreesExpanded && maxBrowseTreesExpanded > 1) {
+					var time = null;
+					var expandedTimes = [];
+					this.calculateOrderedExpandedTimes(expandedTimes);
+					if (expandedTimes.length >= maxBrowseTreesExpanded) {
+						time = expandedTimes[expandedTimes.length - maxBrowseTreesExpanded];
+					}
+					if (time) {
+						this.closeChildrenTreesBeforeTime(time);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method closes all the children trees that were expanded before the given time.
+			@param number time: The given time.
+		-->
+		<method args="time" name="closeChildrenTreesBeforeTime">
+			<![CDATA[
+			if (time) {
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var child = this.children.childComponents[i];
+					if (child instanceof UtilitiesBrowseObjectTree.Class && child.__expandedTime) {
+						child.closeChildrenTreesBeforeTime(time);
+						if (child.__expandedTime < time) {
+							child.setVariable("open", false);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the display name.
+		-->
+		<method args="e" name="updateDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o.objectDisplayName != null) {
+				this.setVariable("text", this.o.objectDisplayName);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the tree node display name style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newTextColor = this.style.textcolor;
+			var newTextStyle = "plain";
+			var style = this.o.displayNameStyle;
+			if (style != null) {
+				newTextColor = style.color;
+				if (style.bold && style.italic) {
+					newTextStyle = "bolditalic";
+				}
+				else if (style.bold) {
+					newTextStyle = "bold";
+				}
+				else if (style.italic) {
+					newTextStyle = "italic";
+				}
+			}
+			if (this.textColor != newTextColor) {
+				this.setVariable("textColor", newTextColor);
+			}
+			if (this.textStyle != newTextStyle) {
+				this.setVariable("textStyle", newTextStyle);
+			}
+			]]>
+		</method>
+		
+		
+
+		<!---
+			Update the status message.
+		-->
+		<method args="e" name="checkStatusMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkStatusMessageDel.disconnectAll();
+			var newMessage = "";
+			if (this.open && this.oList && this.navigationEnabled) {
+				this.checkStatusMessageDel.connect(this.oList, "onstatusObject");
+				this.checkStatusMessageDel.connect(this, "onopen");
+				if (this.oList.statusObject != null) {
+					if (this.oList.statusObject.messageForTree) {
+						newMessage = this.oList.statusObject.messageForTree;
+					}
+					else {
+						newMessage = this.oList.statusObject.message;
+					}
+				}
+			}
+			if (this.statusMessage != newMessage) {
+				this.setVariable("statusMessage", newMessage);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->		
+		<handler name="onactivate">
+			<![CDATA[
+			this.referencedObject.doOpen();
+			]]>
+		</handler>
+		<DragSource dragAndDropManager="${DndManager.Singleton}" placement="dragtreeitem" targetKeys="${['browseElement', 'element']}"/>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Tree>
+	
+	<!---
+		@keywords private
+		Root node of a property browse object tree.
+	-->
+	<PropertyBrowseObjectTree classDefinition="true" definitionName="cmc/foundation/PropertyRootBrowseTree" maxObjectViews="${null}" showroot="false" visible="true">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		
+		<!---
+			The current filter.
+		-->
+		<variable name="filter" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.filter = this.parent.filterSelector.selectedValue;
+			this.updateFilterDel.connect(this.parent.filterSelector, "onselectedValue");
+			this.checkVisibilityDel = new EventHandler.Class(this, "checkVisibility");
+			this.checkVisibility();
+			]]>
+		</method>
+		
+		<!---
+			Returns an array of the currently selected objects.
+		-->
+		<method name="getSelectedObjects">
+			<![CDATA[
+			var s = this.getSelection();
+			var selectedObjects = [];
+			if (s && s.o) {
+				selectedObjects.push(s.o);
+			}
+			return selectedObjects;
+			]]>
+		</method>
+		
+		<!---
+			Update the filter to match the currently selected filter.
+		-->
+		<method args="e" name="updateFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newFilter = this.parent.filterSelector.selectedValue;
+			if (newFilter != this.filter) {
+				if (this.oList) {
+					this.oList.setVariable("baseFilter", newFilter);
+				}
+				this.setVariable("filter", newFilter);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler args="f" name="onfocus">
+			<![CDATA[
+			if (f != null && f != this) {
+				this.oEditor.model.setVariable("activeSelectionView", this);
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onselect">
+			<![CDATA[
+			if (this.isinited && this.parent.propertyTree.selectionHandler != null && this.parent.o != null) {
+				var selectedObject = null;
+				var s = this.getSelection();
+				if (s && s.o) {
+					selectedObject = s.o;
+				}
+				this.parent.propertyTree.selectionHandler.handleSelection(this.parent.o, selectedObject);
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method is called when the visibility of the tree changes. When the tree is made visible, the list of filtered objects is refreshed.
+			When the tree is made invisible the selectedObject of the tree is set to null.
+		-->
+		<method args="e" name="checkVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.parent.propertyTree.selectionHandler != null) {
+				this.checkVisibilityDel.disconnectAll();
+				var visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+				if (visibilityView != null) {
+					this.checkVisibilityDel.connect(visibilityView, "onvisible");
+				}
+				else if (!this.visible) {
+					this.checkVisibilityDel.connect(this, "onvisible");
+				}
+				else {
+					ViewUtil.Singleton.registerVisibilityDelegate(this, this.checkVisibilityDel);
+					if (this.parent.o != null) {
+						var selectedObject = null;
+						var s = this.getSelection();
+						if (s && s.o) {
+							selectedObject = s.o;
+						}
+						this.parent.propertyTree.selectionHandler.handleSelection(this.parent.o, selectedObject);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.oEditor.model" name="onactiveSelectionView">
+			<![CDATA[
+			this.setVariable("activated", this.oEditor.model.activeSelectionView == this);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="restoreFocus">
+			<![CDATA[
+			FocusUtil.setFocus(this.parent, false);
+			]]>
+		</method>
+	</PropertyBrowseObjectTree>
+	
+	<!---
+		@keywords private
+		
+		This class defines the tree widget to use for {@link cmc/foundation/PropertyTree}.
+	-->
+	<Component classDefinition="true" clip="true" definitionName="cmc/foundation/TreeWidget">
+		<dependency localName="PropertyRootBrowseTree" moduleName="cmc/foundation/PropertyRootBrowseTree"/>
+		<dependency localName="BaseComboBox" moduleName="cmc/foundation/BaseComboBox"/>
+		<!---
+			This attribute holds a reference to the instance of {@link cmc/foundation/ModelObject} that is being modified by the
+			properties view that contains this tree widget.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			This attribute holds a reference to the instance of {@link cmc/foundation/PropertyTree} created this widget.
+		-->
+		<variable name="propertyTree" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			var filter = new BaseComboBox.Class(this, {
+				name: "filterSelector",
+				width: 180
+			});
+			var filters = this.parent.filters;
+			if (filters.length == 0) {
+				this.filterSelector.setVariable("selectedValue", null);
+				this.filterSelector.setValues(null);
+				this.filterSelector.setVariable("visible", false);
+			}
+			else if (filters.length == 1) {
+				this.filterSelector.setVariable("selectedValue", filters[0]);
+				this.filterSelector.setValues(filters);
+				this.filterSelector.setVariable("visible", false);
+			}
+			else {
+				var selectedValue = null;
+				for (var i = 0; i < filters.length; i++) {
+					if (filters[i].isDefault) {
+						selectedValue = filters[i];
+						break;
+					}
+				}
+				if (selectedValue == null) {
+					selectedValue = filters[0];
+				}
+				this.filterSelector.setVariable("selectedValue", selectedValue);
+				this.filterSelector.setValues(filters);
+				this.filterSelector.setVariable("visible", true);
+			}
+			new PropertyRootBrowseTree.Class(this, {
+				name: "propertyBrowseTree",
+				oEditor: this.o.model.oEditor,
+				propertyObject: this.o
+			});
+			this.propertyBrowseTree.setVariable("y", this.filterSelector.visible ? this.filterSelector.height + 10 : 0);
+			this.propertyBrowseTree.setVariable("o", this.o.model.oEditor.navigationTree.o);
+			this.inherited(arguments);
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords final
+		Use this class to declare a tree widget as a component of a properties view. The root
+		node in the tree is the {@link cmc/foundation/TopObjectDefinition Top object} declared in the
+		{@link cmc/foundation/BusinessObjectEditor} that contains the properties view. Declare one or more
+		{@link cmc/foundation/Filter filters} as children of the cmc/foundation/PropertyTree instance to control the
+		objects that will be displayed in the tree.
+		<p>A single instance of {@link cmc/foundation/PropertyTreeNodeCustomizer} can be declared as a child
+		of the property tree instance. The tree node customizer controls the icons that are displayed
+		next to the objects in the tree.</p>
+		<p>Multiple instances of {@link cmc/foundation/PropertyTreeAction} can be declared as children of the
+		property instance. The declared actions will be available in the context menu and edit menu
+		when a tree node is selected.</p>
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyTree">
+		<dependency localName="TreeWidget" moduleName="cmc/foundation/TreeWidget"/>
+		<!---
+			@keywords private
+			Array of available filters.
+		-->
+		<variable name="filters" value="${[]}"/>
+		<!---
+			@keywords private
+			Tree node customizer.
+		-->
+		<variable name="customizer" value="${null}"/>
+		<!---
+			@keywords private
+			Array of tree node actions.
+		-->
+		<variable name="actions" value="${[]}"/>
+		<!---
+			@keywords private
+			Selection handler.
+		-->
+		<variable name="selectionHandler" value="${null}"/>
+				
+		<!--- @keywords private -->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new TreeWidget.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				enabled: parentComponent.enabled,
+				propertyTree: this
+			});
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		Use this class to control the icon that will be displayed next to the nodes in a tree declared using
+		{@link cmc/foundation/PropertyTree}. Create a new class that subclasses this class and overrides the
+		<code>getIcon</code> method. Instantiate the new class as a child of the instance of cmc/foundation/PropertyTree.
+		The <code>getIcon</code> method will be called by the framework when the tree node is displayed.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/PropertyTreeNodeCustomizer">
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.customizer = this;
+			]]>
+		</method>
+		<!---
+			@keywords abstract
+			Override this method and return the name of the resource to be used as the icon for the
+			specified tree node object.
+			@param cmc/foundation/ModelObject o: the model object associated with the properties view that contains the cmc/foundation/PropertyTree instance
+			@param cmc/foundation/ModelObject treeNodeObject: the model object associated with the tree node
+			@param cmc/foundation/EventHandler del: a delegate. Register this delegate to events that will change the icon.
+			@return string: the resource name
+		-->
+		<method args="o, treeNodeObject, del" name="getIcon">
+			<![CDATA[
+
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		Use this class to handle the selection of nodes in a tree declared using
+		{@link cmc/foundation/PropertyTree}. Create a new class that subclasses this class and overrides the
+		<code>handleSelection</code> method. Instantiate the new class as a child of the instance of cmc/foundation/PropertyTree.
+		The <code>handleSelection</code> method will be called by the framework when the selected node changes.
+	--> 
+	<Node classDefinition="true" definitionName="cmc/foundation/PropertyTreeSelectionHandler">
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.selectionHandler = this;
+			]]>
+		</method>
+		<!---
+			@keywords abstract
+			Override this method to handle tree node selection.
+			@param cmc/foundation/ModelObject o: the model object associated with the properties view that contains the cmc/foundation/PropertyTree instance
+			@param cmc/foundation/ModelObject selectedObject: the model object associated with the tree node
+			@return string: the resource name
+		-->
+		<method args="o, selectedObject" name="handleSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		Use this class to control the actions that can be performed on the tree nodes displayed in
+		an instance of {@link cmc/foundation/PropertyTree}. The actions will appear in the context menu and
+		in the Edit menu. Create new classes that subclass this class and override the
+		<code>performAction</code> method. Instantiate the new class as children of the instance of cmc/foundation/PropertyTree.
+		The <code>performAction</code> method will be called by the framework when the action is selected.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/PropertyTreeAction">
+		<!---
+			The display name for this action. This is a required attribute.
+		-->
+		<variable name="displayName" type="string"/>
+		<!---
+			The menu display name for this action. This name will appear in both the Edit menu and the context menu. If this attribute is not set, it will default to the displayName attribute.
+		-->
+		<variable name="menuDisplayName" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Returns the menu display name. If the menuDisplayName attribute has not been set
+			then this method will return the value of the displayName attribute.
+
+			@return boolean: the menu display name
+		-->
+		<method name="getMenuDisplayName">
+			<![CDATA[
+			return this.menuDisplayName == null ? this.displayName : this.menuDisplayName;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Initialize the action add this to parent.actions
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var actions = this.parent.actions;
+			if (!actions) {
+				actions = [];
+				this.parent.actions = actions;
+			}
+			actions.push(this);
+			]]>
+		</method>
+		
+		<!---
+			@keywords abstract
+	
+			This method is invoked by the framework when the tree action is executed from the "Edit" menu or
+			the context menu. Override this method to implement the action that needs to be performed on the selected
+			business object whenever the client action is executed.
+			
+			@param cmc/foundation/ModelObject o The model object associated with the properties view that contains the cmc/foundation/PropertyTree instance.
+			@param cmc/foundation/ModelObject treeNodeObject The model object associated with the selected tree node
+		-->			
+		<method args="o, treeNodeObject" name="performAction">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			This method is invoked by the framework to determine if this action is currently
+			enabled. By default the action is always enabled. Override this method to implement
+			the enablement behaviour required by the action.
+			@param cmc/foundation/ModelObject o The model object associated with the properties view that contains the cmc/foundation/PropertyTree instance.
+			@param cmc/foundation/ModelObject treeNodeObject The model object associated with the selected tree node.
+			@param cmc/foundation/EventHandler del a delegate. Register this delegate to events that will change the enablement of the action.
+			@return boolean <code>true</code> if the action is enabled, <code>false</code> otherwise
+		-->
+		<method args="o, treeNodeObject, del" name="isEnabled">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			return true;
+			]]>
+		</method>
+	</Node>
+	
+</Definitions>

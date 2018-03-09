@@ -1,0 +1,860 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords abstract
+
+		A collection list editor is a widget that you can use to work with the list of collections to which an
+		object belongs. You can use the collection list editor to add new collection objects to the list, or delete
+		collection objects from the list.
+
+		cmc/foundation/BaseCollectionListEditor is an abstract class. Do not create instances of this type or extend this class.
+		Instead, use {@link cmc/foundation/CollectionListEditor}, as required.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/BaseCollectionListEditor" focusable="false" visible="true">
+		<dependency localName="CollectionListBackgroundMenu" moduleName="cmc/foundation/CollectionListBackgroundMenu"/>
+		<dependency localName="AddToCollectionActionHandler" moduleName="cmc/foundation/AddToCollectionActionHandler"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="UtilitiesButton" moduleName="cmc/foundation/UtilitiesButton"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="RemoveObjectButton" moduleName="cmc/foundation/RemoveObjectButton"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="CollectionListMenu" moduleName="cmc/foundation/CollectionListMenu"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ObjectSearchWidget" moduleName="cmc/foundation/ObjectSearchWidget"/>
+		<dependency localName="NewObjectButton" moduleName="cmc/foundation/NewObjectButton"/>
+		<!---
+			A comma separated list of primary object types that represent the collection objects.
+			The primary object definitions must have a {@link cmc/foundation/CollectionReferenceObjectDefinition} with
+			a referenceType that matches the current object. This is a required attribute.
+		-->
+		<variable name="objectTypes" type="string"/>
+		
+		<!---
+			This attribute indicates that a new object can be created. If it is set to false, then the
+			collection list editor will not include the "New" button. The default is false.
+		-->
+		<variable name="allowCreate" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Model instance.
+		-->
+		<variable name="model"/>
+
+		<!---
+			@keywords private
+			Model object instance.
+		-->
+		<variable name="o"/>
+
+		<!---
+			The class name for the list view. This must be a class that extends {@link cmc/foundation/ObjectGrid}.
+		-->
+		<variable name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition to use for viewing this list. 
+			This is often a definition that extends {@link cmc/foundation/ObjectGrid}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableHeight" attribute. This is used to calculate
+			the list view's available height.
+		-->
+		<variable name="availableHeightView" value="${ViewUtil.Singleton.getAvailableHeightView(this)}"/>
+
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This is used to calculate
+			the list view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+
+		<!---
+			@keywords private
+			Indicates that this collection list editor is embedded in a properties view.
+		-->
+		<variable name="embedded" type="boolean" value="true"/>
+
+		<!---
+			@keywords private
+			Indicates that the delete action is enabled.
+		-->
+		<variable name="deleteEnabled" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Indicates that the add action is enabled.
+		-->
+		<variable name="addEnabled" type="boolean" value="true"/>
+
+		<!---
+			@keywords private
+			Instance of search widget {@link cmc/foundation/ObjectSearchWidget}.
+		-->
+		<variable name="searchWidget"/>
+
+		<!---
+			@keywords private
+			Instance of utility button {@link cmc/foundation/UtilitiesButton}.
+		-->
+		<variable name="utilitiesButton"/>
+
+		<!---
+			@keywords private
+			Instance of new button {@link cmc/foundation/NewObjectButton}.
+		-->
+		<variable name="newButton"/>
+
+		<!---
+			The resource name of the create new object button.
+		-->
+		<variable name="newButtonResource" type="string" value="grid_createNewIconForSingleAction"/>
+
+		<!---
+			@keywords private
+			Collection list status message.
+		-->
+		<variable name="statusMessage" type="string" value=""/>
+
+		<!--- @keywords private -->
+		
+
+		<!--- @keywords private -->
+		<method args="args, parent" name="constructor">
+			<![CDATA[
+			this.checkEnabledDel = new EventHandler.Class(this, "checkEnabled");
+			this.updateActionsDel = new EventHandler.Class(this, "updateActions");
+			this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+			this.listSelectDel = new EventHandler.Class(this, "listSelect");
+			this.updateMessageDel = new EventHandler.Class(this, "updateMessage");
+			this.o = null;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (this.listClass == null) {
+				this.listClass = this.listDefinition;
+			}
+			if (this.availableHeightView != null) {
+				this.updateAvailableHeightDel = new EventHandler.Class(this, "updateAvailableHeight");
+				this.updateAvailableHeightDel.connect(this.availableHeightView, "onavailableHeight");
+				this.updateAvailableHeightDel.connect(this.content, "ony");
+				this.updateAvailableHeight();
+			}
+			if (this.availableWidthView != null) {
+				this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+				this.updateAvailableWidthDel.connect(this.availableWidthView, "onavailableWidth");
+				this.updateAvailableWidth();
+			}
+			if (this.listClass.Class) {
+				new this.listClass.Class(this, {
+					name: "list",
+					placement: "content",
+					rowMenuClass: CollectionListMenu,
+					menuClass: CollectionListBackgroundMenu,
+					fitExistingRows: this.embedded,
+					listBorderSize: this.embedded ? 1 : 0,
+					filterLeftPadding: this.embedded ? 0 : 3
+				});
+			}
+			else {
+				DefinitionUtil.createDefinitionInstance(this.listClass, this, {
+					name: "list",
+					placement: "content",
+					rowMenuClass: CollectionListMenu,
+					menuClass: CollectionListBackgroundMenu,
+					fitExistingRows: this.embedded,
+					listBorderSize: this.embedded ? 1 : 0,
+					filterLeftPadding: this.embedded ? 0 : 3
+				});
+			}
+			if (this.o) {
+				this.o.bindViewToReferences(this.list, null, this.referenceObjectPaths);
+			}
+			if (this.list.filters && this.list.filters.length > 0) {
+				if (this.embedded) {
+					this.list.setVariable("padding", 5);
+				}
+			}
+			else {
+				this.list.setVariable("padding", 0);
+			}
+			this.checkEnabled();
+			this.listSelectDel.connect(this.list, "onselect");
+			if (this.embedded) {
+				this.createActions();
+				this.updateActions();
+			}
+			this.updateMessage();
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.o) {
+				this.o.releaseViewFromReferences(this.list);
+			}
+			delete this.objectDefinitions;
+			delete this.collectionDefinitions;
+			delete this.referenceObjectPaths;
+			this.listSelectDel.disconnectAll();
+			delete this.listSelectDel;
+			this.checkEnabledDel.disconnectAll();
+			delete this.checkEnabledDel;
+			this.updateActionsDel.disconnectAll();
+			delete this.updateActionsDel;
+			if (this.updateAvailableHeightDel) {
+				this.updateAvailableHeightDel.disconnectAll();
+				delete this.updateAvailableHeightDel;
+			}
+			if (this.updateAvailableWidthDel) {
+				this.updateAvailableWidthDel.disconnectAll();
+				delete this.updateAvailableWidthDel;
+			}
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.updateMessageDel.disconnectAll();
+			delete this.updateMessageDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the model object for this editor to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BaseCollectionListEditor", "setModelObject(newObject)", [newObject]);
+			}
+			if (this.o !== newObject) {
+				this.objectDefinitions = null;
+				this.collectionDefinitions = null;
+				this.referenceObjectPaths = null;
+				this.releaseModelObjectDel.disconnectAll();
+				if (this.o) {
+					if (this.list) {
+						this.o.releaseViewFromReferences(this.list);
+					}
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					this.objectDefinitions = this.model.getObjectDefinitions(null, this.objectTypes);
+					this.collectionDefinitions = [];
+					for (var i = 0; i < this.objectDefinitions.length; i++) {
+						var defs = this.objectDefinitions[i].collectionReferenceObjectDefinitions;
+						var collectionDef = null;
+						for (var j = 0; j < defs.length; j++) {
+							if (defs[j].isReferencedDefinition(this.o.objectDefinition)) {
+								collectionDef = defs[j];
+								break;
+							}
+						}
+						if (collectionDef != null) {
+							this.collectionDefinitions.push(collectionDef);
+							var path = this.objectDefinitions[i].objectType + "/" + collectionDef.objectType;
+							if (this.referenceObjectPaths == null) {
+								this.referenceObjectPaths = path;
+							}
+							else {
+								this.referenceObjectPaths += "," + path;
+							}
+						}
+						else {
+							this.objectDefinitions.splice(i, 1);
+							i--;
+						}
+					}
+					if (this.list) {
+						this.o.bindViewToReferences(this.list, null, this.referenceObjectPaths);
+					}
+				}
+				if (this.list) {
+					this.checkEnabled();
+				}
+				EventUtil.trigger(this, "ono", this.o);
+				this.updateMessage();
+			}
+			if (this.embedded) {
+				this.createActions();
+				this.updateActions();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BaseCollectionListEditor", "setModelObject(newObject)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method releases the {@link cmc/foundation/ModelObject model object} from this collection list editor.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method creates the toolbar actions for this list.
+		-->
+		<method name="createActions">
+			<![CDATA[
+			if (!this._actionsCreated && this.actionArea) {
+				this.searchWidget = new ObjectSearchWidget.Class(this.actionArea, {
+					editor: this,
+					searchDefinitions: null,
+					allowMultipleResults: true,
+					y: 1
+				});
+				this.utilitiesButton = new UtilitiesButton.Class(this.actionArea, {
+					editor: this,
+					objectDefinitions: null,
+					y: 5
+				});
+				this.newButton = new NewObjectButton.Class(this.actionArea, {
+					editor: this,
+					actionDefinitions: null,
+					buttonResourceForSingleAction: this.newButtonResource,
+					y: 5
+				});
+				new RemoveObjectButton.Class(this.actionArea, {
+					editor: this,
+					y: 5
+				});
+				this._actionsCreated = true;
+				this.actionArea.setVariable("visible", true);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method will update the toolbar actions with the new object's object definition.
+		-->
+		<method args="e" name="updateActions">
+			<![CDATA[
+			this.updateActionsDel.disconnectAll();
+			if (this.objectDefinitions && this.actionArea) {
+				var searchDefs = [];
+				var searchTypes = {};
+				for (var i = 0; i < this.objectDefinitions.length; i++) {
+					var searchDef = this.objectDefinitions[i].getSearchDefinition(this.updateActionsDel);
+					if (searchDef && !searchTypes[searchDef.searchType]) {
+						searchTypes[searchDef.searchType] = true;
+						searchDefs.push(searchDef);
+					}
+				}
+				if (searchDefs.length > 0) {
+					this.searchWidget.setVariable("searchDefinitions", searchDefs);
+				}
+				else {
+					this.searchWidget.setVariable("searchDefinitions", null);
+				}
+				if (this.objectDefinitions.length > 0) {
+					this.utilitiesButton.setVariable("objectDefinition", this.objectDefinitions[0]);
+				}
+				else {
+					this.utilitiesButton.setVariable("objectDefinition", null);
+				}
+				var creatableDefs = [];
+				for (var i = 0; i < this.objectDefinitions.length; i++) {
+					var oDef = this.objectDefinitions[i];
+					if (oDef.isCreatable()) {
+						creatableDefs.push(oDef);
+					}
+				}
+				if (this.allowCreate && creatableDefs.length > 0) {
+					this.newButton.setVariable("actionDefinitions", creatableDefs);
+				}
+				else {
+					this.newButton.setVariable("actionDefinitions", null);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method checks the current enablement of the available actions.
+		-->
+		<method args="e" name="checkEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkEnabledDel.disconnectAll();
+			var actionEnabled = this.o != null && this.isDeleteEnabled(this.checkEnabledDel);
+			if (actionEnabled != this.deleteEnabled) {
+				this.setVariable("deleteEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (this.o != null && this.collectionDefinitions != null) {
+				for (var i = 0; i < this.collectionDefinitions.length; i++) {
+					if (this.collectionDefinitions[i].isCreatable(null, this.o, this.checkEnabledDel)) {
+						actionEnabled = true;
+						break;
+					}
+				}
+			}
+			if (actionEnabled != this.addEnabled) {
+				this.setVariable("addEnabled", actionEnabled);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method gets the currently selected object in the list.
+		-->
+		<method name="getSelectedObject">
+			<![CDATA[
+			return this.list.getSelectedObject();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when the selection changes in the list.
+		-->
+		<method args="e" name="listSelect">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			EventUtil.trigger(this, "onselect");
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Adds a reference child for the given new primary object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setNewObject">
+			<![CDATA[
+			var roDef = null;
+			for (var i = 0; i < this.collectionDefinitions.length; i++) {
+				if (newObject.objectDefinition.isChildDefinition(this.collectionDefinitions[i])) {
+					roDef = this.collectionDefinitions[i];
+					break;
+				}
+			}
+			if (roDef != null) {
+				var newRO = this.model.createNewObject(roDef, newObject);
+				newRO.addChild(this.o);
+			}
+			if (this.o.lockCount == 0) {
+				this.o.updateReferences(true);
+				this.list.showObjectInView(newObject);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if the add to collection action is enabled for the specified object.
+			@param cmc/foundation/ModelObject testObject: the object to test
+			@return boolean: true if the object can be added, false otherwise
+		-->
+		<method args="testObject" name="isAddEnabled">
+			<![CDATA[
+			var actionEnabled = true;
+			var sourceObject = testObject.getReferencedObject();
+			var collectionDefs = sourceObject.objectDefinition.collectionReferenceObjectDefinitions;
+			var collectionDef = null;
+			for (var i = 0; i < collectionDefs.length; i++) {
+				if (this.o && collectionDefs[i].isReferencedDefinition(this.o.objectDefinition)) {
+					collectionDef = collectionDefs[i];
+					break;
+				}
+			}
+			if (collectionDef == null || !collectionDef.isCreatable(sourceObject, this.o) || sourceObject.isDuplicateReference(collectionDef, this.o)) {
+				actionEnabled = false;
+			}
+			return actionEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if delete is enabled for the given objects.
+			@param Array objects: An array of cmc/foundation/ModelObject objects
+			@param cmc/foundation/EventHandler delegate: An optional parameter with a delegate that will be registered with the
+			readonly properties of the objects in question.
+		-->
+		<method args="objects, delegate" name="isDeleteObjectsEnabled">
+			<![CDATA[
+			var deleteEnabled = objects.length > 0;
+			if (deleteEnabled) {
+				for (var i = 0; i < objects.length; i++) {
+					var thisObject = objects[i];
+					for (var key in thisObject.childObjectMap) {
+						var thisChildObject = thisObject.childObjectMap[key];
+						if (thisChildObject.objectDefinition.collectionReference && thisChildObject.getReferencedObject() == this.o && !thisChildObject.pendingDelete && !thisChildObject.isDeletable(delegate)) {
+							deleteEnabled = false;
+							break;
+						}
+					}
+					if (!deleteEnabled) {
+						break;
+					}
+				}
+			}
+			return deleteEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if delete is enabled.
+			@param cmc/foundation/EventHandler delegate: An optional parameter, a delegate registered to changes that can effect the deletable state.
+		-->
+		<method args="delegate" name="isDeleteEnabled">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			if (delegate) {
+				delegate.connect(this, "onselect");
+			}
+			return this.isDeleteObjectsEnabled(this.list.getSelectedObjects(), delegate);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Invoke delete for the given cmc/foundation/ModelObjects.
+			@param Array objects: An array of cmc/foundation/ModelObject objects
+		-->
+		<method args="objects" name="doDeleteObjects">
+			<![CDATA[
+			var deleteObjects = [];
+			for (var i = 0; i < objects.length; i++) {
+				var thisObject = objects[i];
+				for (var key in thisObject.childObjectMap) {
+					var thisChildObject = thisObject.childObjectMap[key];
+					if (thisChildObject.objectDefinition.collectionReference && !thisChildObject.pendingDelete && thisChildObject.getReferencedObject() == this.o) {
+						deleteObjects[deleteObjects.length] = thisChildObject;
+						break;
+					}
+				}
+			}
+			for (var i = 0; i < deleteObjects.length; i++) {
+				deleteObjects[i].deleteObject();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Invoke remove object.
+		-->
+		<method name="removeObject">
+			<![CDATA[
+			this.doDeleteObjects(this.list.getSelectedObjects());
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Perform delete.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			this.doDeleteObjects(this.list.getSelectedObjects());
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if drop is enabled.
+			@param array sources: Array of drag sources.
+		-->
+		<method args="sources" name="isDropEnabled">
+			<![CDATA[
+			var dropEnabled = false;
+			if (sources.length > 0 && sources[0].dragParent != this.list) {
+				var objects = [];
+				for (var i = 0; i < sources.length; i++) {
+					objects.push(ModelUtil.Singleton.findObjectForView(sources[i]));
+				}
+				dropEnabled = this.isAddToCollectionActionEnabled(objects);
+			}
+			return dropEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Add the dragged objects into this list.
+			@param array sources: array of drag sources
+		-->
+		<method args="sources" name="droppedInTarget">
+			<![CDATA[
+			var objects = [];
+			for (var i = 0; i < sources.length; i++) {
+				objects.push(ModelUtil.Singleton.findObjectForView(sources[i]));
+			}
+			this.triggerAddToCollection(objects);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if all of the objects currently in the clipboard can be used as source objects to
+			add new objects to this list.
+			@return boolean: true if the objects can be pasted
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			return this.isAddToCollectionActionEnabled(this.model.clipboardObjects);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Paste the objects in the clipboard into this list.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			this.triggerAddToCollection(this.model.clipboardObjects);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if the add to collection action is enabled for the specified objects.
+			@param array objects: source objects
+			@return boolean: true if all the objects can be added, false otherwise
+		-->
+		<method args="objects" name="isAddToCollectionActionEnabled">
+			<![CDATA[
+			var actionEnabled = objects.length > 0;
+			for (var i = 0; i < objects.length; i++) {
+				if (!this.isAddEnabled(objects[i])) {
+					actionEnabled = false;
+					break;
+				}
+			}
+			return actionEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Trigger an add to collection action for each of the specified objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to be added
+		-->
+		<method args="objects" name="triggerAddToCollection">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/BaseCollectionListEditor", "triggerAddToCollection", "Start add to collection");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/BaseCollectionListEditor triggerAddToCollection: " + this.o.objectDisplayName + " #objects=" + objects.length);
+			for (var i = 0; i < objects.length; i++) {
+				AddToCollectionActionHandler.Singleton.triggerAction(this.o, objects[i].getReferencedObject());
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/BaseCollectionListEditor", "triggerAddToCollection", "End add to collection");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the message.
+		-->
+		<method args="e" name="updateMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.list) {
+				this.updateMessageDel.disconnectAll();
+				var newMessage = "";
+				if (this.o && this.list.oList) {
+					if (this.list.oList.statusObject != null) {
+						newMessage = this.list.oList.statusObject.message;
+					}
+					this.updateMessageDel.connect(this.list.oList, "onstatusObject");
+				}
+				if (newMessage != this.statusMessage) {
+					this.setVariable("statusMessage", newMessage);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the available height.
+		-->
+		<method args="e" name="updateAvailableHeight">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newHeight = this.availableHeightView.availableHeight - this.content.y;
+			if (this.embedded) {
+				newHeight -= 2;
+			}
+			if (this.content.availableHeight != newHeight) {
+				this.content.setVariable("availableHeight", newHeight);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the available width.
+		-->
+		<method args="e" name="updateAvailableWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = this.availableWidthView.availableWidth;
+			if (this.embedded) {
+				newWidth -= 2;
+			}
+			if (this.content.availableWidth != newWidth) {
+				this.content.setVariable("availableWidth", newWidth);
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="y" spacing="5"/>
+
+		<Component name="actionArea" visible="false">
+			<AxisLayout axis="x" spacing="3"/>
+		</Component>
+		<TextComponent multiline="true" name="message" text="${this.classroot.statusMessage}" visible="${this.classroot.embedded &amp;&amp; this.classroot.statusMessage != ''}" width="${this.parent.content.width}"/>
+		<Component name="content"/>
+
+		<DropTarget dragAndDropManager="${DndManager.Singleton}" targetKey="${'element'}">
+			<handler args="sources" name="ondroppedintarget">
+				<![CDATA[
+				this.classroot.droppedInTarget(sources);
+				]]>
+			</handler>
+			<method args="currentDragSource" name="isEnabled">
+				<![CDATA[
+				return this.classroot.isDropEnabled(currentDragSource);
+				]]>
+			</method>
+		</DropTarget>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></FocusableComponent>
+
+	<!---
+		@keywords final
+		This class defines a collection list editor that you can use within a properties view. This widget has its own
+		toolbar that a business user can use to add new collection objects to the list.
+
+		<p>Sample usage:
+		@START_CODE
+			<CollectionListEditor
+					name="SampleCollectionListEditor"
+					listClass="SampleGrid"
+					objectTypes="SampleParentObject" />
+		@END_CODE
+		
+		A collection list editor can also be declared as a definition:
+		@START_CODE
+			<CollectionListEditor definitionName="SampleCollectionListEditor" 
+				listDefinition="SampleGrid"
+				objectTypes="SampleParentObject"/>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/CollectionListEditor">
+		<dependency localName="BaseCollectionListEditor" moduleName="cmc/foundation/BaseCollectionListEditor"/>
+		<!---
+			A comma separated list of primary object types that represent the collection objects.
+			The primary object definitions must have a {@link cmc/foundation/CollectionReferenceObjectDefinition} with
+			a referenceType that matches the current object. This is a required attribute.
+		-->
+		<variable name="objectTypes" type="string"/>
+
+		<!---
+			The class name for the list view. This must be a class that extends {@link cmc/foundation/ObjectGrid}.
+		-->
+		<variable name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition to use for viewing this list. 
+			This must be a definition that extends {@link cmc/foundation/ObjectGrid}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+		<!---
+			This attribute indicates that a new object can be created. If it is set to false, then the
+			collection list editor will not include the "New" button. The default is false.
+		-->
+		<variable name="allowCreate" type="boolean" value="false"/>
+		<!---
+			The resource name of the create new object button.
+		-->
+		<variable name="newButtonResource" type="string" value="grid_createNewIconForSingleAction"/>
+
+		<!---
+			@keywords private
+			This method creates the editor for the given property component.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new BaseCollectionListEditor.Class(parentComponent, {
+				name: "editor",
+				model: parentComponent.model,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				objectTypes: this.objectTypes,
+				listClass: this.listClass,
+				listDefinition: this.listDefinition,
+				embedded: true,
+				newButtonResource: this.newButtonResource,
+				allowCreate: this.allowCreate
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Collection list editors should determine their enablement on its own by looking at its
+			collection reference object definitions to find out if they can be creatable. Overwrites the
+			{@link cmc/foundation/PropertiesComponent#updateEnablement} method to do nothing.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+	</PropertiesComponent>
+
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","kk",{indent:"Жол шегінісін көбейту",outdent:"Жол шегінісін азайту"});

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		Custom service definition that enables users to launch the store front of the selected store.
+		This action is not the same as store preview as the launched store will use data contained in the
+		base schema, and no options can be set by the user. 
+		When the store is launched, a SSO Token is set in the session that will log the user into the store automatically. This enables
+		a store to be browsed even when it is closed. 
+	-->
+	<CustomService allowMultipleSelection="false" classDefinition="true" definitionName="cmc/store/LaunchStoreCustomService" displayName="${storeResources.Singleton.launchStore.string}" sendIdentity="true" sendWorkspaceContext="false" toolbarIcon="launchStoreButton" url="/cmc/GetSSOToken">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="storeResources" moduleName="cmc/store/StoreResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		
+		<!---
+			@keywords private
+			This method is invoked by the framework when the custom service successfully generates the SSO Token. 
+			The custom service can be launched from the "Edit" menu, toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			var storeId = requestParent.getPropertyValue("storeId");
+			var isRemote = "true";
+			var SSOToken = null;
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var parameterName = node.nodeName;
+				if (parameterName == "SSOToken") {
+					SSOToken = XMLUtil.getNodeValue(node);
+					break;
+				}
+			}
+            var storeConfig = ContextUtil.Singleton.findStoreConfig(requestParent);
+            
+            if(requestParent.getPropertyValue("isRemote") != null) {
+                isRemote=requestParent.getPropertyValue("isRemote");
+            }
+			if ((SSOToken != null) && (storeId != null) && (storeId != "") && (storeConfig != null)) {
+				var webPath = storeConfig.staticContent.contextPath + storeConfig.staticContent.urlMappingPath;
+				var currentURL = window.location;
+				var port = (storeConfig.staticContent.webServerSSLPort != null && storeConfig.staticContent.webServerSSLPort != "") ? ":" + storeConfig.staticContent.webServerSSLPort : "";
+				var locale = ContextUtil.Singleton.findContextValue(null, "locale");
+				var storeLanguageObject = storeConfig.getLanguageByLocale(locale.value);
+				var langIdParam = "";
+				if (storeLanguageObject != null) {
+					langIdParam = "&langId=" + storeLanguageObject.languageId;
+				}
+				var storeUrl = "https://" + currentURL.hostname + port + webPath + "/StoreView?storeId=" + storeId + "&ActivityToken=" + SSOToken + langIdParam;
+				if( storeConfig.remoteStoreServerConfig != null && storeConfig.remoteStoreServerConfig.remoteWebServerHostName != "" && isRemote== "true"){
+					var storeHostName = storeConfig.remoteStoreServerConfig.remoteWebServerHostName;
+					var storePortName = storeConfig.remoteStoreServerConfig.remoteWebServerSSLPort;
+					if(storePortName == "443"){
+						storePortName = "";
+					}
+					else{
+						storePortName = ":" + storePortName;
+					}
+					var storeRemoteWebPath = storeConfig.remoteStoreServerConfig.remoteWebServerContextPath;
+					storeUrl = "https://" + storeHostName  + storePortName + storeRemoteWebPath + "/wcs" + "/StoreView?storeId=" + storeId + "&ActivityToken=" + SSOToken + langIdParam;
+				}
+				var newWindowObj = new Object();
+				newWindowObj.URL = storeUrl;
+				newWindowObj.windowName = "StoreWindow";
+				newWindowObj.windowFeatures = "scrollbars=yes,toolbar=yes,directories=yes,status=yes,menubar=yes,copyhistory=yes,resizable=yes,location=yes";
+				newWindowObj.windowWidth = 1014;
+				newWindowObj.windowHeight = 710;
+				openNewCenteredWindow(newWindowObj);
+			}
+			]]>
+		</method>
+	</CustomService>
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","hr",{indent:"Povećaj uvlačenje",outdent:"Smanji uvlačenje"});

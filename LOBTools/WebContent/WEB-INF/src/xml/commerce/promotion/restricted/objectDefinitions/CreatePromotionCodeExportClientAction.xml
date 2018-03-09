@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!-- Custom client action to create a promotion code export for a particular promotion -->
+	<ClientAction allowMultipleSelection="false" classDefinition="true" definitionName="cmc/promotion/CreatePromotionCodeExportClientAction">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		
+		<!---
+			Create the PromotionCodeExport client objects using the select promotion details
+			
+			@param cmc/foundation/ModelObject[] objects The array of selected model objects.
+		-->		
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var targetObjDef = objects[0].model.getObjectDefinition(null, "PromotionCodeExport");
+			var newObject = objects[0].model.createNewObject(targetObjDef, null);
+			var promotionId = objects[0].getPropertyValue("promotionId");
+			var promotionName = objects[0].getPropertyValue("adminName");
+			var campaignName = promotionName;
+			var startDate = objects[0].getPropertyValue("startDate");
+			var endDate = objects[0].getPropertyValue("endDate");
+			newObject.setPropertyValue("promotionId", null, promotionId);
+			newObject.setPropertyValue("promotionName", null, promotionName);
+			newObject.setPropertyValue("campaignName", null, campaignName);
+			newObject.setPropertyValue("startDate", null, startDate);
+			newObject.setPropertyValue("endDate", null, endDate);
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(objects[0]);
+			var mcEnabled = ((storeConfig != null) && (storeConfig.analytics != null));
+			if (mcEnabled) {
+				mcEnabled = storeConfig.analytics.isMarketingCenterEnabled == "true";
+				if (mcEnabled) {
+					newObject.setPropertyValue("includeMCMetadata", null, "true");
+				}
+			}
+			newObject.model.oEditor.selectOpenObject(newObject);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if the context is not read only.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (enabled && o.model.oEditor.respectWorkspaceContext) {
+				var readOnlyModeContextValue = ContextUtil.Singleton.findContextValue(null, "readOnlyMode");
+				enabled = (readOnlyModeContextValue.value != "true");
+			}
+			if (enabled && o.isContextReadOnly()) {
+				enabled = false;
+			}
+			return enabled;
+			]]>
+		</method>
+	</ClientAction>
+</Definitions>

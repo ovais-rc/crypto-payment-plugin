@@ -1,0 +1,163 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN PreviewModeTab.jspf -->
+<%@ page import="java.text.SimpleDateFormat" %>
+<%@taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt"%>
+<%@taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@taglib uri="http://commerce.ibm.com/foundation" prefix="wcf" %>
+<%@taglib uri="http://commerce.ibm.com/foundation-fep/stores" prefix="wcst" %>
+
+
+<wcst:mapper source="CommandContext" method="getContext" var="CmdContextGetContxt" />
+<c:set var="storeId" value="${CommandContext.storeId}"/>
+
+<c:if test="${empty previewContext}">
+	<c:set var="previewContext" value="${CmdContextGetContxt['com.ibm.commerce.context.preview.PreviewContext']}"/>
+</c:if>
+<fmt:setLocale value="${param.locale}" />
+<fmt:setBundle var="sp" basename="com.ibm.commerce.stores.preview.properties.StorePreviewer"/>
+
+<c:set var="pmt_includedMemberGroupNames" value=""/>
+<c:if test="${!empty param.includedMemberGroupIds}">
+	<c:forTokens items="${param.includedMemberGroupIds}" delims="," var="includedMemberGroupId" varStatus="status">
+		<wcf:rest var="segmentData" url="store/{storeId}/segment/{segmentId}" cached="true" disablePreview="true"  scope="request">
+			<wcf:var name="storeId" value="${CommandContext.storeId}" encode="true"/>
+			<wcf:var name="segmentId" value="${includedMemberGroupId}" encode="true"/>
+		</wcf:rest>
+		<c:if test="${!empty segmentData}">
+			<c:set var="mbrGrpName" value="${segmentData.MemberGroup[0].displayName.value}"/>
+		</c:if>
+		<c:choose>
+			<c:when test="${status.first}">
+				<c:set var="pmt_includedMemberGroupNames" value="${mbrGrpName}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="pmt_includedMemberGroupNames" value="${pmt_includedMemberGroupNames}, ${mbrGrpName}"/>
+			</c:otherwise>
+		</c:choose>
+	</c:forTokens>
+</c:if>
+
+<c:set var="pmt_timestamp" value="${CommandContext.timeStamp }"/>
+<c:if test="${empty pmt_timestamp}">
+	<c:set var="pmt_timestamp" value="${previewContext.timestamp }"/>
+</c:if>
+<c:set var="pmt_status" value="${CommandContext.previewStatus }"/>
+<%
+SimpleDateFormat pmt_sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S");
+String pmt_start = request.getParameter("start");
+
+String previewTimestamp = pmt_start;
+if (pageContext.getAttribute("pmt_timestamp")!=null) {
+	previewTimestamp = pageContext.getAttribute("pmt_timestamp").toString();
+}
+pageContext.setAttribute("pmt_start", (pmt_start == null || pmt_start.length() == 0 || pmt_start.equals("null") ? pmt_sdf.parse(previewTimestamp) : pmt_sdf.parse(pmt_start)));
+
+%>
+
+<script>
+	function showPreviewModeAlert() {
+		document.getElementById("previewModeDialog").style.display = "block";
+	}
+	
+	function hidePreviewModeAlert() {
+		document.getElementById("previewModeDialog").style.display = "none";
+	}
+	function handlePreviewDialogTab(event, object) {
+		if (event.keyCode == KeyCodes.TAB) {
+			event.preventDefault ? event.preventDefault() : event.returnValue = false;
+			if (object.id == "sp_close_button") {
+				document.getElementById('closePreviewModeDialogButton').focus();
+			} else if (object.id == "closePreviewModeDialogButton") {
+				document.getElementById('sp_close_button').focus();
+			}
+		}
+	}
+</script>
+
+<div class="previewModeTab" role="region" aria-label="<fmt:message key="previewModeTabTitle" bundle="${sp}"/>">
+	<div class="pmt_button">
+		<div class="pmt_left"></div>
+		<a id="previewModeTab_Text" class="pmt_middle" href="javascript:void(0);" onclick="showPreviewModeAlert(); document.getElementById('sp_close_button').focus();" role="button"><fmt:message key="previewModeTabTitle" bundle="${sp}"/></a>
+		<div class="pmt_right"></div>
+	</div>
+	<c:choose>
+		<c:when test="${CommandContext.locale == 'iw_IL' || CommandContext.locale == 'ar_EG'}">
+			<link rel="stylesheet" type="text/css" href="${staticIBMAssetContextRoot}/tools/preview/css/store_preview_bidi.css"></link>
+		</c:when>
+		<c:otherwise>
+			<link rel="stylesheet" type="text/css" href="${staticIBMAssetContextRoot}/tools/preview/css/store_preview.css"></link>
+		</c:otherwise>
+	</c:choose>
+	
+	<div id="previewModeDialog" role="dialog" aria-labelledby="sp_header_text" class="store_preview_dialog_window" style="display: none; z-index: 250;">
+		<div class="sp_header_top">
+			<div class="sp_header">
+				<span id="sp_header_text"><fmt:message key="previewModeTabTitle" bundle="${sp}"/></span>
+				<a id="sp_close_button" onkeydown="handlePreviewDialogTab(event, this);" role="button" title="<fmt:message key='storePreviewCloseBtnText' bundle='${sp}'/>" aria-label="<fmt:message key='storePreviewCloseBtnText' bundle='${sp}'/>" id='closePreviewModeDialog' href='javascript:hidePreviewModeAlert();document.getElementById("previewModeTab_Text").focus();'>
+					<img onmouseover="this.src='${staticIBMAssetContextRoot}/images/preview/storepreview_window_close_icon_hover.png'"
+						onmouseout="this.src='${staticIBMAssetContextRoot}/images/preview/storepreview_window_close_icon.png'"
+						onmousedown="this.src='${staticIBMAssetContextRoot}/images/preview/storepreview_window_close_icon_press.png'"
+						src="${staticIBMAssetContextRoot}/images/preview/storepreview_window_close_icon.png" alt=""/>
+				</a>
+			</div>
+			<div class="sp_whitespace_background">
+				<div class="sp_content_container">
+					<strong class="sp_bold"><fmt:message key='previewModeTabMessage' bundle='${sp}'/></strong><br/>
+					<strong class="sp_bold"><fmt:message key='storePreviewStartTimeMsg' bundle='${sp}'/></strong> <fmt:formatDate value='${pmt_start}' type='both'/>
+					<c:choose>
+						<c:when test="${pmt_status}">
+							<br/><strong class="sp_bold"><fmt:message key='storePreviewTimeStatus' bundle='${sp}'/></strong> <fmt:message key='storePreviewTimeStatusStatic' bundle='${sp}'/>
+						</c:when>
+						<c:otherwise>
+							<br/><strong class="sp_bold"><fmt:message key='storePreviewTimeStatus' bundle='${sp}'/></strong> <fmt:message key='storePreviewTimeStatusRolling' bundle='${sp}'/> - <fmt:formatDate value='${pmt_timestamp}' type='both'/>
+						</c:otherwise>
+					</c:choose>
+					<br/><strong class="sp_bold"><fmt:message key='storePreviewInvStatusTitle' bundle='${sp}'/></strong>
+					<c:choose>
+						<c:when test="${previewContext.properties['previewInventory'] == '-1'}">
+							<fmt:message key='storePreviewInvStatusDupWthCnst' bundle='${sp}'/>
+						</c:when>
+						<c:when test="${previewContext.properties['previewInventory'] == '1'}">
+							<fmt:message key='storePreviewInvStatusDupWthoutCnst' bundle='${sp}'/>
+						</c:when>
+						<c:otherwise>
+							<fmt:message key='storePreviewInvStatusReal' bundle='${sp}'/>
+						</c:otherwise>
+					</c:choose>
+					<c:if test="${!empty previewContext.properties['previewIncludedMemberGroupIds']}">
+						<br/><strong class="sp_bold"><fmt:message key='storePreviewCustomerSegments' bundle='${sp}'/></strong> ${pmt_includedMemberGroupNames}
+					</c:if>
+				</div>
+				<div class="sp_optionsContainer"> 
+					<div class="sp_rightContainer">
+						<a role="button"
+							aria-labelledby="closePreviewModeButtonLeft"
+							id="closePreviewModeDialogButton"
+							class="sp_light_button"
+							href="javascript:void(0);"
+							onkeydown="handlePreviewDialogTab(event, this);"
+							onclick="hidePreviewModeAlert();document.getElementById('previewModeTab_Text').focus();">
+							<div id="closePreviewModeButtonLeft" class="sp_button_text"><fmt:message key='storePreviewCloseBtnText' bundle='${sp}'/></div>
+							<div id="closePreviewModeButtonRight" class="sp_button_right"></div>
+						</a>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- END PreviewModeTab.jspf -->

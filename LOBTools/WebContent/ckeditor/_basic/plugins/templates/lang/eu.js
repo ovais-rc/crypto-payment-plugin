@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","eu",{button:"Txantiloiak",emptyListMsg:"(Ez dago txantiloirik definituta)",insertOption:"Ordeztu oraingo edukiak",options:"Txantiloiaren aukerak",selectPromptMsg:"Hautatu editorean ireki nahi duzun txantiloia",title:"Edukiaren txantiloiak"});

@@ -1,0 +1,131 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2008, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%--
+*****
+This object snippet displays an address when included on a page, and the appropriate
+required parameters are set up.
+
+Required parameters:
+	PaymentInstructionType: This is required to obtain the Protocol data name-value pairs for address display. 
+	
+Optional parameters:	
+	locale:			The locale of the address you wish to display.  
+				Note that this JSP implementation only handles group 1 languages.
+				If locale is not provided a default display format is used.
+
+You may customize the 3 files listed below or add additional locale handling to this file.
+
+*****
+--%>
+<!-- BEGIN AddressDisplayByParams.jspf -->
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
+
+<c:forEach var="protocolData" items="${paymentInstance.protocolData}">
+	<c:if test="${protocolData.name eq 'billto_firstname'}">
+		<c:set var="firstName" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_lastname'}">
+		<c:set var="lastName" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_middlename'}">
+		<c:set var="middleName" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_address1'}">
+		 <c:set var="address" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_stateprovince'}">
+		 <c:set var="billingstate" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_city'}">
+	         <c:set var="city" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_country'}">
+	         <c:set var="billingcountry" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_zipcode'}">
+	        <c:set var="zipcode" value="${protocolData.value}"/>
+	</c:if>
+	<c:if test="${protocolData.name eq 'billto_phone_number'}">
+	       <c:set var="phone" value="${protocolData.value}"/>
+	</c:if>
+</c:forEach> 
+
+
+	<!-- Set the country and state display name to the country and state codes respectively. This is in case the display name is not found. -->
+	<c:set var="countryDisplayName" value="${billingcountry}"/>
+	<c:set var="stateDisplayName" value="${billingstate}"/>
+	
+	<c:catch var ="catchCountryState">
+		<!-- Retrieve the country display name from the country code and -->
+		<!-- the state display name from the state code -->
+		<c:if test="${!empty(billingcountry) && fn:length(billingcountry) <= 5}">
+			<c:set var="key1" value="store/${WCParam.storeId}/country/country_state_name+${langId}+${billingcountry}+${billingstate}"/>
+			<c:set var="contactCountryStateBean" value="${cachedOnlineStoreMap[key1]}"/>
+			<c:if test="${empty contactCountryStateBean}">
+				<wcf:rest var="contactCountryStateBean" url="store/{storeId}/country/country_state_name" cached="true">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="langId" value="${langId}" />
+					<wcf:param name="countryCode" value="${billingcountry}" />
+					<wcf:param name="stateCode" value="${billingstate}" />
+				</wcf:rest>
+				<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${contactCountryStateBean}"/>
+			</c:if>
+		</c:if>
+	</c:catch>
+	
+	<c:if test="${catchCountryState == null && !empty contactCountryStateBean}">
+		<c:catch var="catchCountryName">
+			<c:set var="countryDisplayName" value="${contactCountryStateBean.countryDisplayName}"/>
+		</c:catch>
+	</c:if>
+
+	<c:catch var ="catchCountryState">
+		<!-- Retrieve the state display name from the state code -->
+		<!-- This piece of code should not be needed for most cases -->
+		<c:if test="${!empty(billingstate) && fn:length(billingstate) <= 5 && empty contactCountryStateBean}">
+			<c:set var="key1" value="store/${WCParam.storeId}/country/country_state_name+${langId}+${billingstate}"/>
+			<c:set var="contactCountryStateBean" value="${cachedOnlineStoreMap[key1]}"/>
+			<c:if test="${empty contactCountryStateBean}">
+				<wcf:rest var="contactCountryStateBean" url="store/{storeId}/country/country_state_name" cached="true">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="langId" value="${langId}" />
+					<wcf:param name="stateCode" value="${billingstate}" />
+				</wcf:rest>
+				<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${contactCountryStateBean}"/>
+			</c:if>
+		</c:if>
+	</c:catch>
+	
+	<c:if test="${catchCountryState == null && !empty contactCountryStateBean}">
+		<c:catch var="catchStateName">
+			<c:set var="stateDisplayName" value="${contactCountryStateBean.stateDisplayName}"/>
+		</c:catch>
+	</c:if>
+
+<c:choose>
+	<c:when test="${locale == 'ar_EG'}">
+		<%@ include file="AddressByParams_AR.jspf" %>
+	</c:when>
+	<c:when test="${locale == 'ja_JP' || locale == 'ko_KR' || locale == 'zh_CN' || locale == 'zh_TW'}">
+		<%@ include file="AddressByParams_CN_JP_KR_TW.jspf" %>
+	</c:when>
+	<c:when test="${locale == 'de_DE' || locale == 'es_ES' || locale == 'fr_FR' || locale == 'it_IT' || locale == 'pl_PL' || locale == 'ro_RO' || locale == 'ru_RU'}">
+		<%@ include file="AddressByParams_DE_ES_FR_IT_PL_RO_RU.jspf" %>
+	</c:when>
+	<c:otherwise>
+		<%@ include file="AddressByParams.jspf" %>
+	</c:otherwise>
+</c:choose>
+
+<!-- END AddressDisplayByParams.jspf -->

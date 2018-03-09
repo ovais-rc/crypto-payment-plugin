@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		Input Language Selection Dialog.
+	-->
+	<Dialog classDefinition="true" definitionName="cmc/foundation/LanguageSelectionDialogClass" title="${foundationResources.Singleton.languageSelectionDialog_title.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="BaseRadioButton" moduleName="cmc/foundation/BaseRadioButton"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Reference to the context that will be modified by this dialog.
+		-->
+		<variable name="localContext"/>
+		<!---
+			Array of input language options. 
+		-->
+		<variable name="languageOptions" value="${[]}"/>
+
+		<!---
+			Handle OK. 
+		-->
+		<method name="onOk">
+			<![CDATA[
+			var selectedToolInputLanguageId = this.mainView.languageOptionListView.borderedView.clippedContent.languageOptions.getSelection().getValue();
+			var selectedLanguageIds = [];
+			var preferredLanguageIds = [];
+			var languages = this.localContext.storeConfig.supportedLanguages;
+			for (var i = 0; i < languages.length; i++) {
+				var language = languages[i];
+				var isSelected = language.isDefault || language.languageId == selectedToolInputLanguageId;
+				if (language.isDefault || language.languageId == selectedToolInputLanguageId) {
+					selectedLanguageIds.push(language.languageId);
+				}
+				if (!language.isDefault && language.languageId == selectedToolInputLanguageId) {
+					preferredLanguageIds.push(language.languageId);
+				}
+			}
+			this.closeWindow();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LanguageSelectionDialogClass", "onOk", "preferredLanguageIds=" + preferredLanguageIds);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LanguageSelectionDialogClass", "onOk", "selectedLanguageIds=" + selectedLanguageIds);
+			}
+			PreferenceManager.Singleton.setPreference("CMCInputLanguageIds", preferredLanguageIds.join());
+			PreferenceManager.Singleton.sendPreferenceChangedEvent("CMCInputLanguageIds");
+			]]>
+		</method>
+
+		<!---
+			Handle Cancel. 
+		-->
+		<method name="onCancel">
+			<![CDATA[
+			this.closeWindow();
+			]]>
+		</method>
+
+		<!---
+			Open the Input Language Selection Dialog.
+			@param cmc/foundation/BaseContext context: context
+		 -->
+		<method args="context" name="openLanguageSelectionDialog">
+			<![CDATA[
+			this.openWindow();
+			this.localContext = context;
+			var languageCount = 0;
+			var defaultLanguage = this.localContext.storeConfig.getDefaultLanguage();
+			var defaultOption = null;
+			if (languageCount < this.languageOptions.length) {
+				defaultOption = this.languageOptions[languageCount];
+				defaultOption.setVariable("visible", true);
+			}
+			else {
+				defaultOption = new BaseRadioButton.Class(this.mainView.languageOptionListView.borderedView.clippedContent.languageOptions);
+				this.languageOptions.push(defaultOption);
+			}
+			languageCount++;
+			var defaultLanguageDesc = foundationResources.Singleton.replaceValues("languageSelectionDialog_default_language_text", [defaultLanguage.languageDescription]);
+			defaultOption.setVariable("text", defaultLanguageDesc);
+			defaultOption.setVariable("selected", true);
+			defaultOption.setVariable("value", "");
+			var selectedLanguageIds = ContextUtil.Singleton.findContextValue(this, "inputLanguageIds").value.split(",");
+			var storeLanguages = this.localContext.storeConfig.supportedLanguages;
+			for (var i = 0; i < storeLanguages.length; i++) {
+				var language = storeLanguages[i];
+				if (!language.isDefault) {
+					var languageOption = null;
+					if (languageCount < this.languageOptions.length) {
+						languageOption = this.languageOptions[languageCount];
+						languageOption.setVariable("visible", true);
+					}
+					else {
+						languageOption = new BaseRadioButton.Class(this.mainView.languageOptionListView.borderedView.clippedContent.languageOptions);
+						this.languageOptions.push(languageOption);
+					}
+					languageCount++;
+					languageOption.setVariable("text", language.languageDescription);
+					languageOption.setVariable("selected", selectedLanguageIds.indexOf(language.languageId) >= 0);
+					languageOption.setVariable("value", language.languageId);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Close the Input Language Selection Dialog.
+		 -->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			for (var i = 0; i < this.languageOptions.length; i++) {
+				this.languageOptions[i].setVariable("visible", false);
+			}
+			]]>
+		</method>
+
+		<Component name="mainView">
+
+			<Component name="languageOptionListView">
+				<AxisLayout axis="y" spacing="5"/>
+				<TextComponent multiline="true" placement="header" resize="true" text="${foundationResources.Singleton.languageSelectionDialog_label_1.string}" width="350"/>
+				<BorderedView borderColor="${this.parent.parent.parent.style.bordercolumnlistcolor}" borderSize="1" height="268" name="borderedView" width="${this.parent.width}">
+					<variable name="hScrollRequired" type="boolean" value="${this.clippedContent.languageOptions.width &gt; this.clippedContent.width}"/>
+					<variable name="vScrollRequired" type="boolean" value="${this.clippedContent.languageOptions.height &gt; this.clippedContent.height}"/>
+					<variable name="hScrollHeight" type="number" value="${(this.hScrollRequired ? this.hScroll.height : 0)}"/>
+					<variable name="vScrollWidth" type="number" value="${(this.vScrollRequired ? this.vScroll.width : 0)}"/>
+					<Component clip="true" height="${this.parent.height - this.parent.hScrollHeight - 6}" name="clippedContent" width="${this.parent.width - this.parent.vScrollWidth - 6}" x="3" y="3">
+						<BaseRadioGroup name="languageOptions" x="3" y="3"/>
+					</Component>
+					<HorizontalScrollbar name="hScroll" scrolltarget="${this.parent.clippedContent.languageOptions}" visible="${this.parent.hScrollRequired}" width="${this.parent.width - this.parent.vScrollWidth}" x="${-1}" y="${this.parent.clippedContent.y + this.parent.clippedContent.height + 2}"/>
+					
+					<VerticalScrollbar height="${this.parent.height - this.parent.hScrollHeight}" name="vScroll" scrolltarget="${this.parent.clippedContent.languageOptions}" visible="${this.parent.vScrollRequired}" x="${this.parent.clippedContent.x + this.parent.clippedContent.width + 2}" y="${-1}"/>
+				</BorderedView>
+			</Component>	
+	
+			<AxisLayout axis="y" spacing="20"/>
+		</Component>	
+		
+		<Component name="buttonSection" placement="footer">
+		    <Button name="cancelButton" text="${foundationResources.Singleton.languageSelectionDialog_cancelBtnName.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.onCancel();
+					]]>
+				</handler>
+			</Button>
+			<Button isdefault="true" name="okButton" text="${foundationResources.Singleton.languageSelectionDialog_okBtnName.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.onOk();
+					]]>
+				</handler>
+			</Button>
+			
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+	</Dialog>
+
+	<LanguageSelectionDialogClass definitionName="cmc/foundation/LanguageSelectionDialog" singletonDefinition="true"/>
+	
+</Definitions>

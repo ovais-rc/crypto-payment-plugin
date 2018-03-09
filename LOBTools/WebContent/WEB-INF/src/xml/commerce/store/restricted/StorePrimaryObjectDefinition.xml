@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+		
+	<!---
+		<p>Use this class to define an object definition for a store primary object. This class extends the behavior of the
+		standard primary object definition by allowing you to define a different properties view for every store. The definition
+		name of the properties view is determined by appending the store identifier to the name specified with the
+		{@link cmc/foundation/ObjectDefinition#propertiesDefinitionName} attribute. For example, if the specified properties definition name is
+		"cmc/store/StoreProperties" and the ID of the store is "10001", then the framework will search for a properties view with the definition name
+		of "cmc/store/StoreProperties_10001". If no such properties view is found, then the framework will use the unqualified properties definition
+		name, "cmc/store/StoreProperties".</p>
+
+		<p>If the store extends a storefront asset store, then the store identifier used to determine the properties definition name is the parent store ID.
+		This allows all stores that extend from the same storefront asset store to share the same properties view.</p>
+		
+		<p>The following example demonstrates the declaration of a store primary object definition and two properties
+		views. The properties view with the definition name cmc/store/StoreProperties_10001 will be loaded for store 10001.
+		All other stores will use the default properties view with the definition name cmc/store/StoreProperties.</p>
+		@START_CODE
+		<StorePrimaryObjectDefinition 
+			package="cmc/store" 
+			definitionName="cmc/store/StoreFrontStore" 
+			displayNameProperty="storeIdentifier" 
+			objectType="StoreFrontStore" 
+			propertiesDefinitionName="cmc/store/StoreProperties">
+			
+		<ObjectProperties definitionName="cmc/store/StoreProperties_10001" >
+			<dependency localName="storeResources" moduleName="cmc/store/StoreResources"/>
+			<PropertyTabs definitionName="tabs">
+				<PropertyTabPane name="general" text="${storeResources.generalTabTitle}">
+					<PropertyPane name="pane" baseDefinition="cmc/store/StorePropertiesPane" />
+				</PropertyTabPane>
+				<PropertyTabPane name="flexFlow" text="{storeResources.flexFlowTabTitle}">
+					<PropertyPane name="flexFlowPane" baseDefinition="cmc/store/FlexFlowPropertiesPane" />
+				</PropertyTabPane>
+			</PropertyTabs>
+		</ObjectProperties>
+
+		<ObjectProperties definitionName="cmc/store/StoreProperties" >
+			<PropertyPane name="pane" baseDefinition="cmc/store/StorePropertiesPane" />
+		</ObjectProperties>
+		@END_CODE
+	-->
+	<PrimaryObjectDefinition classDefinition="true" definitionName="cmc/store/StorePrimaryObjectDefinition">
+		<dependency localName="DefinitionNameRegistry" moduleName="cmc/foundation/DefinitionNameRegistry"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="ClassInstanceRegistry" moduleName="cmc/foundation/ClassInstanceRegistry"/>
+		<!---
+			@keywords private
+			Name of the property that contains the store identifier.
+		-->
+		<variable name="storeIdPropertyName" type="string" value="storeId"/>
+		<!---
+			@keywords private
+			Name of the property that contains the asset store identifier.
+		-->
+		<variable name="assetStoreIdPropertyName" type="string" value="assetStoreId"/>
+		
+		<!---
+			@keywords private
+			This method finds the instance of {@link cmc/foundation/ObjectDefinition#propertiesClass} that is the child of the specified
+			parent view. First, the class name contained in <code>propertiesClass</code> appended with the current store ID is searched.
+			If no view is found, <code>propertiesClass</code> is appended with the asset store ID and that class name is searched.
+			If still no view can be found, <code>propertiesClass</code> without any modification is used.
+			
+			If an instance has previously been requested for the given parent, the previously created one will be
+			returned.  Otherwise it will create a new instance. The method will also set {@link cmc/foundation/BaseObjectProperties#o} to
+			be the specified {@link cmc/foundation/ModelObject} instance.
+			
+			@param cmc/foundation/Component parentView The parent view to consider.
+			@param cmc/foundation/ModelObject o The model object instance whose properties should be displayed.
+			@param boolean inDetails When set to true, this boolean flag indicates that the properties view instance is used
+					in the details view. For more information see {@link cmc/foundation/BaseObjectProperties#inDetails}.
+			@return cmc/foundation/ObjectProperties An instance of the class specified in {@link cmc/foundation/ObjectDefinition#propertiesClass propertiesClass}
+					that is the child of the specified parent view.
+		-->
+		<method args="parentView, o, inDetails, del" name="getPropertiesView">
+			<![CDATA[
+			var v = null;
+			if (this.baseDefinition != null && this.propertiesClass_moduleName == this.baseDefinition.propertiesClass_moduleName) {
+				v = this.baseDefinition.getPropertiesView(parentView, o, inDetails, del);
+			}
+			else if (this.propertiesClass_moduleName != null) {
+				var propertiesClassName = null;
+				var definitionNameRegistryKey = "storeProperties_" + o.getPropertyValue(this.storeIdPropertyName);
+				if (typeof (DefinitionNameRegistry[definitionNameRegistryKey]) != "undefined") {
+					propertiesClassName = DefinitionNameRegistry[definitionNameRegistryKey];
+				}
+				else {
+					definitionNameRegistryKey = "storeProperties_" + o.getPropertyValue(this.assetStoreIdPropertyName);
+					if (typeof (DefinitionNameRegistry[definitionNameRegistryKey]) != "undefined") {
+						propertiesClassName = DefinitionNameRegistry[definitionNameRegistryKey];
+					}
+					else {
+						propertiesClassName = this.propertiesClass_moduleName;
+					}
+				}
+				if (typeof (ClassInstanceRegistry[propertiesClassName]) != "undefined") {
+					v = this.getPropertiesViewByClassName(propertiesClassName, parentView, o, inDetails);
+					o.loadChildren(o.objectDefinition.getOpenGroupObjectDefinitions());
+					o.loadReferences();
+				}
+				else {
+					require([propertiesClassName], function(PropertiesViewClass) {
+						if (del) {
+							del.execute();
+						}
+					});
+				}
+			}
+			return v;
+			]]>
+		</method>	
+		
+		
+		<!---
+			@keywords private
+			This method is called by the getPropertiesView method but attempts to retrieve the {@link cmc/foundation/ObjectDefinition#propertiesClass}
+			based on the Unique ID plus the propertiesClass name.  If an instance is not found then one will be created.
+			
+			@param string propertiesClassName The name of the class to use for displaying the properties view of objects with this 
+			{@link cmc/foundation/ObjectDefinition#objectType}. 
+			@param cmc/foundation/Component parentView The parent view to consider.
+			@param cmc/foundation/ModelObject o The model object instance whose properties should be displayed.
+			@param boolean inDetails When set to true, this boolean flag indicates that the properties view instance is used
+					in the details view. For more information see {@link cmc/foundation/BaseObjectProperties#inDetails}.
+			@return cmc/foundation/ObjectProperties An instance of the class specified in {@link cmc/foundation/ObjectDefinition#propertiesClass propertiesClass}
+					that is the child of the specified parent view.
+		-->
+		<method args="propertiesClassName, parentView, o, inDetails" name="getPropertiesViewByClassName">
+			<![CDATA[
+			var propertiesViewKey = parentView.getUID();
+			if (inDetails) {
+				propertiesViewKey += "browsing";
+			}
+			var v = this.propertiesViews[propertiesViewKey + propertiesClassName];
+			if (typeof (v) == "undefined") {
+				var propertiesClass = ClassInstanceRegistry[propertiesClassName];
+				if (propertiesClass.Class) {
+					v = new propertiesClass.Class(parentView, {
+						o: o,
+						inDetails: inDetails
+					});
+				}
+				else {
+					v = DefinitionUtil.createDefinitionInstance(propertiesClass, parentView, {
+						o: o,
+						inDetails: inDetails
+					});
+				}
+				if (v) {
+					this.propertiesViews[propertiesViewKey + propertiesClassName] = v;
+				}
+			}
+			else {
+				v.setVariable("o", o);
+			}
+			return v;
+			]]>
+		</method>	
+	</PrimaryObjectDefinition>
+	
+</Definitions>

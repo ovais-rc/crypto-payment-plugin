@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","zh",{indent:"增加缩进量",outdent:"减少缩进量"});

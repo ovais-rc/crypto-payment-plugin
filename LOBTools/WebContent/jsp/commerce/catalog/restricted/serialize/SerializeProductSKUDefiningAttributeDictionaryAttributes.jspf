@@ -1,0 +1,144 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<fmt:setLocale value="en_US" />
+<%--
+	====================================================================================================
+	Determine if the attribute is user data. An attribute is user data if the attribute has no usage set.
+	====================================================================================================
+--%>
+<c:if test="${!empty attribute.usage && attribute.usage == CONST_ATTRIBUTE_USAGE_DEFINING}" >
+	<%--
+		====================================================================================================
+		Determine if the attribute is inherited.
+		====================================================================================================
+	--%>
+	<c:set var="inherited" value=""/>
+	<c:if test="${(!empty attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID) &&
+					attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+		<c:set var="inherited" value="Inherited"/>
+	</c:if>
+	<c:set var="attributeObjectType" value="${inherited}AttributeDictionaryAttributeWithAllowedValues" />
+	<c:set var="attributeReferenceObjectType" value="ProductSKUReferenceDefining${attributeObjectType}" />
+	<c:set var="storeId" value="${param.storeId}"/>
+	<c:if test="${inherited == 'Inherited' && catentry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+		<c:set var="storeId" value="${catentry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+	</c:if>
+	<%--
+		====================================================================================================
+		Set the value object type.
+		====================================================================================================
+	--%>
+	<%-- Create reference object --%>
+	<object objectType="${attributeReferenceObjectType}" >
+		<attrId>${attribute.attributeIdentifier.uniqueID}</attrId>
+		<attrDisplaySequence><fmt:formatNumber type="number" value="${attribute.displaySequence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></attrDisplaySequence>
+		<c:set var="languages" value="${param.dataLanguageIds}" />
+		<%--
+			Need to look through all attribute languages, as there may only be
+			a value defined for one language.
+		--%>
+		<c:if test="${ empty languages }">
+			<c:set var="languages" value="${allowedValue.language}" />
+		</c:if>
+		<c:forTokens items="${languages}" delims="," var="attributeLanguageBeingManaged">
+			<c:set var="UNIQUE_ID_AND_LANGUAGE_ID" value="${attribute.attributeIdentifier.uniqueID}_${attributeLanguageBeingManaged}"/>
+			<c:set var="ATTRIBUTE" value="${ATTRIBUTE_HASH_MAP[UNIQUE_ID_AND_LANGUAGE_ID]}"/>
+			<%-- Check if there is a attribute for this language. --%>
+			<c:if test="${ !empty ATTRIBUTE.value.identifier }">
+				<c:set var="attributeValueId" value="${ATTRIBUTE.value.identifier}"/>
+			</c:if>
+		</c:forTokens>
+		<attrValId><wcf:cdata data="${attributeValueId}"/></attrValId>
+		<objectStoreId>${storeId}</objectStoreId>
+		<%-- Create attribute object --%>
+		<object objectType="${attributeObjectType}">
+			<c:set var="attributeToUse" value="${attribute}"/>
+			<c:if test="${!empty ATTRIBUTE_VERB_MAP }">
+				<c:set var="attributeToUse" value="${ATTRIBUTE_VERB_MAP[attribute.attributeIdentifier.uniqueID]}"/>
+			</c:if>
+			<c:set var="showVerb" value="${showVerb}" scope="request"/>
+			<c:set var="businessObject" value="${attributeToUse}" scope="request"/>
+			<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+			<attrId>${attribute.attributeIdentifier.uniqueID}</attrId>
+			<attributeCode><wcf:cdata data="${attribute.attributeIdentifier.externalIdentifier.identifier}"/></attributeCode>
+			<attrDataType readonly="true"><wcf:cdata data="${attribute.attributeDataType}"/></attrDataType>
+			<objectStoreId>${attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+			<xdata_Field1>${attribute.extendedData.AttributeField1}</xdata_Field1>
+			<xdata_Field2>${attribute.extendedData.AttributeField2}</xdata_Field2>
+			<xdata_Field3>${attribute.extendedData.AttributeField3}</xdata_Field3>
+			<displayable>${attribute.displayable}</displayable>
+			<%-- <searchable readonly="${attribute.searchable}">${attribute.searchable}</searchable> --%>
+			<searchable>${attribute.searchable}</searchable>
+			<comparable>${attribute.comparable}</comparable>
+			<merchandisable>${attribute.merchandisable}</merchandisable>
+			<storeDisplay>${attribute.storeDisplay}</storeDisplay>
+			<c:forEach var="userDataField" items="${attribute.userData.userDataField}">
+				<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+			</c:forEach>
+			<%-- Create description object
+				Iterate over all the languages currently enabled in the UI and place the language
+				sensitive objects under their parent object. (CMC requirement)
+			--%>
+			<c:forTokens items="${languages}" delims="," var="attributeLanguageBeingManaged">
+				<%--
+					Determine the key and retrieve the allowed value description
+				--%>
+				<c:set var="UNIQUE_ID_AND_LANGUAGE_ID" value="${attribute.attributeIdentifier.uniqueID}_${attributeLanguageBeingManaged}"/>
+				<c:set var="ATTRIBUTE" value="${ATTRIBUTE_HASH_MAP[UNIQUE_ID_AND_LANGUAGE_ID]}"/>
+				<%-- Check if there is a attribute for this language and a value. --%>
+				<c:if test="${ !empty ATTRIBUTE && !empty ATTRIBUTE.value.identifier }">
+					<object	objectType="AttributeDictionaryAttributeDescription">
+						<languageId>${ATTRIBUTE.language}</languageId>
+						<attrName><wcf:cdata data="${ATTRIBUTE.name}"/></attrName>
+						<attrDescription><wcf:cdata data="${ATTRIBUTE.description}"/></attrDescription>
+						<xdescdata_Field1>${ATTRIBUTE.extendedData.Field1}</xdescdata_Field1>					
+						<c:forEach var="userDataField" items="${ATTRIBUTE.userData.userDataField}">
+							<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+						</c:forEach>
+					</object>
+					<%-- Create partial attribute allowed value object just for the selected value.
+						 Test if value is inherited.
+					--%>
+					<c:set var="inheritedValue" value="" />
+					<c:if test="${ATTRIBUTE.value.storeID != param.storeId}">
+						<c:set var="inheritedValue" value="Inherited" />
+					</c:if>
+					<c:set var="allowedValueObjectType" value="${inheritedValue}AttributeDictionaryAttribute${attribute.attributeDataType}Value" />
+					<object objectType="${allowedValueObjectType}">
+						<attrValId>${ATTRIBUTE.value.identifier}</attrValId>
+						<objectStoreId>${ATTRIBUTE.value.storeID}</objectStoreId>
+						<object objectType="AttributeDictionaryAttributeValueDescription">
+							<languageId>${ATTRIBUTE.language}</languageId>
+							<c:choose>
+								<c:when test="${ATTRIBUTE.stringValue != null }" >
+							 		<value><wcf:cdata data="${ATTRIBUTE.value.value}"/></value>
+							  	</c:when>
+							 	<c:when test="${ATTRIBUTE.integerValue != null }" >
+							 		<value><wcf:cdata data="${ATTRIBUTE.value.value}"/></value>
+							  	</c:when>
+							  	<c:when test="${ATTRIBUTE.floatValue != null }" >
+							 		<value><fmt:formatNumber type="number" value="${ATTRIBUTE.value.value}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></value>		 		
+							  	</c:when>
+							</c:choose>
+							<c:forEach var="userDataField" items="${attributeValue_desc.userData.userDataField}">
+								<xvaldesc_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xvaldesc_${userDataField.typedKey}>
+							</c:forEach>
+						</object>
+					</object>
+				</c:if>
+			</c:forTokens>
+		</object>
+	</object>
+</c:if>

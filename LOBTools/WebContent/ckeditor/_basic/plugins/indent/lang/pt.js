@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","pt",{indent:"Aumentar indentação",outdent:"Diminuir indentação"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","sv",{options:"Alternativ för känslolägesikoner",title:"Känslolägesikoner",toolbar:"Infoga känslolägesikon"});

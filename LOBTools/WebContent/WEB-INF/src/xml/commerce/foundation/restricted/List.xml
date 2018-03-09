@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords final 
+		This class defines a widget that displays a list of values for the user to select from. The cmc/foundation/PropertyList
+		widget is for use in a properties view. 
+		
+		The name of the property specified by the {@link cmc/foundation/PropertyEditor#propertyName propertyName} attribute is resolved to 
+		the associated {@link cmc/foundation/PropertyDefinition}. An entry in the list is then created for each {@link cmc/foundation/PropertyValue possible value}
+		of the associated {@link cmc/foundation/PropertyDefinition}.
+		
+		The cmc/foundation/PropertyList widget allows a single item to be selected by default, but can be configured to allow multiple selections using
+		the {@link cmc/foundation/PropertyList#multiselect multiselect} attribute.
+		
+		The code snippet below demonstrates how this class is used:
+
+		@START_CODE
+			...
+			<PropertyDefinition propertyName="currencies">
+				<PropertyValue displayName="US Dollar" value="USD"/>
+				<PropertyValue displayName="Canadian Dollar" value="CAD"/>
+				<PropertyValue displayName="Chinese Yen" value="CNY"/>
+			</PropertyDefinition>
+			...
+			<PropertyGroup>
+				<PropertyList propertyName="currencies" promptText="Select the Currencies you want to use" multiselect="true" />
+			</PropertyGroup>
+		@END_CODE
+		
+		The code above creates a list with three possible values. These three list items will correspond to the three 
+		{@link cmc/foundation/PropertyValue property values} defined for <CODE>currencies</CODE>.
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyList">
+		<dependency localName="List" moduleName="cmc/foundation/List"/>
+		<!--- 
+			Indicates whether multiple list items can be selected. When the shift key is down, a range of items is selected. 
+			When the control key is down, any item may be added to the selection. The default value is set to false.
+		-->
+		<variable name="multiselect" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Maximum number of items to show before displaying a scrollbar.
+		-->
+		<variable name="maxItemsToShow" type="number" value="15"/>
+
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new List.Class(parentComponent, {
+				name: "editor",
+				property: parentComponent.property,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				enabled: parentComponent.enabled,
+				width: 235,
+				multiselect: this.multiselect,
+				maxItemsToShow: this.maxItemsToShow
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords private
+		
+		Skinned list item class for use with cmc/foundation/List.
+	-->
+	<BaseTextListItem classDefinition="true" definitionName="cmc/foundation/TextListItem"/>
+	 
+	<!---
+		@keywords private
+		
+		Foundation list implementation. Given a cmc/foundation/PropertyDefinition as an input,
+		this class generates a list which supports the object properties model.
+		
+		Values are stored in the property as a comma-separated list of values.
+	-->
+	<BaseList classDefinition="true" definitionName="cmc/foundation/List" itemClass="${PropertyValueTextListItem}" scrollBarClass="${VerticalScrollbar}" toggleselected="true">
+		<dependency localName="PropertyValueTextListItem" moduleName="cmc/foundation/PropertyValueTextListItem"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="VerticalScrollbar" moduleName="cmc/foundation/VerticalScrollbar"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!--- Reference to cmc/foundation/ModelProperty object that is being edited. -->
+		<variable name="property" value="${null}"/>
+
+		<!--- @keywords private  -->
+		<handler name="oninit">
+			<![CDATA[
+			this.itemSelectDel = new EventHandler.Class(this, "storeValue");
+			this.itemSelectDel.connect(this, "onselect");
+			this.isInitialized = true;
+			if (this.property) {
+				this.createList();
+				this.updateValue();
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method args="ignore" name="_doFocus">
+			<![CDATA[
+			var keyDown = false;
+			for (var i = 0; i < KeyUtil.downKeysArray.length; i++) {
+				if (KeyUtil.downKeysArray[i] != 16 && KeyUtil.downKeysArray[i] != 17) {
+					keyDown = true;
+					break;
+				}
+			}
+			if (keyDown) {
+				this.inherited(arguments);
+			}
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					offset: 1,
+					placement: "list"
+				});
+			}
+			]]>
+		</method>
+
+		<!--- Cleanup delegates when destroyed  -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			if (this.itemSelectDel) {
+				this.itemSelectDel.disconnectAll();
+				delete this.itemSelectDel;
+			}
+			if (this.propValueDel) {
+				this.propValueDel.disconnectAll();
+				delete this.propValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Handle key down event for end and home.
+		-->
+		<handler args="keyCode" name="onkeydown">
+			<![CDATA[
+			var visibleItems = this.getVisibleItems();
+			if ((keyCode == 35 || keyCode == 36) && visibleItems.length > 0) {
+				if (this.hilitedItem) {
+					this.hilitedItem.setHilite(false);
+				}
+				var item = null;
+				if (keyCode == 35) {
+					item = visibleItems[visibleItems.length - 1];
+				}
+				else {
+					item = visibleItems[0];
+				}
+				this.hilitedItem = item;
+				item.setHilite(true);
+				this.ensureItemInView(item);
+				this.setVariable('doesenter', true);
+			}
+			]]>
+		</handler>
+        
+        <!--- 
+			@keywords private 
+			returns array of visible items in list
+		-->
+		<method name="getVisibleItems">
+			<![CDATA[
+			var visibleItems = [];
+			var items = this._selector.immediateparent.subviews;
+			for (var i = 0; i < items.length; i++) {
+				var item = items[i];
+				if (item.visible) visibleItems.push(item);
+			}
+			return visibleItems;
+			]]>
+		</method>
+
+		<!---
+			Set the property.
+			@param cmc/foundation/ModelProperty newProperty: the new property
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					if (this.isinited) {
+						this.createList();
+					}
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					if (this.isInitialized) {
+						this.clearSelection();
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- Create the list and all the available options -->
+		<method args="e" name="createList">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property && this.property.propertyDefinition != null) {
+				var propDef = this.property.propertyDefinition;
+				if (!this.propValueDel) {
+					this.propValueDel = new EventHandler.Class(this, "createList");
+				}
+				else {
+					this.propValueDel.disconnectAll();
+				}
+				var propertyValues = this.property.propertyDefinition.getPropertyValues(this.property.o, this.propValueDel);
+				var createItems = false;
+				if (!this._propertyValues) {
+					createItems = true;
+				}
+				if (!createItems && this._propertyValues.length != propertyValues.length) {
+					createItems = true;
+				}
+				if (!createItems) {
+					for (var i = 0; i < this._propertyValues.length; i++) {
+						if (this._propertyValues[i].value != propertyValues[i].value || this._propertyValues[i].displayName != propertyValues[i].displayName) {
+							createItems = true;
+							break;
+						}
+					}
+				}
+				if (createItems) {
+					this._propertyValues = propertyValues;
+					for (var i = this.getNumItems() - 1; i >= 0; i--) {
+						this.removeItemAt(i);
+					}
+					var maxItemWidth = 0;
+					for (var i = 0; i < propertyValues.length; i++) {
+						var propertyValue = propertyValues[i];
+						this.addItem(propertyValue.displayName, propertyValue.value);
+						var newItem = this.getItem(propertyValue.value);
+						newItem.setVariable("propertyValue", propertyValue);
+						if (this.getItemAt(i)._title.getTextWidth() > maxItemWidth) {
+							maxItemWidth = this.getItemAt(i)._title.getTextWidth();
+						}
+					}
+					if (this.width < maxItemWidth + 10) {
+						this.setVariable('width', maxItemWidth + 10);
+					}
+				}
+				if (typeof (this.maxItemsToShow) != "undefined") {
+					var numItems = (propertyValues.length > this.maxItemsToShow) ? this.maxItemsToShow : -1;
+					this.setVariable("shownitems", numItems);
+				}
+				this.updateValue();
+			}
+			]]>
+		</method>	
+		
+		<!--- Update the widget with a new property value. -->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.isInitialized) {
+				if (this.parseValue() != this.property.value) {
+					this._skipStoringValue = true;
+					var value = this.property.value;
+					if (this.multiselect) {
+						var values = value == null ? [] : value.split(",");
+						var valuesMap = {};
+						for (var i = 0; i < values.length; i++) {
+							var val = StringUtil.Singleton.trim(values[i]);
+							valuesMap[val] = true;
+						}
+						var itemList = new Array();
+						for (var i = 0; i < getNumItems(); i++) {
+							var item = this.getItemAt(i);
+							if (valuesMap[item.value]) {
+								itemList.push(item);
+							}
+						}
+						this.clearSelection();
+						if (itemList.length > 0) {
+							select(itemList);
+						}
+					}
+					else {
+						if (value != null && value != "") {
+							this.selectItem(value);
+						}
+						else {
+							this.clearSelection();
+						}
+					}
+					this._skipStoringValue = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- Store the property value. -->
+		<method args="e" name="storeValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property && this.isInitialized && !this._skipStoringValue) {
+				var value = this.parseValue();
+				if (value != this.property.value) {
+					this.property.change(value);
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/List", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + value + this.property.o.logString());
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method name="parseValue">
+			<![CDATA[
+			var value = "";
+			if (this.multiselect) {
+				var values = getValue();
+				if (values != null) {
+					for (var i = 0; i < values.length; i++) {
+						value += values[i];
+						if (i != values.length - 1) {
+							value += ",";
+						}
+					}
+				}
+			}
+			else {
+				value = (getValue() == null) ? "" : getValue();
+			}
+			return value;
+			]]>
+		</method>
+	 <method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method></BaseList>
+	 
+	 <!---
+		@keywords private
+	 -->
+	<TextListItem classDefinition="true" definitionName="cmc/foundation/PropertyValueTextListItem">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+        <variable name="propertyValue"/>
+        
+        <method args="v" name="set_propertyValue">
+			<![CDATA[
+			if (this.propertyValue != v) {
+				this.propertyValue = v;
+				if (this.updateTextDel) {
+					this.updateTextDel.disconnectAll();
+				}
+				else {
+					this.updateTextDel = new EventHandler.Class(this, "updateText");
+				}
+				if (this.propertyValue != null) {
+					this.updateTextDel.connect(this.propertyValue, "ondisplayName");
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateTextDel) {
+				this.updateTextDel.disconnectAll();
+				delete this.updateTextDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("text", this.propertyValue.displayName);
+			]]>
+		</method>
+    </TextListItem>
+</Definitions>

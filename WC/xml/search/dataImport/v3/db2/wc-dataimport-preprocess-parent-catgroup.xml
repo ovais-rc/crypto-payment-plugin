@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<_config:DIHPreProcessConfig xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../../xsd/wc-dataimport-preprocess.xsd ">
+	
+  <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.CatalogHierarchyDataPreProcessor" batchSize="10000">
+    <_config:table definition="CREATE TABLE TI_APGROUP_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, CATGROUPS VARCHAR(2000), CATPATHS VARCHAR(3000), PRIMARY KEY (CATENTRY_ID))" name="TI_APGROUP_#INDEX_SCOPE_TAG#"/>
+    <_config:query sql=""/>
+    <_config:mapping>
+      <_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+      <_config:column-mapping>
+        <_config:column-column-mapping>
+        	<_config:column-column queryColumn="CATGROUP_ID" tableColumn="CATGROUP"/>
+        </_config:column-column-mapping>
+        </_config:column-mapping>
+    </_config:mapping>  
+    
+    <!--
+     This sql is to fetch published top categories. The default value is "SELECT DISTINCT CATTOGRP.CATGROUP_ID from CATTOGRP, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATTOGRP.CATALOG_ID = ? and CATTOGRP.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchTopCategorySQL" value="SELECT DISTINCT CATTOGRP.CATGROUP_ID from CATTOGRP, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATTOGRP.CATALOG_ID = ? and CATTOGRP.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"/>
+    
+    <!--
+     This sql is to fetch immediate published child categories. The default value is "SELECT DISTINCT CATGRPREL.CATGROUP_ID_CHILD from CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATGRPREL.CATGROUP_ID_PARENT = ? and CATGRPREL.CATALOG_ID = ? and CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchChildCategorySQL" value="SELECT DISTINCT CATGRPREL.CATGROUP_ID_CHILD from CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATGRPREL.CATGROUP_ID_PARENT = ? and CATGRPREL.CATALOG_ID = ? and CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"/>
+    
+    <!--
+     This sql is to fetch immediate catalog entries under a catalog and published category. The default value is "SELECT DISTINCT CATGPENREL.CATENTRY_ID from CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATGPENREL.CATGROUP_ID=? AND CATGPENREL.CATALOG_ID=? AND CATGPENREL.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchChildCatalogEntrySQL" value="SELECT DISTINCT CATGPENREL.CATENTRY_ID from CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATGPENREL.CATGROUP_ID=? AND CATGPENREL.CATALOG_ID=? AND CATGPENREL.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?) AND NOT EXISTS (SELECT 1 FROM CATENTREL WHERE CATENTRY_ID_CHILD=CATGPENREL.CATENTRY_ID AND CATENTREL.CATRELTYPE_ID ='PRODUCT_ITEM')"/>
+        
+    <!--
+     This sql is to fetch the count of published catalog entries under the catgpenrel table for a catalog.  The default value is "SELECT COUNT(*) FROM (SELECT DISTINCT CATGPENREL.CATGROUP_ID, CATGPENREL.CATENTRY_ID, CATGPENREL.CATALOG_ID from CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATGPENREL.CATALOG_ID=? and CATGPENREL.catgroup_id = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?))"
+     -->
+    <_config:property name="fetchCatalogChildCatalogEntryCountSQL" value="SELECT COUNT(1) FROM CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD, CATENTRY CE where CATGPENREL.CATALOG_ID=? and CATGPENREL.catgroup_id = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?) AND CATGPENREL.CATENTRY_ID=CE.CATENTRY_ID AND NOT EXISTS (SELECT 1 FROM CATENTREL WHERE CATENTRY_ID_CHILD=CE.CATENTRY_ID AND CATENTREL.CATRELTYPE_ID ='PRODUCT_ITEM')"/>
+	
+    <!--
+     This sql is to fetch the published catalog entry IDs under the catgpenrel table for a catalog.  The default value is "SELECT DISTINCT CATGPENREL.CATENTRY_ID from CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD where CATGPENREL.CATALOG_ID=? and CATGPENREL.catgroup_id = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchCatalogChildCatalogEntrySQL" value="SELECT DISTINCT CATGPENREL.CATENTRY_ID from CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD, CATENTRY CE where CATGPENREL.CATALOG_ID=? and CATGPENREL.catgroup_id = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?) AND CATGPENREL.CATENTRY_ID=CE.CATENTRY_ID AND NOT EXISTS (SELECT 1 FROM CATENTREL WHERE CATENTRY_ID_CHILD=CE.CATENTRY_ID AND CATENTREL.CATRELTYPE_ID ='PRODUCT_ITEM')"/>
+    
+    <!--
+     This sql is to fetch the published parent category IDs for a calalog entry.  The default value is "SELECT DISTINCT CATGPENREL.CATGROUP_ID, CATGPENREL.CATALOG_ID FROM CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGPENREL.CATENTRY_ID = ? and CATGPENREL.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchCatalogEntryParentCategorySQL" value="SELECT DISTINCT CATGPENREL.CATGROUP_ID, CATGPENREL.CATALOG_ID FROM CATGPENREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD, CATENTRY CE WHERE CATGPENREL.CATENTRY_ID = ? and CATGPENREL.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?) AND CATGPENREL.CATENTRY_ID=CE.CATENTRY_ID AND NOT EXISTS (SELECT 1 FROM CATENTREL WHERE CATENTRY_ID_CHILD=CE.CATENTRY_ID AND CATENTREL.CATRELTYPE_ID ='PRODUCT_ITEM')"/>
+        
+    <!--
+     This sql is to fetch the published parent category IDs for a category.  The default value is "SELECT DISTINCT CATGRPREL.CATGROUP_ID_PARENT, CATGRPREL.CATALOG_ID FROM CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGRPREL.CATGROUP_ID_CHILD = ? AND CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchCategoryParentCategorySQL" value="SELECT DISTINCT CATGRPREL.CATGROUP_ID_PARENT, CATGRPREL.CATALOG_ID FROM CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGRPREL.CATGROUP_ID_CHILD = ? AND CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"/>
+
+    <!--
+     This sql is to fetch the count of published categories. The default value is "SELECT COUNT(DISTINCT CATGROUP.CATGROUP_ID) FROM CATGROUP, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGROUP.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"
+     -->
+    <_config:property name="fetchCategoryCountSQL" value="SELECT COUNT(DISTINCT CATGROUP.CATGROUP_ID) FROM CATGROUP, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGROUP.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"/>
+	
+    <!--
+     This sql is to fetch the count of published category relationship for a catalog.  The default value is "SELECT COUNT(*) FROM (SELECT DISTINCT CATGROUP_ID_CHILD, CATGROUP_ID_PARENT, CATALOG_ID FROM CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGRPREL.CATALOG_ID = ? AND CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?))"
+     -->
+    <_config:property name="fetchCatgrprelCountSQL" value="SELECT COUNT(1) FROM CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE CATGRPREL.CATALOG_ID = ? AND CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?, ?)"/>
+	
+    <!--
+     This sql is to fetch the count of  catalog entries.  The default value is "SELECT COUNT(1) from CATENTRY"
+     -->
+    
+    <_config:property name="fetchCatentryCountSQL" value="SELECT COUNT(1) from CATENTRY CE WHERE NOT EXISTS (SELECT 1 FROM CATENTREL WHERE CATENTRY_ID_CHILD=CE.CATENTRY_ID AND CATENTREL.CATRELTYPE_ID ='PRODUCT_ITEM')"/>
+	
+    <!--
+    	If you experience duplicate key exceptions or index constraint errors on the CATENTRY_ID
+    	column, most likely you have catalog entries in your master catalog that have multiple
+    	parent catalog groups, which we do not allow in our management tooling as well as our
+    	dataload utility.  For performance reasons, out of the box we assume this assumption holds.
+    	This property can be uncommented to allow for this scenario to load the data, and
+    	all data going into this table will be treated as updates vs inserts.
+    -->
+    <_config:property name="masterCatalogContainsCatalogEntriesWithMultipleParents" value="false"/>
+
+	<!--
+      disableDeltaUpdate
+
+      Default is false.	Change this to "true" if running of this preprocessor during delta update is not desired.
+    -->
+    <_config:property name="disableDeltaUpdate" value="false"/>
+	
+	<!--
+      largeCategoryValue
+
+      Default is 50,000.  This option is to improve indexing time for the large category by altering the indexing
+      behaviour - instead of performing a top-down category traversal, use bottom-up approach for large categories.
+    -->
+    <_config:property name="largeCategoryValue" value="50000"/>
+	
+   	<!--
+			indexNavigationPath
+
+    	Default is false. Change this to "true" if required to index the full navigation path into the parentCatgroup_id_path index column.
+    	Note: Indexing full navigation path can only be performed when catalog size does not exceeding parameter "largeCategoryValue".
+    -->
+    <_config:property name="indexNavigationPath" value="false"/>
+
+    <!--
+      batchSize
+
+      Default is 1.  This option enables batch mode processing when setting to a number higher than 1.  The value
+      used here is to define the maximum number of entries to be batched up before sending to the database.
+    -->
+    <_config:property name="batchSize" value="1"/>
+    
+  </_config:data-processing-config>
+  
+  <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  batchSize="500">
+		<_config:table definition="CREATE TABLE TI_APGROUPI_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, CATGROUPS VARCHAR(2000), CATPATHS VARCHAR(3000), PRIMARY KEY (CATENTRY_ID))" name="TI_APGROUPI_#INDEX_SCOPE_TAG#"/>
+		<_config:query sql="SELECT X.CATENTRY_ID_CHILD CATENTRY_ID, P.CATGROUPS CATGROUPS, P.CATPATHS CATPATHS
+							FROM TI_APGROUP_#INDEX_SCOPE_TAG# P,
+								(SELECT CATENTRY_ID_PARENT,CATENTRY_ID_CHILD FROM TI_CATENTRY_#INDEX_SCOPE_TAG#,CATENTREL WHERE CATENTRY_ID_CHILD=CATENTRY_ID AND CATENTTYPE_ID='ItemBean' AND CATRELTYPE_ID='PRODUCT_ITEM') X  
+							WHERE P.CATENTRY_ID=X.CATENTRY_ID_PARENT
+				 			ORDER BY CATENTRY_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="CATGROUPS" tableColumn="CATGROUPS"/>
+				<_config:column-column queryColumn="CATPATHS" tableColumn="CATPATHS"/>
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+	</_config:data-processing-config>
+  
+</_config:DIHPreProcessConfig>

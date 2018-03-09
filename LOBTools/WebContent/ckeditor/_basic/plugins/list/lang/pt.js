@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","pt",{bulletedlist:"Lista marcada",numberedlist:"Lista numerada",ibm:{numberedTitle:"Lista numerada",bulletedTitle:"Lista marcada",description:"As definições serão aplicadas ao nível da lista actual",fontsize:"Tamanho do tipo de letra:"}});

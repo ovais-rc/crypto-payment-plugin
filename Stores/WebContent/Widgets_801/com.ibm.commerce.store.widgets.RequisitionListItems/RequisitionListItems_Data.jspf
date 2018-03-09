@@ -1,0 +1,443 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+
+<wcf:rest var="order" url="store/{storeId}/order/{orderId}">
+	<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+	<wcf:var name="orderId" value="${WCParam.requisitionListId}" encode="true"/>
+	<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+	<wcf:param name="pageSize" value="${pageSize}"/>
+	<wcf:param name="pageNumber" value="${currentPage}"/>
+</wcf:rest>
+
+<%-- ****************************************************************
+	 pagination --%>
+
+	<fmt:parseNumber var="numEntries" value="${order.recordSetTotal}" integerOnly="true"/>
+	<fmt:formatNumber var="totalPages" value="${(numEntries/pageSize)}"/>
+	<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+	<c:if test="${numEntries - (totalPages * pageSize) > 0}" >
+		<c:set var="totalPages" value="${totalPages + 1}" />
+	</c:if>
+		
+	<c:choose>
+		<c:when test="${beginIndex == 0}">
+			<c:set var="currentPage" value="1" />
+		</c:when>
+		<c:otherwise>
+			<fmt:formatNumber var="currentPage" value="${beginIndex / pageSize + 1}"/>
+			<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+		</c:otherwise>
+	</c:choose>
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= numEntries}">
+			<c:set var="endIndex" value="${numEntries}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	
+	<c:if test="${numEntries < (beginIndex+1) && numEntries != 0}">
+		<c:set var="beginIndex" value="${numEntries % pageSize == 0 ? numEntries - pageSize : numEntries - numEntries % pageSize}" />
+		<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+		<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+		<c:choose>
+			<c:when test="${beginIndex + pageSize >= numEntries}">
+				<c:set var="endIndex" value="${numEntries}" />
+			</c:when>
+			<c:otherwise>
+				<c:set var="endIndex" value="${beginIndex + pageSize}" />
+			</c:otherwise>
+		</c:choose>
+		<wcf:rest var="order" url="store/{storeId}/order/{orderId}">
+			<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+			<wcf:var name="orderId" value="${WCParam.requisitionListId}" encode="true"/>
+			<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+			<wcf:param name="pageSize" value="${pageSize}"/>
+			<wcf:param name="pageNumber" value="${currentPage}"/>
+		</wcf:rest>
+	</c:if>
+	
+	<c:if test="${numEntries == 0}">
+		<c:set var="beginIndex" value="0" />
+	</c:if>
+	
+	<wcst:message var="pageDisplay1" key="REQUISITIONLISTITEM_PAGE_DISPLAY1" bundle="${widgetText}"/>
+	<wcst:message var="pageDisplay2" key="REQUISITIONLISTITEM_PAGE_DISPLAY2" bundle="${widgetText}">
+		<c:choose>
+			<c:when test="${numEntries == 0}">
+				<wcst:param><wcst:formatNumber value="${beginIndex}"/></wcst:param>
+			</c:when>
+			<c:otherwise>
+				<wcst:param><wcst:formatNumber value="${beginIndex + 1}"/></wcst:param>
+			</c:otherwise>
+		</c:choose>
+		<wcst:param><wcst:formatNumber value="${endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${numEntries}"/></wcst:param>
+	</wcst:message>
+
+<c:set var="readOnly" value="true" />
+<c:if test="${order.buyerId == userId}">
+	<c:set var="readOnly" value="false" />
+</c:if>
+
+<script type="text/javascript">
+	$( document ).ready(function() {
+		ReqListItemsJS.setCommonParameters('<c:out value="${langId}"/>','<c:out value="${storeId}" />','<c:out value="${catalogId}" />','<c:out value="${order.orderId}" />');
+		<wcst:message var="REQUISITIONLIST_ADD_SUCCESS" key="REQUISITIONLIST_ADD_SUCCESS" bundle="${widgetText}"/>
+		<wcst:message var="REQUISITIONLIST_ITEM_DELETE_SUCCESS" key="REQUISITIONLIST_ITEM_DELETE_SUCCESS" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_REQUISITION_LIST_INVALID_SKU" key="ERROR_REQUISITION_LIST_INVALID_SKU" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_REQUISITION_LIST_SKU_EMPTY" key="ERROR_REQUISITION_LIST_SKU_EMPTY" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_REQUISITION_LIST_QUANTITY_ONE_OR_MORE" key="ERROR_REQUISITION_LIST_QUANTITY_ONE_OR_MORE" bundle="${widgetText}"/>
+		<wcst:message var="ADDED_TO_ORDER" key="ADDED" bundle="${widgetText}"/>
+
+		MessageHelper.setMessage("REQUISITIONLIST_ADD_SUCCESS", <wcf:json object="${REQUISITIONLIST_ADD_SUCCESS}"/>);
+		MessageHelper.setMessage("REQUISITIONLIST_ITEM_DELETE_SUCCESS", <wcf:json object="${REQUISITIONLIST_ITEM_DELETE_SUCCESS}"/>);
+		MessageHelper.setMessage("ERROR_REQUISITION_LIST_INVALID_SKU", <wcf:json object="${ERROR_REQUISITION_LIST_INVALID_SKU}"/>);
+		MessageHelper.setMessage("ERROR_REQUISITION_LIST_SKU_EMPTY", <wcf:json object="${ERROR_REQUISITION_LIST_SKU_EMPTY}"/>);
+		MessageHelper.setMessage("ERROR_REQUISITION_LIST_QUANTITY_ONE_OR_MORE", <wcf:json object="${ERROR_REQUISITION_LIST_QUANTITY_ONE_OR_MORE}"/>);
+		MessageHelper.setMessage("ADDED_TO_ORDER", <wcf:json object="${ADDED_TO_ORDER}"/>);
+	});
+</script>
+
+<%-- The following variable are passed to ItemTable_UI.jsp --%>
+<c:set var="widgetName" value="RequisitionListItems" />
+<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}" />
+
+<%-- ****************************************************************
+	 strings to to pass to UI JSP from properties file --%>
+
+	<%-- table header --%>
+	<c:set var="hCol1Text" value="" />
+	<wcst:message var="hCol2Text" key="REQUISITIONLISTITEM_TABLECOL_SKU" bundle="${widgetText}"/>
+	<wcst:message var="hCol3Text" key="REQUISITIONLISTITEM_TABLECOL_NAME" bundle="${widgetText}"/>
+	<wcst:message var="hCol4Text" key="REQUISITIONLISTITEM_TABLECOL_QUANTITY" bundle="${widgetText}"/>
+	<wcst:message var="hCol5Text" key="REQUISITIONLISTITEM_TABLECOL_MANUFACTURER" bundle="${widgetText}"/>
+	<wcst:message var="hCol6Text" key="REQUISITIONLISTITEM_TABLECOL_ACTIONS" bundle="${widgetText}"/>
+
+	<%-- action responses --%>
+	<wcst:message var="msgQtyUpdated" key="REQUISITIONLIST_QTY_UPDATED" bundle="${widgetText}"/>
+
+<%-- ****************************************************************
+	 toolbar section  --%>
+
+<%-- set toolbarType to determine which toolbar JSP to include --%>
+<c:if test="${!readOnly}">
+	<c:set var="toolbarType" value="InputsAndButtons_ReqListItems" />
+</c:if>
+
+<%-- ****************************************************************
+	 header row main div class name --%>
+	<c:set var="headerDivClass" value="row tableHeader" />
+
+	<%--
+	hCells is an array holding div class and contents of the cells in the header row, we have 6 columns for
+	requisiton list items page so there are 6 cells.
+	Structure of hCells array:
+	"hCells": [
+		"hCell":{
+			"cellDivClass": <DIV_CLASS>
+			"cellContent": <CELL_CONTENT>
+		},
+
+	The HTML of the header row is:
+	<div class="<DIV_CLASS>">
+		<div class="cell">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>
+	<wcf:useBean var="hCells" classname="java.util.ArrayList"/>
+
+		<%-- header row column 1 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col2" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol1Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		<%-- header row column 2 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col2" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol2Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		<%-- header row column 3 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col3" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol3Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		<%-- header row column 4 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col2" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol4Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		<%-- header row column 5 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col2" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol5Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+		<%-- header row column 6 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col1 actions" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol6Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+
+<%-- ****************************************************************
+	 table row main div class name --%>
+	<c:set var="rowDivClass" value="row entry withPreviewImage" />
+
+	<%-- define tableInputForm and tableFormHiddenInputs if a form is needed for the table --%>
+	<%-- form id and action --%>
+	<wcf:useBean var="tableInputForm" classname="java.util.HashMap"/>
+		<wcf:set key="id" value="RequisitionListAddToCartForm" target="${tableInputForm}" />
+		<wcf:set key="action" value="requisitionListAjaxPlaceOrder" target="${tableInputForm}" />
+		<wcf:set key="name" value="RequisitionListAddToCartForm" target="${tableInputForm}" />
+
+	<%-- each form hidden input holds these attributes: name, value --%>
+	<wcf:useBean var="tableFormHiddenInputs" classname="java.util.ArrayList"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="requisitionListId" target="${inputAttribute}" />
+			<wcf:set key="value" value="${WCParam.requisitionListId}" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="storeId" target="${inputAttribute}" />
+			<wcf:set key="value" value="${WCParam.storeId}" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="catalogId" target="${inputAttribute}" />
+			<wcf:set key="value" value="${WCParam.catalogId}" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="langId" target="${inputAttribute}" />
+			<wcf:set key="value" value="${WCParam.langId}" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="calculationUsage" target="${inputAttribute}" />
+			<wcf:set key="value" value="-1,-2,-3,-4,-5,-6,-7" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="mergeToCurrentPendingOrder" target="${inputAttribute}" />
+			<wcf:set key="value" value="Y" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="name" value="URL" target="${inputAttribute}" />
+			<wcf:set key="value" value="" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+	<%--
+	rows is an array holding rCells, each rCells record holds data for one row of the table
+	rCells is an array holding div class, id and contents of the cells in a table row, we have 6 columns so there are 6 cells each row
+	Structure of rCells array:
+	"rCells": [
+		"rCell":{
+			"div1Class": <DIV1_CLASS>
+			"div2Class": <DIV2_CLASS>
+			"div2Id": <DIV2_ID>
+			"cellContent": <CELL_CONTENT>
+		},
+
+	The HTML of a table cell is:
+	<div class="<DIV1_CLASS>">
+		<div class="<DIV2_CLASS>" id="<DIV2_ID">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>
+
+	<c:set var="rowCount" value="0"/>
+	<wcf:useBean var="rows" classname="java.util.ArrayList"/>
+
+	<c:if test="${!empty order.orderItem}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="catEntry" url="${searchHostNamePath}${searchContextPath}/store/${storeId}/productview/byIds" >
+				<c:forEach var="orderItem" items="${order.orderItem}" varStatus="istat">
+					<wcf:param name="id" value="${orderItem.productId}" />
+				</c:forEach>
+				<wcf:param name="langId" value="${langId}" />
+				<wcf:param name="currency" value="${env_currencyCode}" />
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="catalogId" value="${sdb.masterCatalog.catalogId}" />
+				<wcf:param name="profileName" value="IBM_findProductByIds_Summary_WithNoEntitlementCheck" />
+			</wcf:rest>
+		</c:catch>
+	</c:if>
+
+	<c:forEach var="orderItem" items="${order.orderItem}" varStatus="istat">
+		<c:remove var="catEntryView"/>
+		<c:forEach var="curCatEntryView" items="${catEntry.catalogEntryView}">
+			<c:if test="${curCatEntryView.uniqueID == orderItem.productId}">
+				<c:set var="catEntryView" value="${curCatEntryView}" />
+			</c:if>
+		</c:forEach>
+
+		<c:set var="rowCount" value="${rowCount+1}"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="id" value="ProductInfoName_${catEntryView.uniqueID}" target="${inputAttribute}" />
+			<wcf:set key="name" value="ProductInfoName_${catEntryView.uniqueID}" target="${inputAttribute}" />
+			<wcf:set key="value" value="${catEntryView.name}" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="inputAttribute" classname="java.util.HashMap"/>
+			<wcf:set key="id" value="ProductInfoImage_${catEntryView.uniqueID}" target="${inputAttribute}" />
+			<wcf:set key="name" value="ProductInfoImage_${catEntryView.uniqueID}" target="${inputAttribute}" />
+			<wcf:set key="value" value="${fn:escapeXml(catEntryView.thumbnail)}" target="${inputAttribute}" />
+		<wcf:set target="${tableFormHiddenInputs}" value="${inputAttribute}" />
+		<c:remove var="inputAttribute"/>
+
+		<wcf:useBean var="rCells" classname="java.util.ArrayList"/>
+			<%-- table row column 1 --%>
+			<c:remove var="thumbnail"/>
+			<c:if test="${!empty catEntryView.thumbnail}">
+				<c:choose>
+					<c:when test="${(fn:startsWith(catEntryView.thumbnail, 'http://') || fn:startsWith(catEntryView.thumbnail, 'https://'))}">
+						<wcst:resolveContentURL var="thumbnail" url="${catEntryView.thumbnail}"/>
+					</c:when>
+					<c:when test="${fn:startsWith(catEntryView.thumbnail, '/store/0/storeAsset')}">
+						<c:set var="thumbnail" value="${storeContextPath}${catEntryView.thumbnail}" />
+					</c:when>
+					<c:otherwise>
+						<c:set var="thumbnail" value="${catEntryView.thumbnail}" />
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+			<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+				<wcf:set key="div1Class" value="col2 previewImage" target="${rCell}" />
+				<wcf:set key="div2Class" value="cell" target="${rCell}" />
+				<wcf:set key="div2Id" value="" target="${rCell}" />
+				<wcf:set key='cellContent' value='<img src="${thumbnail}" alt="${catEntryView.name}">' target='${rCell}' />
+			<wcf:set target="${rCells}" value="${rCell}" />
+			<c:remove var="rCell"/>
+
+			<%-- table row column 2 --%>
+			<wcf:url var="catEntryDisplayUrl" patternName="ProductURL" value="Product1">
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<wcf:param name="storeId" value="${WCParam.storeId}"/>
+				<wcf:param name="productId" value="${orderItem.productId}"/>
+				<wcf:param name="langId" value="${WCParam.langId}"/>
+			</wcf:url>
+			<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+				<wcf:set key="div1Class" value="col2 updated" target="${rCell}" />
+				<wcf:set key="div2Class" value="cell" target="${rCell}" />
+				<wcf:set key="div2Id" value="" target="${rCell}" />
+				<wcf:set key='cellContent' value='<a id="${widgetName}_r${rowCount}_col2Link" href="${catEntryDisplayUrl}">${catEntryView.partNumber}</a>' target='${rCell}' />
+			<wcf:set target="${rCells}" value="${rCell}" />
+			<c:remove var="rCell"/>
+
+			<%-- table row column 3 --%>
+			<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+				<wcf:set key="div1Class" value="col3 name" target="${rCell}" />
+				<wcf:set key="div2Class" value="cell" target="${rCell}" />
+				<wcf:set key="div2Id" value="" target="${rCell}" />
+				<wcf:set key='cellContent' value='${catEntryView.name}' target='${rCell}' />
+			<wcf:set target="${rCells}" value="${rCell}" />
+			<c:remove var="rCell"/>
+
+			<%-- table row column 4 --%>
+			<fmt:formatNumber var="formattedQuantity" value="${orderItem.quantity}" type="number" maxFractionDigits="0"/>
+			<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+				<wcf:set key="div1Class" value="col2 quantity editable" target="${rCell}" />
+				<wcf:set key="div2Class" value="cell" target="${rCell}" />
+				<wcf:set key="div2Id" value="quantityCell1" target="${rCell}" />
+				<c:set var='rCol4_HTML_TO_ADD' value='<label for=\"table_r${rowCount}_input2\" style=\"display:none\"> ${hCol4Text} </label>' />
+				<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <input type=\"text\" id=\"table_r${rowCount}_input2\" name=\"quantity_${rowCount}\" class=\"input_field\" value=\"${formattedQuantity}\" onKeyPress=\"if(event.keyCode == 13){ReqListItemsJS.updateItemQuantity(table_r${rowCount}_input2,${orderItem.orderItemId},${rowCount})}\" onchange=\"ReqListItemsJS.updateItemQuantity(table_r${rowCount}_input2,${orderItem.orderItemId},${rowCount})\"' />
+				<c:if test="${readOnly}">
+					<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} disabled' />
+				</c:if>
+				<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD}  />' />
+				<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <div class=\"reqListQuantityUpdated\" id=\"reqItem_msg_qty_updated_${rowCount}\">' />
+				<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <img src=\"${jspStoreImgDir}images/checkmark_icon_white.png\" />${msgQtyUpdated}' />
+				<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} </div>' />
+				<wcf:set key='cellContent' value='${rCol4_HTML_TO_ADD}' target='${rCell}' />
+			<wcf:set target="${rCells}" value="${rCell}" />
+			<c:remove var="rCol4_HTML_TO_ADD"/>
+			<c:remove var="rCell"/>
+
+			<%-- table row column 5 --%>
+			<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+				<wcf:set key="div1Class" value="col2 manufacturer" target="${rCell}" />
+				<wcf:set key="div2Class" value="cell" target="${rCell}" />
+				<wcf:set key="div2Id" value="" target="${rCell}" />
+				<wcf:set key='cellContent' value='${catEntryView.manufacturer}' target='${rCell}' />
+			<wcf:set target="${rCells}" value="${rCell}" />
+			<c:remove var="rCell"/>
+
+			<%-- table row column 6 --%>
+			<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+				<wcf:set key="div1Class" value="col1 actions" target="${rCell}" />
+				<wcf:useBean var="actionsMap" classname="java.util.HashMap"/>
+					<wcf:set key="ADD_ITEM" value="ReqListItemsJS.addItemToOrder('${catEntryView.uniqueID}','${catEntryView.partNumber}','${rowCount}');" target="${actionsMap}" />
+					<wcf:set key="ADD_LIST" value="ReqListItemsJS.addListToOrder('RequisitionListAddToCartForm');" target="${actionsMap}" />
+					<c:if test="${!readOnly}">
+						<wcf:set key="REMOVE_ITEM" value="ReqListItemsJS.deleteItemFromReqList(${orderItem.orderItemId});" target="${actionsMap}" />
+					</c:if>
+				<wcf:set key='actionsMap' value='${actionsMap}' target='${rCell}' />
+			<wcf:set target="${rCells}" value="${rCell}" />
+			<c:remove var="actionsMap"/>
+			<c:remove var="rCell"/>
+
+		<wcf:set target="${rows}" value="${rCells}" />
+		<c:remove var="rCells"/>
+	</c:forEach>
+	<wcst:message bundle="${widgetText}" key="ACCE_REGION_SKUTYPEAHEAD" var="autoSuggestBySKULabel"/>
+
+	<%-- Set variables used by pagination controls - used by PaginationControls.jspf --%>
+	<c:set var="linkPrefix" value="${widgetName}"/>
+	<c:set var="otherViews" value="false"/>
+	<c:set var="eventName" value="showResultsForPageNumber_reqList"/>
+	
+	<script>
+		$( document ).ready(function() {			
+		wcTopic.subscribe("showResultsForPageNumber_reqList",$.proxy(ReqListItemsJS.showResultsPage,ReqListItemsJS));
+			<c:if test="${env_inPreview && !env_storePreviewLink}">
+			wcTopic.subscribe("CMPageRefreshEvent",function(){           
+				var previewHeader = window.parent.frames[0];
+				if(previewHeader.isSpotsShown()) {
+					previewHeader.showESpots();previewHeader.showESpots();
+					}
+				});
+			</c:if>
+		});
+	</script>
+

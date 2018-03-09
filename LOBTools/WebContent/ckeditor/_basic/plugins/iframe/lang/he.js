@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","he",{border:"הצגת גבול מסגרת",noUrl:"נא להקליד את URL ה-IFrame",scrolling:"הפעלת סרגלי גלילה",title:"תכונות IFrame",toolbar:"הוספת IFrame",ibm:{title:"IFrame"}});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","da",{clear:"Ryd",highlight:"Fremhæv",options:"Farveindstillinger",selected:"Valgt farve",title:"Vælg farve",ibm:{currentColor:"Aktuel farve"}});

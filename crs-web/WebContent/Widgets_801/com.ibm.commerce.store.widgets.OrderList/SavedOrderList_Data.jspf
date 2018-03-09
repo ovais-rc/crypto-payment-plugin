@@ -1,0 +1,303 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN SavedOrderList_Data.jspf -->
+
+<c:set var="search01" value="'"/>
+<c:set var="search02" value='"'/>
+<c:set var="replaceStr01" value="\\\\'"/>
+<c:set var="replaceStr02" value='\\\\"'/>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_CREATE_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_CREATE_SUCCESS"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_CREATE_FAIL" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_CREATE_FAIL"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_DELETE_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_DELETE_SUCCESS"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_DELETE_FAIL" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_DELETE_FAIL"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_COPY_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_COPY_SUCCESS"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_COPY_FAIL" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_COPY_FAIL"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_CALCULATE_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_CALCULATE_SUCCESS"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_CALCULATE_FAIL" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_CALCULATE_FAIL"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_SUCCESS"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_FAIL" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_FAIL"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_ORDER_LOCK_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_ORDER_LOCK_SUCCESS"/>
+        <wcst:message key="MYACCOUNT_SAVEDORDERLIST_ORDER_UNLOCK_SUCCESS" bundle="${widgetText}" var="MYACCOUNT_SAVEDORDERLIST_ORDER_UNLOCK_SUCCESS"/>
+
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_CREATE_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_CREATE_SUCCESS}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_CREATE_FAIL", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_CREATE_FAIL}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_DELETE_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_DELETE_SUCCESS}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_DELETE_FAIL", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_DELETE_FAIL}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_COPY_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_COPY_SUCCESS}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_COPY_FAIL", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_COPY_FAIL}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_CALCULATE_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_CALCULATE_SUCCESS}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_CALCULATE_FAIL", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_CALCULATE_FAIL}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_SUCCESS}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_FAIL", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_SET_AS_CURRENT_FAIL}"/>);
+
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_ORDER_LOCK_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_ORDER_LOCK_SUCCESS}"/>);
+        MessageHelper.setMessage("MYACCOUNT_SAVEDORDERLIST_ORDER_UNLOCK_SUCCESS", <wcf:json object="${MYACCOUNT_SAVEDORDERLIST_ORDER_UNLOCK_SUCCESS}"/>);
+
+        OrderListJS.setCommonParameters('<c:out value="${WCParam.langId}"/>','<c:out value="${WCParam.storeId}"/>','<c:out value="${WCParam.catalogId}"/>', true);
+    });
+</script>
+
+<%-- Retrieve a list of saved orders. --%>
+<wcf:rest var="orders" url="store/{storeId}/order/byStatus/{status}">
+    <wcf:var name="storeId" value="${storeId}" encode="true"/>
+    <wcf:var name="status" value="P"/>
+    <wcf:param name="pageSize" value="${pageSize}"/>
+    <wcf:param name="pageNumber" value="${currentPage}"/>
+</wcf:rest>
+<c:set var="allOrdersInThisCategory" value="${orders.Order}"/>
+
+<%-- Pagination --%>
+<fmt:parseNumber var="totalCount" value="${orders.recordSetTotal}" integerOnly="true"/>
+<c:if test="${empty totalCount}">
+    <fmt:parseNumber var="totalCount" value="0" integerOnly="true"/>
+</c:if>
+<fmt:formatNumber var="totalPages" value="${(totalCount / pageSize)}"/>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+<c:if test="${totalCount - (totalPages * pageSize) > 0}" >
+    <c:set var="totalPages" value="${totalPages + 1}" />
+</c:if>
+
+<c:choose>
+    <c:when test="${beginIndex + pageSize >= totalCount}">
+        <c:set var="endIndex" value="${totalCount}" />
+    </c:when>
+    <c:otherwise>
+        <c:set var="endIndex" value="${beginIndex + pageSize}" />
+    </c:otherwise>
+</c:choose>
+
+<c:choose>
+    <c:when test="${totalCount == 0}">
+        <c:set var="hideTable" value="true" scope="request"/>
+    </c:when>
+    <c:otherwise>
+        <%-- If there are no orders on the current page then return to the first previous page that has orders on it. --%>
+        <c:if test="${empty allOrdersInThisCategory}">
+            <c:set var="beginIndex" value="${totalCount % pageSize == 0 ? totalCount - pageSize : totalCount - totalCount % pageSize}" />
+            <fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+            <fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+            <wcf:rest var="orders" url="store/{storeId}/order/byStatus/{status}">
+                <wcf:var name="storeId" value="${storeId}" encode="true"/>
+                <wcf:var name="status" value="P"/>
+                <wcf:param name="pageSize" value="${pageSize}"/>
+                <wcf:param name="pageNumber" value="${currentPage}"/>
+            </wcf:rest>
+        </c:if>
+
+        <c:choose>
+            <c:when test="${beginIndex == 0}">
+                <c:set var="currentPage" value="1" />
+            </c:when>
+            <c:otherwise>
+                <fmt:formatNumber var="currentPage" value="${beginIndex / pageSize + 1}"/>
+                <fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+            </c:otherwise>
+        </c:choose>
+
+        <script type="text/javascript">
+            $(document).ready(function() {
+                OrderListJS.updateCurrentOrder("${currentOrderId}");
+            });
+        </script>
+
+        <c:set var="hidePublicPrivateDropdown" value="true"/>
+        <c:set var="arrowUpImgDir" value="${jspStoreImgDir}images/sort_arrow_UP.png" />
+        
+        <c:if test="${allOrdersInThisCategory != null}">
+            <wcf:useBean var="orderListMappingList" classname="java.util.ArrayList" />
+
+            <c:forEach var="order" items="${allOrdersInThisCategory}" varStatus="status">
+                <c:choose>
+                    <c:when test="${!empty order.externalOrderID}">
+                        <c:set var="objectId" value="${order.externalOrderID}"/>
+                        <c:set var="objectIdParam" value="externalOrderId"/>
+                    </c:when>
+                    <c:otherwise>
+                        <c:set var="objectId" value="${order.orderId}"/>
+                        <c:set var="objectIdParam" value="orderId"/>
+                    </c:otherwise>
+                </c:choose>
+
+                <%-- Need to reset currencyFormatterDB as initialized in JSTLEnvironmentSetup.jspf, as the currency code used there is from commandContext. We want to display with currency used when the order was placed. --%>
+                <c:set var="currencyDecimal" value="${currencyFormatterDB.decimalPlaces}"/>
+
+                <c:if test ="${order.grandTotal != null}">
+                    <c:set var="totalCostCurrency" value="${order.grandTotalCurrency}"/>
+                </c:if>
+
+                <c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${totalCostCurrency}+-1+${langId}"/>
+                <c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+                <c:if test="${empty currencyFormatterDB}">
+                    <wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+                        <wcf:var name="storeId" value="${storeId}" />
+                        <wcf:param name="q" value="byCurrency" />
+                        <wcf:param name="currency" value="${totalCostCurrency}" />
+                        <wcf:param name="numberUsage" value="-1" />
+                        <wcf:param name="langId" value="${langId}" />
+                    </wcf:rest>
+                    <c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+                    <wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+                </c:if>
+
+                <c:if test="${totalCostCurrency == 'KRW'}">
+                    <c:set property="currencySymbol" value="&#8361;" target="${currencyFormatterDB}"/>
+                </c:if>
+                <c:if test="${totalCostCurrency == 'PLN'}">
+                    <c:set property="currencySymbol" value="z&#322;" target="${currencyFormatterDB}"/>
+                </c:if>
+                <c:if test="${totalCostCurrency == 'ILS' && locale == 'iw_IL'}">
+                    <c:set property="currencySymbol" value="&#1513;&#1524;&#1495;" target="${currencyFormatterDB}"/>
+                </c:if>
+
+                <%-- These variables are used to hold the currency symbol --%>
+                <c:choose>
+                    <c:when test="${locale == 'ar_EG' && totalCostCurrency == 'EGP'}">
+                        <c:set var="CurrencySymbolToFormat" value=""/>
+                        <c:set var="CurrencySymbol" value="${currencyFormatterDB.currencySymbol}"/>
+                    </c:when>
+                    <c:otherwise>
+                        <c:set var="CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}"/>
+                        <c:set var="CurrencySymbol" value=""/>
+                    </c:otherwise>
+                </c:choose>
+
+                <wcf:useBean var="orderListMap" classname="java.util.HashMap"/>
+
+                <%-- Total price for Saved Orders --%>
+                <fmt:formatNumber var="total_price" value="${order.totalProductPrice}" type="currency" maxFractionDigits="${currencyDecimal}" currencySymbol="${CurrencySymbolToFormat} "/>
+                <wcf:set target="${orderListMap}" key="total_price" value="${total_price}"/>
+
+                <c:set var="orderId" value="${order.orderId}"/>
+                <c:set var="isCurrentOrder" value="false" />
+                <c:set var="orderDescription" value="${order.orderDescription}"/>
+
+                <c:choose>
+                    <c:when test="${orderId == currentOrderId}">
+                        <wcf:url var="savedOrderDetailsURL" value="RESTOrderCalculate" type="Ajax">
+                            <wcf:param name="langId" value="${langId}" />
+                            <wcf:param name="storeId" value="${WCParam.storeId}" />
+                            <wcf:param name="catalogId" value="${WCParam.catalogId}" />
+                            <wcf:param name="URL" value="AjaxOrderItemDisplayView" />
+                            <wcf:param name="errorViewName" value="AjaxOrderItemDisplayView" />
+                            <wcf:param name="updatePrices" value="1" />
+                            <wcf:param name="calculationUsageId" value="-1" />
+                            <wcf:param name="orderId" value="." />
+                        </wcf:url>
+
+                        <c:set var="isCurrentOrder" value="true" />
+                    </c:when>
+                    <c:otherwise>
+                        <wcf:url var="savedOrderDetailsURL" value="SavedOrderDetailView">
+                            <wcf:param name="langId" value="${langId}"/>
+                            <wcf:param name="storeId" value="${storeId}"/>
+                            <wcf:param name="catalogId" value="${catalogId}"/>
+                            <wcf:param name="orderId" value="${orderId}" />
+                        </wcf:url>
+                    </c:otherwise>
+                </c:choose>
+
+                <c:if test="${!empty order.lastUpdateDate}">
+                    <c:catch>
+                        <fmt:parseDate parseLocale="${dateLocale}" var="orderUpdated" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT" />
+                    </c:catch>
+                    <c:if test="${empty orderUpdated}">
+                        <c:catch>
+                            <fmt:parseDate parseLocale="${dateLocale}" var="orderUpdated" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                        </c:catch>
+                    </c:if>
+                </c:if>
+
+                <fmt:formatDate var="orderUpdatedFormatted" value="${orderUpdated}" />
+
+                <%-- Get the REST contextPath URL as a string --%>
+                <c:set var="sId">${storeId}</c:set>
+                <c:if test="${!empty REST_CONFIG[sId]}">
+                    <c:set var="contextPath" value="${REST_CONFIG[sId].contextPath}/" />
+                </c:if>
+
+                <wcst:message key="ACCE_ORDERLIST_SELECTED_ON" bundle="${widgetText}" var="currentOrderStr"/>
+                <c:set var="currentOrderStr" value="(${currentOrderStr})" />
+                <wcf:useBean var="orderListNumberandDetailList" classname="java.util.ArrayList" />
+                <wcf:set target="${orderListNumberandDetailList}" value="${savedOrderDetailsURL}"/>
+                <wcf:set target="${orderListNumberandDetailList}" value="${orderId} ${isCurrentOrder ? currentOrderStr : ''}"/>
+
+                <wcf:useBean var="orderListMap" classname="java.util.HashMap"/>
+
+                <wcf:set target="${orderListMap}" key="selected" value="${isCurrentOrder}"/>
+                <wcf:set target="${orderListMap}" key="isRowLocked" value="${order.locked}"/>
+                <wcf:set target="${orderListMap}" key="order" value="${orderListNumberandDetailList}"/>
+                <wcf:set target="${orderListMap}" key="name" value="${orderDescription}"/>
+                <wcf:set target="${orderListMap}" key="updated" value="${orderUpdatedFormatted}"/>
+
+                <%-- Map javascript calls for each action --%>
+                <wcf:set target="${orderListMap}" key="view_details" value="OrderListJS.viewDetails('${savedOrderDetailsURL}')"/>
+                <flow:ifEnabled feature="RequisitionList">
+                    <wcf:set target="${orderListMap}" key="add_to_req_list" value="OrderListJS.getOrderItems('GetOrderItemsView', 'storeId=${storeId}&orderId=${orderId}');"/>
+                </flow:ifEnabled>
+                <wcf:set target="${orderListMap}" key="duplicate" value="OrderListJS.duplicateOrder('${orderId}', '${fn:replace(fn:replace(orderDescription, search01, replaceStr01), search02, replaceStr02)}');"/>
+                
+                <%-- Check if lock/unlock can be showed--%>
+                <%@ include file="/Widgets_801/Common/SavedOrder/SavedOrder_OnBehalf_setup.jspf" %>
+                <c:if test="${currentOrderLocked != 'true' || (env_shopOnBehalfSessionEstablished eq true && env_buyOnBehalfAdminUserId eq currentOrderEidtorId)}">
+                    <wcf:set target="${orderListMap}" key="set_as_current" value="OrderListJS.setCurrentOrder('${orderId}');"/>
+                </c:if>
+                <c:if test="${isOrderDeletable eq true }" >
+                    <wcf:set target="${orderListMap}" key="delete" value="OrderListJS.deleteOrder('${orderId}');"/>
+                </c:if>
+                        
+                <c:choose>
+                    <%--Show unlock action if locked by current user --%>
+                    <c:when test="${lockedByCurrentUser eq 'true'}">
+                        <wcf:set target="${orderListMap}" key="unlock_order" value="OrderListJS.unlockOrderOnBehalf('${orderId}');"/>
+                    </c:when>
+                    <c:otherwise>
+                        <c:choose>
+                            <%-- Other admins can take over lock --%>
+                            <c:when test="${lockedByCurrentUser eq 'false' and canLockOrder eq 'true'}">
+                                <wcf:set target="${orderListMap}" key="order_lock_take_over" value="OrderListJS.takeOverLockOrderOnBehalf('${orderId}', '${isCurrentOrder}');"/>
+                            </c:when>
+                            <c:otherwise>
+                                <c:if test="${canLockOrder eq 'true'}">
+                                    <%-- Show lock order button --%>
+                                    <wcf:set target="${orderListMap}" key="lock_order" value="OrderListJS.lockOrderOnBehalf('${orderId}');"/>
+                                </c:if>
+                            </c:otherwise>
+                        </c:choose>
+                    </c:otherwise>
+                </c:choose>
+                <c:remove var="lockedByCurrentUser"/>
+                <c:remove var="canLockOrder"/>
+                <c:remove var="isOrderEditable"/>
+                <c:remove var="isOrderDeletable"/>
+
+                <wcf:set target="${orderListMappingList}" value="${orderListMap}"/>
+
+                <c:remove var="orderListMap"/>
+                <c:remove var="orderListNumberandDetailList"/>
+                <c:remove var="orderListNameandDetailList"/>
+            </c:forEach>
+        </c:if>
+    </c:otherwise>
+</c:choose>
+
+<%-- The following data is passed to List Table UI --%>
+<c:set var="tableValueMapping" value="${orderListMappingList}"/>
+<c:set var="tableHeading" value="selected;order;name;updated;total_price;actions"/>
+<c:set var="tableAction" value="view_details;add_to_req_list;duplicate;set_as_current;delete;unlock_order;lock_order;order_lock_take_over"/>
+
+<!-- END SavedOrderList_Data.jspf -->

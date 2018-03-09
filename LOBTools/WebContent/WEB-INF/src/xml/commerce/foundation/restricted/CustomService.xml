@@ -1,0 +1,874 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		Declares an enablement condition to indicate whether the parent object is enabled.
+		The algorithm used to determine this condition is in {@link cmc/foundation/ValueResolver}.
+		
+		Sample usage for service:		
+		@START_CODE
+		<CustomService
+			url="/cmc/MyObjectCustomService" 
+			displayName="MyCustomService">
+			
+			<EnablementCondition propertyName="status" enablementValue="Active" />
+			<ServiceParam name="objectId" propertyName="objectId"/>
+			
+		</CustomService>
+		@END_CODE
+		
+		In this sample, the custom service is enabled if the propertyName "status"
+		is equal to "Active".
+
+		Sample usage for widget:
+		@START_CODE
+		<PropertyInputText promptText="MyProperty" propertyName="MyOProperty">			
+			<EnablementCondition propertyName="display" enablementValue="true" />
+		</PropertyInputText>
+		@END_CODE
+		
+		In this sample, the MyProperty input text widget is visible in the Management Center
+		if the "display" property of the object associated with the MyProperty widget
+		is set to "true".
+	-->
+	<ValueResolver classDefinition="true" definitionName="cmc/foundation/EnablementCondition">
+		<dependency localName="BaseListEnablementCondition" moduleName="cmc/foundation/BaseListEnablementCondition"/>
+		<!---  An unique identifier string for this condition within a node. -->
+		<variable name="conditionId" type="string" value=""/>
+		
+		<!---
+			The enablement value for this enablement condition. If the enablement value is equal to the resolved value, 
+			then the condition will be enabled.
+		-->
+		<variable name="enablementValue" type="string"/>
+
+		<!---
+			If this is set to "true", the result will be negated.
+		-->
+		<variable name="negate" type="boolean" value="false"/>
+		
+		<!---
+			 Enablement condition type. This attribute should only be set if the parent accepts more than one type of enablement condition. For 
+			 example, {@link cmc/foundation/ObjectDefinition} instances accept three possible enablement condition types: "parentObjectCondition", 
+			 "childObjectCondition", and "refreshCondition".
+		-->
+		<variable name="conditionType" type="string" value="enablementCondition"/>
+	
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.parent instanceof BaseListEnablementCondition.Class) {
+				this.parent.enablementConditions.push(this);
+			}
+			else {
+				this.parent[this.conditionType] = this;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var val = this.getValue(o);
+			if (this.negate) {
+				return !(val == this.enablementValue || (!val && !this.enablementValue));
+			}
+			else {
+				return val == this.enablementValue || (!val && !this.enablementValue);
+			}
+			]]>
+		</method>
+	</ValueResolver>
+
+	<!---
+		@keywords final
+		This class is an enablement condition that always returns "false" unless the negate attribute is set to "true". 
+		You can use this enablement condition as a child of {@link cmc/foundation/ObjectDefinition} to prevent the creation of such 
+		objects under any circumstances.
+	-->
+	<EnablementCondition classDefinition="true" definitionName="cmc/foundation/FalseEnablementCondition">
+			
+		<!--- 
+			@keywords private
+			Return false unless negate is true 
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			if (this.negate) {
+				return true;
+			}
+			return false;
+			]]>
+		</method>
+	</EnablementCondition>
+	
+	<!---
+		@keywords final
+		This class is an enablement condition that always returns "true" unless the negate attribute is set to "true".
+		You can use this enablement condition as a child of {@link cmc/foundation/ObjectDefinition} to override the default
+		enablement behaviour of an object definition and allow the creation of such objects under any circumstance.
+	-->
+	<EnablementCondition classDefinition="true" definitionName="cmc/foundation/TrueEnablementCondition">
+			
+		<!--- 
+			@keywords private
+			Return false unless negate is true 
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			if (this.negate) {
+				return false;
+			}
+			return true;
+			]]>
+		</method>
+	</EnablementCondition>
+	
+	<!---
+		@keywords private
+		Declares an enablement condition that is contains a list of other enablement conditions
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/BaseListEnablementCondition">
+		<!---  An unique identifier string for this condition within a node. -->
+		<variable name="conditionId" type="string" value=""/>
+		
+		<variable name="enablementConditions" value="${[]}"/>
+		
+		<!---
+			If this is set to "true", the result will be negated.
+		-->
+		<variable name="negate" type="boolean" value="false"/>
+		
+		<!---
+			 Enablement condition type. This attribute should only be set if the parent accepts more than one type of enablement condition. For 
+			 example, {@link cmc/foundation/ObjectDefinition} instances accept two possible enablement condition types: "parentObjectCondition" and 
+			 "childObjectCondition"
+		-->
+		<variable name="conditionType" type="string" value="enablementCondition"/>
+	
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.parent instanceof exports.Class) {
+				this.parent.enablementConditions.push(this);
+			}
+			else {
+				this.parent[this.conditionType] = this;
+			}
+			]]>
+		</method>
+	
+		<!---
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			for (var i = 0; i < this.enablementConditions.length; i++) {
+				this.enablementConditions[i].registerDelegate(o, del);
+			}
+			]]>
+		</method>
+
+	</Node>
+	
+	<!---
+		Declares an enablement condition to indicate whether the parent object is enabled.
+		The parent object is enabled if the logical AND of the result of all child
+		enablement conditions is true.
+				
+		Sample usage:		
+		@START_CODE
+		<EnablementAndCondition>
+			<EnablementCondition propertyName="p1" enablementValue="true" />
+			<EnablementCondition propertyName="p2" enablementValue="true" />
+		</EnablementAndCondition>
+		
+		@END_CODE
+
+		This sample will enable the parent object if the both the property "p1"
+		and "p2" are set to "true"
+	-->
+	<BaseListEnablementCondition classDefinition="true" definitionName="cmc/foundation/EnablementAndCondition">
+		
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var result = true;
+			for (var i = 0; i < this.enablementConditions.length; i++) {
+				if (!this.enablementConditions[i].isEnabled(o)) {
+					result = false;
+				}
+			}
+			if (this.negate) {
+				result = !result;
+			}
+			return result;
+			]]>
+		</method>
+	</BaseListEnablementCondition>
+	
+	<!---
+		Declares an enablement condition to indicate whether the parent object is 
+		enabled.  The parent object is enabled if the logical OR of the result of 
+		all child enablement conditions is true.
+				
+		Sample usage:		
+		@START_CODE
+		<EnablementOrCondition>
+			<EnablementCondition propertyName="p1" enablementValue="true" />
+			<EnablementCondition propertyName="p2" enablementValue="true" />
+		</EnablementOrCondition>
+		
+		@END_CODE
+
+		This sample will enable the parent object property "p1"
+		or "p2" is set to "true"
+	-->
+	<BaseListEnablementCondition classDefinition="true" definitionName="cmc/foundation/EnablementOrCondition">
+	
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var result = false;
+			for (var i = 0; i < this.enablementConditions.length; i++) {
+				if (this.enablementConditions[i].isEnabled(o)) {
+					result = true;
+				}
+			}
+			if (this.negate) {
+				result = !result;
+			}
+			return result;
+			]]>
+		</method>
+	</BaseListEnablementCondition>
+
+
+	<!---
+		Defines the text style that the framework will use when displaying 
+		the display name of a business object. Declare instances of 
+		cmc/foundation/DisplayNameStyle as children of cmc/foundation/ObjectDefinition. Each instance 
+		must include an enablement condition (cmc/foundation/EnablementCondition) that 
+		will determine when the specified text style will be used. If none 
+		of the instances of cmc/foundation/DisplayNameStyle are enabled, then the display 
+		name will be displayed using the default text style. 
+		If multiple instances of cmc/foundation/DisplayNameStyle are enabled, 
+		then the first declared style will be used.
+				
+		Sample usage:		
+		@START_CODE
+		<PrimaryObjectDefinition definitionName="CatalogGroup"
+				objectType="CatalogGroup" 
+				baseType="catBaseCatalogGroupPrimaryObjectDefinition"
+				icon="catalogGroupIcon"
+				headerIcon="catalogGroupHeaderIcon">
+			...
+
+			<DisplayNameStyle color="green">
+            	<EnablementCondition propertyName="xdesc_published" objectPath="CatalogGroupDescription" enablementValue="1"/>
+			</DisplayNameStyle>
+		</PrimaryObjectDefinition>
+		
+		@END_CODE
+
+		This sample will change the display name color of published categories to green.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/DisplayNameStyle">
+	
+		<!--- 
+			The color that will be used by the framework when displaying 
+			the display name of the business object defined by the parent 
+			object definition. 
+		-->
+		<variable name="color" type="string" value="#0"/>
+		
+		<!---
+			Set this value to true to indicate to the framework that the display name is to be displayed in bold.
+		-->
+		<variable name="bold" type="boolean" value="false"/>
+		<!---
+			Set this value to true to indicate to the framework that the display name is to be displayed in italics.
+		-->
+		<variable name="italic" type="boolean" value="false"/>
+				
+		<!--- @keywords private -->
+		<variable name="enablementCondition" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var displayNameStyles = this.parent.displayNameStyles;
+			if (!displayNameStyles) {
+				displayNameStyles = [];
+				this.parent.displayNameStyles = displayNameStyles;
+			}
+			displayNameStyles.push(this);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var result = true;
+			if (this.enablementCondition != null) {
+				result = this.enablementCondition.isEnabled(o);
+			}
+			return result;
+			]]>
+		</method>
+	
+		<!---
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			if (this.enablementCondition != null) {
+				this.enablementCondition.registerDelegate(o, del);
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		<p>This service performs a custom action on the WebSphere Commerce
+		server for a business object by invoking the URL specified in
+		the <code>url</code> attribute. Instances of cmc/foundation/CustomService can only be declared as 
+		children of an instance of {@link cmc/foundation/ObjectDefinition}. Custom services will only
+		be called when the custom action is explicitly requested by the user for
+		a selected business object.</p>
+		
+		<p>The <code>isFileUploadService</code> flag exists to denote a custom service which will perform a file
+		upload. If the flag is set to true, then {@link cmc/foundation/FileTypes} can be declared as children of the custom
+		service to indicate which files can be uploaded by this service. A parameter indicating the file name will be passed on the 
+		url. The name of the parameter can be controlled using the {@link cmc/foundation/CustomService#fileNameParameter fileNameParameter} attribute.</p>
+		
+		<p>A single instance of {@link cmc/foundation/EnablementCondition}, {@link cmc/foundation/EnablementAndCondition} or 
+		{@link cmc/foundation/EnablementOrCondition} can be declared as a child of a custom service. 
+		The enablement condition will be used by the framework to determine if a custom action 
+		is available for the currently selected business objects.
+		If it is available, then the framework will add the action to
+		the context menu and "Edit" menu. If the <code>toolbarIcon</code>
+		attribute has been defined, then the action will also be available
+		on the toolbar.
+		
+		<p>If the custom service request is successful, then a status message will be displayed
+		in the message logger and any properties returned in the response
+		will be updated in the cmc/foundation/ModelObject instance associated with
+		the request. If the request fails, the 
+		error message returned by the request will be displayed
+		in the message logger.
+
+		<p>The following example demonstrates the declaration of a custom service.
+		The service includes an enablement condition that will resolve to "true" if
+		the property named "state" has a value of "Inactive". Otherwise, this
+		custom service will not be available. The service includes two
+		required parameters. The "storeId" parameter is resolved from the "storeId"
+		context value. The "activityId" parameter is resolved from the business object property
+		named "activityId".
+
+		@START_CODE
+		<CustomService url="/cmc/ActivateActivity" displayName="${mktMarketingResources.activate}" toolbarIcon="activateToolbarIcon">
+			<EnablementCondition conditionId="activate" propertyName="state" enablementValue="Inactive"/>
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="activityId" propertyName="activityId"/>
+		</CustomService>
+		@END_CODE
+		
+		<p>The successful response from a custom service must be an XML document
+		that has "object" as the name of the root element. If the response document includes
+		properties, then the properties will be applied to the client side representation
+		of the business object. Typically custom services will return at least one updated
+		property that reflects the state change caused by the service. 
+		The following sample demonstrates the expected format
+		for a successful response. It returns an updated value for the "state" property
+		and marks the object as "readonly". When an object is marked
+		as read-only, the framework will prevent the user from making changes to the object.
+
+		@START_CODE
+		<object readonly="true">
+			<state>Active</state>
+		</object>
+		@END_CODE
+		
+		<p>If the request is not successful, then the response must be an XML document
+		that has "errors" as the name of the root element. The XML document must include
+		at least one element named "validationError" or an element named "exception". Validation
+		errors should be returned if the problem can be corrected by the business user. An example
+		of a validation error is a missing required parameter. Validation errors can either be "property"
+		level validation errors or "object" level validation errors. Property level validation errors
+		include the name of the specific property that was found to be a problem. Object level validation
+		errors do not include a property name and are not mapped to a specific problem.
+		An exception should be returned if the problem cannot be corrected by the business user.
+		An example of an exception is the user does not have the required access rights to perform
+		the action.
+		
+		<p>The following sample demonstrates an error response that includes an object level validation
+		error and a property level validation error.
+		
+		@START_CODE
+		<errors>
+			<validationError propertyName="categoryName">A category name must be specified.</validationError>
+			<validationError>The activity could not be activated. Please check any additional error messages for details.</validationError>
+		</errors>
+		@END_CODE
+		
+		<p>The following sample demonstrates an error response that includes an exception.
+		
+		@START_CODE
+		<errors>
+			<exception>You do not have the correct access rights to complete this operation.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/CustomService" transactionService="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="Service" moduleName="cmc/foundation/Service"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>	
+		<!---
+			The display name for this service. This is a required attribute.
+		-->
+		<variable name="displayName" type="string"/>
+		
+		<!---
+			The menu display name for this service. This name will appear in both the
+			Edit menu and the context menu. If this attribute is not set, 
+			it will default to the displayName attribute.
+		-->
+		<variable name="menuDisplayName" type="string" value="${null}"/>
+
+		<!---
+			The shortcut keys used to invoke this service from the keyboard 
+			when the object is selected.
+			@type String[]
+		-->
+		<variable name="shortcutKeys" value="${null}"/>
+
+		<!---
+			@keywords private
+			Flag to if shortcutKeys are registered
+		-->			
+		<variable name="keysRegistered" type="boolean" value="false"/>
+
+		<!---
+			The name of the resource that is used for the toolbar
+			icon for this custom service.
+		-->		
+		<variable name="toolbarIcon" type="string" value=""/>	
+		
+		<!---
+			This attribute specifies if this custom service is enabled when multiple objects are selected. The default value is true. 
+		-->
+		<variable name="allowMultipleSelection" type="boolean" value="true"/>	
+				
+		<!---
+			A flag to indicate that this is a file upload service. The default is false.
+		-->		
+		<variable name="isFileUploadService" type="boolean" value="false"/>			
+		
+		<!---
+       		When the service is flagged as a file upload service, the selected file's name will automatically be passed as a url parameter.
+       		This variable specifies the name to use for that url parameter. The default value is <code>fileName</code>. 
+       	-->
+       	<variable name="fileNameParameter" type="string" value="fileName"/>       	
+       	
+       	<!---
+			@keywords private
+			The file types that can be uploaded by this custom action. It is initialized to an empty array.			
+		-->
+		<variable name="fileTypes" value="${[]}"/>		
+		
+		<!---
+			The maximum size permitted for a file that is being uploaded. This file size is in bytes.
+		-->
+		<variable name="maximumFileSize" type="number" value="1000000"/>	
+		
+		<!---
+			@keywords private
+			This is a holder for use by file upload custom services. It will keep track of the requestParent for use after the file has been 
+			selected. 
+		-->
+		<variable name="requestParent"/>
+		
+		<!---
+			@keywords private
+			This is a holder for use by file upload custom services. It will keep track of the arguments for use after the file has been 
+			selected. 
+		-->
+		<variable name="args"/>
+		
+		<!---
+			@keywords private
+			This is a holder for use by file upload custom services. It will keep track of the startIndex for use after the file has been 
+			selected. 
+		-->
+		<variable name="startIndex"/>		
+
+		<!---
+			Indicates whether to add the custom service to the "Edit" menu when the custom service is
+			available for the currently selected business objects. The default value is "true".
+		-->
+		<variable name="addToEditMenu" type="boolean" value="true"/>
+
+		<!---
+			Indicates whether this custom service is added to the Utilities view context menu. The default is <code>false</code>.
+		-->
+		<variable name="addToUtilitiesContextMenu" type="boolean" value="false"/>
+
+		<!---
+			Indicates whether this custom service is added to the explorer view context menu. The default is <code>true</code>.
+		-->
+		<variable name="addToExplorerContextMenu" type="boolean" value="true"/>
+
+		<!---
+			Indicates whether this custom service is added to the list view context menu. The default is <code>true</code>.
+		-->
+		<variable name="addToListContextMenu" type="boolean" value="true"/>
+
+		<!---
+			@keywords private
+			Initialize the service add this to parent.customService
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var services = this.parent.customServices;
+			if (!services) {
+				services = [];
+				this.parent.customServices = services;
+			}
+			services.push(this);
+			if (this.shortcutKeys != null) {
+				this.doCustomServiceDel = new EventHandler.Class(this, "doCustomService");
+				var model = ModelUtil.Singleton.findModelForView(this);
+				if (model != null) {
+					this.checkBusinessObjectEditorDel = new EventHandler.Class(this, "checkBusinessObjectEditor");
+					this.checkBusinessObjectEditorDel.connect(model, "onmodelInitialized");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the menu display name. If the menuDisplayName attribute has not been set
+			then this method will return the value of the displayName attribute.
+
+			@return boolean: the menu display name
+		-->
+		<method name="getMenuDisplayName">
+			<![CDATA[
+			return this.menuDisplayName == null ? this.displayName : this.menuDisplayName;
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			This method is overloaded for use by a file upload custom service. 
+		-->		
+		<method args="requestParent, args, extraArgs" name="doRequest">
+			<![CDATA[
+			if (typeof(requestParent) == "undefined") requestParent = null;
+			if (this.isFileUploadService) {
+				if (typeof (extraArgs) == "undefined") {
+					extraArgs = {};
+				}
+				var startIndex = 0;
+				if (extraArgs.startIndex) {
+					startIndex = extraArgs.startIndex;
+				}
+				this.requestParent = requestParent;
+				this.args = args;
+				this.startIndex = startIndex;
+				if (this.handleCancelDel == null) {
+					this.handleCancelDel = new EventHandler.Class(this, "handleCancel");
+				}
+				if (this.handleSelectDel == null) {
+					this.handleSelectDel = new EventHandler.Class(this, "handleSelect");
+				}
+				var caller = this;
+				require(["cmc/foundation/FileUploadUtil"], function(FileUploadUtil) {
+					caller.handleCancelDel.connect(FileUploadUtil.Singleton, "onfileCanceled");
+					caller.handleSelectDel.connect(FileUploadUtil.Singleton, "onfileSelected");
+					FileUploadUtil.Singleton.browseForFile(caller.fileTypes, caller.maximumFileSize);
+				});
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is used when there are shortcut keys declared for this custom action.
+		-->				
+		<method args="e" name="doCustomService">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (model != null) {
+				var oEditor = model.oEditor;
+				if (ViewUtil.Singleton.containedInModalView(oEditor)) {
+					oEditor.doCustomService(this);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if business object editor is initialized and register shortcutKeys event
+		-->			
+		<method args="e" name="checkBusinessObjectEditor">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (model.modelInitialized && !this.checkShortcutKeysDel) {
+				this.checkShortcutKeysDel = new EventHandler.Class(this, "checkShortcutKeys");
+				this.checkShortcutKeysDel.connect(model.oEditor, "onactive");
+				this.checkShortcutKeysDel.connect(model.oEditor, "onenabledCustomServices");
+				this.checkBusinessObjectEditorDel.disconnectAll();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.doCustomServiceDel) {
+				this.doCustomServiceDel.disconnectAll();
+				delete this.doCustomServiceDel;
+			}
+			if (this.checkBusinessObjectEditorDel) {
+				this.checkBusinessObjectEditorDel.disconnectAll();
+				delete this.checkBusinessObjectEditorDel;
+			}
+			if (this.checkShortcutKeysDel) {
+				this.checkShortcutKeysDel.disconnectAll();
+				delete this.checkShortcutKeysDel;
+			}
+			if (this.handleCancelDel) {
+				this.handleCancelDel.disconnectAll();
+				delete this.handleCancelDel;
+			}
+			if (this.handleSelectDel) {
+				this.handleSelectDel.disconnectAll();
+				delete this.handleSelectDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Method to register/unregister shortcut keys
+		-->			
+		<method args="e" name="checkShortcutKeys">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (model.oEditor.active && model.oEditor.enabledCustomServices != null && model.oEditor.enabledCustomServices.indexOf(this) != -1) {
+				this.registerShortcutKey();
+			}
+			else {
+				this.unregisterShortcutKey();
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Registers the shortcut key
+		-->
+		<method name="registerShortcutKey">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.keysRegistered = true;
+				KeyUtil.callOnKeyCombo(this.doCustomServiceDel, this.shortcutKeys);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Unregisters the shortcut key
+		-->
+		<method name="unregisterShortcutKey">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.keysRegistered = false;
+				KeyUtil.removeKeyComboCall(this.doCustomServiceDel, this.shortcutKeys);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns true if this custom service is enabled for the specified
+			model object by evaluating the associated {@link cmc/foundation/EnablementCondition} object.
+			In addition to the associated {@link cmc/foundation/EnablementCondition} object, three conditions will also 
+			be checked to verify that this service is enabled:
+			<ol><li>Check that <code>readOnlyMode</code> is false if workspaces are enabled. 
+				<li>Verify that the user has access rights.
+				<li>Ensure that <code>changeControlModifiable</code> is not set to false.
+			</ol>
+			The associated {@link cmc/foundation/EnablementCondition} object and all three of the above conditions must be true 
+			for the custom service to be enabled. 
+			
+			This method is only used to determine if this service is visible to the user.
+			It is not invoked from the {@link cmc/foundation/CustomService#doCustomService} method.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this custom service
+			@return boolean: true if the custom service is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = true;
+			if (enabled && o.model.oEditor.respectWorkspaceContext) {
+				var readOnlyModeContextValue = ContextUtil.Singleton.findContextValue(null, "readOnlyMode");
+				enabled = (readOnlyModeContextValue.value != "true");
+			}
+			if (enabled && o.isContextReadOnly()) {
+				enabled = false;
+			}
+			if (enabled) {
+				enabled = o.hasAccessRight;
+			}
+			if (enabled && o.changeControlModifiable != null && o.changeControlModifiable == "false") {
+				enabled = false;
+			}
+			if (enabled && o.objectVersionId != null && o.objectVersionId != "") {
+				enabled = false;
+			}
+			if (enabled && this.enablementCondition) {
+				return this.enablementCondition.isEnabled(o);
+			}
+			return enabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the enablement condition changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerEnablementDelegate">
+			<![CDATA[
+			if (o.model.oEditor.respectWorkspaceContext) {
+				ContextUtil.Singleton.findContextValue(null, "readOnlyMode", del);
+			}
+			del.connect(o, "onhasAccessRight");
+			del.connect(o, "onchangeControlModifiable");
+			if (this.enablementCondition) {
+				this.enablementCondition.registerDelegate(o, del);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when this custom service completed successfully.
+			If you want to perform additional logic after the service has completed,
+			override this method.
+			
+			@param cmc/foundation/ModelObject requestParent: the object on which this custom service was performed
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var msg;
+			var messageType = "customServiceSuccessful" + "_" + this.displayName + "_" + requestParent.openGroupObject.objectDefinition.displayName;
+			var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+			if (msgCount == 1) {
+				msg = foundationResources.Singleton.replaceValues("customServiceSuccessful", [this.displayName, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			}
+			else {
+				msg = foundationResources.Singleton.replaceValues("multiCustomServiceSuccessful", [this.displayName, msgCount, requestParent.openGroupObject.objectDefinition.displayName]);
+			}
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			This method will be called when the {@link cmc/foundation/FileUploadUtil#onfileCanceled} event is sent.
+		-->
+		<method args="e" name="handleCancel">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.releaseFileUpload();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will be called when the {@link cmc/foundation/FileUploadUtil#onfileSelected} event is sent.
+		-->
+		<method args="fileref" name="handleSelect">
+			<![CDATA[
+			if (typeof(fileref) == "undefined") fileref = null;
+			var msg = "";
+			if (fileref != null) {
+				msg = fileref.name;
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/CustomService handleSelect: " + msg);
+			if (fileref != null) {
+				if (typeof (this.args) == "undefined" || this.args == null) {
+					this.args = new Object();
+				}
+				this.args[this.fileNameParameter] = fileref.name;
+				Service.Class.prototype.doRequest.call(this, this.requestParent, this.args, {
+	startIndex: this.startIndex,
+	fileref: fileref
+});
+			}
+			this.releaseFileUpload();
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method> 
+		
+		<!---
+			@keywords private
+			This method releases resources associated with the file upload. 
+		-->
+		<method name="releaseFileUpload">
+			<![CDATA[
+			this.requestParent = null;
+			this.args = null;
+			this.startIndex = null;
+			this.handleCancelDel.disconnectAll();
+			this.handleSelectDel.disconnectAll();
+			]]>
+		</method>
+	</Service>	
+</Definitions>

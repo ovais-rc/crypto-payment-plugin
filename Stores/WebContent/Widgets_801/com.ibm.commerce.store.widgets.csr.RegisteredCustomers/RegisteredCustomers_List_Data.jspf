@@ -1,0 +1,165 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="queryName" value="registeredUsersICanManage"/>
+<c:if test="${not empty paramValues.searchInitializedForCustomers && paramValues.searchInitializedForCustomers[0] =='true' }">
+<wcf:rest var="usersList" url="store/{storeId}/person" scope="request">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="q" value="${queryName}"/>
+	<wcf:param name="profileName" value="IBM_User_List_Basic_Summary"/>
+	<wcf:param name="startIndex" value="0" /> <!-- Show only first 20 ( or registeredCustomersResultListSize ) results. This widget doesn't support pagination -->
+	<wcf:param name="maxResults" value="${registeredCustomersResultListSize}" />
+
+		<%-- 
+				By default:
+					searchType = Ignore Case, contains for all fields 
+					searchType = Exact match, case insensitive for logonId field. 
+					
+					If searchType needs to be modified for any field, then pass a different value
+					using the param name as paramNameSearchType (Ex: logonIdSearchType, firstNameSearchType)
+					
+					***************
+					SEARCHTYPE_CASESENSITIVE_STARTSWITH = 1;
+					SEARCHTYPE_CASESENSITIVE_CONTAINS = 2;
+					SEARCHTYPE_CASEINSENSITIVE_STARTSWITH = 3;
+					SEARCHTYPE_CASEINSENSITIVE_CONTAINS = 4;
+					SEARCHTYPE_CASESENSITIVE_EXACTMATCH = 5;
+					SEARCHTYPE_CASEINSENSITIVE_EXACTMATCH = 6;
+					SEARCHTYPE_NOT_EQUALS = 8;
+					***************
+		--%>
+
+		<c:if test="${not empty WCParam.logonId}">
+			<wcf:param name="logonId" value="${WCParam.logonId}" />
+			<wcf:param name="logonIdSearchType" value="6" />
+		</c:if>
+		<c:if test="${not empty WCParam.firstName }">
+			<wcf:param name="firstName" value="${WCParam.firstName }" />
+		</c:if>
+		<c:if test="${not empty WCParam.lastName }">
+			<wcf:param name="lastName" value="${WCParam.lastName}" />
+		</c:if>
+		<c:if test="${not empty WCParam.email1 }">
+			<wcf:param name="email1" value="${WCParam.email1 }" />
+		</c:if>
+		<c:if test="${not empty WCParam.phone1 }">
+			<wcf:param name="phone1" value="${WCParam.phone1}" />
+		</c:if>
+		<c:if test="${not empty WCParam.address1 }">
+			<wcf:param name="address1" value="${WCParam.address1 }" />
+		</c:if>
+		<c:if test="${not empty WCParam.zipcode }">
+			<wcf:param name="zipcode" value="${WCParam.zipcode}" />
+		</c:if>
+		<c:if test="${not empty WCParam.country}">
+			<wcf:param name="country" value="${WCParam.country }" />
+		</c:if>
+		<c:if test="${not empty WCParam.state}">
+			<wcf:param name="state" value="${WCParam.state}" />
+		</c:if>
+		<c:if test="${not empty WCParam.parentOrgName}">
+			<wcf:param name="parentOrgName" value="${WCParam.parentOrgName}" />
+		</c:if>
+</wcf:rest>
+
+<c:set var="errorMessage" value=""/>
+<c:set var="addressFieldOrderForOrg" value="address1,city,stateDisplayName,zipCode,countryDisplayName" scope="request"/>
+<wcf:useBean var="memberDetailsMap" classname="java.util.HashMap" scope="request"/>
+<wcf:useBean var="memberAddressDetailsMap" classname="java.util.HashMap" scope="request"/>
+
+<c:choose>
+	<c:when test="${usersList != null && usersList.recordSetTotal > registeredCustomersResultListSize}">
+		<%-- Too many results. Ask CSR to refine the search --%>
+		<wcst:message var = "errorMessage" key="TOO_MANY_RESULTS_CSR" bundle="${widgetText}"/>
+	</c:when>
+	<c:when test="${usersList == null || usersList.recordSetTotal == 0}">
+		<%-- No results. Ask CSR to refine the search --%>
+		<wcst:message var="errorMessage" key="NO_RESULTS_CSR" bundle="${widgetText}"/>
+	</c:when>
+	<c:otherwise>
+		<%-- Get member details by making another REST call to personHandler --%>
+		<c:forEach items="${usersList.userDataBeans}" var="user">
+			
+			<wcf:rest var="memberDetails" url="store/{storeId}/person/{memberId}" scope="request">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:var name="memberId" value="${user.memberId}" encode="true"/>
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="profileName" value="IBM_User_Registration_Details"/>
+			</wcf:rest>
+
+			<wcf:useBean var="addressFieldDisplayList" classname="java.util.ArrayList"/>
+			<c:set target="${memberAddressDetailsMap}" value="${addressFieldDisplayList}" property="${user.memberId}" />
+			<c:set target="${memberDetailsMap}" value="${memberDetails}" property="${user.memberId}" />
+
+			<%-- Start creating address display list. Display state/country name instead of state/country code --%>
+			<c:set var="selectedCountryCode" value="${memberDetails.address.country}"/>
+			<c:set var="selectedStateCode" value="${memberDetails.address.state}"/>
+			<c:set var="selectedCountryName" value="${selectedCountryCode}"/>
+			<c:set var="selectedStateName" value="${selectedStateCode}"/>
+
+			<c:set var="key1" value="store/${WCParam.storeId}/country/country_state_list+${langId}+${selectedCountryCode}"/>
+			<c:set var="countryBean" value="${cachedOnlineStoreMap[key1]}" scope="request"/>
+			<c:if test="${empty countryBean}">
+				<wcf:rest var="countryBean" url="store/{storeId}/country/country_state_list" cached="true" scope="request">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="langId" value="${langId}" />
+					<wcf:param name="countryCode" value="${selectedCountryCode}"/>
+				</wcf:rest>
+				<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${countryBean}"/>
+			</c:if>
+
+			<%-- Country display name --%>
+			<c:forEach var="country" items="${countryBean.countries}">
+				<c:if test="${country.code eq selectedCountryCode }">
+					<c:set value="${country.displayName}" var="selectedCountryName"/>
+				</c:if>
+			</c:forEach>
+
+			<%-- State display name --%>
+			<c:forEach var="state" items="${countryBean.countryCodeStates}">
+				<c:if test="${state.code eq selectedStateCode}">
+					<c:set value="${state.displayName}" var="selectedStateName"/>
+				</c:if>
+			</c:forEach>
+
+			<c:forEach var="fieldName" items="${addressFieldOrderForOrg}">
+				<c:choose>
+					<c:when test="${fieldName eq 'stateDisplayName' && fn:length(selectedStateName) > 0}">
+						<wcf:set target="${addressFieldDisplayList}" value="${selectedStateName}"/>
+					</c:when>
+					<c:when test="${fieldName eq 'countryDisplayName' && fn:length(selectedCountryName) > 0}">
+						<wcf:set target="${addressFieldDisplayList}" value="${selectedCountryName}"/>
+					</c:when>
+					<c:otherwise>
+						<c:if test="${fn:length(memberDetails.address[fieldName]) > 0}">
+							<wcf:set target="${addressFieldDisplayList}" value="${memberDetails.address[fieldName]}"/>
+						</c:if>
+					</c:otherwise>
+				</c:choose>
+			</c:forEach>
+
+			<c:remove var="addressFieldDisplayList"/>
+
+		</c:forEach>
+	</c:otherwise>
+</c:choose>
+
+<wcf:url var="landingURL_RegisteredUser" value="AjaxLogonForm">
+	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}" />
+	<wcf:param name="myAcctMain" value="1" />
+</wcf:url>
+</c:if>

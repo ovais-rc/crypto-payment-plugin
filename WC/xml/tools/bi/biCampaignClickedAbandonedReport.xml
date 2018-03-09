@@ -1,0 +1,67 @@
+<?xml version="1.0" standalone="yes" ?>
+<Reporting>
+
+<Report reportName="biCampaignAbandonedReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+	SELECT
+      	c.name AS "Campaign",
+        SUM ( coalesce(fe.num_clicks,0) )  AS "Clicked/Abandoned"
+	FROM
+        wca.fact_event fe,
+        wca.period p,
+        wca.camp_init_mpe_rel cim,
+	    wca.fact_orderitems fo,
+        wca.campaign c
+	WHERE
+		c.store_id IN ({storeent_id})
+		AND fe.store_id IN ({storeent_id})
+		AND fe.camprel_id = cim.camprel_id
+		AND c.campaign_id = cim.campaign_id
+		AND p.per_id = fe.per_id
+	 	AND fo.abandoned = 1
+		AND fo.member_id = fe.member_id
+		AND fo.session_id = fe.usr_session_id
+		and (fe.num_cks_to_ord is null or fe.num_cks_to_ord = 0)
+		and (select count(*) from wca.fact_event where fe.num_clicks != 0) != 0 
+		AND fo.created_time &lt;= fe.entry_time + integer(wca.param_value('FE_EFFECTIVE_MINUTES')) minutes
+		AND fo.created_time &gt; fe.entry_time
+		AND p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+		AND p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+	GROUP BY
+        c.name
+    ORDER BY
+    	{sortBy} {sortOrder}
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>campaignClickedAbandoned</title>
+         <message>campaignClickedAbandoned</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>campaign</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>clickedAbandoned</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+        </columns>
+      </userDefinedParameters>
+   </display>
+  </Report>
+
+</Reporting>

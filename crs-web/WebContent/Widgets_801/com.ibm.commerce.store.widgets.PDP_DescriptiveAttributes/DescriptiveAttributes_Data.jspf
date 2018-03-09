@@ -1,0 +1,146 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- Display SKU context-sensitive data when product ID is a SKU --%>
+<c:if test="${displaySKUContextData eq 'true'}">
+	<c:if test="${!empty itemId}">
+		<c:set var="productId" value="${itemId}" />
+	</c:if>
+	<c:set var="parentCatEntryId" value="${productId}"/>
+</c:if>
+<%@ include file="/Widgets_801/Common/PDP_CatalogEntryData.jspf" %>
+<c:set var="uniqueID" value="${catalogEntryID}"/>
+<c:set var="catEntry" value="${catalogEntryDetails}"/>
+
+<%-- Picking the descriptive attributes --%>
+<wcf:useBean var="descAttrMap" classname="java.util.LinkedHashMap"/>
+<wcf:useBean var="descAttrNames" classname="java.util.HashMap"/>
+<c:forEach items="${catEntry.attributes}" var="attribute" varStatus="status">
+	<c:if test="${attribute.usage eq 'Descriptive' and attribute.displayable and !fn:startsWith(attribute.identifier,'ribbonad') and attribute.identifier != 'PickUpInStore'}">
+		<c:if test="${empty descAttrMap[attribute.uniqueID]}">
+			<c:set var="varName" value="attrValueContainer_${status.count}"/>
+			<wcf:useBean var="${varName}" classname="java.util.ArrayList" scope="page"/>
+			<wcf:set target="${descAttrMap}" key="${attribute.uniqueID}" value="${pageScope[varName]}"/>
+			<wcf:set target="${descAttrNames}" key="${attribute.uniqueID}" value="${attribute.name}"/>
+		</c:if>
+		<c:set var="attrValueContainer" value="${descAttrMap[attribute.uniqueID]}"/>
+		<c:forEach items="${attribute.values}" var="value">
+		
+			<!-- UoM Replacement -->
+			<c:choose>
+				<c:when test="${value.unitID != 'C62' && !empty value.unitOfMeasure}">
+					<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+						<wcst:param><c:out value="${fn:replace(value.value, search01, replaceStr01)}" escapeXml="false"/></wcst:param>
+						<wcst:param><c:out value="${value.unitOfMeasure}" escapeXml="false"/></wcst:param>
+					</wcst:message>
+				</c:when>
+				<c:otherwise>
+					<c:set var="displayValue" value="${fn:replace(value.value, search01, replaceStr01)}"/>
+				</c:otherwise>
+			</c:choose>
+		
+			<wcf:set target="${attrValueContainer}" value="${displayValue}"/>
+		</c:forEach>
+	</c:if>
+</c:forEach>
+
+<%-- If item descriptive attributes are empty, fetch the parent descriptive attributes--%>
+<c:if test="${empty descAttrMap and not empty catEntry.parentCatalogEntryID}">
+	<%-- Try to get it from our internal hashMap --%>
+	<c:set var="key2" value="${catEntry.parentCatalogEntryID}+getCatalogEntryViewAllByID"/>
+	<c:set var="parentCatEntry" value="${cachedCatalogEntryDetailsMap[key2]}"/>
+	<c:if test="${empty parentCatEntry}">
+		<%-- Since this is an item, get the details about the parent product --%>
+		<c:catch var="searchServerException">
+			<wcf:rest var="parentCatalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${catEntry.parentCatalogEntryID}" >	
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<c:forEach var="contractId" items="${env_activeContractIds}">
+					<wcf:param name="contractId" value="${contractId}"/>
+				</c:forEach>
+			</wcf:rest>
+					
+			<c:set var="parentCatEntry" value="${parentCatalogNavigationView.catalogEntryView[0]}" />
+			<wcf:set target="${cachedCatalogEntryDetailsMap}" key="${key1}" value="${parentCatEntry}"/>
+		</c:catch>
+	</c:if>
+	
+		
+	<%-- Check if the parent is a product and not package or bundle --%>
+	<c:if test="${parentCatEntry.catalogEntryTypeCode eq 'ProductBean'}">
+		<%-- Pick all the descriptive attributes of the parent --%>
+		<c:forEach items="${parentCatEntry.attributes}" var="attribute"  varStatus="status">
+			<c:if test="${attribute.usage eq 'Descriptive' and attribute.displayable and !fn:startsWith(attribute.identifier,'ribbonad') and attribute.identifier != 'PickUpInStore'}">
+			<c:if test="${empty descAttrMap[attribute.uniqueID]}">
+				<c:set var="varName" value="attrValueContainer_${status.count}"/>
+				<wcf:useBean var="${varName}" classname="java.util.TreeSet" scope="page"/>
+				<wcf:set target="${descAttrMap}" key="${attribute.uniqueID}" value="${pageScope[varName]}"/>
+				<wcf:set target="${descAttrNames}" key="${attribute.uniqueID}" value="${attribute.name}"/>
+			</c:if>
+			<c:set var="attrValueContainer" value="${descAttrMap[attribute.uniqueID]}"/>
+			<c:forEach items="${attribute.values}" var="value">
+			
+				<!-- UoM Replacement -->
+				<c:choose>
+					<c:when test="${value.unitID != 'C62' && !empty value.unitOfMeasure}">
+						<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+							<wcst:param><c:out value="${fn:replace(value.value, search01, replaceStr01)}" escapeXml="false"/></wcst:param>
+							<wcst:param><c:out value="${value.unitOfMeasure}" escapeXml="false"/></wcst:param>
+						</wcst:message>
+					</c:when>
+					<c:otherwise>
+						<c:set var="displayValue" value="${fn:replace(value.value, search01, replaceStr01)}"/>
+					</c:otherwise>
+				</c:choose>
+			
+				<wcf:set target="${attrValueContainer}" key="${value.value}" value="${displayValue}"/>
+			</c:forEach>
+			</c:if>
+		</c:forEach>
+	</c:if>
+</c:if>
+
+<c:if test="${catEntry.catalogEntryTypeCode eq 'DynamicKitBean'}">
+	<wcf:useBean var="dynamicKitComponentList" classname="java.util.ArrayList"/>
+	
+	<c:forEach items="${catEntry.components}" var="component">
+		<c:choose>
+			<c:when test="${not empty component.catalogEntryView.shortDescription}">
+				<c:set var="componentDescription" value="${component.catalogEntryView.shortDescription}"/>
+			</c:when>
+			<c:when test="${not empty component.catalogEntryView.name}">
+				<c:set var="componentDescription" value="${component.catalogEntryView.name}"/>
+			</c:when>
+		</c:choose>
+		<fmt:formatNumber var="componentQty" value="${component.quantity}" type="number" maxFractionDigits="0"/>
+		<c:if test="${componentQty > 1}">
+			<%-- output order item component quantity in the form of "5 x ComponentName" --%>
+			<wcst:message var="componentDescription" key="ITEM_COMPONENT_QUANTITY_NAME" bundle="${widgetText}"> 
+				<wcst:param><c:out value="${componentQty}" escapeXml="false"/></wcst:param>
+				<wcst:param><c:out value="${componentDescription}" escapeXml="false"/></wcst:param>
+			</wcst:message>
+		</c:if>
+		<wcf:set target="${dynamicKitComponentList}" value="${componentDescription}" />
+	</c:forEach>
+	
+</c:if>
+
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+
+

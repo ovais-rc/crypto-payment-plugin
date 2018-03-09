@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","ja",{block:"行末揃え",center:"中央揃え",left:"左揃え",right:"右揃え"});

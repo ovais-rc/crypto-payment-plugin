@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","id",{fontSize:{label:"Ukuran",voiceLabel:"Ukuran font",panelTitle:"Ukuran font"},label:"Font",panelTitle:"Nama Font",voiceLabel:"Font"});

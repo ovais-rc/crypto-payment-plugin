@@ -1,0 +1,207 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN AddressBookDetail_Data.jspf -->
+
+<wcf:url var="EditAddAddressURL" value="AjaxAddressBookDetailViewV2" type="Ajax">
+    <wcf:param name="storeId" value="${WCParam.storeId}" />
+    <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+    <wcf:param name="langId" value="${langId}" />
+</wcf:url>
+
+<c:if test="${empty person}" >
+    <wcf:rest var="person" url="store/{storeId}/person/@self">
+        <wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+    </wcf:rest>
+</c:if>
+
+<c:set var="addressBookBean" value="${person}" scope="request"/>
+<c:choose>
+    <c:when test="${!empty param.addressId}">
+        <c:set var="selectedAddress" value="${param.addressId}" scope="request"/>
+    </c:when>
+    <c:otherwise>
+        <c:set var="selectedAddress" value="${person.addressId}" scope="request"/>
+    </c:otherwise>
+</c:choose>
+
+<%-- validate the selected address...it may be the scenario that the address has been deleted
+     in this case just default to the primary address --%>
+<c:set var="foundSelectedAddress" value="false"/>
+<c:set var="defaultAddress" value="${person.addressId}"/>
+<c:set var="final_accountaddr" value="${person}"/>
+<c:choose>
+    <c:when test="${selectedAddress == person.addressId}">
+        <c:set var="foundSelectedAddress" value="true"/>
+    </c:when>
+</c:choose>
+<c:if test="${!foundSelectedAddress}" >
+    <c:forEach items="${addressBookBean.contact}" var="contact" varStatus="status">
+        <%-- Do not show the special addresses used for quick checkout profile --%>
+        <c:if test="${ contact.nickName != profileShippingNickname && contact.nickName != profileBillingNickname }" >
+            <c:if test="${selectedAddress == contact.addressId}">
+                <c:set var="foundSelectedAddress" value="true"/>
+                <c:set var="final_accountaddr" value="${contact}"/>
+            </c:if>
+        </c:if>
+    </c:forEach>
+</c:if>
+<c:if test="${!foundSelectedAddress}">
+    <c:set var="selectedAddress" value="${defaultAddress}" scope="request"/>
+</c:if>
+
+<c:choose>
+    <c:when test="${locale == 'zh_CN'}">
+        <c:set var="addressFieldOrderForOrg" value="countryDisplayName,stateDisplayName,city,address1,address2,zipCode,userDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,country,state,city,address1,zipCode,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,state,zipCode,country,email1"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.lastName} ${final_accountaddr.firstName}"/>
+    </c:when>
+    <c:when test="${locale == 'zh_TW'}">
+        <c:set var="addressFieldOrderForOrg" value="countryDisplayName,stateDisplayName,zipCode,city,address1,address2,userDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,country,state,zipCode,city,address1,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,state,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.lastName} ${final_accountaddr.firstName}"/>
+    </c:when>
+    <c:when test="${locale eq 'ar_EG'}">
+        <c:set var="addressFieldOrderForOrg" value="userDisplayName,address1,address2,city,stateDisplayName,zipCode,countryDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,address1,city,state,zipCode,country,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,state,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.firstName} ${final_accountaddr.lastName}"/>
+        <c:if test="${empty final_accountaddr.firstName || final_accountaddr.firstName eq ''}">
+            <c:set var="userDisplayName" value="${final_accountaddr.lastName}"/>
+        </c:if>
+    </c:when>
+    <c:when test="${locale == 'ru_RU'}">
+        <c:set var="addressFieldOrderForOrg" value="userDisplayName,address1,address2,zipCode,city,stateDisplayName,countryDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,address1,zipCode,city,state,country,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,state,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.firstName} ${final_accountaddr.lastName}"/>
+        <c:if test="${empty final_accountaddr.firstName || final_accountaddr.firstName eq ''}">
+            <c:set var="userDisplayName" value="${final_accountaddr.lastName}"/>
+        </c:if>
+    </c:when>
+    <c:when test="${locale == 'ja_JP' || locale == 'ko_KR'}">
+        <c:set var="addressFieldOrderForOrg" value="countryDisplayName,zipCode,stateDisplayName,city,address1,address2,userDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,country,zipCode,state,city,address1,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,address2,city,state,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.lastName} ${final_accountaddr.firstName}"/>
+    </c:when>
+    <c:when test="${locale == 'de_DE' || locale == 'es_ES' || locale == 'fr_FR' || locale == 'it_IT' || locale == 'ro_RO'}">
+        <c:set var="addressFieldOrderForOrg" value="userDisplayName,address1,address2,zipCode,city,stateDisplayName,countryDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,address1,zipCode,city,state,country,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.firstName} ${final_accountaddr.lastName}"/>
+        <c:if test="${empty final_accountaddr.firstName || final_accountaddr.firstName eq ''}">
+            <c:set var="userDisplayName" value="${final_accountaddr.lastName}"/>
+        </c:if>
+    </c:when>
+    <c:when test="${locale == 'pl_PL'}">
+        <c:set var="addressFieldOrderForOrg" value="userDisplayName,address1,address2,zipCode,city,stateDisplayName,countryDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,address1,zipCode,city,state,country,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,state,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.firstName} ${final_accountaddr.lastName}"/>
+        <c:if test="${empty final_accountaddr.firstName || final_accountaddr.firstName eq ''}">
+            <c:set var="userDisplayName" value="${final_accountaddr.lastName}"/>
+        </c:if>
+    </c:when>
+    <c:otherwise>
+        <c:set var="addressFieldOrderForOrg" value="userDisplayName,address1,address2,city,stateDisplayName,zipCode,countryDisplayName" scope="request"/>
+        <c:set var="addressFieldOrderForOrgEdit" value="firstName,lastName,address1,city,state,zipCode,country,email1,phone1" scope="request"/>
+        <c:set var="mandatoryFields" value="lastName,address1,city,state,zipCode,country,email1" scope="request"/>
+        <c:set var="userDisplayName" value="${final_accountaddr.firstName} ${final_accountaddr.lastName}"/>
+        <c:if test="${empty final_accountaddr.firstName || final_accountaddr.firstName eq ''}">
+            <c:set var="userDisplayName" value="${final_accountaddr.lastName}"/>
+        </c:if>
+    </c:otherwise>
+</c:choose>
+
+<c:set var="contactInfoFieldsForOrg" value="email1,phone1" scope="request"/>
+
+<%-- Start creating address display list. Display state/country name instead of state/country code --%>
+<wcf:useBean var="addressFieldDisplayList" classname="java.util.ArrayList"/>
+<wcf:useBean var="contactFieldDisplayList" classname="java.util.ArrayList"/>
+<c:set var="selectedCountryCode" value="${final_accountaddr.country}"/>
+<c:set var="selectedStateCode" value="${final_accountaddr.state}"/>
+<c:set var="selectedCountryName" value="${selectedCountryCode}"/>
+<c:set var="selectedStateName" value="${selectedStateCode}"/>
+
+<c:if test="${empty final_accountaddr}">
+    <%-- This is create org scenario.. Set country based on user locale. --%>
+    <c:set var="selectedCountryCode" value="${fn:split(locale, '_')[1]}" />
+</c:if>
+
+<c:set var="key1" value="store/${WCParam.storeId}/country/country_state_list+${langId}+${selectedCountryCode}"/>
+<c:set var="countryBean" value="${cachedOnlineStoreMap[key1]}" scope="request"/>
+<c:if test="${empty countryBean}">
+    <wcf:rest var="countryBean" url="store/{storeId}/country/country_state_list" cached="true" scope="request">
+        <wcf:var name="storeId" value="${WCParam.storeId}" />
+        <wcf:param name="langId" value="${langId}" />
+        <wcf:param name="countryCode" value="${selectedCountryCode}"/>
+    </wcf:rest>
+    <wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${countryBean}"/>
+</c:if>
+
+<%-- Country display name --%>
+<c:forEach var="country" items="${countryBean.countries}">
+    <c:if test="${country.code eq selectedCountryCode }">
+        <c:set value="${country.displayName}" var="selectedCountryName"/>
+    </c:if>
+</c:forEach>
+
+<%-- State display name --%>
+<c:forEach var="state" items="${countryBean.countryCodeStates}">
+    <c:if test="${state.code eq selectedStateCode}">
+        <c:set value="${state.displayName}" var="selectedStateName"/>
+    </c:if>
+</c:forEach>
+
+<c:forEach var="fieldName" items="${addressFieldOrderForOrg}">
+    <c:choose>
+        <c:when test="${fieldName eq 'userDisplayName' && fn:length(userDisplayName) > 0}">
+            <wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(userDisplayName)}"/>
+        </c:when>
+        <c:when test="${fieldName eq 'stateDisplayName' && fn:length(selectedStateName) > 0}">
+            <wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(selectedStateName)}"/>
+        </c:when>
+        <c:when test="${fieldName eq 'countryDisplayName' && fn:length(selectedCountryName) > 0}">
+            <wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(selectedCountryName)}"/>
+        </c:when>
+        <c:when test="${fieldName eq 'address1'}">
+            <wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(final_accountaddr.addressLine[0])}"/>
+        </c:when>
+        <c:when test="${fieldName eq 'address2' && fn:length(final_accountaddr.addressLine[1]) > 0}">
+            <wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(final_accountaddr.addressLine[1])}"/>
+        </c:when>
+        <c:otherwise>
+            <c:if test="${fn:length(final_accountaddr[fieldName]) > 0}">
+                <wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(final_accountaddr[fieldName])}"/>
+            </c:if>
+        </c:otherwise>
+    </c:choose>
+</c:forEach>
+
+<c:choose>
+    <c:when test="${final_accountaddr.addressType == 'Shipping'}">
+        <wcst:message var="addressType" bundle="${widgetText}" key="SHIPPING_ADDRESS2"/>
+    </c:when>
+    <c:when test="${final_accountaddr.addressType == 'Billing'}">
+        <wcst:message var="addressType" bundle="${widgetText}" key="BILLINGADDRESS"/>
+    </c:when>
+    <c:otherwise>
+        <wcst:message var="addressType" bundle="${widgetText}" key="AB_SBADDR"/>
+    </c:otherwise>
+</c:choose>
+
+<!-- END AddressBookDetail_Data.jspf -->

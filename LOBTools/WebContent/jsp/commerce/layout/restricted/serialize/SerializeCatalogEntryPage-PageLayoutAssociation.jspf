@@ -1,0 +1,70 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2012 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<c:set var="pageType" value="${param.pageType}"/>
+
+<c:choose>
+	<c:when test="${pageType == 'ProductPage'}">
+		<c:set var="catEntryType" value="Product" />
+	</c:when>
+	<c:when test="${pageType == 'ItemPage'}">
+		<c:set var="catEntryType" value="SKU" />
+	</c:when>
+	<c:when test="${pageType == 'BundlePage'}">
+		<c:set var="catEntryType" value="Bundle" />
+	</c:when>
+	<c:when test="${pageType == 'StaticKitPage'}">
+		<c:set var="catEntryType" value="Kit" />
+	</c:when>
+	<c:when test="${pageType == 'DynamicKitPage'}">
+		<c:set var="catEntryType" value="DynamicKit" />
+	</c:when>
+</c:choose>
+
+<c:if test="${! (empty catEntryPage) }">
+	<c:set var="pageLayoutReferenceList" value="${catEntryPage.layoutAssociation}"/>
+	<c:set var="pageLayoutTypeId" scope="request" value="${param.pageType}"/>
+	<jsp:directive.include file="../GetPageLayoutDetailsById.jspf"/>
+					
+	<c:forEach var="layoutAssociation" items="${catEntryPage.layoutAssociation}">
+		<c:set var="pagelayout" value="${PAGE_LAYOUTS_HASH_MAP[layoutAssociation.layoutIdentifier.uniqueID]}" />
+		<c:if test="${empty layoutAssociation.layoutIdentifier.externalIdentifier.storeIdentifier.uniqueID}">
+			<c:set var="objStoreId" value="${param.storeId}"/> 
+		</c:if>
+		<c:if test="${!empty layoutAssociation.layoutIdentifier.externalIdentifier.storeIdentifier.uniqueID}">
+			<c:set var="objStoreId" value="${layoutAssociation.layoutIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+		</c:if>
+		<c:choose>
+			<c:when test="${objStoreId == param.storeId}">
+				<c:set var="objectType" value="${catEntryType}PageLayoutAssociationReferenced${catEntryType}PageLayouts"/>
+			</c:when>
+			<c:when test="${(objStoreId != param.storeId) && (layoutAssociation.layoutAssociationIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId) }">
+				<c:set var="objectType" value="${catEntryType}PageLayoutAssociationReferencedInherited${catEntryType}PageLayouts"/>
+			</c:when>
+			<c:when test="${(objStoreId != param.storeId) && (layoutAssociation.layoutAssociationIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId) }">
+				<c:set var="objectType" value="Inherited${catEntryType}PageLayoutAssociationReferencedInherited${catEntryType}PageLayouts"/>
+			</c:when>
+		</c:choose>
+		<object objectType="${objectType}">
+			<c:set var="showVerb" value="${showVerb}" scope="request"/>
+			<c:set var="businessObject" value="${layoutAssociation}" scope="request"/>
+			<jsp:include page="/cmc/SerializeChangeControlMetaData"/>
+			<objectStoreId><wcf:cdata data="${layoutAssociation.layoutAssociationIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+			<associationID><wcf:cdata data="${layoutAssociation.layoutAssociationIdentifier.uniqueID}"/></associationID>
+			<priority><wcf:cdata data="${layoutAssociation.schedule.priority}"/></priority>
+			<startDate><wcf:cdata data="${layoutAssociation.schedule.startDate}"/></startDate>
+			<endDate><wcf:cdata data="${layoutAssociation.schedule.endDate}"/></endDate>	
+			<jsp:directive.include file="SerializePageLayout.jspf" /> 
+		</object>
+	</c:forEach>
+</c:if>

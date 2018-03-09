@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","sv",{button:"Mallar",emptyListMsg:"(Det finns inga definierade mallar)",insertOption:"Ersätt faktiskt innehåll",options:"Alternativ för mallar",selectPromptMsg:"Välj den mall du vill öppna i redigeraren",title:"Innehållsmallar"});

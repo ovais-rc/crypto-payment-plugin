@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","tr",{bold:"Kalın",italic:"İtalik",strike:"Üstü Çizili",subscript:"Alt Simge",superscript:"Üst Simge",underline:"Altı Çizili"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","ca",{button:"Plantilles",emptyListMsg:"(No hi ha plantilles definides)",insertOption:"Substitueix el contingut actual",options:"Opcions de plantilla",selectPromptMsg:"Selecciona la plantilla per obrir a l'editor",title:"Plantilles de contingut"});

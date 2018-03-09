@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","nb",{clear:"Tøm",highlight:"Uthev",options:"Fargealternativer",selected:"Valgt farge",title:"Velg farge",ibm:{currentColor:"Gjeldende farge"}});

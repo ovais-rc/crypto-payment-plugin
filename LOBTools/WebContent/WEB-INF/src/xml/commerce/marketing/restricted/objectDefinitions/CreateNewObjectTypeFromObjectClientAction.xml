@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Client-side action that copies the selected objects into new objects converting the types
+		into the specified {@link cmc/marketing/CreateNewObjectTypeFromObjectClientAction#targetObjectType target object type}.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/marketing/CreateNewObjectTypeFromObjectClientAction">
+		<dependency localName="CopyActionHandler" moduleName="cmc/foundation/CopyActionHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			The target object type to copy and convert the selected objects into. The target object definition of the given
+			type must be listed as in the {@link cmc/foundation/ObjectDefinition#compatibleObjectTypes} field of the selected objects' definition.
+		-->
+		<variable name="targetObjectType" type="string" value=""/>
+		
+		<!---
+			@keywords private
+			Returns true if the context is not read only.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (enabled && o.model.oEditor.respectWorkspaceContext) {
+				var readOnlyModeContextValue = ContextUtil.Singleton.findContextValue(null, "readOnlyMode");
+				enabled = (readOnlyModeContextValue.value != "true");
+			}
+			if (enabled && o.isContextReadOnly()) {
+				enabled = false;
+			}
+			return enabled;
+			]]>
+		</method>
+		
+		<!---
+			Create new objects in the target object type using the selected objects.
+			
+			@param cmc/foundation/ModelObject[] objects The array of selected model objects.
+		-->				
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (this.targetObjectType != "" && objects) {
+				var targetObjDef = null;
+				for (var i = 0; i < objects.length; i++) {
+					if (i == 0) {
+						targetObjDef = objects[i].model.getObjectDefinition(null, this.targetObjectType);
+					}
+					CopyActionHandler.Singleton.triggerAction(objects[i], null, targetObjDef, i == 0);
+				}
+			}
+			]]>
+		</method>
+	</ClientAction>
+</Definitions>

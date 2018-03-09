@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<Node classDefinition="true" definitionName="cmc/foundation/BaseContextMenu">
+		<dependency moduleName="cmc/foundation/BaseContextMenuItem" localName="BaseContextMenuItem"/>
+		<dependency moduleName="cmc/foundation/Component" localName="Component"/>
+		<dependency moduleName="cmc/foundation/ContextMenuComponent" localName="ContextMenuComponent"/>
+		<dependency moduleName="cmc/RootComponent" localName="RootComponent"/>
+		<dependency moduleName="cmc/foundation/EventHandler" localName="EventHandler"/>
+		<dependency moduleName="cmc/foundation/EventUtil" localName="EventUtil"/>
+		<dependency moduleName="cmc/shell/Logger" localName="Logger"/>
+		<variable name="delegate" value="${null}" />
+		<variable name="items" value="${[]}" />
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+	        var ip = this.immediateParent;
+	        if (ip && ip instanceof Component.Class) {
+	        	ip.setVariable("contextMenu", this);
+	        }
+			]]>
+		</method>
+		
+		<method name="destroy">
+			<![CDATA[
+			if (this._showDel) {
+				this._showDel.disconnectAll();
+				delete this._showDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method name="set_delegate" args="del">
+        	<![CDATA[
+			if (!(del instanceof EventHandler.Class)) {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation", "WARNING", "cmc/foundation/BaseContextMenuItem", "set_delegate", "the passed argument del must be an instanceof EventHandler.Class");
+				}
+			}
+			else {
+				this.delegate = del;
+				EventUtil.trigger(this, "ondelegate", del);
+		    }
+			]]>
+		</method>
+		
+		<method name="addItem" args="item">
+			<![CDATA[
+			this.items.push(item);
+			]]>
+		</method>
+		
+		<method name="clearItems">
+			<![CDATA[
+			this.items = [];
+			]]>
+		</method>
+
+		<method name="makeMenuItem" args="title, delegate">
+			<![CDATA[
+			return new BaseContextMenuItem.Class(null, {"title" : title , "delegate" : delegate});
+			]]>
+		</method>
+
+		<method name="_show">
+			<![CDATA[
+			if (!this._showDel) {
+				this._showDel = new EventHandler.Class(this, "_show");
+			}
+			else {
+				this._showDel.disconnectAll();
+			}
+			var del = this.delegate;
+			if (del) del.execute(this);
+			EventUtil.trigger(this, "onmenuopen", this);
+			
+			var itemlist = [];
+			var items = this.items;
+			var _items = {};
+			for (var i = 0; i < items.length; i++) {
+		        var v = items[i].cmenuitem;
+		        var caption = v.caption;
+		        if (v.visible != true || caption in _items) {
+		            continue; 
+		        }
+		        // Mark as displayed
+		        _items[caption] = true;
+		        if (v.enabled) {
+		            itemlist.push({type: 'Text', label: caption, offset: i, separatorbefore: v.separatorbefore});
+		        } else {
+		            itemlist.push({type: 'Disabled', label: caption, offset: i, separatorbefore: v.separatorbefore});
+		        }
+		    }
+		
+		    var s = this._create();
+		    s.setItems(itemlist);
+		    s.show();
+			]]>
+		</method>
+		
+		<method name="_hide">
+			<![CDATA[
+			if (this._showDel) {
+				this._showDel.disconnectAll();
+			}
+			]]>
+		</method>
+
+		<method name="_create">
+			<![CDATA[
+			var s = this._contextmenu;
+		    if (!s) {
+		        this._contextmenu = s = new ContextMenuComponent.Class(RootComponent.Singleton, {owner: this});
+		    }
+		    return s;
+			]]>
+		</method>
+
+		<method name="_select" args="i">
+			<![CDATA[
+			var items = this.items;
+			if (items && items[i]) items[i]._select();
+			]]>
+		</method>
+	</Node>
+	
+	<Node classDefinition="true" definitionName="cmc/foundation/BaseContextMenuItem">
+		<dependency moduleName="cmc/foundation/BaseContextMenu" localName="BaseContextMenu"/>
+		<dependency moduleName="cmc/shell/Logger" localName="Logger" />
+		<dependency moduleName="cmc/foundation/EventHandler" localName="EventHandler"/>
+		<dependency moduleName="cmc/foundation/EventUtil" localName="EventUtil"/>
+		<variable name="delegate" value="${null}" />
+
+        <method name="constructor" args="parent,args">
+			<![CDATA[
+			var ip = this.immediateParent;
+	        if (ip && ip instanceof BaseContextMenu.Class) {
+            	ip.addItem(this);
+        	}
+        	this.cmenuitem = {visible: true, enabled: true, separatorbefore: false, caption: this.title};
+			]]>
+		</method>
+		
+		<method name="set_caption" args="value">
+			<![CDATA[
+		    this.cmenuitem.caption = value;
+			]]>
+		</method>
+		
+		<method name="set_visble" args="value">
+			<![CDATA[
+		    this.cmenuitem.visible = value;
+			]]>
+		</method>
+		
+		<method name="set_enabled" args="value">
+			<![CDATA[
+		    this.cmenuitem.enabled = value;
+			]]>
+		</method>
+		
+		<method name="set_separatorbefore" args="value">
+			<![CDATA[
+		    this.cmenuitem.separatorbefore = value;
+			]]>
+		</method>
+		
+		<method name="_select">
+			<![CDATA[
+		    var delegate = this.delegate;
+		    if (delegate) {
+		        if (delegate instanceof EventHandler.Class) {
+		            delegate.execute(this);
+		        } else if (typeof delegate === 'function') {
+		            delegate();
+		        }
+		    }
+		    EventUtil.trigger(this, "onselect", this);
+			]]>
+		</method>
+		
+		<method name="set_delegate" args="del">
+        	<![CDATA[
+			if ((!(del instanceof EventHandler.Class)) && (typeof del !== 'function')) {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation", "WARNING", "cmc/foundation/BaseContextMenuItem", "set_delegate", "the passed argument del must be an instanceof EventHandler.Class or a function");
+				}
+			}
+			else {
+				this.delegate = del;
+				EventUtil.trigger(this, "ondelegate", del);
+		    }
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

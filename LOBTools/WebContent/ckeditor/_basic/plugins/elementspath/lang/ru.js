@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("elementspath","ru",{eleLabel:"Путь к элементам",eleTitle:"Элемент %1"});

@@ -1,0 +1,210 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<table style="border-collapse:collapse; border-spacing:0; width:100%; margin:20px 0;">
+	<tr>
+		<th style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; text-align:left; border-bottom:1px solid #e5e5e5;"><fmt:message bundle="${storeText}" key="EMAIL_PRODUCT"/></th>
+		<flow:ifEnabled feature="ExpeditedOrders">
+			<th style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:center; border-bottom:1px solid #e5e5e5;"><fmt:message bundle="${storeText}" key="SHIP_EXPEDITE_SHIPPING"/></th>
+		</flow:ifEnabled>
+		<th style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:center; border-bottom:1px solid #e5e5e5;"><fmt:message bundle="${storeText}" key="EMAIL_QUANTITY"/></th>
+		<th style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:right; border-bottom:1px solid #e5e5e5;"><fmt:message bundle="${storeText}" key="EMAIL_EACH"/></th>
+		<th style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:right; border-bottom:1px solid #e5e5e5;"><fmt:message bundle="${storeText}" key="EMAIL_TOTAL"/></th>
+	</tr>
+
+	<c:forEach var="orderItem" items="${order.orderItem}" varStatus="status">
+			<wcf:rest var="catEntry" url="${searchHostNamePath}${searchContextPath}/store/${storeId}/productview/byId/${orderItem.productId}" >
+				<wcf:param name="langId" value="${langId}" />
+				<wcf:param name="currency" value="${env_currencyCode}" />
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="catalogId" value="${sdb.masterCatalog.catalogId}" />
+				<wcf:param name="profileName" value="IBM_findProductByIds_Summary_WithNoEntitlementCheck" />
+			</wcf:rest>
+			<fmt:formatNumber var="quickCartOrderItemQuantity" value="${orderItem.quantity}" type="number" maxFractionDigits="0"/>
+			<tr>
+		<td style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; text-align:left;"><strong>${catEntry.catalogEntryView[0].name}</strong><br>
+		<span><fmt:message bundle="${storeText}" key="EMAIL_SKU_LABEL" />&#58;&nbsp;<c:out value="${catEntry.catalogEntryView[0].partNumber}"/></span><br>
+		<c:if test="${showDynamicKit eq 'true'}">
+			<c:set var="orderHasDKComponents" value="false" />
+			<c:forEach var="orderItem2" items="${order.orderItem}">
+				<c:if test="${!empty orderItem2.orderItemComponent}">
+					<c:set var="orderHasDKComponents" value="true" />
+				</c:if>
+			</c:forEach>
+			<c:if test="${orderHasDKComponents eq 'true'}">
+
+					<wcf:rest var="dkComponents" url="${searchHostNamePath}${searchContextPath}/store/${storeId}/productview/byIds" >
+						<c:forEach var="orderItem1" items="${order.orderItem}">
+							<wcf:param name="id" value="${orderItem1.productId}"/>
+							<c:forEach var="orderItemComponents" items="${orderItem1.orderItemComponent}">
+								<wcf:param name="id" value="${orderItemComponents.catalogEntryIdentifier.uniqueID}"/>
+							</c:forEach>
+						</c:forEach>
+						<wcf:param name="langId" value="${langId}" />
+						<wcf:param name="currency" value="${env_currencyCode}" />
+						<wcf:param name="responseFormat" value="json" />
+						<wcf:param name="catalogId" value="${catalogId}" />
+					</wcf:rest>
+			</c:if>
+		</c:if>
+
+		<c:if test="${showDynamicKit eq 'true' && !empty orderItem.orderItemComponent}">
+						<c:forEach var="savedDKComponent" items="${dkComponents.catalogEntryView}">
+							<c:if test="${!empty savedDKComponent.dynamicKitDefaultConfig && savedDKComponent.uniqueID==orderItem.productId}">
+								<input type="hidden" id="configXml_${orderItem.orderItemId}" class="configurationXML" value="${savedDKComponent.dynamicKitDefaultConfig}"/>
+							</c:if>
+						</c:forEach>
+						<div class="top_margin5px"><fmt:message bundle="${storeText}" key="CONFIGURATION"/></div>
+						<p>
+							<ul class="product_specs" id="configuredComponents_${orderItem.orderItemId}">
+
+									<c:forEach var="oiComponent" items="${orderItem.orderItemComponent}">
+									<c:forEach var="savedDKComponent" items="${dkComponents.catalogEntryView}">
+										<c:if test="${savedDKComponent.uniqueID == oiComponent.catalogEntryIdentifier.uniqueID}">
+											<fmt:formatNumber var="itemComponentQuantity" value="${oiComponent.quantity.value}" type="number" maxFractionDigits="0"/>
+
+											<c:choose>
+												<c:when test="${itemComponentQuantity>1}">
+													<%-- output order item component quantity in the form of "5 x ComponentName" --%>
+													<fmt:message bundle="${storeText}" var="txtOrderItemQuantityAndName" key="ITEM_COMPONENT_QUANTITY_NAME" >
+														<fmt:param><c:out value="${itemComponentQuantity}" escapeXml="false"/></fmt:param>
+														<fmt:param><c:out value="${savedDKComponent.name}" escapeXml="false"/></fmt:param>
+													</fmt:message>
+													<li><c:out value="${txtOrderItemQuantityAndName}"/></li>
+												</c:when>
+												<c:otherwise>
+													<li><c:out value="${savedDKComponent.name}"/></li>
+												</c:otherwise>
+											</c:choose>
+										</c:if>
+
+									</c:forEach>
+								</c:forEach>
+
+							</ul>
+						</p>
+		</c:if>
+		<c:if test="${env_contractSelection}">
+			<c:if test="${!empty orderItem.contractId}">
+				<wcf:rest var="getContractResponse" url="store/{storeId}/contract/{contractId}">
+					<wcf:var name="storeId" value="${storeId}" />
+					<wcf:var name="contractId" value="${orderItem.contractId}" />
+					<wcf:param name="profileName" value="IBM_Contract_Usage"/>
+				</wcf:rest>
+				<c:set var="contract" value="${getContractResponse.resultList[0]}" />
+				<c:if test="${contract.usage != 0}">
+					<fmt:message key="PRICING_POPUP_LINK" bundle="${storeText}"/> <c:out value="${contract.name}"/>
+				</c:if>
+			</c:if>
+		</c:if>
+		</td>
+			<flow:ifEnabled feature="ExpeditedOrders">
+				<td style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:center;">
+					<c:choose>
+						<c:when test="${orderItem.isExpedited eq 'true'}">
+							<fmt:message key="YES" bundle="${storeText}"/>
+						</c:when>
+						<c:otherwise>
+							<fmt:message key="NO" bundle="${storeText}"/>
+						</c:otherwise>
+					</c:choose>
+				</td>
+			</flow:ifEnabled>
+				<td style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:center; vertical-align:top;">
+					<c:out value="${quickCartOrderItemQuantity}"/></td>
+				<td style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:right; vertical-align:top;">
+					<fmt:formatNumber value="${orderItem.unitPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+					<c:out value="${CurrencySymbol}"/></td>
+				<td style="margin:0; padding:0; border-bottom:1px dotted #aaaaaa; padding:9px 0 7px 0; width:15%; text-align:right; vertical-align:top;">
+				<c:choose>
+				<c:when test="${orderItem.freeGift}">
+					<%-- the OrderItem is a freebie --%>
+					<fmt:message bundle="${storeText}" key="Free"/>
+				</c:when>
+				<c:otherwise>
+					<fmt:formatNumber var="totalFormattedProductPrice" value="${orderItem.orderItemPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+					<c:out value="${totalFormattedProductPrice}" escapeXml="false" />
+					<c:out value="${CurrencySymbol}"/>
+				</c:otherwise>
+				</c:choose></td>
+			</tr>
+		<c:remove var="catEntry"/>
+	</c:forEach>
+
+</table>
+
+ <table role="presentation" style="border-collapse:collapse; border-spacing:0; width:100%; text-align:right; line-height:14px; margin-bottom:35px;">
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><fmt:message bundle="${storeText}" key="EMAIL_ORDER_SUBTOTAL" />&#58;</td>
+		<td style="margin:0; padding:0;">
+		<fmt:formatNumber value="${order.totalProductPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/>
+		</td>
+	</tr>
+	<c:set var="totalProductDiscount" value="0"/>
+	<c:set var="hasProductDiscount" value="false"/>
+	<c:forEach var="orderItemAdjustment" items="${order.adjustment}">
+		<c:if test="${!hasProductDiscount}">
+			<c:if test="${orderItemAdjustment.displayLevel == 'OrderItem'}">
+				<c:set var="hasProductDiscount" value="true"/>
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><fmt:message bundle="${storeText}" key="PRODUCT_DISCOUNT_TOTAL"/>&#58;
+		</td>
+			</c:if>
+		</c:if>
+	</c:forEach>
+	<c:forEach var="orderItemAdjustment" items="${order.adjustment}">
+		<c:if test="${hasProductDiscount}">
+			<c:if test="${orderItemAdjustment.displayLevel == 'OrderItem'}">
+				<c:set var="totalProductDiscount" value="${totalProductDiscount + orderItemAdjustment.amount}"/>
+			</c:if>
+		</c:if>
+	</c:forEach>
+	<c:if test="${hasProductDiscount}">
+		<td style="margin:0; padding:0;">
+		<fmt:formatNumber value="${totalProductDiscount}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/>
+		</td>
+		</tr>
+	</c:if>
+
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><fmt:message bundle="${storeText}" key="EMAIL_TOTAL_ORDER_DISCOUNT" />&#58;</td>
+		<td style="margin:0; padding:0;">
+			<fmt:formatNumber value="${order.totalAdjustment - totalProductDiscount}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/>
+		</td>
+	</tr>
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><fmt:message bundle="${storeText}" key="EMAIL_TAX" />&#58;</td>
+		<td style="margin:0; padding:0;">
+			<fmt:formatNumber value="${order.totalSalesTax}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/>
+		</td>
+	</tr>
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><fmt:message bundle="${storeText}" key="EMAIL_SHIPPING" />&#58;</td>
+		<td style="margin:0; padding:0;">
+			<fmt:formatNumber value="${order.totalShippingCharge}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/>
+		</td>
+	</tr>
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><fmt:message bundle="${storeText}" key="EMAIL_SHIPPING_TAX" />&#58;</td>
+		<td style="margin:0; padding:0;">
+			<fmt:formatNumber value="${order.totalSalesTax}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/>
+		</td>
+	</tr>
+	<tr>
+		<td style="margin:0; padding:0; width:85%; line-height:14px;"><strong><fmt:message bundle="${storeText}" key="EMAIL_ORDER_TOTAL" />&#58;</strong></td>
+		<td style="margin:0; padding:0;">
+			<strong><fmt:formatNumber value="${order.grandTotal}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/></strong>
+		</td>
+	</tr>
+</table>

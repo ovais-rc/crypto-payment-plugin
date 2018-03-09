@@ -1,0 +1,81 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="formattedTimeZone" value="${fn:replace(cookie.WC_timeoffset.value, '%2B', '+')}"/>
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.75', ':45')}"/>
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.5', ':30')}"/>
+
+<%-- Fetch list of order comments for the given orderId --%>
+<wcf:rest var="orderCommentsList" url="store/{storeId}/order/{orderId}/comment" scope="request">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:var name="orderId" value="${param.orderId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="pageNumber" value="0" />
+	<wcf:param name="pageSize" value="${orderCommentsListSize}" />
+</wcf:rest>
+
+<%-- Page Heading - Ex: 1) Order Comments  or 2) Order Comments (Displaying recent 15 comments out of 20 comments) --%>
+<wcst:message bundle="${widgetText}" key="ORDER_COMMENTS_HEADING" var="orderCommentsHeading" />
+<c:if test="${orderCommentsList.recordSetTotal > orderCommentsListSize}">
+	<wcst:message bundle="${widgetText}" key="ORDER_COMMENTS_HEADING_PAGINATION_INFO" var="orderCommentHeadingPaginationInfo" >
+		<wcst:param><c:out value="${orderCommentsListSize}"/></wcst:param>
+		<wcst:param><c:out value="${orderCommentsList.recordSetTotal}"/></wcst:param>
+	</wcst:message>
+</c:if>
+
+
+<wcf:useBean var="commentsList" classname="java.util.ArrayList"/>
+<wcf:useBean var="cachedMemberDetailsMap" classname="java.util.HashMap"/>
+
+<c:forEach items="${orderCommentsList.orderComments}" var="orderComment">
+	<c:remove var="addedBy"/>
+	<%-- Comment addedd by details --%>
+	<c:set var="memberDetails" value="${orderComment.serviceRepDetails}"/>
+	<c:if test="${memberDetails.address != null && memberDetails.logonId != null}">
+		<wcst:message bundle="${widgetText}" key="COMMENT_ADDED_BY" var="addedBy" >
+			<wcst:param><c:out value="${memberDetails.address['firstName']}"/></wcst:param>
+			<wcst:param><c:out value="${memberDetails.address['middleName']}"/></wcst:param>
+			<wcst:param><c:out value="${memberDetails.address['lastName']}"/></wcst:param>
+			<wcst:param><c:out value="${memberDetails.logonId}"/></wcst:param>
+		</wcst:message>
+	</c:if>
+
+	<%-- Last Update date and time --%>
+	<c:catch>
+		<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdate" value="${orderComment.commentDetails.lastupdate}" pattern="yyyy-MM-dd HH:mm:ss.SSS" />
+	</c:catch>
+	<c:if test="${empty lastUpdate}">
+		<c:catch>
+			<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdate" value="${orderComment.commentDetails.lastupdate}" pattern="yyyy-MM-dd HH:mm:ss" />
+		</c:catch>
+	</c:if>
+	<c:if test="${!empty lastUpdate}">
+		<fmt:formatDate var="lastUpdateTime" value="${lastUpdate}" timeStyle="short" type="time" timeZone="${formattedTimeZone}"/>				
+		<fmt:formatDate var="lastUpdate" value="${lastUpdate}" dateStyle="medium" timeZone="${formattedTimeZone}"/>				
+	</c:if>
+	
+	<c:remove var="commentDetailsMap"/>
+	<wcf:useBean var="commentDetailsMap" classname="java.util.HashMap"/>
+	<wcf:set target="${commentsList}" value="${commentDetailsMap}" />
+	<c:set target="${commentDetailsMap}" value="${addedBy}" property="addedBy" />
+	<c:set target="${commentDetailsMap}" value="${lastUpdate}" property = "lastUpdate" />
+	<c:set target="${commentDetailsMap}" value="${lastUpdateTime}" property = "lastUpdateTime" />
+	<c:set target="${commentDetailsMap}" value="${orderComment.commentDetails.comment}" property = "comment" />
+
+</c:forEach>
+
+<c:set var="mode" value="self"/>
+<c:if test = "${env_shopOnBehalfSessionEstablished eq 'true'}">
+	<c:set var="mode" value="onbehalf"/>
+</c:if>

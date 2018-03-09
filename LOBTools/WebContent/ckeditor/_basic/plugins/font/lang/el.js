@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","el",{fontSize:{label:"Μέγεθος",voiceLabel:"Μέγεθος γραμματοσειράς",panelTitle:"Μέγεθος γραμματοσειράς"},label:"Γραμματοσειρά",panelTitle:"Όνομα γραμματοσειράς",voiceLabel:"Γραμματοσειρά"});

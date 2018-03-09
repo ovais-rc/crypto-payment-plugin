@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","he",{fontSize:{label:"גודל",voiceLabel:"גודל גופן",panelTitle:"גודל גופן"},label:"גופן",panelTitle:"שם גופן",voiceLabel:"גופן"});

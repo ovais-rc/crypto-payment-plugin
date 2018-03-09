@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","el",{alt:"Αλλαγή σελίδας",toolbar:"Εισαγωγή αλλαγής σελίδας"});

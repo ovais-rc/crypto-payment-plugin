@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<_config:DIHPreProcessConfig xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../../xsd/wc-dataimport-preprocess.xsd ">
+
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.CategoryParentChainDataPreProcessor"   batchSize="500">
+		<_config:table definition="CREATE TABLE TI_GROUPPATH_#INDEX_SCOPE_TAG# (CATGROUP_ID BIGINT NOT NULL, CATALOG_ID BIGINT NOT NULL, CATGROUPPATH VARCHAR(4000))" name="TI_GROUPPATH_#INDEX_SCOPE_TAG#"/>
+		<_config:query sql="(SELECT CATGRPREL.CATGROUP_ID_CHILD, CATGRPREL.CATGROUP_ID_PARENT, CATGRPREL.CATALOG_ID, CATGRPREL.SEQUENCE FROM CATGRPREL, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE
+		CATGRPREL.CATGROUP_ID_CHILD = CD.CATGROUP_ID AND CD.PUBLISHED IN (?unpublished?, ?published?) AND
+			CATGRPREL.CATALOG_ID IN (SELECT DISTINCT CATGPENREL.CATALOG_ID FROM CATGPENREL, TI_CATENTRY_#INDEX_SCOPE_TAG# CE WHERE CATGPENREL.CATENTRY_ID=CE.CATENTRY_ID))
+			UNION
+			(SELECT CATTOGRP.CATGROUP_ID AS CATGROUP_ID_CHILD, 0 AS CATGROUP_ID_PARENT, CATTOGRP.CATALOG_ID, CATTOGRP.SEQUENCE FROM CATTOGRP, TI_CGPUB_#INDEX_SCOPE_TAG# CD WHERE
+			CATTOGRP.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?unpublished?, ?published?) AND
+			CATTOGRP.CATALOG_ID IN (SELECT DISTINCT CATGPENREL.CATALOG_ID FROM CATGPENREL, TI_CATENTRY_#INDEX_SCOPE_TAG# CE WHERE CATGPENREL.CATENTRY_ID=CE.CATENTRY_ID)
+			)
+			ORDER BY CATGROUP_ID_CHILD, CATALOG_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATGROUP_ID" tableColumn="CATGROUP_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="CATALOG_ID" tableColumn="CATALOG_ID" />
+				<_config:column-column queryColumn="CATGROUPPATH" tableColumn="CATGROUPPATH" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+			<!--
+				The format of sequence:
+				If format of sequence is "4.3" which means 
+					sequence with number  6.22   will turn into string "0006220"
+					sequence with number 10.1    will turn into string "0010100"
+					sequence with number 20.21   will turn into string "0020210"
+					sequence with number 22.6454 will turn into string "0022645"
+				Note: when this sequence format requires updating, the same "sequenceFormat" parameter in the following
+					config node also needs to be changed as well.
+			-->
+		<_config:property name="sequenceFormat" value="4.2"/>
+	</_config:data-processing-config>
+
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.ProductGlobalSequenceDataPreProcessor" batchSize="500">
+		<_config:table definition="CREATE TABLE TI_ENTGRPPATH_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, ENTGRPPATH CLOB, PRIMARY KEY (CATENTRY_ID))" name="TI_ENTGRPPATH_#INDEX_SCOPE_TAG#"/>
+		<_config:query sql="(SELECT CATGPENREL.CATENTRY_ID CATENTRY_ID, CP.CATGROUPPATH, CATGPENREL.SEQUENCE 
+							FROM CATGPENREL, TI_GROUPPATH_#INDEX_SCOPE_TAG# CP, TI_CATENTRY_#INDEX_SCOPE_TAG# CE
+							WHERE CATGPENREL.CATENTRY_ID=CE.CATENTRY_ID 
+								AND CATGPENREL.CATALOG_ID = CP.CATALOG_ID
+								AND CATGPENREL.CATGROUP_ID = CP.CATGROUP_ID
+								AND NOT EXISTS (SELECT 1 FROM CATENTREL WHERE CATENTRY_ID_CHILD=CE.CATENTRY_ID AND CATRELTYPE_ID ='PRODUCT_ITEM'))
+							UNION
+							(SELECT X.CATENTRY_ID_CHILD CATENTRY_ID, CP.CATGROUPPATH, CATGPENREL.SEQUENCE				
+							FROM CATGPENREL, 
+								TI_GROUPPATH_#INDEX_SCOPE_TAG# CP,
+								(SELECT CATENTRY_ID_PARENT,CATENTRY_ID_CHILD FROM TI_CATENTRY_#INDEX_SCOPE_TAG#,CATENTREL WHERE CATENTRY_ID_CHILD=CATENTRY_ID AND CATENTTYPE_ID='ItemBean' AND CATRELTYPE_ID='PRODUCT_ITEM') X  
+							WHERE 
+								CATGPENREL.CATALOG_ID = CP.CATALOG_ID
+								AND CATGPENREL.CATGROUP_ID = CP.CATGROUP_ID 
+								AND CATGPENREL.CATENTRY_ID=X.CATENTRY_ID_PARENT)				
+							ORDER BY CATENTRY_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="NOT_USED" tableColumn="ENTGRPPATH" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+			<!--
+				The format of sequence is same pattern as above format defining.
+			-->
+		<_config:property name="sequenceFormat" value="7.2"/>
+		<_config:property name="padding" value="#"/>
+	</_config:data-processing-config>
+  
+</_config:DIHPreProcessConfig>

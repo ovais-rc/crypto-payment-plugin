@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	<PrimaryObjectDefinition baseDefinition="cmc/catalog/BaseCatalogEntryPrimaryObjectDefinition" definitionName="cmc/catalog/BaseCatalogGroupSKUPrimaryObjectDefinition" displayName="${catalogResources.displayNameCategoryLevelSKU}" displayNameProperty="partnumber" helpLink="tasks/tpngen1s.htm" idProperty="catentryId" isBaseDefinition="true" newDisplayName="${catalogResources.displayNameNewCategoryLevelSKU}" newObjectMenuItemText="${catalogResources.contextMenuNewCategoryLevelSKU}" objectGroups="CatalogEntry,SKUs,CatalogGroupSKUs" propertiesDefinition="cmc/catalog/CatalogGroupSKUProperties" searchType="FindAllCatalogEntries">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<!---
+			Retrieves the {@link cmc/catalog/CatalogEntryOffer} and
+			{@link cmc/catalog/InheritedCatalogEntryOffer} child objects.
+		-->
+		<GetChildrenService objectTypes="CatalogEntryOffer,InheritedCatalogEntryOffer" url="/cmc/GetCatalogEntryChildren-Offer">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+		</GetChildrenService>
+		<!---
+			Retrieves the {@link cmc/catalog/ChildSalesCatalogEntry} and {@link cmc/catalog/ChildSalesInheritedCatalogEntry}
+			reference objects for this catalog entry.
+		-->
+		<GetReferencesService primaryObjectTypes="SalesCatalogGroup,InheritedSalesCatalogGroup" referenceObjectTypes="ChildSalesCatalogEntry,ChildSalesInheritedCatalogEntry" url="/cmc/GetCatalogEntryReferences-SalesCatalogGroups">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="catentryId" propertyName="catentryId"/>
+			<ServiceParam name="masterCatalogId"/>
+		</GetReferencesService>
+		<!---
+			Retrieves the {@link cmc/catalog/BundleComponent} and
+			{@link cmc/catalog/InheritedBundleComponent} objects that refer to this object.
+		-->
+		<GetReferencesService primaryObjectTypes="Bundle,InheritedBundle" referenceObjectTypes="BundleComponent,InheritedBundleComponent" url="/cmc/GetCatalogEntryReferences-ReferenceBundles">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="catentryId" propertyName="catentryId"/>
+			<ServiceParam name="catenttypeId" value="ItemBean"/>
+		</GetReferencesService>
+		<!---
+			Retrieves the {@link cmc/catalog/KitComponent} and
+			{@link cmc/catalog/InheritedKitComponent} objects that refer to this object.
+		-->
+		<GetReferencesService primaryObjectTypes="Kit,InheritedKit" referenceObjectTypes="KitComponent,SterlingDynamicKitComponent,InheritedKitComponent,InheritedSterlingDynamicKitComponent" url="/cmc/GetCatalogEntryReferences-ReferenceKits">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="catentryId" propertyName="catentryId"/>
+			<ServiceParam name="catenttypeId" value="ItemBean"/>
+			<ServiceParam contextName="sterlingConfigEnabled" name="sterlingConfigEnabled"/>
+		</GetReferencesService>
+		<!---
+			A property definition for the code for the SKU.  This property is required
+			when creating a SKU.
+		-->
+		<PropertyDefinition displayName="${catalogResources.skuCode_DisplayName}" maximumSize="64" propertyName="partnumber" required="true" type="string"/>
+		<!--- Template -->
+		<Xml name="template">
+			<object objectType="CatalogEntryListPrice"/>
+		</Xml>
+		<!---
+			An instantiation of the 'cmc/catalog/CatalogEntryListPrice', representing the
+			list price for a catalog entry.
+		-->
+		<ChildObjectDefinition baseDefinition="cmc/catalog/CatalogEntryListPrice"/>
+		<!---
+			An instantiation of the child object {@link cmc/catalog/CatalogEntryOffer} representing
+			the offer and offer prices for this catalog entry.
+		-->
+		<ChildObjectDefinition baseDefinition="cmc/catalog/CatalogEntryOffer"/>
+		<!---
+			Validator to check and pass the warning message when there is no parent specified for the SKU.
+		-->
+		<RequiredParentValidator errorMessage="${catalogResources.parentCategoryValidator}" validatorId="parentExistsCheck" validatorType="requiredParentCategoryValidator">
+			<EnablementCondition conditionId="objectVersionCondition" enablementValue="" propertyName="objectVersionId"/>
+		</RequiredParentValidator>
+		<RequiredParentValidator errorMessage="${catalogResources.missingRequiredVersionedCategoryParent}" validatorId="versionedParentExistsCheck" validatorType="requiredParentVersionedCategoryValidator">
+			<EnablementCondition conditionId="objectVersionCondition" enablementValue="" negate="true" propertyName="objectVersionId"/>
+		</RequiredParentValidator>
+	</PrimaryObjectDefinition>
+
+	<!---
+		This definition represents the primary object definition describing a CatalogGroupSKU as a business object.
+		CatalogGroupSKU uses the noun CatalogEntry from the file wc-catalog-clientobjects.xml
+		which contains the informations on how the parameters in the
+		Create, Update or Delete services are mapped to create the appropriate BOD for the web services.
+	-->
+	<PrimaryObjectDefinition baseDefinition="cmc/catalog/BaseCatalogGroupSKUPrimaryObjectDefinition" definitionName="cmc/catalog/CatalogGroupSKU" headerIcon="skuHeaderIcon" icon="skuIcon" objectGroups="CatalogEntry,SKUs,CatalogGroupSKUs" objectType="CatalogGroupSKU">
+		<!--- Condition to disable the object creation in certain store types. -->
+		<EnablementAndCondition conditionId="objectCreationCondition">
+			<!--- Condition to disable the object creation in ATP inventory systems. -->
+			<IsATPStoreEnablementCondition conditionId="checkATPStatusCondition" negate="true" package="cmc/catalog"/>
+			<!--- Condition to disable the object creation in certain store types. -->
+			<EnablementOrCondition baseDefinition="cmc/catalog/StoreTypeCatalogObjectCreationRestriction"/>
+		</EnablementAndCondition>
+		<!--
+			Create Service
+		-->
+		<CreateService sendDefaultLanguageProperties="true" url="/cmc/CreateCatalogEntry">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="masterCatalogId"/>
+			<ServiceParam name="defaultLanguageId" parameterName="descriptionLanguageId"/>
+			<ServiceParam name="catenttypeId" value="ItemBean"/>
+		</CreateService>
+		<!---
+			Retrieves the {@link cmc/catalog/ChildCatalogGroupSKU} objects that refer to this object.
+		-->
+		<GetReferencesService url="/cmc/GetCatalogEntryParent-MasterCatalogCatalogGroup">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="masterCatalogId"/>
+			<ServiceParam name="catentryId" propertyName="catentryId"/>
+			<ServiceParam name="childType" value="ChildCatalogGroupSKU"/>
+		</GetReferencesService>
+		<!---
+			Reference object definition for the attachment of the catalog entry
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/catalog/CatalogEntryAttachmentReference"/>
+		<!---
+			Reference object definition for the asset store attachment of the catalog entry
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/catalog/CatalogEntryInheritedAttachmentReference"/>
+		<!---
+			Retrieves the content version object for this object
+		-->
+		<GetChildrenService objectTypes="ContentVersion" url="/cmc/GetContentVersions">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectId" propertyName="catentryId"/>
+			<ServiceParam name="objectType" value="CatalogGroupSKU"/>
+		</GetChildrenService>
+		<!---
+			Reference object definition for this object
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/foundation/BaseContentVersion" referencedType="CatalogGroupSKU"/>
+		<!---
+			Create Content Version Client Action
+		-->
+		<CreateContentVersionClientAction>
+			<EnablementCondition checkHasAccessRight="true" conditionId="accessRightCondition" enablementValue="true"/>
+		</CreateContentVersionClientAction>
+	</PrimaryObjectDefinition>
+
+	<PrimaryObjectDefinition baseDefinition="cmc/catalog/BaseCatalogGroupSKUPrimaryObjectDefinition" compatibleObjectTypes="CatalogGroupSKU" definitionName="cmc/catalog/InheritedCatalogGroupSKU" displayName="${catalogResources.displayNameInheritedCategoryLevelSKU}" headerIcon="inheritedSkuHeaderIcon" icon="inheritedSkuIcon" objectGroups="CatalogEntry,SKUs,InheritedSKU,CatalogGroupSKUs" objectType="InheritedCatalogGroupSKU">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<!--- Condition to disable the object creation in ATP inventory systems. -->
+		<IsATPStoreEnablementCondition conditionId="checkATPStatusCondition" negate="true" package="cmc/catalog"/>
+		<!---
+			Retrieves the {@link cmc/catalog/ChildInheritedCatalogGroupSKU} objects that refer to this object.
+		-->
+		<GetReferencesService url="/cmc/GetCatalogEntryParent-MasterCatalogCatalogGroup">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="masterCatalogId"/>
+			<ServiceParam name="catentryId" propertyName="catentryId"/>
+			<ServiceParam name="childType" value="ChildInheritedCatalogGroupSKU"/>
+		</GetReferencesService>
+		<!---
+			Reference object definition for the asset store attachment of the catalog entry
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/catalog/InheritedCatalogEntryInheritedAttachmentReference"/>
+		<!---
+			An instantiation of the 'cmc/catalog/CatalogEntryOffer', representing the offer for a catalog entry.
+		-->
+		<ChildObjectDefinition baseDefinition="cmc/catalog/InheritedCatalogEntryOffer"/>
+		<!---
+			Retrieves the content version object for this object
+		-->
+		<GetChildrenService objectTypes="ContentVersion" url="/cmc/GetContentVersions">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectId" propertyName="catentryId"/>
+			<ServiceParam name="objectType" value="InheritedCatalogGroupSKU"/>
+			<ServiceParam name="basedOnVersionNumber" propertyName="basedOnVersionNumber"/>
+		</GetChildrenService>
+		<!---
+			Reference object definition for the versioned catalog group
+		-->
+		<ReferenceObjectDefinition baseDefinition="cmc/foundation/BaseContentVersion" referencedType="InheritedCatalogGroupSKU"/>
+		<!---
+			Create Content Version Client Action
+		-->
+		<CreateContentVersionClientAction/>
+	</PrimaryObjectDefinition>
+</Definitions>

@@ -1,0 +1,189 @@
+<!-- ========================================================================
+  Licensed Materials - Property of IBM
+   
+  WebSphere Commerce
+   
+  (c) Copyright IBM Corp. 2001, 2002
+   
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+   -------------------------------------------------------------------
+    ReportFulfillmentCenterHelper.jsp
+ ===========================================================================-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+
+<%@page import="java.util.*" %>
+<%@page import="com.ibm.commerce.beans.DataBeanManager" %>
+<%@page import="com.ibm.commerce.command.CommandContext"%>
+<%@page import="com.ibm.commerce.server.ECConstants"%>
+<%@page import="com.ibm.commerce.inventory.beans.FulfillmentCenterListDataBean"%>
+<%@page import="com.ibm.commerce.inventory.beans.FulfillmentCenterDataBean"%>
+
+<%
+   CommandContext fulfillmentCenterHelperCC = (CommandContext) request.getAttribute(ECConstants.EC_COMMANDCONTEXT);
+   Hashtable      fulfillmentCenterHelperRB = (Hashtable)com.ibm.commerce.tools.util.ResourceDirectory.lookup("reporting.reportStrings", fulfillmentCenterHelperCC.getLocale());
+   String fulfillmentCenterHelperStoreId = fulfillmentCenterHelperCC.getStoreId().toString();
+   String fulfillmentCenterHelperLangId  = fulfillmentCenterHelperCC.getLanguageId().toString();
+%>
+
+
+<%!
+private String generateFulfillmentCenter(String container, Hashtable reportsRB, String availableLabel, String selectedLabel)
+{
+   String labels = "";
+
+   if (availableLabel!= null && selectedLabel != null) {
+      labels      = "      <TR> " + 
+		   "         <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32>\n" + reportsRB.get(selectedLabel) + "\n" +
+                   "         </TD>\n" +
+                   "         <TD> </TD>" + 
+		   "         <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32>\n" + reportsRB.get(availableLabel) + "\n" +
+                   "         </TD>\n" +
+		   "      </TR>\n";
+   }
+
+   String result = "<FORM NAME=" + container + ">\n" + 
+                   "   <TABLE CELLPADDING=0 CELLSPACING=0>" + labels +
+                   "      <TR>\n" +
+                   "         <TD VALIGN=BOTTOM CLASS=selectWidth>\n" + 
+                   "            <SELECT NAME=collateralSelected id=\"collateralSelected\" CLASS=selectWidth SIZE=5 MULTIPLE onChange=\"javascript:updateSelectedCollateral('" + container + "');\"></SELECT>\n" +
+                   "         </TD>\n" +
+                   "         <TD WIDTH=150px ALIGN=CENTER>\n" +
+                   "            <br>\n" +
+                   "            <INPUT TYPE=BUTTON NAME=addToSloshBucketButton      VALUE=\"" + reportsRB.get("FulfillmentCenterHelperSloshBucketAdd") + "\"  ONCLICK=\"javascript:addToSelectedCollateral('" + container + "');\" >\n" +
+                   "            <br>\n" +                                                                       
+                   "            <INPUT TYPE=BUTTON NAME=removeFromSloshBucketButton VALUE=\"" + reportsRB.get("FulfillmentCenterHelperSloshBucketRemove") + "\"  ONCLICK=\"javascript:removeFromSelectedCollateral('" + container + "')\" >\n" + 
+                   "            <br>" +
+                   "         </TD>\n" +
+                   "         <TD VALIGN=BOTTOM CLASS=selectWidth>\n" +
+                   "            <SELECT NAME=collateralAvailable id=\"collateralAvailable\" CLASS=selectWidth SIZE=5 MULTIPLE onChange=\"javascript:updateAvailableCollateral('" + container + "');\"></SELECT>\n" +
+                   "         </TD>\n" +
+                   "      </TR>\n" +
+                   "   </TABLE>\n" +
+                   "</FORM>\n";
+
+
+   return result;
+}
+%>
+
+<SCRIPT>
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // If this is the first time the page is being loaded within the transaction then initialize the
+   // fulfillment center data from the data bean.
+   // If this page is being reloaded within the transaction then retrieve the data from the parent object
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function onLoadFulfillmentCenter(container) 
+   {
+      var myContainer = parent.get(container, null);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // If false then this is the first time to the page and we need to generate the data bean
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      if (myContainer == null) initializeFulfillmentCenter(container);
+      else                     retrieveFulfillmentCenter(container);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Initialize the slosh bucket contents
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      onLoadCollateral(container);
+      return;
+   }
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Initialize the fulfillment center data from the data bean
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function initializeFulfillmentCenter(container) 
+   {
+      var myContainer = new Object();
+<%
+      try 
+      {
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         // Instantiate the fulfillment center data bean
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         FulfillmentCenterListDataBean FFCList = new FulfillmentCenterListDataBean();
+         FFCList.setStoreentId(fulfillmentCenterHelperStoreId);
+         DataBeanManager.activate(FFCList, request);
+ 
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         // Loop through the fulfillment centers and add to the selection box
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         FulfillmentCenterDataBean[] FFCenters = FFCList.getFulfillmentCenterList();
+ 
+       for (int i = 0; i<FFCenters.length; i++) {
+         String ffcName = FFCenters[i].getDisplayName();
+         String ffcId = FFCenters[i].getFulfillmentCenterId();
+         if(ffcName!=null) ffcName = ffcName.trim(); else ffcName = "";
+         if(ffcId!=null) ffcId = ffcId.trim(); else ffcId = "";
+%>
+            putAvailableCollateral(container, "<%=UIUtil.toJavaScript(ffcName)%>", "<%=UIUtil.toJavaScript(ffcId)%>");
+<%
+       }
+      } catch (Exception ex) {
+        System.out.println("initializeFulfillmentCenter Exception: " + ex.getMessage());
+      }
+%>   
+      parent.put(container, myContainer);
+   }
+
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   // Retrieve the saved available fulfillment center data
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   function retrieveFulfillmentCenter(container) 
+   {
+      retrieveCollateral(container);
+   }
+
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   // Save the fulfillment center data
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   function saveFulfillmentCenter(container) 
+   {
+      saveCollateral(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return an array of selected fulfillment center ids
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedFulfillmentCenterIDs(container)
+   {
+      return returnSelectedCollateralValue(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return an array of selected fulfillment center names
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedFulfillmentCenterNames(container)
+   {
+      return returnSelectedCollateralText(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return the number of selected fulfillment centers
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function getNumberOfSelectedFulfillmentCenters(container)
+   {
+      return getNumberOfSelectedCollateral(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Validation function to ensure that a fulfillment center has been selected
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function validateFulfillmentCenter(container)
+   {
+      if (getNumberOfSelectedFulfillmentCenters(container) == 0) {
+         parent.alertDialog("<%=UIUtil.toJavaScript(fulfillmentCenterHelperRB.get("FulfillmentCenterHelperNoSelection"))%>");
+         return false;
+      }
+      return true;
+   }
+
+	function setSelectFulfillmentCenterVisible(container, s) {
+		document.forms[container].collateralSelected.style.visibility = s;
+		document.forms[container].collateralAvailable.style.visibility = s;
+	}
+</SCRIPT>

@@ -1,0 +1,286 @@
+<%-- 
+Generate parameters to be passed to wcf:url to generate links back to this Category Display page. 
+
+Pattern to use with the "parameters" HashMap:
+A lot of URLs with slightly differing URL parameters needs to be generated for the Facet Navigation Widget
+and the Catalog Entry List Widget since all the controls on the page must trigger a full page refresh. 
+All the parameters that needs to be included is stored in the "parameters" HashMap. When generating URL 
+for each control, define a new HashMaps (e.g. call it "newParameters"), which will include new parameters 
+or parameters that already exist in the "parameters" HashMap, but the value has been changed. When 
+generating the URLs, if a parameter already exists in "newParameters", then the same parameter in 
+"parameters" will not be included.
+
+E.g.
+Assume these are the key-value pairs in 
+parameters: {
+    "p1": "1",
+    "p2": "2",
+    "p3": "3"
+}
+
+Code:
+<wcf:useBean var="newParameters" classname="java.util.HashMap" />
+<wcf:set target="${newParameters}" key="p1" value="a" />
+<wcf:set target="${newParameters}" key="p3" value="" />
+
+<wcf:url var="newURL" value="${patternName}">
+    <c:forEach var="paramEntry" items="${parameters}">
+        <c:if test="${!newParameters.containsKey(paramEntry.key)}">
+            <wcf:param name="${paramEntry.key}" value="${paramEntry.value}" />
+        </c:if>		
+    </c:forEach>
+    <c:forEach var="paramEntry" items="${newParameters}">
+        <c:if test="${!empty paramEntry.value}">
+            <wcf:param name="${paramEntry.key}" value="${paramEntry.value}" />
+        </c:if>		
+    </c:forEach>
+</wcf:url>
+<c:remove var="newParameters" />
+
+
+newParameters: {
+    "p1": "a",
+    "p3": ""
+}
+Then these are the parameters that will be passed to wcf:url:
+ {
+    "p1": "a", // From newParameters, overrides parameters
+    "p2": "2" // From parameters
+    // Note missing "p3" because it was set to empty in "newParameters"
+}
+
+This way, it's much easier to change the shared parameters all in one place, rather than copying, pasting,
+and searching for usage each time a shared parameter is changed or added.
+--%>
+<!-- Begin SEOFacetURL.jspf -->
+
+<c:remove var="parameters" />
+ <%-- parameters to pass to wcf:url --%>
+<wcf:useBean var="parameters" classname="java.util.HashMap" />
+
+<c:choose>
+	<c:when test="${requestScope.pageGroup == 'Category'}">				
+		<%-- Copy these parameters from WCParam --%>
+        <c:set var="includedWCParamNames">
+            langId,storeId,catalogId,categoryId,urlLangId,categoryFacetHierarchyPath,
+            top_category,top_category2,top_category3,top_category4,top_category5,
+            parent_category_rn,searchTermScope,resultCatEntryType,manufacturer,
+            filterFacet,filterTerm,minPrice,maxPrice,
+            <%-- Needed for "Items Per Page" drop down --%>
+            pageSize,
+            <%-- Needed for "Sort By" drop down --%>
+            orderBy,
+            <%-- Needed for pagination controls --%>
+            beginIndex,
+            <%-- Needed for page view (e.g. grid view, list view) --%>
+            pageView,
+            <%-- For content list page size (# of items to display per page) --%>
+            pageSizeContent,
+            <%-- For content list order by option --%>
+            orderByContent,
+            <%-- For content list pagination control --%>
+            beginIndexContent
+        </c:set>
+        <c:forTokens items="${includedWCParamNames}" delims="," var="paramName">
+            <wcf:set target="${parameters}" key="${fn:trim(paramName)}" value="${WCParam[fn:trim(paramName)]}" />
+        </c:forTokens>
+
+        <%-- Copy these parameters from param --%>
+        <c:set var="includedParamNames">
+            emsName,gridPosition,enableSKUListView
+        </c:set>
+        <c:forTokens items="${includedParamNames}" delims="," var="paramName">
+            <wcf:set target="${parameters}" key="${paramName}" value="${param[paramName]}" />    		
+        </c:forTokens>
+
+        <%-- Other parameters --%>
+        <wcf:set target="${parameters}" key="showResultsPage" value="true"/>
+        <wcf:set target="${parameters}" key="metaData" value="${metaData}"/>
+        <wcf:set target="${parameters}" key="disableProductCompare" value="${disableProductCompare}" />
+        <wcf:set target="${parameters}" key="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+        <wcf:set target="${parameters}" key="ddkey" value="ProductListingView${widgetSuffix}"/>      
+
+        <%-- URL parameters to be included in preview mode ONLY --%>
+        <c:if test="${env_inPreview && !env_storePreviewLink}">
+            <%-- Copy these parameters from param in preview mode only --%>
+            <c:set var="includedPreviewParamNames">
+                pgl_widgetName,pgl_widgetId,pgl_widgetSlotId,pgl_widgetSeqeunce,pgl_widgetDefName
+            </c:set>
+            <c:forTokens items="${includedPreviewParamNames}" delims="," var="paramName">
+                <wcf:set target="${parameters}" key="${paramName}" value="${param[paramName]}" />
+            </c:forTokens>
+
+            <%-- Other parameters to be included in store preview mode only --%>
+            <wcf:set target="${parameters}" key="initSortOrder" value="${initSortOrder}" />
+            <wcf:set target="${parameters}" key="initPageView" value="${initPageView}" />
+        </c:if>     
+	</c:when>
+	<c:when test="${requestScope.pageGroup == 'Search'}">
+		<%-- Copy these parameters from WCParam --%>
+        <c:set var="includedWCParamNames">
+            langId,storeId,catalogId,searchTerm,searchType,searchTermScope,advancedSearch,filterTerm,filterType,
+            categoryId,manufacturer,minPrice,maxPrice,resultCatEntryType,categoryFacetHierarchyPath,
+            parent_category_rn,filterFacet,
+            <%-- Needed for "Items Per Page" drop down --%>
+            pageSize,
+            <%-- Needed for "Sort By" drop down --%>
+            orderBy,
+            <%-- Needed for pagination controls --%>
+            beginIndex,
+            <%-- Needed for page view (e.g. grid view, list view) --%>
+            pageView,
+            <%-- For content list page size (# of items to display per page) --%>
+            pageSizeContent,
+            <%-- For content list order by option --%>
+            orderByContent,
+            <%-- For content list pagination control --%>
+            beginIndexContent
+        </c:set>
+        <c:forTokens items="${includedWCParamNames}" delims="," var="paramName">
+            <wcf:set target="${parameters}" key="${fn:trim(paramName)}" value="${WCParam[fn:trim(paramName)]}" />
+        </c:forTokens>
+
+        <%-- Copy these parameters from param --%>
+        <c:set var="includedParamNames">
+            emsName,gridPosition,enableSKUListView
+        </c:set>
+        <c:forTokens items="${includedParamNames}" delims="," var="paramName">
+            <wcf:set target="${parameters}" key="${paramName}" value="${param[paramName]}" />    		
+        </c:forTokens>
+
+        <%-- Other parameters --%>
+        <wcf:set target="${parameters}" key="showResultsPage" value="true"/>
+        <wcf:set target="${parameters}" key="sType" value="SimpleSearch"/>
+        <wcf:set target="${parameters}" key="metaData" value="${metaData}"/>
+        <wcf:set target="${parameters}" key="disableProductCompare" value="${disableProductCompare}" />
+        <wcf:set target="${parameters}" key="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+        <wcf:set target="${parameters}" key="ddkey" value="ProductListingView${widgetSuffix}"/>      
+
+        <%-- URL parameters to be included in preview mode ONLY --%>
+        <c:if test="${env_inPreview && !env_storePreviewLink}">
+            <%-- Copy these parameters from param in preview mode only --%>
+            <c:set var="includedPreviewParamNames">
+                pgl_widgetName,pgl_widgetId,pgl_widgetSlotId,pgl_widgetSeqeunce,pgl_widgetDefName
+            </c:set>
+            <c:forTokens items="${includedPreviewParamNames}" delims="," var="paramName">
+                <wcf:set target="${parameters}" key="${paramName}" value="${param[paramName]}" />
+            </c:forTokens>
+
+            <%-- Other parameters to be included in store preview mode only --%>
+            <wcf:set target="${parameters}" key="initSortOrder" value="${initSortOrder}" />
+            <wcf:set target="${parameters}" key="initPageView" value="${initPageView}" />
+        </c:if>
+	</c:when>			
+</c:choose>
+
+<wcf:set target="${parameters}" key="resultType" value="products" />
+<wcf:set target="${parameters}" key="fromPage" value="catalogEntryList" />
+
+ <%-- Remove empty values --%>
+<%-- <% java.util.HashMap parameters = (java.util.HashMap) pageContext.getAttribute("parameters");
+parameters.values().removeAll(java.util.Arrays.asList((Object) null)); %> --%>
+
+<%-- For facet navigation --%>
+<c:forEach var="entry" items="${WCParam}">
+    <c:if test="${(fn:startsWith(entry.key, 'facetName_') || fn:startsWith(entry.key, 'facet_') || fn:startsWith(entry.key, 'facetLimit_')) && !empty WCParam[entry.key]}" >
+        <wcf:set target="${parameters}" key="${entry.key}" value="${WCParam[entry.key]}" />
+    </c:if>
+</c:forEach>
+
+<%-- overwrite parameters with newParameters --%>
+<c:forEach var="paramEntry" items="${newParameters}">
+    <wcf:set target="${parameters}" key="${paramEntry.key}" value="${paramEntry.value}" />
+</c:forEach>
+<c:choose>
+	<c:when test="${requestScope.pageGroup == 'Category'}">		
+        <%-- Choose which patternName to use to generate the category URL. Implicit assumptions:
+        - category id will always be present
+        - if parent_category_rn is set, then top_category is also set
+        --%>
+        <c:choose>           
+            <c:when test="${empty parameters.parent_category_rn}">
+                <c:if test"${empty parameters.top_category}" >
+                    <%--  Use CanonicalCategoryURL when only category_id is present and both it's parent category id and 
+                    top category id are null --%>
+                    <c:set var="patternName" value="CanonicalCategoryURL"/>
+                </c:if>
+            </c:when>        
+            <c:otherwise>
+                <c:choose>
+                    <c:when test"${parameters.parent_category_rn == parameters.top_category}" >
+                        <%-- Use CategoryURL when category_id is present, top_category id and parent category id are identical --%>
+                        <c:set var="patternName" value="CategoryURL"/>
+                    </c:when>
+                    <c:otherwise>
+                        <%-- Use CategoryURLWithParentCategory when categoryId is present, parent category Id and top_category Id are different --%>
+                        <c:set var="patternName" value="CategoryURLWithParentCategory"/>
+                    </c:otherwise>
+                </c:choose>
+            </c:otherwise>
+        </c:choose>
+    </c:when>
+    <c:when test="${requestScope.pageGroup == 'Search'}">
+        <c:set var="patternName" value="SearchDisplay"/>
+    </c:when>
+</c:choose>
+
+<%-- Parameters to put in the query part of the URL --%>
+<wcf:useBean var="queryParams" classname="java.util.HashMap" />
+
+<c:if test="${requestScope.pageGroup == 'Category'}">	
+    <c:set var="queryParamToInclude">
+        <%-- Needed for "Items Per Page" drop down --%>
+        pageSize,
+        <%-- Needed for "Sort By" drop down --%>
+        orderBy,
+        <%-- Needed for pagination controls --%>
+        beginIndex,
+        <%-- Needed for page view (e.g. grid view, list view) --%>
+        pageView,
+        <%-- For content list page size (# of items to display per page) --%>
+        pageSizeContent,
+        <%-- For content list order by option --%>
+        orderByContent,
+        <%-- For content list pagination control --%>
+        beginIndexContent,
+        <%-- For not clearing CompareItems_* cookie --%>
+        fromPage
+    </c:set>
+    <c:forEach var="entry" items="${parameters}">
+        <c:if test="${(fn:startsWith(entry.key, 'facetName_') || fn:startsWith(entry.key, 'facet_') || fn:startsWith(entry.key, 'facetLimit_')) && !empty parameters[entry.key]}" >
+            <c:set var="queryParamToInclude" value="${queryParamToInclude},${entry.key}" />
+        </c:if>
+    </c:forEach>    
+    <c:forTokens items="${queryParamToInclude}" delims="," var="paramName">
+        <c:set var="paramName" value="${fn:trim(paramName)}" />
+        <c:set var="paramValue" value="${parameters[paramName]}" />    
+        <c:if test="${!empty paramValue}">
+		<%
+                String paramValue = String.valueOf(pageContext.getAttribute("paramValue"));
+                if (paramValue != null) {
+                    pageContext.setAttribute("paramValue", java.net.URLEncoder.encode(paramValue,"UTF-8"));
+                }%>
+        </c:if>	
+	<wcf:set target="${queryParams}" key="${paramName}" value="${paramValue}" />	
+    </c:forTokens>    
+</c:if>
+
+
+
+<wcf:url var="SEOFacetURL" patternName="${patternName}">
+    <c:forEach var="paramEntry" items="${parameters}">
+        <c:if test="${!empty paramEntry.value}">
+            <wcf:param name="${paramEntry.key}" value="${paramEntry.value}" />
+        </c:if>		
+    </c:forEach>
+    <c:forEach var="paramEntry" items="${queryParams}">
+        <c:if test="${!empty paramEntry.value}">
+		
+            <wcf:additionalParam name = "${paramEntry.key}" value="${paramEntry.value}"  usageType="queryParam"/>
+        </c:if>		
+    </c:forEach>    
+</wcf:url>	
+
+<c:remove var="parameters" />
+<c:remove var="queryParams" />
+<!-- END SEOFacetURL.jspf -->

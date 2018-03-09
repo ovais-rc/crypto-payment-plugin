@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/foundation/GanttAxisText">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="text" type="string" value=""/>
+		<variable name="availableWidth" type="number" value="0"/>
+		<variable name="grid"/>
+		<!---
+			@keywords private
+			The text used to truncate the Gantt Grid column header when the width of a column is smaller than the header text.
+			The default string used is retrieved from a {@link cmc/foundation/ResourceBundle} class.
+		-->
+		<variable name="truncationText" type="string" value="${foundationResources.Singleton.gridTruncationText.string}"/>
+		<!---
+			@keywords private
+			A boolean variable which indicates whether or not the header text currently is truncated.
+	 	-->
+		<variable name="truncated" type="boolean" value="false"/>
+		
+		<handler name="onavailableWidth">
+			<![CDATA[
+			this.updateTruncated();
+			]]>
+		</handler>
+		
+		<method name="updateTruncated">
+			<![CDATA[
+			this.setVariable("truncated", this.txtView.txt.fullTxt.width > this.availableWidth);
+			if (this.availableWidth > 0) {
+				this.txtView.truncatedText.setVariable("visible", this.truncated);
+				var newTextWidth = this.availableWidth - (this.truncated ? this.txtView.truncatedText.width : 0);
+				if (newTextWidth > 0) {
+					this.txtView.txt.setVariable('width', newTextWidth);
+				}
+				else {
+					this.txtView.txt.setVariable('width', 0);
+					this.txtView.truncatedText.setVariable("visible", false);
+				}
+			}
+			]]>
+		</method>
+	
+		<Component clickable="true" height="21" name="txtView" y="2">
+			<AxisLayout axis="x"/>
+			<Component clip="true" name="txt">
+				<TextComponent name="fullTxt" text="${this.classroot.text}">
+					<handler name="onwidth">
+						<![CDATA[
+						this.classroot.updateTruncated();
+						]]>
+					</handler>
+				</TextComponent>
+			</Component>
+			<TextComponent name="truncatedText" text="${this.classroot.truncationText}"/>
+			
+			<handler name="onmousedown">
+				<![CDATA[
+				this.classroot.grid.model.setVariable("activeSelectionView", this.classroot.grid);
+				]]>
+			</handler>
+		</Component>
+		
+		<Tooltip enabled="${this.classroot.truncated}" name="tooltipInfo" text="${this.parent.text}"/>
+	</Component>
+	
+	<!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/foundation/GanttAxis">
+		<dependency localName="GanttAxisText" moduleName="cmc/foundation/GanttAxisText"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="GanttChartStyle" moduleName="cmc/foundation/GanttChartStyle"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+	
+		<variable name="startDate" value="${null}"/>
+		<variable name="endDate" value="${null}"/>
+		<variable name="widthPerDay" type="number" value="30"/>
+		<variable name="marginWidth" type="number" value="0"/>
+	
+		<!--- @keywords private -->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCDateFormat") {
+				this.render();
+			}
+			]]>
+		</handler>
+		
+		<DrawComponent height="${this.parent.height}" name="background" width="${this.parent.width}"/>
+		<Component name="header"/>
+		
+		<handler name="onwidth">
+			<![CDATA[
+			this.render();
+			]]>
+		</handler>
+		
+		<handler name="onheight">
+			<![CDATA[
+			this.render();
+			]]>
+		</handler>
+		
+		<method name="render">
+			<![CDATA[
+			if (this.startDate) {
+				this.widthPerDay = this.width / (DateUtil.Singleton.datedaysdiff(this.endDate, this.startDate) + 1);
+				this.background.clear();
+				var timeAxisLabels = this.getTimeAxisLabels();
+				var totalPosition = 0;
+				for (var i = 0; i < timeAxisLabels.length; i++) {
+					var text = null;
+					if (i >= this.header.childComponents.length) {
+						text = new GanttAxisText.Class(this.header, {
+							grid: this.parent
+						});
+						this.parent.ganttBar.menu.addView(text);
+					}
+					else {
+						text = this.header.childComponents[i];
+					}
+					text.setVariable("visible", true);
+					text.setVariable('clickable', true);
+					text.setVariable('y', 4);
+					text.setVariable('x', totalPosition);
+					text.setVariable("availableWidth", timeAxisLabels[i].days * this.widthPerDay);
+					text.setVariable("text", timeAxisLabels[i].dateText);
+					if (totalPosition > this.marginWidth && totalPosition < (this.width - this.marginWidth)) {
+						this.renderLine(totalPosition, 0, this.height);
+					}
+					totalPosition += timeAxisLabels[i].days * this.widthPerDay;
+				}
+				for (var i = timeAxisLabels.length; i < this.header.childComponents.length; i++) {
+					this.header.childComponents[i].setVariable("availableWidth", 0);
+					this.header.childComponents[i].setVariable("visible", false);
+					this.header.childComponents[i].setVariable("truncated", false);
+					this.header.childComponents[i].setVariable("text", "");
+				}
+			}
+			]]>
+		</method>
+	    
+		<method args="pX, pY, pHeight" name="renderLine">
+			<![CDATA[
+			var strokeHeight = GanttChartStyle.Singleton.ganttaxislineheight;
+			var strokeSpacing = GanttChartStyle.Singleton.ganttaxislinespacing;
+			var strokeCount = Math.round(pHeight / (strokeHeight + strokeSpacing));
+			for (var i = 0; i < strokeCount; i++) {
+				this.background.beginPath();
+				this.background.moveTo(pX, pY + (i * (strokeHeight + strokeSpacing)));
+				this.background.lineTo(pX, pY + (i * (strokeHeight + strokeSpacing)) + strokeHeight);
+				this.background.strokeStyle = GanttChartStyle.Singleton.ganttaxislinecolor;
+				this.background.lineWidth = 1;
+				this.background.stroke();
+			}
+			]]>
+		</method>
+	    	
+		<method name="getTimeAxisLabels">
+			<![CDATA[
+			var labels = new Array();
+			var iDate = DateUtil.Singleton.copydate(this.startDate);
+			if (this.widthPerDay >= 55) {
+				var endDateBoundary = DateUtil.Singleton.copydate(this.endDate);
+				DateUtil.Singleton.adddays(endDateBoundary, 1);
+				while (iDate <= endDateBoundary) {
+					var dateText = DateUtil.Singleton.formatUI(iDate, DateUtil.Singleton.UI_DATE_FORMAT);
+					labels.push({
+						"days": 1,
+						"dateText": dateText
+					});
+					DateUtil.Singleton.adddays(iDate, 1);
+				}
+			}
+			else {
+				var endDateBoundary = DateUtil.Singleton.copydate(this.endDate);
+				DateUtil.Singleton.adddays(endDateBoundary, 31);
+				while (iDate <= endDateBoundary) {
+					var daysLeftInMonth = DateUtil.Singleton.daysleftinmonth(iDate);
+					var dateText = DateUtil.Singleton.formatUI(iDate, DateUtil.Singleton.UI_DATE_FORMAT);
+					labels.push({
+						"days": daysLeftInMonth,
+						"dateText": dateText
+					});
+					DateUtil.Singleton.adddays(iDate, daysLeftInMonth);
+				}
+			}
+			return labels;
+			]]>
+		</method>
+	</Component>
+
+</Definitions>

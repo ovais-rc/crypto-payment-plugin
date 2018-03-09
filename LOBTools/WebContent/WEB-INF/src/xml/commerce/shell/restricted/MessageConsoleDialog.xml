@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		This class defines the content in message console dialog. It extends cmc/foundation/Dialog for dialog
+		implementation, and it contains the filter, message list and dialog buttons as the content.
+	-->
+	<Dialog classDefinition="true" contentPaddingBottomSize="0" contentPaddingLeftSize="0" contentPaddingRightSize="0" contentPaddingTopSize="0" definitionName="cmc/shell/MessageConsoleDialog" title="${shellResources.Singleton.messageConsoleDialogTitle.string}">
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ModelObjectList" moduleName="cmc/foundation/ModelObjectList"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+
+		<!---
+			Indicates that the clear option is currently enabled.
+		-->
+		<variable name="clearEnabled" type="boolean" value="false"/>
+		<!---
+			Indicates that the copy option is currently enabled.
+		-->
+		<variable name="copyEnabled" type="boolean" value="false"/>
+		<!---
+			Model object list instance.
+		-->
+		<variable name="oList" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.oList = new ModelObjectList.Class(this, {
+				v: this.messageConsoleGridView.messageConsoleGrid,
+				modelObjects: [],
+				ignoreReferenceCount: true
+			});
+			]]>
+		</method>
+		
+		<!---
+			Open the message console dialog.
+		-->
+		<method name="openWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateMessages();
+			]]>
+		</method>
+		
+		<!---
+			Close the message console dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateMessages();
+			]]>
+		</method>
+		
+		<!---
+			Update the messages.
+		-->
+		<method name="updateMessages">
+			<![CDATA[
+			var messages = [];
+			if (this.visible) {
+				messages = MessageLogger.Singleton.messages;
+			}
+			this.messageConsoleGridView.messageConsoleGrid.clearSelection();
+			this.oList.setVariable("modelObjects", messages);
+			this.updateEnabled();
+			]]>
+		</method>
+		
+		<method name="updateEnabled">
+			<![CDATA[
+			var selectedMessages = this.messageConsoleGridView.messageConsoleGrid.getSelectedMessages();
+			var isEnabled = selectedMessages.length > 0;
+			this.setVariable("copyEnabled", isEnabled);
+			for (var i = 0; i < selectedMessages.length; i++) {
+				var m = selectedMessages[i];
+				if (m.messageType == "ERROR") {
+					isEnabled = false;
+				}
+			}
+			this.setVariable("clearEnabled", isEnabled);
+			]]>
+		</method>
+
+		<!---
+			Set initial focus to the filter selector.
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.messageConsoleGridView.messageConsoleGrid.filterSelectorArea.filterSelector, false);
+			]]>
+		</method>
+
+		<Component clip="true" height="300" name="messageConsoleGridView" width="740">
+			<variable name="availableWidth" type="number" value="${this.width}"/>
+			<variable name="availableHeight" type="number" value="${this.height}"/>
+
+			<MessageGrid filterExtendedHelpText="${shellResources.Singleton.messageConsoleDialogFilterExtendedHelp.string}" filterHelpLinkURL="tasks/ttfviewmessages.htm" filterHelpText="${shellResources.Singleton.messageConsoleDialogFilterHelp.string}" name="messageConsoleGrid" package="cmc/shell">
+				<MessageGridType minWidth="22" name="typeColumn" package="cmc/shell" sortable="true" width="22"/>
+				<MessageGridMessage minWidth="100" name="messageColumn" package="cmc/shell" sortable="true" text="${shellResources.Singleton.messageConsoleDialogListMessageColumn.string}" width="420"/>
+				<MessageGridObject name="objectColumn" package="cmc/shell" sortable="true" text="${shellResources.Singleton.messageConsoleDialogListObjectColumn.string}" width="129"/>
+				<MessageGridDate name="dateColumn" package="cmc/shell" sortable="true" text="${shellResources.Singleton.messageConsoleDialogListDateTimeColumn.string}" width="170"/>
+				<MessageTypeFilter displayName="${shellResources.Singleton.messageConsoleDialogFilterOptionError.string}" messageType="ERROR" package="cmc/shell"/>
+				<MessageTypeFilter displayName="${shellResources.Singleton.messageConsoleDialogFilterOptionException.string}" messageType="EXCEPTION" package="cmc/shell"/>
+				<MessageTypeFilter displayName="${shellResources.Singleton.messageConsoleDialogFilterOptionStatus.string}" messageType="STATUS" package="cmc/shell"/>
+		
+				<!--- @keywords private -->
+				<handler name="onselect">
+					<![CDATA[
+					this.classroot.updateEnabled();
+					]]>
+				</handler>
+			</MessageGrid>
+		</Component>
+
+		<Component name="messageConsoleButtonView" placement="footer">
+			<Button enabled="${this.classroot.copyEnabled}" name="messageConsoleCopyToClipboard" text="${shellResources.Singleton.copyButton.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					MessageLogger.Singleton.copyMessageToClipBoard(this.classroot.messageConsoleGridView.messageConsoleGrid.getSelectedMessages());
+					]]>
+				</handler>
+				<!--- @keywords private -->
+				<method name="doEnterDown">
+					<![CDATA[
+					this.inherited(arguments);
+					if (this._enabled) {
+						EventUtil.trigger(this, "onclick");
+					}
+					]]>
+				</method>
+				<!--- @keywords private -->
+				<method name="doSpaceDown">
+					<![CDATA[
+					this.inherited(arguments);
+					if (this._enabled) {
+						EventUtil.trigger(this, "onclick");
+					}
+					]]>
+				</method>
+			</Button>
+			<Button enabled="${this.classroot.clearEnabled}" name="messageConsoleClearButton" text="${shellResources.Singleton.clearButton.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					MessageLogger.Singleton.clear(this.classroot.messageConsoleGridView.messageConsoleGrid.getSelectedMessages());
+					this.classroot.updateMessages();
+					]]>
+				</handler>
+			</Button>
+			<Button isdefault="true" name="messageConsoleCloseButton" text="${shellResources.Singleton.closeButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+	</Dialog>
+
+</Definitions>

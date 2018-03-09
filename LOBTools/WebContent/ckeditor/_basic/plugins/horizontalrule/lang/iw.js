@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("horizontalrule","iw",{toolbar:"הוספת קו אופקי"});

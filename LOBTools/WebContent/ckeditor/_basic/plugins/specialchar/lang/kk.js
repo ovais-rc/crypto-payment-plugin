@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","kk",{options:"Арнайы таңба параметрлері",title:"Арнайы таңба",toolbar:"Арнайы таңба енгізу"});

@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<BaseWindow classDefinition="true" definitionName="cmc/foundation/Window" bgcolor="#ffffff">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<!--- The title of a window. It appears at the top of a window.-->
+		<variable name="title" type="string" value=""/>
+		
+		<!--- A window is modal if this value is true. -->
+		<variable name="modal" type="boolean" value="false"/>
+		
+		<!--- A window can be closed by hitting the esc key if this value is true. -->
+		<variable name="closeable" type="boolean" value="true"/>
+		
+		<!--- A window will have a close control if it is closeable and this value is true. -->
+		<variable name="hideCloseButton" type="boolean" value="false"/>		
+		
+		<!--  the left padding size of content -->
+		<variable name="contentPaddingLeftSize" type="number" value="20"/>
+		
+		<!--  the right padding size of content -->
+		<variable name="contentPaddingRightSize" type="number" value="20"/>
+		
+		<!--  the top padding size of content -->
+		<variable name="contentPaddingTopSize" type="number" value="20"/>
+		
+		<!--  the bottom padding size of content -->
+		<variable name="contentPaddingBottomSize" type="number" value="20"/>				
+				
+		<!-- The padding on top of the footer. That is, the padding between window content and the footer content -->
+		<variable name="footerPaddingTopSize" type="number" value="0"/>
+		
+		<!-- The padding at the bottom of the footer. That is, the padding between footer content and the window bottom border -->
+		<variable name="footerPaddingBottomSize" type="number" value="30"/>
+		
+		<!-- The size of the right padding on footer -->
+		<variable name="footerPaddingRightSize" type="number" value="20"/>
+		
+		<!-- The size of the left padding on footer -->
+		<variable name="footerPaddingLeftSize" type="number" value="20"/>
+		
+		<!-- @keywords private -->
+		<variable name="defaultplacement" type="string" value="content"/>
+		<!--- @keywords private -->
+		<variable name="restoreFocusView" value="${null}"/>
+		<!--  
+			Minimum width of a window 
+		-->
+		<variable name="minWidth" type="number" value="278"/>
+		
+		<!--  
+			Minimum height of a window 
+		-->
+		<variable name="minHeight" type="number" value="213"/>
+		
+		<!--- "true" if this window is open. -->
+		<variable name="isOpen" type="boolean" value="false"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			]]>
+		</method>
+
+		<method name="openWindow">
+			<![CDATA[
+			if (!this.isOpen) {
+				if (this.restoreFocusView == null) {
+					this.restoreFocusView = FocusUtil.getFocus();
+				}
+				this.open();
+				if (this.modal) {
+					RootComponent.Singleton.modalContext = true;
+					ModalUtil.makeModal(this);
+				}
+				if (this.closeable) {
+					if (this.modal) {
+						if (typeof (this.closeWhenModalDel) === "undefined") {
+							this.closeWhenModalDel = new EventHandler.Class(this, "closeWhenModal");
+						}
+						KeyUtil.callOnKeyCombo(this.closeWhenModalDel, ['esc']);
+					}
+					else {
+						if (typeof (this.closeWhenFocusedDel) === "undefined") {
+							this.closeWhenFocusedDel = new EventHandler.Class(this, "closeWhenFocused");
+						}
+						KeyUtil.callOnKeyCombo(this.closeWhenFocusedDel, ['esc']);
+					}
+				}
+				this.setVariable("isOpen", true);
+			}
+			if (typeof (this.setInitialFocusDel) == "undefined") {
+				this.setInitialFocusDel = new EventHandler.Class(this, "setInitialFocus");
+			}
+			CallbackUtil.Singleton.addDeferredCallback(this.setInitialFocusDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			this.bringToFront();
+			]]>
+		</method>
+		
+		<!-- Override this method in subclass of this window to set focus on specific component -->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this, false);
+			]]>
+		</method>
+
+		<!-- @keywords private -->
+		<method args="e" name="closeWhenFocused">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				this.closeWindow();
+			}
+			]]>
+		</method>
+		
+		<!-- @keywords private -->
+		<method args="e" name="closeWhenModal">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ModalUtil.getModalComponent() == this) {
+				this.closeWindow();
+			}
+			]]>
+		</method>
+
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			if (ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				if (this.restoreFocusView != null && this.restoreFocusView.visible && ViewUtil.Singleton.getInvisibleAncestor(this.restoreFocusView) == null) {
+					FocusUtil.setFocus(this.restoreFocusView, false);
+				}
+				else {
+					FocusUtil.clearFocus();
+				}
+			}
+			this.restoreFocusView = null;
+			]]>
+		</method>
+		
+		<!-- @keywords private -->
+		<method name="closeWindow">
+			<![CDATA[
+			if (this.isOpen) {
+				if (this.closeable) {
+					if (this.modal) {
+						KeyUtil.removeKeyComboCall(this.closeWhenModalDel, ['esc']);
+					}
+					else {
+						KeyUtil.removeKeyComboCall(this.closeWhenFocusedDel, ['esc']);
+					}
+				}
+				this.restoreFocus();
+				if (this.modal) {
+					RootComponent.Singleton.modalContext = false;
+					ModalUtil.release(this);
+				}
+				this.setVariable("isOpen", false);
+				this.close();
+			}
+			]]>
+		</method>
+
+		<!-- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.borderDel) {
+				this.borderDel.unregisterAll();
+				delete this.borderDel;
+			}
+			if (this.closeWhenModalDel) {
+				this.closeWhenModalDel.disconnectAll();
+				delete this.closeWhenModalDel;
+			}
+			if (this.setInitialFocusDel) {
+				this.setInitialFocusDel.disconnectAll();
+				delete this.setInitialFocusDel;
+			}
+			]]>
+		</method>
+		
+		<Layout name="layout">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.updateHandler.connect(this.classroot.content, "onwidth");
+				this.updateHandler.connect(this.classroot.content, "onheight");
+				this.updateHandler.connect(this.classroot.leftFooter, "onwidth");
+				this.updateHandler.connect(this.classroot.leftFooter, "onheight");
+				this.updateHandler.connect(this.classroot.footer, "onwidth");
+				this.updateHandler.connect(this.classroot.footer, "onheight");
+				this.inherited(arguments);
+				]]>
+			</method>
+
+			<method name="destroy">
+				<![CDATA[
+				if (this.borderDel) {
+					this.borderDel.unregisterAll();
+					delete this.borderDel;
+				}
+				this.inherited(arguments);
+				]]>
+			</method>
+			
+			<!-- 
+				Returns the width of content area. If content and footer have different width, the larger one will be returned. 
+			 -->
+	        <method name="getContentAreaWidth">
+				<![CDATA[
+				var contentAreaWidth = this.classroot.contentPaddingLeftSize + this.classroot.content.width + this.classroot.contentPaddingRightSize;
+				var footerAreaWidth = this.classroot.footerPaddingLeftSize + this.classroot.leftFooter.width + this.classroot.footer.width + this.classroot.footerPaddingRightSize;
+				var result = Math.max(contentAreaWidth, footerAreaWidth);
+				var minimumWidth = this.classroot.minWidth - 2;
+				return Math.max(result, minimumWidth);
+				]]>
+			</method>
+	        
+	        <!-- 
+	        	Returns the total height used for content and footer including horizontal borders.
+	         -->
+	        <method name="getContentAndFooterHeight">
+				<![CDATA[
+				var contentAreaHeight = this.classroot.contentPaddingTopSize + this.classroot.content.height + this.classroot.contentPaddingBottomSize;
+				var footerAreaHeight = this.classroot.footerPaddingTopSize + Math.max(this.classroot.leftFooter.height, this.classroot.footer.height) + this.classroot.footerPaddingBottomSize;
+				var minHeight = this.classroot.minHeight - 2;
+				return Math.max(contentAreaHeight + footerAreaHeight, minHeight);
+				]]>
+			</method>
+	        
+	        <!-- 
+	        	Updates this window and its subviews' widths. It makes sure footer area and content area have the same width. 
+	         -->
+	        <method name="updateWindowWidth">
+				<![CDATA[
+				var contentAreaWidth = this.getContentAreaWidth();
+				this.classroot.setVariable("width", contentAreaWidth + 2);
+				this.classroot.titleArea.setVariable("width", this.classroot.width - 2);
+				this.classroot.bottom.setVariable("width", this.classroot.width);
+				]]>
+			</method>
+	        
+			<!-- 
+				Updates the heights of window and its subviews. 
+			-->
+			<method name="updateWindowHeight">
+				<![CDATA[
+				var totalHeight = this.getContentAndFooterHeight();
+				var height = this.classroot.titleArea.height + totalHeight + 1;
+				if (height != this.classroot.height) {
+					this.classroot.setVariable("height", height);
+				}
+				this.classroot.left.setVariable("height", this.classroot.height);
+				this.classroot.right.setVariable("height", this.classroot.height);
+				]]>
+			</method>
+	        
+			<method args="e" name="update">
+				<![CDATA[
+				if (!this.locked) {
+					this.lock();
+					this.updateWindowWidth();
+					this.updateWindowHeight();
+					this.classroot.titleArea.setVariable("x", 1);
+					this.classroot.right.setVariable("x", this.classroot.width - 1);
+					this.classroot.bottom.setVariable("y", this.classroot.height - 1);
+					this.classroot.content.setVariable("x", 1 + this.classroot.contentPaddingLeftSize);
+					this.classroot.content.setVariable("y", this.classroot.titleArea.height + this.classroot.contentPaddingTopSize);
+					this.classroot.leftFooter.setVariable("x", 1 + this.classroot.footerPaddingLeftSize);
+					this.classroot.leftFooter.setVariable("y", this.classroot.height - 1 - this.classroot.footerPaddingBottomSize - this.classroot.leftFooter.height);
+					this.classroot.footer.setVariable("x", this.classroot.width - 1 - this.classroot.footerPaddingRightSize - this.classroot.footer.width);
+					this.classroot.footer.setVariable("y", this.classroot.height - 1 - this.classroot.footerPaddingBottomSize - this.classroot.footer.height);
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+		
+		<!-- 
+			The border components.
+		 -->
+		<Component name="bottom" bgcolor="#959595" height="1"/>
+		<Component name="left" bgcolor="#959595" width="1"/>
+		<Component name="right" bgcolor="#959595" width="1"/>
+			
+		<!-- 
+			Title area contains window title, as well as close button
+		-->
+		<Component clip="true" name="titleArea" height="40" bgcolor="#323232">
+			<TextComponent fgcolor="#ffffff" fontsize="16" name="text" text="${this.classroot.title}" width="${this.parent.width - this.parent.controls.width - 20}" x="20" y="${(this.parent.height - this.height) / 2}"/>
+			<Component name="controls" x="${this.parent.width - this.width - 20}" y="${(this.parent.height - this.height) / 2}">
+				<State name="closeable">
+					<variable name="active" value="${this.classroot.closeable &amp;&amp; !this.classroot.hideCloseButton}"/>
+				</State>
+				<BaseButton imageSet="windowCloseButton" name="closeButton" visible="${this.parent.closeable.active}">
+					<handler name="onclick">
+						<![CDATA[
+						this.classroot.closeWindow();
+						]]>
+					</handler>
+					<handler name="onmousedown">
+						<![CDATA[
+						this.setVariable("currentImage", 3);
+						]]>
+					</handler>
+					<handler name="onmouseover">
+						<![CDATA[
+						this.setVariable("currentImage", 2);
+						]]>
+					</handler>
+				</BaseButton>
+            </Component>
+        </Component>
+		
+      	<!-- 
+      		The area that holds all the window content
+      	-->
+      	<Component clip="true" name="content"/>
+      	<!--
+      		Left footer area. The regular footer is right justified. This footer can be used with buttons that you want to have left justified.
+      	-->
+      	<Component clip="true" name="leftFooter"/>
+      	<!--
+      		The footer area of the window. Buttons such as close, cancel, and OK are placed here. 
+      	-->
+        <Component clip="true" name="footer"/>       
+	</BaseWindow>
+</Definitions>

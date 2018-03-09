@@ -1,0 +1,179 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="queryName" value="ordersICanWorkonbehalf"/>
+<c:if test="${not empty paramValues.searchInitialized && paramValues.searchInitialized[0] =='true' }">
+		<wcf:rest var="ordersList" url="store/{storeId}/order" scope="request">
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="responseFormat" value="json" />
+			<wcf:param name="q" value="${queryName}"/>
+			<wcf:param name="profileName" value="IBM_Summary"/>
+			<wcf:param name="orderByFieldName" value="TIMEPLACED"/>
+			<wcf:param name="startIndex" value="0" /> <!-- Show only first 20 ( or findOrdersResultListSize ) results. This widget doesn't support pagination -->
+			<wcf:param name="maxResults" value="${findOrdersResultListSize}" />
+			<wcf:param name="retrievePendingGuestOrders" value="false" />
+				<%-- By default searchType = Ignore Case, contains. If any other type of search is needed, 
+						then pass the value using param names logonIdSearchType, firstNameSearchType and so on.. --%>
+		
+					<c:choose>
+						<c:when test="${not empty WCParam.findOrdersOrderNumber}">
+							<wcf:param name="orderId" value="${WCParam.findOrdersOrderNumber}" />
+						</c:when>
+						<c:otherwise>
+							<c:if test="${not empty WCParam.findOrdersFirstName }">
+								<wcf:param name="firstName" value="${WCParam.findOrdersFirstName}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersLastName }">
+								<wcf:param name="lastName" value="${WCParam.findOrdersLastName}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersEmail }">
+								<wcf:param name="email" value="${WCParam.findOrdersEmail}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersPhone}">
+								<wcf:param name="phone" value="${WCParam.findOrdersPhone}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersAddress1 }">
+								<wcf:param name="streetAddress1" value="${WCParam.findOrdersAddress1}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersZipCode }">
+								<wcf:param name="zipCode" value="${WCParam.findOrdersZipCode}" />
+							</c:if>
+							<c:if test="${not empty WCParam.country}">
+								<wcf:param name="country" value="${WCParam.country }" />
+							</c:if>
+							<c:if test="${not empty WCParam.state}">
+								<wcf:param name="state" value="${WCParam.state }" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersCity}">
+								<wcf:param name="city" value="${WCParam.findOrdersCity}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersAddressType}">
+								<wcf:param name="addressType" value="${WCParam.findOrdersAddressType}" />
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersOrderDateFrom  && fn:length(WCParam.findOrdersOrderDateFrom) > 0 }" >
+											<c:set var="requestedDate" value="${WCParam.findOrdersOrderDateFrom}"/>
+											<c:catch>
+												<fmt:parseDate parseLocale="${dateLocale}" var="startDateFormat" value="${requestedDate}" pattern="yyyy-MM-dd" timeZone="GMT"/>
+											</c:catch>
+											<c:if test="${not empty startDateFormat}">
+												<c:catch>
+														<fmt:formatDate value="${startDateFormat}"  pattern="yyyy-MM-dd HH:mm:ss.SSS" var="formattedDateCame"/> 
+												</c:catch>
+											</c:if>
+											<wcf:param name="orderDateFrom" value="${formattedDateCame}" />	
+							</c:if>
+							<c:if test="${not empty WCParam.findOrdersOrderDateTo  && fn:length(WCParam.findOrdersOrderDateTo) > 0 }" >
+											<c:set var="requestedDate" value="${WCParam.findOrdersOrderDateTo}"/>
+											<c:catch>
+												<fmt:parseDate parseLocale="${dateLocale}" var="endDateFormat" value="${requestedDate}" pattern="yyyy-MM-dd" timeZone="GMT"/>
+											</c:catch>
+											<c:if test="${not empty endDateFormat}">
+												<c:catch>
+														<fmt:formatDate value="${endDateFormat}"  pattern="yyyy-MM-dd HH:mm:ss.SSS" var="formattedToDate"/> 
+												</c:catch>
+											</c:if>
+											<wcf:param name="orderDateTo" value="${formattedToDate}" />	
+							</c:if>
+							<c:if test = "${env_b2bStore eq 'true'}">
+								<c:if test="${not empty WCParam.findOrdersparentOrgName}">
+									<wcf:param name="parentOrgName" value="${WCParam.findOrdersparentOrgName}" />
+									<wcf:param name="parentOrgNameSearchType" value="4" /> <%-- 4 == SEARCHTYPE_CASEINSENSITIVE_CONTAINS --%>
+								</c:if>
+							</c:if>
+					</c:otherwise>	
+				</c:choose>
+			</wcf:rest>
+		
+		<c:set var="errorMessage" value=""/>
+		<c:set var="lockDisplayAttribute">class="nodisplay"</c:set>
+		
+		
+		<c:set var="addressFieldOrderForOrg" value="lastNameFirstName,address1,city,stateProvDisplayName,zipCode,countryDisplayName" scope="request"/>
+		<wcf:useBean var="orderDetailsMap" classname="java.util.HashMap" scope="request"/>
+		<wcf:useBean var="orderAddressDetailsMap" classname="java.util.HashMap" scope="request"/>
+		<wcf:useBean var="orderAddressDataBeanMap" classname="java.util.HashMap" scope="request"/>
+		<wcf:useBean var="memberDetailsMap" classname="java.util.HashMap" scope="request"/>
+		 
+		<c:choose>
+			<c:when test="${ordersList != null && ordersList.recordSetTotal > findOrdersResultListSize}">
+				<%-- Too many results. Ask CSR to refine the search --%>
+				<wcst:message var ="errorMessage" key="TOO_MANY_RESULTS_CSR" bundle="${widgetText}"/>
+			</c:when>
+			<c:when test="${ordersList == null || ordersList.recordSetTotal == 0}">
+				<%-- No results. Ask CSR to refine the search --%>
+				<wcst:message var="errorMessage" key="NO_RESULTS_CSR" bundle="${widgetText}"/>
+			</c:when>
+			<c:otherwise>
+					<c:forEach items="${ordersList.resultList}" var="order">
+							<wcf:rest var="memberDetails" url="store/{storeId}/person/{memberId}" scope="request">
+										<wcf:var name="storeId" value="${storeId}" encode="true"/>
+										<wcf:var name="memberId" value="${order.memberId}" encode="true"/>
+										<wcf:param name="responseFormat" value="json" />
+										<wcf:param name="profileName" value="IBM_User_Registration_Details"/>
+							</wcf:rest>
+							
+							<c:set var="orderDetails"  value="order"  scope="request"/>
+							<wcf:useBean var="addressFieldDisplayList" classname="java.util.ArrayList"/>
+							<c:set target="${memberDetailsMap}" value="${memberDetails}" property="${order.memberId}" />
+							<c:set target="${orderAddressDetailsMap}" value="${addressFieldDisplayList}" property="${order.orderId}" />
+							<c:set target="${orderDetailsMap}" value="${orderDetails}" property="${order.orderId}" />
+							<c:set var="addressDataBean"  value="${order.uniqueShippingAddresses[0]}"  scope="request"/>
+							
+							<c:set target="${orderAddressDataBeanMap}" value="${addressDataBean}" property="${order.orderId}" />
+							<%-- Start creating address display list. Display state/country name instead of state/country code --%>
+							<c:set var="selectedCountryName" value="${addressDataBean.countryDisplayName}"/>
+							<c:set var="selectedStateName" value="${addressDataBean.stateProvDisplayName}"/>
+							<c:set var="lastName" value="${addressDataBean.lastName}"/>
+							<c:set var="firstName" value="${addressDataBean.firstName}"/>
+							<c:choose>
+									<c:when test="${fn:length(lastName) > 0 && fn:length(firstName) > 0 }">
+											<c:set var="lastNameFirstName" value="${lastName} , ${firstName} "/>
+									</c:when>
+									<c:when test="${fn:length(lastName) > 0 }">
+											<c:set var="lastNameFirstName" value="${lastName}  "/>
+									</c:when>
+									<c:when test="${fn:length(firstName) > 0 }">
+											<c:set var="lastNameFirstName" value=" ${firstName} "/>
+									</c:when>
+									 <c:otherwise>
+									 			<c:set var="lastNameFirstName" value=" "/>
+									  </c:otherwise>
+							</c:choose>
+							
+							<c:forEach var="fieldName" items="${addressFieldOrderForOrg}">
+								<c:choose>
+									<c:when test="${fieldName eq 'lastNameFirstName' && fn:length(lastNameFirstName) > 0}">
+										<wcf:set target="${addressFieldDisplayList}" value="${lastNameFirstName}"/>
+									</c:when>
+									<c:otherwise>
+										<c:if test="${fn:length(addressDataBean[fieldName]) > 0}">
+											<wcf:set target="${addressFieldDisplayList}" value="${addressDataBean[fieldName]}"/>
+										</c:if>
+									</c:otherwise>
+								</c:choose>
+									
+							</c:forEach>
+							<c:remove var="addressFieldDisplayList"/>
+						
+				</c:forEach>
+			</c:otherwise>
+		</c:choose>
+		
+		<wcf:url var="landingURL_RegisteredUser" value="AjaxLogonForm">
+			<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<wcf:param name="langId" value="${langId}" />
+			<wcf:param name="myAcctMain" value="1" />
+		</wcf:url>
+</c:if>

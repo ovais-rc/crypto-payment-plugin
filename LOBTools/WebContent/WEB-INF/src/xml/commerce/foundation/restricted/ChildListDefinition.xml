@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		You can use a navigation list to navigate to objects related to the current object. A navigation list is associated with a particular 
+		object definition by creating an instance of cmc/foundation/NavigationListDefinition as a child of the 
+		{@link cmc/foundation/ObjectDefinition object definition} in the source code. When you select an object in the explorer view, 
+		the default navigation list is used to display related objects in a list view. This list is displayed in the main work area. 
+		
+		<p>Since objects can have more than one type of related objects, you can create multiple cmc/foundation/NavigationListDefinitions. 
+		Each definition should display related objects of specific types or related types. For example, categories can 
+		have subcategories, products, bundles, and kits. You might create two navigation list definitions. The default 
+		definition might display products, bundles, and kits in a single list view since they all have similar properties. 
+		An alternate navigation list might display subcategories of the selected category. 
+		
+		<p>When you select a specific navigation list, an instance of <code>listClass</code> will be instantiated
+		and the appropriate {@link cmc/foundation/GetChildrenService}s and {@link cmc/foundation/GetReferencesService}s will be 
+		invoked. The listClass defines the object types and properties that will be displayed in the list view.
+		
+		<p>A single instance of {@link cmc/foundation/EnablementCondition}, {@link cmc/foundation/EnablementAndCondition} or
+		{@link cmc/foundation/EnablementOrCondition} can be declared as a child of a navigation list definition.
+		The enablement condition is used by the framework to determine if the navigation list 
+		is available for the currently selected business object.
+	
+		@see cmc/foundation/ChildListEditor
+		@see cmc/foundation/ReferenceList
+		@see cmc/foundation/ObjectGrid
+		-->
+	<Node classDefinition="true" definitionName="cmc/foundation/NavigationListDefinition">
+		<!---
+			@keywords private
+		-->
+		<variable deferLoad="true" name="navigationListClass" type="module" value="cmc/foundation/NavigationList"/>
+		<!---
+			The name of the class that is used to display the list of related objects.  
+			This is typically the name of a class that extends {@link cmc/foundation/ChildListEditor} or {@link cmc/foundation/ReferenceList}.
+			@type string 
+		-->
+		<variable deferLoad="true" name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition that is used to display the list of related objects.  
+			This is typically the name of a definition that extends {@link cmc/foundation/ChildListEditor} or {@link cmc/foundation/ReferenceList}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+			@type string 
+		-->
+		<variable deferLoad="true" name="listDefinition" type="module" value="${null}"/>
+		<!---
+			The title for the navigation list.  This text will appear above the list of objects within the main work area.
+		-->
+		<variable name="listTitle" type="string" value=""/>
+		<!---
+			Display name for this navigation list type.  This will show up in the context menu of an object within the exporer view.
+		-->
+		<variable name="displayName" type="string" value=""/>
+		<!---
+			Indicates that this navigation list is the default navigation list. A default navigation list is used when you select an item in the explorer view. You can only have one default navigation list. If isDefault is set to false, you must explicitly select this navigation list using a toolbar button or from the context menu.
+		-->
+		<variable name="isDefault" type="boolean" value="false"/>
+		<!---
+			The resource of the toolbar button for this navigation list.  When this button is clicked, this navigation list will be displayed in the main work area.
+		-->		
+		<variable name="toolbarIcon" type="string" value=""/>
+		<!---
+			Relative URL to the help file for this navigation list.
+		-->		
+		<variable name="helpLink" type="string" value=""/>
+		<!---
+			List view instance.
+			@keywords private
+		-->
+		<variable name="listView" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.listClass_moduleName == null) {
+				this.listClass_moduleName = this.listDefinition_moduleName;
+			}
+			var lists = this.parent.navigationListDefinitions;
+			if (!lists) {
+				lists = [];
+				this.parent.navigationListDefinitions = lists;
+			}
+			lists.push(this);
+			if (this.isDefault || this.parent.defaultNavigationList == null) {
+				this.parent.defaultNavigationList = this;
+			}
+			if (!this.name) {
+				this.name = "navigationList" + lists.length;
+			}
+			]]>
+		</method>
+
+		<!---
+			Get the navigation list view and bind it to the specified model object.
+			@param cmc/foundation/ModelObject o: The parent model object.
+			@returns view: The navigation view.
+			@keywords private
+		-->
+		<method args="o, del" name="getListView">
+			<![CDATA[
+			if (this.listView == null) {
+				if (this.listClass) {
+					if (this.navigationListClass) {
+						this.listView = new this.navigationListClass.Class(o.model.oEditor.workAreaContainer, {
+							navigationListDefinition: this,
+							o: o,
+							menuType: "navigationListMenu"
+						});
+						this.listView.setVariable("o", o);
+					}
+					else if (del) {
+						del.connect(this, "onnavigationListClass");
+						this.loadDeferredVariable("navigationListClass");
+					}
+				}
+				else if (del) {
+					del.connect(this, "onlistClass");
+					this.loadDeferredVariable("listClass");
+				}
+			}
+			else {
+				if (this.listView.o != o) {
+					this.listView.setVariable("o", o);
+				}
+			}
+			return this.listView;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if this navigation list is enabled for the specified
+			model object by evaluating the associated {@link cmc/foundation/EnablementCondition} object.
+			
+			@param cmc/foundation/ModelObject o: the model object against which the enablement condition will be evaluated
+			@return boolean: true if the navigation list is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			if (this.enablementCondition) {
+				return this.enablementCondition.isEnabled(o);
+			}
+			else {
+				return true;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the enablement condition changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerEnablementDelegate">
+			<![CDATA[
+			if (this.enablementCondition) {
+				this.enablementCondition.registerDelegate(o, del);
+			}
+			]]>
+		</method>
+	</Node>
+</Definitions>

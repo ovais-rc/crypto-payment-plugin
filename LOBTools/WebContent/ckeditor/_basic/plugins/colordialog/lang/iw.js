@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","iw",{clear:"ניקוי",highlight:"הבלטה",options:"אפשרויות צבע",selected:"צבע נבחר",title:"בחירת צבע",ibm:{currentColor:"צבע נוכחי"}});

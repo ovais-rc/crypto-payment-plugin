@@ -1,0 +1,542 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:if test="${env_displaySKUContextData eq 'true'}">
+	<c:if test="${!empty param.productId}">
+		<c:set var="productId" value="${param.productId}"/>
+	</c:if>
+	<c:if test="${!empty WCParam.productId}">
+		<c:set var="productId" value="${WCParam.productId}"/>
+	</c:if>
+
+	<c:if test="${!empty productId}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}" >	
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<c:forEach var="contractId" items="${env_activeContractIds}">
+					<wcf:param name="contractId" value="${contractId}"/>
+				</c:forEach>
+			</wcf:rest>
+		</c:catch>
+		
+		<c:if test="${!empty catalogNavigationView && !empty catalogNavigationView.catalogEntryView[0]}">
+			<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+		</c:if>
+		
+		<c:set var="parentCatEntryId" value="${catalogNavigationView.catalogEntryView[0].parentCatalogEntryID}" scope="request"/>
+		<%-- If parentCateEntryId is not empty, then this is an item and not a product --%>
+		<c:if test="${not empty parentCatEntryId}">
+			<%-- Since this is an item, get all the details about the parent product and save it in internal cache, so that other components can use it... --%>
+			<c:catch var="searchServerException">
+				<wcf:rest var="parentCatalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${parentCatEntryId}" >	
+					<wcf:param name="langId" value="${WCParam.langId}"/>
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="responseFormat" value="json"/>		
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+					<c:forEach var="contractId" items="${env_activeContractIds}">
+						<wcf:param name="contractId" value="${contractId}"/>
+					</c:forEach>
+				</wcf:rest>
+			</c:catch>
+			
+			<%-- Check if the parent is a product and not package or bundle --%>
+			<c:if test="${parentCatalogNavigationView.catalogEntryView[0].catalogEntryTypeCode eq 'ProductBean'}">
+				<%-- Keep all the defining attributes and its value in WCParam so that it will be selected by default --%>
+				<c:forEach var="attribute" items="${catalogNavigationView.catalogEntryView[0].attributes}">
+					<c:if test="${attribute.usage eq 'Defining'}">
+						<c:set target="${WCParam}" property="${attribute.name}" value="${attribute.values[0].value}"/>
+					</c:if>
+				</c:forEach>
+				
+				<%-- So that the parent page can be displayed instead of item page and pre select the values correspoding to the item --%>
+				<c:set var="catalogNavigationView" value="${parentCatalogNavigationView}" />
+				<c:set var="itemId" value="${productId}" scope="request"/>
+				<c:set var="productId" value="${parentCatEntryId}" scope="request"/>
+				<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			</c:if>
+		</c:if>
+	</c:if>
+</c:if>
+		
+<%@ include file="/Widgets_801/Common/PDP_CatalogEntryData.jspf" %>
+
+<c:set var="replaceCmprStr" value=""/>
+<c:set var="ampersand" value="&amp;" />
+<c:set var="replaceAmpersand" value="&" />
+
+<c:set var="search" value='"'/>
+<c:set var="replaceStr" value='\\"'/>
+<c:set var="search01" value="'"/>
+<c:set var="replaceStr01" value="\\'"/>
+<%-- 
+***
+*	Start: Product Descriptive and Defining Attributes
+* 	
+* Defining attributes are properties of SKUs.  They are used for SKU resolution.
+***
+--%>
+
+<wcf:useBean var="descriptiveAttributeList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="descriptiveAttributeMap" classname="java.util.HashMap"/>
+
+<wcf:useBean var="subsFulfillmentFrequencyAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="subsPaymentFrequencyAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="subsTimePeriodAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="swatchAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="definingAttributeList" classname="java.util.ArrayList"/>
+
+<%-- Find out all the subscription related attributes if any --%>
+<c:set var="fulfillmentFrequency" value=""/>
+<c:set var="fulfillmentFrequencyAttrName" value=""/>
+<c:set var="paymentFrequency" value=""/>
+<c:set var="paymentFrequencyAttrName" value=""/>
+<c:set var="aValidTimePeriod" value=""/>
+<jsp:useBean id="validTimePeriodAttrValues" class="java.util.HashMap" scope="page" />
+
+<c:choose>
+	<c:when test="${type eq 'product'}">
+		<c:if test="${numberOfSKUs eq 1}">
+			<%-- 
+			If there is only one SKU then let's just display the attributes of the one item as text without selection.
+			Also, initialize the JavaScript code to simulate attribute selections made already.
+			--%>
+			<c:forEach var="attribute" items="${entitledItems[0].attributes}">
+				<c:if test="${attribute.usage eq 'Defining'}">
+					<c:choose>
+						<c:when test="${attribute.identifier eq env_subsTimePeriodAttrName}">
+							<c:set var="isValidValue" value="false"/>
+							<c:forEach var="validValue" items="${validTimePeriodAttrValues}">
+								<c:if test="${attribute.values[0].value == validValue.value}">
+									<c:set var="isValidValue" value="true"/>
+								</c:if>
+							</c:forEach>
+							
+							<c:set var="attributeUOMKey" value="QI_ATTR_UOM_ANN" />
+							<c:forEach var="extValue" items="${attribute.values[0].extendedValue}">
+								<c:if test="${extendedValue.key == 'UnitOfMeasure'}">
+									<c:set var="attributeUOMKey" value="QI_ATTR_UOM_${extValue.value}" />
+								</c:if>
+							</c:forEach>
+							<wcst:message var="displayValue" key="${attributeUOMKey}" bundle="${widgetText}">
+								<wcst:param value="${attribute.values[0].value}" />
+							</wcst:message>
+							
+							<c:if test="${isValidValue}">
+								<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+								<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}" />
+								<wcf:set target="${listValues}" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}" />
+								<wcf:set target="${listValues}" value="${fn:replace(displayValue, search01, replaceStr01)}" />
+								<wcf:set target="${listValues}" value="${attribute.name}" />
+								<wcf:set target="${definingAttributeList}" value="${listValues}" />
+								<c:remove var="listValues"/>
+							</c:if>
+						</c:when>
+						<c:when test="${attribute.identifier != env_subsFulfillmentFrequencyAttrName && attribute.identifier != env_subsPaymentFrequencyAttrName}">
+							<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+							<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}" />
+							<wcf:set target="${listValues}" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}" />
+							
+							<!-- UoM Replacement -->
+							<c:choose>
+								<c:when test="${attribute.values[0].unitID != 'C62' && !empty attribute.values[0].unitOfMeasure}">
+									<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+										<wcst:param value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}" />
+										<wcst:param value="${attribute.values[0].unitOfMeasure}" />
+									</wcst:message>
+								</c:when>
+								<c:otherwise>
+									<c:set var="displayValue" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}"/>
+								</c:otherwise>
+							</c:choose>
+							
+							<wcf:set target="${listValues}" value="${displayValue}" />
+							<wcf:set target="${listValues}" value="${attribute.name}" />
+							<wcf:set target="${definingAttributeList}" value="${listValues}" />
+							<c:remove var="listValues"/>
+						</c:when>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+		</c:if>
+
+		<c:if test="${type == 'product'}">
+				<c:forEach var='entitledItem' items='${entitledItems}' varStatus='outerStatus'>
+					<c:if test="${entitledItem.buyable eq 'true' || buyablePurchasable eq 'true'}">
+						<c:set var="sku" value="${entitledItem}"/>
+						<c:set var="skuID" value="${entitledItem.uniqueID}"/>
+						<c:set var="hasAttributes" value="false"/>											
+							<c:forEach var="definingAttrValue2" items="${sku.attributes}" varStatus="innerStatus">
+								<c:if test="${definingAttrValue2.identifier == env_subsFulfillmentFrequencyAttrName}">
+									<c:set var="fulfillmentFrequency" value="${definingAttrValue2.values[0].value}"/>
+									<c:set var="fulfillmentFrequencyAttrName" value="${definingAttrValue2.name}"/>
+								</c:if>
+								<c:if test="${definingAttrValue2.identifier == env_subsPaymentFrequencyAttrName}">
+									<c:set var="paymentFrequency" value="${definingAttrValue2.values[0].value}"/>
+									<c:set var="paymentFrequencyAttrName" value="${definingAttrValue2.name}"/>
+								</c:if>
+								<c:if test="${definingAttrValue2.identifier == env_subsTimePeriodAttrName}">
+									<c:set var="aValidTimePeriod" value="${definingAttrValue2.values[0].value}"/>
+									<c:set property="${definingAttrValue2.values[0].value}" value="${definingAttrValue2.values[0].value}" target="${validTimePeriodAttrValues}"/>	
+								</c:if>
+							</c:forEach>
+					</c:if>
+				</c:forEach>			
+		</c:if>
+		
+		<c:forEach var="attribute" items="${catalogEntryDetails.attributes}" varStatus="aStatus">
+			<c:if test="${ attribute.usage=='Descriptive' and attribute.displayable}" >
+				<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+				<c:choose>
+					<c:when test="${ !empty attribute.image1 }" >
+						<wcf:set target="${listValues}" value="${attribute.name}"/>
+						<wcf:set target="${listValues}" value="${attribute.values[0].value}"/>											
+						<wcf:set target="${listValues}" value="${attribute.image1}" />
+					</c:when>
+					<c:otherwise >
+						<wcf:set target="${listValues}" value="${attribute.name}"/>
+						<wcf:set target="${listValues}" value="${attribute.values[0].value}"/>
+					</c:otherwise>
+				</c:choose>
+				<wcf:set target="${listValues}" value="${attribute.name}" />
+				<wcf:set target="${descriptiveAttributeList}" value="${listValues}"/>
+				<c:remove var="listValues"/>
+			</c:if>
+			<c:if test="${(attribute.usage eq 'Defining') and (numberOfSKUs gt 1)}" >
+				<c:set var="swatchEnabled" value="false"/>
+				<c:forEach var="attrValue" items="${attribute.values}">	
+						<c:if test="${!empty attrValue.image1}">
+								<c:set var="swatchEnabled" value="true"/>
+						</c:if>									
+				</c:forEach>		
+
+				<c:choose>
+					<c:when test="${attribute.identifier == env_subsFulfillmentFrequencyAttrName}">
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}"/>
+						<wcf:set target="${listValues}" value="${fn:replace(fulfillmentFrequency, search01, replaceStr01)}"/>		
+						<wcf:set target="${subsFulfillmentFrequencyAttrList}" value="${listValues}" />
+						<c:remove var="listValues"/>
+					</c:when>
+					<c:when test="${attribute.identifier == env_subsPaymentFrequencyAttrName}">
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}"/>
+						<wcf:set target="${listValues}" value="${fn:replace(paymentFrequency, search01, replaceStr01)}"/>
+						<wcf:set target="${subsPaymentFrequencyAttrList}" value="${listValues}" />
+						<c:remove var="listValues"/>
+					</c:when>
+					<c:when test="${attribute.identifier == env_subsTimePeriodAttrName}">
+						<wcf:useBean var="values" classname="java.util.ArrayList"/>
+						<wcf:useBean var="displayValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+						<c:forEach var="allowedValue" items="${attribute.values}" varStatus="vStatus">
+							<c:set var="isValidValue" value="false"/>
+							<c:forEach var="validValue" items="${validTimePeriodAttrValues}">
+								<c:if test="${allowedValue.value == validValue.value}">
+									<c:set var="isValidValue" value="true"/>
+								</c:if>
+							</c:forEach>
+							
+							<c:set var="attributeUOMKey" value="PD_ATTR_UOM_ANN" />
+							<c:forEach var="extValue" items="${allowedValue.extendedValue}">
+								<c:if test="${extendedValue.key == 'UnitOfMeasure'}">
+									<c:set var="attributeUOMKey" value="PD_ATTR_UOM_${extValue.value}" />
+								</c:if>
+							</c:forEach>
+							<wcst:message var="displayValue" key="${attributeUOMKey}" bundle="${widgetText}">
+								<wcst:param value="${allowedValue.value}" />
+							</wcst:message>
+							
+							<c:if test="${isValidValue}">
+								<wcf:set target="${values}" value="${fn:replace(allowedValue.value, search01, replaceStr01)}" />
+								<wcf:set target="${displayValues}" value="${fn:replace(displayValue, search01, replaceStr01)}" />
+							</c:if>
+						</c:forEach>
+						
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}"/>
+						<wcf:set target="${listValues}" value="${values}"/>
+						<wcf:set target="${listValues}" value="${displayValues}"/>
+						<wcf:set target="${listValues}" value="${attribute.name}" />
+						<wcf:set target="${subsTimePeriodAttrList}" value="${listValues}" />
+						<c:remove var="values" />
+						<c:remove var="displayValues" />
+						<c:remove var="listValues" />
+					</c:when>
+					<c:when test="${swatchEnabled}">
+						<wcf:useBean var="swatchValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="swatchDisplayValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="swatchImages" classname="java.util.ArrayList" />
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="5"/>
+						<wcf:useBean var="swatchImagesDisabled" classname="java.util.ArrayList" />
+						<c:set var="attributeCount" value="${fn:length(catalogEntryDetails.attributes)}"/>
+						
+						<c:if test="${attributeCount > 1 && empty doNotDisable}">
+							<c:set var="doNotDisable" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}"/>
+						</c:if>
+
+						<c:forEach var="swatchValue" items="${attribute.values}">
+							<c:set var="isSwatchAttachmentFound" value="false"/>
+							<c:set var="isSwatchImageFound" value="false"/>
+							<c:set var="swatchAttachmentIdentifier" value="${catalogEntryDetails.partNumber}_${attribute.identifier}_${swatchValue.identifier}"/>
+							<c:set var="swatchDisabledAttachmentIdentifier" value="${swatchAttachmentIdentifier}_disabled"/>
+																
+							<c:forEach var="swatchAttachment" items="${swatchImagesList}">
+								<c:if test="${fn:toLowerCase(swatchAttachment.identifier) eq fn:toLowerCase(swatchAttachmentIdentifier) || fn:toLowerCase(swatchAttachment.identifier) eq fn:toLowerCase(swatchDisabledAttachmentIdentifier)}">
+									<c:if test="${!isSwatchImageFound}">								
+										<wcf:set target="${swatchValues}" value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+										
+										<!-- UoM Replacement -->
+										<c:choose>
+											<c:when test="${swatchValue.unitID != 'C62' && !empty swatchValue.unitOfMeasure}">
+												<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+													<wcst:param value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+													<wcst:param value="${swatchValue.unitOfMeasure}" />
+												</wcst:message>
+											</c:when>
+											<c:otherwise>
+												<c:set var="displayValue" value="${fn:replace(swatchValue.value, search01, replaceStr01)}"/>
+											</c:otherwise>
+										</c:choose>
+										<wcf:set target="${swatchDisplayValues}" value="${displayValue}" />
+										<c:set var="isSwatchImageFound" value="true"/>
+									</c:if>									
+									<c:choose>
+										<c:when test="${(fn:startsWith(swatchAttachment.assetPath, 'http://') || fn:startsWith(swatchAttachment.assetPath, 'https://'))}">
+											<wcst:resolveContentURL var="resolvedPath" url="${swatchAttachment.assetPath}"/>
+											<c:choose>
+												<c:when test="${fn:endsWith(swatchAttachment.identifier, '_disabled')}">
+													<wcf:set target="${swatchImagesDisabled}" value="${resolvedPath}" />
+												</c:when>
+												<c:otherwise>
+													<wcf:set target="${swatchImages}" value="${resolvedPath}" />
+												</c:otherwise>
+											</c:choose>
+										</c:when>
+										<c:when test="${fn:startsWith(swatchAttachment.assetPath, '/store/0/storeAsset')}">
+											<c:choose>
+												<c:when test="${fn:endsWith(swatchAttachment.identifier, '_disabled')}">
+													<wcf:set target="${swatchImagesDisabled}" value="${storeContextPath}${swatchAttachment.assetPath}" />
+												</c:when>
+												<c:otherwise>
+													<wcf:set target="${swatchImages}" value="${storeContextPath}${swatchAttachment.assetPath}" />
+												</c:otherwise>
+											</c:choose>
+										</c:when>
+										<c:when test="${fn:startsWith(swatchAttachment.assetPath, '[extContentURI]') && env_inPreview}">
+											<c:set var="assetPathTemp" value="${fn:substringAfter(swatchAttachment.assetPath, '/StoreImageServlet')}"/>
+											<c:choose>
+												<c:when test="${fn:endsWith(swatchAttachment.identifier, '_disabled')}">
+													<wcf:set target="${swatchImagesDisabled}" value="${env_customImageContextPath}/StoreImageServlet${assetPathTemp}" />
+												</c:when>
+												<c:otherwise>
+													<wcf:set target="${swatchImages}" value="${env_customImageContextPath}/StoreImageServlet${assetPathTemp}" />
+												</c:otherwise>
+											</c:choose>
+										</c:when>
+										<c:when test="${fn:startsWith(swatchAttachment.assetPath, '[extContentURI]')}">
+											<c:choose>
+												<c:when test="${fn:endsWith(swatchAttachment.identifier, '_disabled')}">
+													<wcf:set target="${swatchImagesDisabled}" value="${fn:replace(swatchAttachment.assetPath, '[extContentURI]', '')}" />
+												</c:when>
+												<c:otherwise>
+													<wcf:set target="${swatchImages}" value="${fn:replace(swatchAttachment.assetPath, '[extContentURI]', '')}" />
+												</c:otherwise>
+											</c:choose>
+										</c:when>
+										<c:otherwise>
+											<c:choose>
+												<c:when test="${fn:endsWith(swatchAttachment.identifier, 'disabled')}">
+													<wcf:set target="${swatchImagesDisabled}" value="${env_customImageContextPath}/${swatchAttachment.assetPath}" />
+												</c:when>
+												<c:otherwise>
+													<wcf:set target="${swatchImages}" value="${env_customImageContextPath}/${swatchAttachment.assetPath}" />
+												</c:otherwise>
+											</c:choose>
+										</c:otherwise>
+									</c:choose>
+									<c:set var="isSwatchAttachmentFound" value="true"/>
+								</c:if>
+							</c:forEach>
+							<c:if test="${!isSwatchAttachmentFound}">
+									<c:if test="${!empty swatchValue.image1path}">
+										<wcf:set target="${swatchValues}" value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+										
+										<!-- UoM Replacement -->
+										<c:choose>
+											<c:when test="${swatchValue.unitID != 'C62' && !empty swatchValue.unitOfMeasure}">
+												<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+													<wcst:param value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+													<wcst:param value="${swatchValue.unitOfMeasure}" />
+												</wcst:message>
+											</c:when>
+											<c:otherwise>
+												<c:set var="displayValue" value="${fn:replace(swatchValue.value, search01, replaceStr01)}"/>
+											</c:otherwise>
+										</c:choose>
+										<wcf:set target="${swatchDisplayValues}" value="${displayValue}" />
+									
+										<c:choose>
+											<c:when test="${(fn:startsWith(swatchValue.image1path, 'http://') || fn:startsWith(swatchValue.image1path, 'https://'))}">
+												<wcst:resolveContentURL var="resolvedPath" url="${swatchValue.image1path}"/>
+												<wcf:set target="${swatchImages}" value="${resolvedPath}" />
+											</c:when>
+											<c:when test="${fn:startsWith(swatchValue.image1path, '/store/0/storeAsset')}">
+												<wcf:set target="${swatchImages}" value="${storeContextPath}${swatchValue.image1path}" />
+											</c:when>
+											<c:otherwise>
+												<wcf:set target="${swatchImages}" value="${swatchValue.image1path}" />
+											</c:otherwise>
+										</c:choose>
+										<c:choose>
+											<c:when test="${(fn:startsWith(swatchValue.image2path, 'http://') || fn:startsWith(swatchValue.image2path, 'https://'))}">
+												<wcst:resolveContentURL var="resolvedPath2" url="${swatchValue.image2path}"/>
+												<wcf:set target="${swatchImagesDisabled}" value="${resolvedPath2}" />
+											</c:when>
+											<c:when test="${fn:startsWith(swatchValue.image2path, '/store/0/storeAsset')}">
+												<wcf:set target="${swatchImagesDisabled}" value="${storeContextPath}${swatchValue.image2path}" />
+											</c:when>
+											<c:otherwise>
+												<wcf:set target="${swatchImagesDisabled}" value="${swatchValue.image2path}" />
+											</c:otherwise>
+										</c:choose>
+									</c:if>
+							
+							</c:if>							
+						</c:forEach>
+						
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}"/>
+						<wcf:set target="${listValues}" value="${swatchValues}"/>
+						<wcf:set target="${listValues}" value="${swatchImages}"/>				
+						<wcf:set target="${listValues}" value="${swatchDisplayValues}"/>
+						<wcf:set target="${listValues}" value="${swatchImagesDisabled}"/>
+						<wcf:set target="${swatchAttrList}" value="${listValues}" />
+						<c:remove var="swatchValues" />
+						<c:remove var="swatchDisplayValues" />
+						<c:remove var="swatchImages" />
+						<c:remove var="listValues" />
+						<c:remove var="swatchImagesDisabled" />
+					</c:when>
+					<c:otherwise>
+						<wcf:useBean var="attributeDisplayValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="attributeValues" classname="java.util.ArrayList" />
+						<c:forEach var="allowedValue" items="${attribute.values}">
+							<%-- For each allowedValue, go through the attributes of the SKUs of the catalogEntry to figure out if the allowedValue attributes
+							match those of the SKU whose buyable flag is false--%>
+							<c:forEach var="sku" items="${catalogEntryDetails.sKUs}">
+								<c:if test="${sku.buyable eq 'true' || buyablePurchasable eq 'true'}">
+									<%-- Buyable SKU --%>
+									<c:forEach var="skuAttributes" items="${sku.attributes}">
+										<c:if test="${attribute.name == skuAttributes.name}">
+											<%-- Check if the same attribute is being compared --%>
+											<c:forEach var="skuAttributeValues" items="${skuAttributes.values}">										
+												<c:if test="${skuAttributeValues.uniqueID == allowedValue.uniqueID 
+													|| skuAttributeValues.identifier == allowedValue.identifier}">
+													<%-- ID of SKU matches the allowedValue's ID --%>									
+													<c:set var="isBuyable" value="true"/>
+												</c:if>
+											</c:forEach>
+										</c:if>
+									</c:forEach>
+								</c:if>
+							</c:forEach>
+							<c:if test="${isBuyable eq 'true' || buyablePurchasable eq 'true'}">							
+
+								<!-- UoM Replacement -->
+								<c:choose>
+									<c:when test="${allowedValue.unitID != 'C62' && !empty allowedValue.unitOfMeasure}">
+										<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+											<wcst:param><c:out value="${fn:replace(allowedValue.value, search01, replaceStr01)}" escapeXml="false"/></wcst:param>
+											<wcst:param><c:out value="${allowedValue.unitOfMeasure}" escapeXml="false"/></wcst:param>
+										</wcst:message>
+									</c:when>
+									<c:otherwise>
+										<c:set var="displayValue" value="${fn:replace(allowedValue.value, search01, replaceStr01)}"/>
+									</c:otherwise>
+								</c:choose>
+								
+								<%-- Display allowedValue --%>						
+								<wcf:set target="${attributeDisplayValues}" value="${displayValue}" />
+								<wcf:set target="${attributeValues}" value="${fn:replace(allowedValue.value, search01, replaceStr01)}" />
+							</c:if>
+							<c:remove var="isBuyable"/>
+						</c:forEach>
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}" />
+						<wcf:set target="${listValues}" value="${attributeValues}" />
+						<wcf:set target="${listValues}" value="${attributeDisplayValues}" />
+						<wcf:set target="${listValues}" value="${attribute.name}" />
+						<wcf:set target="${definingAttributeList}" value="${listValues}" />
+						<c:remove var="attributeValues" />
+						<c:remove var="attributeDisplayValues" />
+						<c:remove var="listValues" />
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+		</c:forEach>
+	</c:when>
+
+	<c:when test="${type eq 'item'}">
+		<c:forEach var="attribute" items="${catalogEntryDetails.attributes}" varStatus="aStatus">
+			<c:if test="${attribute.usage eq 'Defining'}">
+				<wcf:useBean var="attributeValues" classname="java.util.ArrayList" />
+				<c:if test="${attribute.identifier != env_subsFulfillmentFrequencyAttrName && attribute.identifier != env_subsPaymentFrequencyAttrName}">
+					<c:choose>
+						<c:when test="${attribute.identifier == env_subsTimePeriodAttrName}">						
+							<c:forEach var="allowedValue" items="${attribute.values}" varStatus="vStatus">							
+								<c:set var="attributeUOMKey" value="PD_ATTR_UOM_ANN" />
+								<c:forEach var="extValue" items="${allowedValue.extendedValue}">
+									<c:if test="${extendedValue.key == 'UnitOfMeasure'}">
+										<c:set var="attributeUOMKey" value="PD_ATTR_UOM_${extValue.value}" />
+									</c:if>
+								</c:forEach>
+								<wcst:message var="displayValue" key="${attributeUOMKey}" bundle="${widgetText}">
+									<wcst:param value="${allowedValue.value}" />
+								</wcst:message>
+								
+								<wcf:set target="${attributeValues}" value="${fn:replace(displayValue, search01, replaceStr01)}" />
+							</c:forEach>
+						</c:when>
+						<c:otherwise>
+							<wcf:set target="${attributeValues}" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="4"/>
+				<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr)}" />
+				<wcf:set target="${listValues}" value="${attributeValues}" />
+				<wcf:set target="${listValues}" value="${displayValue}" />
+				<wcf:set target="${listValues}" value="${attribute.name}" />
+				<wcf:set target="${definingAttributeList}" value="${listValues}" />
+				<c:remove var="attributeValues" />
+				<c:remove var="listValues" />
+			</c:if>
+		</c:forEach>
+	</c:when>
+</c:choose>
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+<%-- 
+***
+*	End: Product Descriptive and Defining Attributes
+***
+--%>

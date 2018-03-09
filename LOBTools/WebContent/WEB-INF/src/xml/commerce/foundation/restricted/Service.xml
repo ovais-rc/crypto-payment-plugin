@@ -1,0 +1,3795 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		Service transaction handler. This handler works on transaction objects, which contain
+		information about objects and properties that are saved in a save request.
+		When the the service completes successfully, the saved state will be applied to all
+		of the properties and objects. If the service fails, then the state of the objects
+		will be assumed to be unchanged.
+		
+		<p>
+		A transaction object is a javascript Object with the following attributes:
+		<ul>
+			<li>service - The service associated with the transaction</li>
+			<li>o - The parent object for the transaction.</li>
+			<li>requestParent - The parent object for the transaction.</li>
+			<li>saveObjects - Array of cmc/foundation/ModelObject instances that are being saved by the current request.</li>
+			<li>hasNewObjects - Indicates that one or more of the secondary save objects associated with this transaction
+								are new objects. Secondary save objects are objects that are not equal to "o".</li>
+			<li>saveProperties - Array of cmc/foundation/ModelProperty instances that are being saved by the current request. These
+								 properties could belong to multiple model objects.</li>
+			<li>deleteObjects - Array of cmc/foundation/ModelObject instances that are being deleted by the current request.</li>
+			<li>serviceDataset - The service dataset associated with this transaction.</li>
+			<li>fileref - This Action Script FileReference object is used when thef service transaction is for an upload service request.
+										  The default value is null.</li>
+			<li>args - arguments object that will be passed to the service dataset</li>
+			<li>reresolveParameters - array of parameters that must be reresolved before the request is sent</li>
+			<li>loadingParameters - array of parameters that are loading. The request will be triggered once the values are loaded</li>
+			<li>serverManagedParameters - array of service managed parameter. Service managed parameters are properties of new objects
+										that will be set once the new objects have been saved.</li>
+			<li>unresolvableParameters - array of unresolvable parameters.</li>
+			<li>requestIdentifier - the request identifier</li>
+			<li>recreate - indicates that when this transaction completes successfully, the create service will be called</li>
+			<li>recreateArgs - arguments that will be sent to the create service when a recreate is required</li>
+			<li>eventId - the user event ID that triggered this transaction</li>
+		</ul>
+		
+	-->
+	<Node definitionName="cmc/foundation/ServiceTransactionUtil" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			Array of pending transactions.
+		-->
+		<variable name="pendingTransactions" value="${[]}"/>
+		<!---
+			An array of active transactions.
+		-->
+		<variable name="activeTransactions" value="${[]}"/>
+		<!---
+			Array of pending parallel transactions. This array contains transactions that have
+			been identified as being eligible to be sent in parallel with the currently active
+			transactions but have not yet been sent because the maximum number of parallel transactions
+			limit has been reached.
+		-->
+		<variable name="pendingParallelTransactions" value="${[]}"/>
+		<!---
+			The active transaction group ID.
+		-->
+		<variable name="activeTransactionGroupId" type="string" value="${null}"/>
+		<!---
+			The active transaction event ID.
+		-->
+		<variable name="activeTransactionEventId" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Active service transaction count.
+		-->
+		<variable name="activeServiceTransactionCount" type="number" value="0"/>
+		<!---
+			@keyword private
+			Indicates that "triggerPendingTransactions" has been added as a deferred callback.
+		-->
+		<variable name="deferredTriggerAdded" type="boolean" value="false"/>
+		<!---
+			@keyword private
+			Counter used to generate transaction group identifiers. Transaction groups include all
+			the transactions associated with the same open object that were triggered by the same user action.
+		-->
+		<variable name="transactionEventCount" type="number" value="0"/>
+		<!---
+			@keyword private
+			Map of all of the existing transaction groups. A transaction group includes all of the transactions
+			associated with the same open group that were triggered by the same user action.
+		-->
+		<variable name="transactionGroupMap" value="${{}}"/>
+		<!---
+			@keyword private
+			Indicates that "triggerPendingTransactions" method is currently active.
+		-->
+		<variable name="triggeringPendingTransactions" type="boolean" value="false"/>
+		<!---
+			@keyword private
+			Map of all of the existing transaction Events. A transaction event includes all of the transactions groups
+			associated with a single user event, e.g a mouse click to 'save all'.
+		-->
+		<variable name="transactionEventMap" value="${{}}"/>
+		<!---
+			@keyword private
+			Indicates that the ping service has been submitted.
+		-->
+		<variable name="pingSubmitted" type="boolean" value="false"/>
+		<!---
+			@keyword private
+			Indicates that the ping service has been completed.
+		-->
+		<variable name="pingCompleted" type="boolean" value="false"/>
+		<!---
+			Interval to submit the ping service again (in milliseconds).
+		-->
+		<variable name="pingInterval" type="number" value="300000"/>
+		<!---
+			@keyword private
+			This event is triggered when all ongoing transactions complete.
+		-->
+		
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.triggerPendingTransactionsDel = new EventHandler.Class(this, "triggerPendingTransactions");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.triggerPendingTransactionsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Returns true if the specified transaction is the last transaction in the transaction group.
+			@param Object transaction: the service transaction
+			@return boolean: true if the specified transaction is the last transaction in the transaction group
+			@keywords private
+		-->
+		<method args="transaction" name="isLastTransactionInGroup">
+			<![CDATA[
+			return this.transactionGroupMap[transaction.transactionGroupId] && !this.transactionGroupMap[transaction.transactionGroupId].longRunning && this.transactionGroupMap[transaction.transactionGroupId].length == 1;
+			]]>
+		</method>
+
+		<!---
+			Clear the specified transaction group.
+			@param string transactionGroupId: the transaction group ID
+			@keywords private
+		-->
+		<method args="transactionGroupId" name="clearTransactionGroup">
+			<![CDATA[
+			if (this.transactionGroupMap[transactionGroupId] && !this.transactionGroupMap[transactionGroupId].longRunning) {
+				var transactionEventId = this.transactionGroupMap[transactionGroupId].transactionEventId;
+				var transactionEvent = this.transactionEventMap[transactionEventId];
+				transactionEvent.transactionGroupCount--;
+				if (transactionEvent.transactionGroupCount == 0 && !transactionEvent.longRunning) {
+					for (var key in transactionEvent.messages) {
+						MessageLogger.Singleton.logStatus(transactionEvent.messages[key].message);
+					}
+					delete this.transactionEventMap[transactionEventId];
+				}
+				delete this.transactionGroupMap[transactionGroupId];
+				SingletonRegistry.progressIndicator.removeAction();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Add the specified transaction to the queue of pending transactions.
+			@param Object transaction: the service transaction
+			@param boolean async ensure the transaction is triggered asynchronously
+		-->
+		<method args="transaction, async" name="addPendingTransaction">
+			<![CDATA[
+			if (typeof(async) == "undefined") async = false;
+			if (transaction.o.transaction == null || transaction.o.transaction == transaction) {
+				transaction.o.transaction = transaction;
+				if (!transaction.deferred) {
+					this.pendingTransactions.push(transaction);
+				}
+				else {
+					transaction.deferred = false;
+					var transactionAdded = false;
+					for (var i = 0; i < this.pendingTransactions.length; i++) {
+						if (this.pendingTransactions[i].transactionGroupId == transaction.transactionGroupId) {
+							i++;
+							while (i < this.pendingTransactions.length && this.pendingTransactions[i].transactionGroupId == transaction.transactionGroupId) {
+								i++;
+							}
+							this.pendingTransactions.splice(i, 0, transaction);
+							transactionAdded = true;
+							break;
+						}
+					}
+					if (!transactionAdded) {
+						if (this.activeTransactionGroupId == transaction.transactionGroupId) {
+							this.pendingTransactions.unshift(transaction);
+						}
+						else {
+							this.pendingTransactions.push(transaction);
+						}
+					}
+				}
+			}
+			else {
+				transaction.o.addPendingTransaction(transaction);
+			}
+			if (async) {
+				if (!this.deferredTriggerAdded) {
+					CallbackUtil.Singleton.addDeferredCallback(this.triggerPendingTransactionsDel, null, CallbackUtil.Singleton.PRIORITY_IMMEDIATE);
+					this.deferredTriggerAdded = true;
+				}
+			}
+			else {
+				this.triggerPendingTransactions();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Trigger any pending transactions.
+		-->
+		<method args="e" name="triggerPendingTransactions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.triggeringPendingTransactions) {
+				var waitForPingService = false;
+				if (!this.pingCompleted && this.hasOutstandingTransactions()) {
+					waitForPingService = true;
+					if (!this.pingSubmitted) {
+						var currentTime = (new Date()).getTime();
+						var interval = currentTime - ServiceUtil.Singleton.lastSubmittedTime;
+						if (interval >= this.pingInterval) {
+							this.pingSubmitted = true;
+							require(["cmc/foundation/PingService"], function(PingService) {
+								PingService.Singleton.doRequest();
+							});
+						}
+						else {
+							waitForPingService = false;
+						}
+					}
+				}
+				if (!waitForPingService) {
+					this.triggeringPendingTransactions = true;
+					this.deferredTriggerAdded = false;
+					this.triggerPendingParallelTransactions();
+					var checkPendingParallelTransactions = false;
+					while (this.pendingTransactions.length > 0 && this.activeTransactions.length == 0) {
+						var transaction = this.pendingTransactions.shift();
+						checkPendingParallelTransactions = transaction.service.sendSiblingRequestsInParallel;
+						this.activeTransactions.push(transaction);
+						this.doRequest(transaction);
+					}
+					if (checkPendingParallelTransactions && this.activeTransactions.length > 0) {
+						var activeTransaction = this.activeTransactions[0];
+						var isOpenGroupTransaction = activeTransaction.o.isOpenGroupObject();
+						for (var i = 0; i < this.pendingTransactions.length; i++) {
+							var transaction = this.pendingTransactions[i];
+							if ((isOpenGroupTransaction && transaction.service != activeTransaction.service) || (!isOpenGroupTransaction && transaction.transactionGroupId != activeTransaction.transactionGroupId)) {
+								break;
+							}
+							if (transaction.service == activeTransaction.service) {
+								this.pendingParallelTransactions.push(transaction);
+								this.pendingTransactions.splice(i, 1);
+								i--;
+							}
+						}
+						this.triggerPendingParallelTransactions();
+					}
+					this.triggeringPendingTransactions = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Trigger any pending parallel transactions.
+		-->
+		<method name="triggerPendingParallelTransactions">
+			<![CDATA[
+			while (this.pendingParallelTransactions.length > 0 && this.activeTransactions.length < ConfigProperties.Singleton.maximumParallelServiceRequests) {
+				var transaction = this.pendingParallelTransactions.shift();
+				this.activeTransactions.push(transaction);
+				this.doRequest(transaction);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Stop any pending transactions.
+			@param cmc/foundation/Model model: object model instance
+		-->
+		<method args="model" name="stopPendingTransactions">
+			<![CDATA[
+			var stoppableTransactions = [];
+			var remainingActiveTransactions = [];
+			for (var i = 0; i < this.activeTransactions.length; i++) {
+				var transaction = this.activeTransactions[i];
+				if ((!this.transactionGroupMap[transaction.transactionGroupId].submitted) && (typeof (model) == "undefined" || model == null || transaction.o.model == model)) {
+					stoppableTransactions.push(transaction);
+				}
+				else {
+					remainingActiveTransactions.push(transaction);
+				}
+			}
+			this.activeTransactions = remainingActiveTransactions;
+			var remainingPendingParallelTransactions = [];
+			for (var i = 0; i < this.pendingParallelTransactions.length; i++) {
+				var transaction = this.pendingParallelTransactions[i];
+				if ((!this.transactionGroupMap[transaction.transactionGroupId].submitted) && (typeof (model) == "undefined" || model == null || transaction.o.model == model)) {
+					stoppableTransactions.push(transaction);
+				}
+				else {
+					remainingPendingParallelTransactions.push(transaction);
+				}
+			}
+			this.pendingParallelTransactions = remainingPendingParallelTransactions;
+			var remainingPendingTransactions = [];
+			for (var i = 0; i < this.pendingTransactions.length; i++) {
+				var transaction = this.pendingTransactions[i];
+				if ((!this.transactionGroupMap[transaction.transactionGroupId].submitted) && (typeof (model) == "undefined" || model == null || transaction.o.model == model)) {
+					stoppableTransactions.push(transaction);
+				}
+				else {
+					remainingPendingTransactions.push(transaction);
+				}
+			}
+			this.pendingTransactions = remainingPendingTransactions;
+			while (stoppableTransactions.length > 0) {
+				var transaction = stoppableTransactions.shift();
+				if (transaction.service != null) {
+					this.rollback(transaction);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Discard any pending transactions whose open group object match the given open group object.
+			@param openGroupObject: the given open group object
+		-->
+		<method args="openGroupObject" name="discardPendingTransactions">
+			<![CDATA[
+			var discardablePendingTransactions = [];
+			var remainingPendingParallelTransactions = [];
+			for (var i = 0; i < this.pendingParallelTransactions.length; i++) {
+				var transaction = this.pendingParallelTransactions[i];
+				if (transaction.o.openGroupObject == openGroupObject || transaction.o.parentPrimaryObject == openGroupObject) {
+					discardablePendingTransactions.push(transaction);
+				}
+				else {
+					remainingPendingParallelTransactions.push(transaction);
+				}
+			}
+			this.pendingParallelTransactions = remainingPendingParallelTransactions;
+			var remainingPendingTransactions = [];
+			for (var i = 0; i < this.pendingTransactions.length; i++) {
+				var transaction = this.pendingTransactions[i];
+				if (transaction.o.openGroupObject == openGroupObject || transaction.o.parentPrimaryObject == openGroupObject) {
+					discardablePendingTransactions.push(transaction);
+				}
+				else {
+					remainingPendingTransactions.push(transaction);
+				}
+			}
+			this.pendingTransactions = remainingPendingTransactions;
+			while (discardablePendingTransactions.length > 0) {
+				var transaction = discardablePendingTransactions.shift();
+				if (transaction.service != null) {
+					this.rollback(transaction);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Returns a service transaction instance primed with the specified arguments. This may
+			be a new or recycled instance.
+			@param cmc/foundation/ModelObject o: the model object associated with the created transaction that will be created
+			@param cmc/foundation/Service service: the service associated with the created transaction that will be created
+		-->
+		<method args="o, service" name="createServiceTransaction">
+			<![CDATA[
+			var transaction = {};
+			transaction.o = o;
+			transaction.requestParent = o;
+			transaction.service = service;
+			transaction.saveObjects = [];
+			transaction.hasNewObjects = false;
+			transaction.saveProperties = [];
+			transaction.deleteObjects = [];
+			transaction.serviceDataset = null;
+			transaction.fileref = null;
+			transaction.args = null;
+			transaction.reresolveParameters = null;
+			transaction.loadingParameters = null;
+			transaction.serverManagedParameters = null;
+			transaction.unresolvableParameters = null;
+			transaction.requestIdentifier = null;
+			transaction.deferred = false;
+			transaction.recreate = false;
+			transaction.recreateArgs = null;
+			if (EventTimer.Singleton.enabled) transaction.eventId = EventTimer.Singleton.currentEventId;
+			if (transaction.o.openGroupObject != null) {
+				transaction.o.openGroupObject.incrementReferenceCount();
+			}
+			var eventId = this.transactionEventCount;
+			if (this.activeTransactionEventId != null) {
+				eventId = this.activeTransactionEventId;
+			}
+			else if (!this.deferredTriggerAdded) {
+				eventId = this.createTransactionEvent();
+			}
+			var transactionGroupId = transaction.o.openGroupObject.objectKey + eventId;
+			var transactionGroup = this.transactionGroupMap[transactionGroupId];
+			if (typeof (transactionGroup) == "undefined") {
+				transactionGroupId = this.createTransactionGroup(transaction.o, eventId);
+				transactionGroup = this.transactionGroupMap[transactionGroupId];
+			}
+			transaction.transactionGroupId = transactionGroupId;
+			transactionGroup.push(transaction);
+			this.activeServiceTransactionCount++;
+			return transaction;
+			]]>
+		</method>
+		
+		<!---@keywords private-->
+		<method args="longRunning" name="createTransactionEvent">
+			<![CDATA[
+			if (typeof(longRunning) == "undefined") longRunning = false;
+			this.transactionEventCount++;
+			this.transactionEventMap[this.transactionEventCount] = {
+				transactionGroupCount: 0,
+				messages: {},
+				longRunning: longRunning
+			};
+			return this.transactionEventCount;
+			]]>
+		</method>
+		
+		<!---@keywords private-->
+		<method args="o, eventId, longRunning" name="createTransactionGroup">
+			<![CDATA[
+			if (typeof(longRunning) == "undefined") longRunning = false;
+			var transactionGroupId = o.openGroupObject.objectKey + eventId;
+			var transactionGroup = [];
+			transactionGroup.submitted = false;
+			transactionGroup.hasError = false;
+			transactionGroup.transactionEventId = eventId;
+			transactionGroup.longRunning = longRunning;
+			this.transactionGroupMap[transactionGroupId] = transactionGroup;
+			this.transactionEventMap[eventId].transactionGroupCount++;
+			SingletonRegistry.progressIndicator.addAction();
+			return transactionGroupId;
+			]]>
+		</method>
+		
+		<!---@keywords private-->
+		<method args="eventId" name="releaseLongRunningTransactionEvent">
+			<![CDATA[
+			var transactionEvent = this.transactionEventMap[eventId];
+			if (transactionEvent) {
+				transactionEvent.longRunning = false;
+				if (transactionEvent.transactionGroupCount == 0) {
+					for (var key in transactionEvent.messages) {
+						MessageLogger.Singleton.logStatus(transactionEvent.messages[key].message);
+					}
+					delete this.transactionEventMap[eventId];
+				}
+			}
+			]]>
+		</method>
+		
+		<!---@keywords private-->
+		<method args="groupId" name="releaseLongRunningTransactionGroup">
+			<![CDATA[
+			var transactionGroup = this.transactionGroupMap[groupId];
+			if (transactionGroup) {
+				transactionGroup.longRunning = false;
+				if (transactionGroup.length == 0) {
+					this.clearTransactionGroup(groupId);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---@keywords private-->
+		<method args="transaction" name="setTransactionGroupHasError">
+			<![CDATA[
+			if (this.transactionGroupMap[transaction.transactionGroupId]) {
+				this.transactionGroupMap[transaction.transactionGroupId].hasError = true;
+			}
+			]]>
+		</method>
+		
+		<!---@keywords private-->
+		<method args="transaction" name="transactionGroupHasError">
+			<![CDATA[
+			var result = false;
+			if (this.transactionGroupMap[transaction.transactionGroupId]) {
+				result = this.transactionGroupMap[transaction.transactionGroupId].hasError;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the message count that matches the specified message type
+			for the transaction event associated with the specified transaction. This represents the number of business objects
+			of the same type that were successfully processed by the same action (saved, deleted, activated etc.) as part of
+			the same transaction event.
+			@param transaction: The transaction used to determine the transaction event
+			@param messageType: The message type (save, delete, activate etc.)
+		-->
+		<method args="transaction, messageType" name="getTransactionEventMessageCount">
+			<![CDATA[
+			var count = 0;
+			var transactionEventId = this.transactionGroupMap[transaction.transactionGroupId].transactionEventId;
+			var transactionEvent = this.transactionEventMap[transactionEventId];
+			if (transactionEvent.messages[messageType]) {
+				count = transactionEvent.messages[messageType].count;
+			}
+			return count;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the transaction event status message for the specified message type.
+			A single message will be logged for all of the successful transaction groups 
+			in the same transaction event that have the same message type.
+			@param transaction: The transaction that outputs the message.
+			@param messageType: The message type (save, delete, activate etc.)
+			@param msg: The message logged for the completion of the transaction group that includes this transaction. 
+		-->
+		<method args="transaction, messageType, msg" name="setTransactionEventMessage">
+			<![CDATA[
+			var transactionEventId = this.transactionGroupMap[transaction.transactionGroupId].transactionEventId;
+			var transactionEvent = this.transactionEventMap[transactionEventId];
+			if (transactionEvent.messages[messageType]) {
+				transactionEvent.messages[messageType].count++;
+				transactionEvent.messages[messageType].message = msg;
+			}
+			else {
+				transactionEvent.messages[messageType] = {
+					count: 1,
+					message: msg
+				};
+			}
+			]]>
+		</method>
+		
+		<!---
+			Release the specified service transaction and make it available for future requests.
+			@param Object transaction: the service transaction to release
+		-->
+		<method args="transaction" name="releaseServiceTransaction">
+			<![CDATA[
+			this.activeServiceTransactionCount--;
+			this.release(transaction);
+			]]>
+		</method>
+		
+		<!---
+			This method checks whether there are outstanding transactions.
+			@return boolean: True if there are outstanding transactions; false otherwise.
+		-->
+		<method name="hasOutstandingTransactions">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/foundation/ServiceTransactionUtil", "hasOutstandingTransactions", [this.activeTransactions]);
+			}
+			var result = false;
+			if (this.activeTransactions.length > 0 || this.pendingParallelTransactions.length > 0 || this.pendingTransactions.length > 0) {
+				result = true;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/foundation/ServiceTransactionUtil", "hasOutstandingTransactions", result);
+			}
+			return result;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Release the service transaction instance and make it available for re-use.
+			@param Object transaction: the service transaction to release
+		-->
+		<method args="transaction" name="release">
+			<![CDATA[
+			if (transaction.serviceDataset != null) {
+				ServiceUtil.Singleton.releaseServiceDataset(transaction.serviceDataset);
+				transaction.serviceDataset = null;
+			}
+			var transactionGroup = this.transactionGroupMap[transaction.transactionGroupId];
+			if (transactionGroup) {
+				for (var i = 0; i < transactionGroup.length; i++) {
+					if (transactionGroup[i] == transaction) {
+						transactionGroup.splice(i, 1);
+						break;
+					}
+				}
+				if (transactionGroup.length == 0) {
+					this.clearTransactionGroup(transaction.transactionGroupId);
+				}
+			}
+			if (transaction.o.openGroupObject != null) {
+				transaction.o.openGroupObject.decrementReferenceCount();
+			}
+			transaction.transactionGroupId = null;
+			transaction.service = null;
+			transaction.o = null;
+			transaction.requestParent = null;
+			transaction.saveObject = null;
+			transaction.hasNewObjects = false;
+			transaction.saveProperties = null;
+			transaction.deleteObjects = null;
+			transaction.serviceDataset = null;
+			transaction.fileref = null;
+			transaction.args = null;
+			transaction.reresolveParameters = null;
+			transaction.loadingParameters = null;
+			transaction.serverManagedParameters = null;
+			transaction.unresolvableParameters = null;
+			transaction.requestIdentifier = null;
+			transaction.deferred = false;
+			transaction.recreate = false;
+			transaction.recreateArgs = null;
+			transaction.eventId = null;
+			var index = this.activeTransactions.indexOf(transaction);
+			if (index != -1) {
+				this.activeTransactions.splice(index, 1);
+				this.triggerPendingTransactions();
+			}
+			if (!this.hasOutstandingTransactions()) {
+				this.pingSubmitted = false;
+				this.pingCompleted = false;
+				EventUtil.trigger(this, "allTransactionsComplete");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Add the specified save object to the transaction.
+		-->
+		<method args="transaction, o" name="addSaveObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addSaveObject(transaction, o)", [transaction, o]);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceTransactionUtil", "addSaveObject(transaction, o)", "adding save object for service " + transaction.service.url + " " + o.logString());
+			}
+			if (transaction.saveObjects.indexOf(o) == -1) {
+				if (o.newObject) {
+					if (o != transaction.o) {
+						transaction.hasNewObjects = true;
+					}
+					o.creating = true;
+					if (o.objectDefinition.parentReference) {
+						var referencedObject = o.getReferencedObject();
+						for (var key in referencedObject.referenceMap) {
+							var ro = referencedObject.referenceMap[key];
+							if (ro != o && ro.objectDefinition.parentReference && ro.pendingDelete && !ro.deleting && !ro.getIsVersionObject()) {
+								this.addDeleteObject(transaction, ro);
+								ro.transaction = transaction;
+							}
+						}
+					}
+				}
+				if (o.openGroupObject != null) {
+					o.openGroupObject.incrementReferenceCount();
+				}
+				if (o.objectDefinition.isFileObject == true && o == transaction.o) {
+					transaction.fileref = o.fileref;
+				}
+				transaction.saveObjects.push(o);
+				for (var key in o.propertyMap) {
+					var prop = o.propertyMap[key];
+					if (prop.dirty && prop.transaction == null) {
+						this.addSaveProperty(transaction, prop);
+					}
+				}
+				for (var key in o.childObjectMap) {
+					var child = o.childObjectMap[key];
+					var oDef = child.objectDefinition;
+					if (!oDef.parentReference && !oDef.collectionReference && child.transaction == null && child.parentObject == o && !child.getIsVersionObject()) {
+						if (oDef.createService == null && child.newObject) {
+							this.addSaveObject(transaction, child);
+							child.transaction = transaction;
+							child.creating = true;
+						}
+						else if (oDef.deleteService == null && child.pendingDelete) {
+							this.addDeleteObject(transaction, child);
+							child.transaction = transaction;
+						}
+						else if (oDef.saveService == null && child.hasUnsavedPropertyChanges()) {
+							this.addSaveObject(transaction, child);
+							child.transaction = transaction;
+						}
+					}
+				}
+				var newParentReferenceObject = null;
+				var oldParentReferenceObject = null;
+				for (var key in o.referenceMap) {
+					var ro = o.referenceMap[key];
+					var oDef = ro.objectDefinition;
+					if (ro.transaction == null && (oDef.parentReference || oDef.collectionReference) && oDef.isReferencedDefinition(o.objectDefinition) && !ro.getIsVersionObject()) {
+						if (ro.newObject) {
+							if (oDef.createService == null) {
+								this.addSaveObject(transaction, ro);
+								ro.transaction = transaction;
+								ro.creating = true;
+							}
+							else if (oDef.parentReference) {
+								newParentReferenceObject = ro;
+							}
+						}
+						else if (ro.pendingDelete) {
+							if (oDef.deleteService == null && !ro.deleting) {
+								if (oDef.parentReference) {
+									oldParentReferenceObject = ro;
+								}
+								else {
+									this.addDeleteObject(transaction, ro);
+									ro.transaction = transaction;
+								}
+							}
+						}
+						else if (oDef.saveService == null && ro.hasUnsavedPropertyChanges()) {
+							this.addSaveObject(transaction, ro);
+							ro.transaction = transaction;
+						}
+					}
+				}
+				if (oldParentReferenceObject != null && newParentReferenceObject == null && !oldParentReferenceObject.deleting) {
+					this.addDeleteObject(transaction, oldParentReferenceObject);
+					oldParentReferenceObject.transaction = transaction;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addSaveObject");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Add the specified property to the transaction.
+		-->
+		<method args="transaction, prop" name="addSaveProperty">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addSaveProperty(transaction,prop)", [transaction, prop]);
+			}
+			prop.transaction = transaction;
+			transaction.saveProperties.push(prop);
+			if (prop.o == transaction.o && !transaction.o.newObject && prop.propertyDefinition != null && prop.propertyDefinition.recreateObject && transaction.o.objectDefinition.deleteService != null && transaction.o.objectDefinition.createService != null && !transaction.o.objectDefinition.hasChildDefinitions()) {
+				transaction.recreate = true;
+				transaction.service = transaction.o.objectDefinition.deleteService;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addSaveProperty(transaction, prop)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Remove the specified property from the transaction. If the property changes before the
+			service request completes, then it will be dropped from the transaction.
+		-->
+		<method args="transaction, prop" name="removeSaveProperty">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "removeSaveProperty(transaction, prop)", [transaction, prop]);
+			}
+			if (transaction.serviceDataset == null || !transaction.serviceDataset.complete) {
+				var index = transaction.saveProperties.indexOf(prop);
+				if (index != -1) {
+					transaction.saveProperties.splice(index, 1);
+				}
+				prop.transaction = null;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "removeSaveProperty(transaction, prop)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Add the specified object to the list of objects that are being deleted by this transaction.
+		-->
+		<method args="transaction, o" name="addDeleteObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addDeleteObject(transaction, o)", [transaction, o]);
+			}
+			o.setVariable("deleting", true);
+			if (o.openGroupObject != null) {
+				o.openGroupObject.incrementReferenceCount();
+			}
+			transaction.deleteObjects.push(o);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addDeleteObject(transaction, o)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Rollback the transaction.
+		-->
+		<method args="transaction" name="rollback">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "rollback(transaction)");
+			}
+			var dirty = false;
+			var openGroupObject = transaction.o.openGroupObject;
+			while (transaction.saveProperties.length > 0) {
+				var prop = transaction.saveProperties.shift();
+				prop.transaction = null;
+				if (!dirty) {
+					dirty = prop.dirty;
+				}
+			}
+			while (transaction.saveObjects.length > 0) {
+				var o = transaction.saveObjects.shift();
+				if (o.transaction == transaction) {
+					o.transaction = null;
+					o.creating = false;
+				}
+				o.discardPendingTransactions();
+				if (o.openGroupObject != null) {
+					if (!o.openGroupObject.open) {
+						o.openGroupObject.setVariable("open", true);
+					}
+					o.openGroupObject.decrementReferenceCount();
+				}
+				if (!dirty) {
+					dirty = o.hasUnsavedChanges();
+				}
+			}
+			while (transaction.deleteObjects.length > 0) {
+				var o = transaction.deleteObjects.shift();
+				o.setVariable("deleting", false);
+				if (o.transaction == transaction) {
+					o.transaction = null;
+				}
+				o.discardPendingTransactions();
+				if (o.openGroupObject != null) {
+					if (o.pendingDelete && !o.openGroupObject.open) {
+						o.openGroupObject.setVariable("open", true);
+					}
+					o.openGroupObject.decrementReferenceCount();
+				}
+				if (!dirty) {
+					dirty = o.hasUnsavedChanges();
+				}
+			}
+			if (transaction.o.transaction == transaction) {
+				transaction.o.transaction = null;
+				transaction.o.discardPendingTransactions();
+			}
+			if (openGroupObject) {
+				if (transaction == transaction.o.postSaveTransaction) {
+					dirty = true;
+					transaction.o.setVariable("postSaveTransaction", null);
+					transaction.o.setVariable("postSaveFailed", true);
+					if (!openGroupObject.open) {
+						openGroupObject.setVariable("open", true);
+					}
+				}
+				if (transaction.service.abortOnError) {
+					this.discardPendingTransactions(openGroupObject);
+				}
+			}
+			this.releaseServiceTransaction(transaction);
+			if (dirty && openGroupObject != null) {
+				openGroupObject.checkUnsavedChanges(dirty);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "rollback(transaction)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Commit the changes back to the model. If there are any pending transactions, then
+			the next transaction in the queue will be invoked.
+			@param Object transaction: the service transaction to commit
+			@param boolean abort: true if the request is aborted
+		-->
+		<method args="transaction, abort" name="commit">
+			<![CDATA[
+			if (typeof(abort) == "undefined") abort = false;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "commit(transaction)");
+			}
+			if (transaction.recreate) {
+				var index = this.activeTransactions.indexOf(transaction);
+				if (index != -1) {
+					this.activeTransactions.splice(index, 1);
+				}
+				ServiceUtil.Singleton.releaseServiceDataset(transaction.serviceDataset);
+				transaction.serviceDataset = null;
+				transaction.recreate = false;
+				transaction.o.revertToNewObject();
+				transaction.o.creating = true;
+				for (var key in transaction.recreateArgs) {
+					transaction[key] = transaction.recreateArgs[key];
+				}
+				transaction.recreateArgs = null;
+				transaction.deferred = true;
+				this.addPendingTransaction(transaction);
+			}
+			else {
+				var openGroupObject = transaction.o.openGroupObject;
+				while (transaction.saveProperties.length > 0) {
+					var prop = transaction.saveProperties.shift();
+					prop.reset();
+					prop.transaction = null;
+				}
+				while (transaction.saveObjects.length > 0) {
+					var o = transaction.saveObjects.shift();
+					if (o.newObject) {
+						if (o.transaction == null || o.transaction == transaction) {
+							o.creating = false;
+						}
+						if (!abort) {
+							o.setGetChildrenServicesLoaded();
+							o.implicitNewObject = false;
+							o.setVariable("newObject", false);
+						}
+					}
+					if (o.transaction == transaction) {
+						o.transaction = null;
+						o.triggerPendingTransactions();
+					}
+					if (o.openGroupObject != null) {
+						o.openGroupObject.decrementReferenceCount();
+					}
+				}
+				while (transaction.deleteObjects.length > 0) {
+					var o = transaction.deleteObjects.shift();
+					if (o.openGroupObject != null) {
+						o.openGroupObject.decrementReferenceCount();
+					}
+					ModelUtil.Singleton.releaseModelObject(o);
+				}
+				if (transaction.o.postSaveTransaction == transaction) {
+					transaction.o.setVariable("postSaveFailed", false);
+					transaction.o.setVariable("postSaveTransaction", null);
+				}
+				if (transaction.o.transaction == transaction) {
+					transaction.o.transaction = null;
+					transaction.o.triggerPendingTransactions();
+				}
+				if (EventTimer.Singleton.enabled && !abort) {
+					EventTimer.Singleton.updateObjCount(1);
+				}
+				this.releaseServiceTransaction(transaction);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "commit(transaction)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Invoke the service request for the given transaction. If there is already an active transaction
+			for the parent of this transaction, then the request will be queued in the list of pending
+			transactions.
+		-->
+		<method args="transaction" name="doRequest">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "doRequest(transaction)");
+			}
+			if (EventTimer.Singleton.enabled && transaction.eventId) EventTimer.Singleton.restart(transaction.eventId);
+			this.activeTransactionGroupId = transaction.transactionGroupId;
+			var unresolvedServiceParameter = null;
+			var unresolvedParameter = false;
+			var isPendingTransaction = false;
+			if (transaction.unresolvableParameters.length > 0) {
+				unresolvedParameter = true;
+				unresolvedServiceParameter = transaction.unresolvableParameters[0];
+				if (Logger.Singleton.enabled) {
+					var param = transaction.unresolvableParameters[0];
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/ServiceTransactionUtil", "doRequest", "Unresolved parameter: " + param.name + " for request " + transaction.service.url);
+				}
+			}
+			if (!unresolvedParameter) {
+				ServiceUtil.Singleton.resolveParameters(transaction.reresolveParameters, transaction);
+				var parentObject = null;
+				var unresolvedParentParameter = false;
+				var childObject = null;
+				var unresolvedChildParameter = false;
+				if (transaction.serverManagedParameters.length > 0) {
+					var params = transaction.serverManagedParameters;
+					for (var i = 0; i < params.length; i++) {
+						var param = params[i];
+						if (param.parentProperty) {
+							if (Logger.Singleton.enabled) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/ServiceTransactionUtil", "doRequest", "Unresolved parameter: " + param.name + " for request " + transaction.service.url);
+							}
+							unresolvedParentParameter = true;
+							unresolvedServiceParameter = param;
+							var property = param.getValueSource(transaction.o);
+							if (property) {
+								parentObject = property.o;
+							}
+							break;
+						}
+						else if (param.objectPath) {
+							if (Logger.Singleton.enabled) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/ServiceTransactionUtil", "doRequest", "Unresolved parameter: " + param.name + " for request " + transaction.service.url);
+							}
+							unresolvedChildParameter = true;
+							unresolvedServiceParameter = param;
+							var property = param.getValueSource(transaction.o);
+							if (property) {
+								childObject = property.o;
+							}
+						}
+					}
+				}
+				if (parentObject && parentObject.transaction) {
+					parentObject.addPendingTransaction(transaction);
+					isPendingTransaction = true;
+				}
+				else if (childObject && childObject.transaction) {
+					childObject.addPendingTransaction(transaction);
+					isPendingTransaction = true;
+				}
+			}
+			if (!isPendingTransaction) {
+				var isInvalidFileUpload = this.notValidFileUploadTransaction(transaction);
+				if (unresolvedParameter || unresolvedParentParameter || unresolvedChildParameter || isInvalidFileUpload) {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ServiceTransactionUtil", "doRequest", "Aborting transaction " + transaction.service.url);
+					}
+					if (transaction.o.isOpenGroupObject() || !transaction.o.openGroupObject.hasServiceErrors()) {
+						this.clearServiceErrors(transaction);
+						var hasErrorInOpenGroup = transaction.o.openGroupObject.errorInOpenGroup;
+						if (unresolvedServiceParameter != null && !hasErrorInOpenGroup) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ServiceTransactionUtil", "doRequest", "No errors associated with the business object. Unresolved parameter: " + unresolvedServiceParameter.name + " for transaction: " + transaction.service.url);
+						}
+						var o = transaction.o;
+						this.rollback(transaction);
+						if (hasErrorInOpenGroup) {
+							MessageLogger.Singleton.logValidationError(foundationResources.Singleton.savingFailed.string, o, null, null);
+						}
+						else if (isInvalidFileUpload) {
+							MessageLogger.Singleton.logValidationError(foundationResources.Singleton.uploadFileFailed.string, o, null, null);
+						}
+						else {
+							MessageLogger.Singleton.logValidationError(foundationResources.Singleton.savingFailedInGeneral.string, o, null, null);
+						}
+					}
+					else {
+						this.rollback(transaction);
+					}
+				}
+				else {
+					transaction.serviceDataset = ServiceUtil.Singleton.createServiceDataset({
+						requestParent: transaction.requestParent,
+						service: transaction.service,
+						args: transaction.args,
+						transaction: transaction,
+						reresolveParameters: transaction.reresolveParameters,
+						loadingParameters: transaction.loadingParameters,
+						serverManagedParameters: transaction.serverManagedParameters,
+						unresolvableParameters: transaction.unresolvableParameters,
+						requestIdentifier: transaction.requestIdentifier
+					});
+					transaction.serviceDataset.doRequest();
+					if (Logger.Singleton.enabled) {
+						if (this.activeTransactions.length > 1) {
+							var msg = "Sending transaction " + transaction.o.logString() + " in parallel with " + this.activeTransactions[0].o.logString() + " transactionGroupId=" + transaction.transactionGroupId;
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceTransactionUtil", "doRequest", msg);
+						}
+					}
+				}
+			}
+			else {
+				var index = this.activeTransactions.indexOf(transaction);
+				if (index != -1) {
+					this.activeTransactions.splice(index, 1);
+					this.triggerPendingTransactions();
+				}
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "doRequest(transaction)");
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method returns true if the current transaction is a file upload transaction, but is not valid.
+			A file upload transaction is indicated by a non null value for {@link transaction fileref}.
+			This transaction can be invalid in one of three ways:
+			<ol><li>The {@link cmc/foundation/ServiceTransaction#o object's} {@link cmc/foundation/ModelObject#fileref fileref} is null
+				<li>No file was selected for the fileref.
+				<li>An empty file was selected for the fileref.
+			</ol>
+			If the current transaction is not a file upload transaction, this method will return false.
+			It will also return	false if the current transaction is a valid file upload transaction. 			
+			
+			@return boolean This method returns true if the current transaction is a file upload transaction, but
+			is not valid.
+		-->
+		<method args="transaction" name="notValidFileUploadTransaction">
+			<![CDATA[
+			if (transaction.fileref == null) {
+				return false;
+			}
+			if (typeof (transaction.fileref.name) == "undefined" || transaction.fileref.size == 0) {
+				return true;
+			}
+			return false;
+			]]>
+		</method>
+		<!---
+			Returns true if the given transaction has no properties being saved or has no objects being deleted.
+			@return boolean: true if the transaction is empty
+		-->
+		<method args="transaction" name="isEmpty">
+			<![CDATA[
+			var empty;
+			if (transaction.o.objectDefinition.postSaveService == transaction.service) {
+				empty = this.isLastTransactionInGroup(transaction) && (!transaction.o.postSaveFailed || transaction.o.postSaveTransaction != transaction);
+			}
+			else {
+				empty = !transaction.hasNewObjects && transaction.saveProperties.length == 0 && transaction.deleteObjects.length == 0;
+			}
+			if (!empty && Logger.Singleton.enabled) {
+				var msg = "Saving objects: ";
+				for (var i = 0; i < transaction.saveObjects.length; i++) {
+					var o = transaction.saveObjects[i];
+					msg = msg + " " + o.objectType + o.objectId;
+				}
+				msg += " Has new objects: " + transaction.hasNewObjects;
+				msg += " Saving properties: ";
+				for (var i = 0; i < transaction.saveProperties.length; i++) {
+					var prop = transaction.saveProperties[i];
+					msg = msg + " " + prop.propertyName + "=" + prop.value;
+				}
+				msg += " Deleting objects: ";
+				for (var i = 0; i < transaction.deleteObjects.length; i++) {
+					var o = transaction.deleteObjects[i];
+					msg = msg + " " + o.objectType + o.objectId;
+				}
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceTransactionUtil", "isEmpty", msg);
+			}
+			return empty;
+			]]>
+		</method>
+		
+		<!---
+			Clears service errors associated with the objects that this transaction saves.
+			If the object has an open group object, then the open group object's service errors will
+			also be cleared. If the open group object is not a primary object, then the owning primary
+			object is located and its service errors are also cleared.
+		 -->
+		<method args="transaction" name="clearServiceErrors">
+			<![CDATA[
+			transaction.o.clearServiceErrors();
+			for (var i = 0; i < transaction.saveObjects.length; i++) {
+				var o = transaction.saveObjects[i];
+				o.clearServiceErrors();
+				if (o.openGroupObject) {
+					if (o != o.openGroupObject) {
+						o.openGroupObject.clearValidationError(null);
+					}
+					if (o.openGroupObject.parentPrimaryObject != null && o.openGroupObject != o.openGroupObject.parentPrimaryObject) {
+						o.openGroupObject.parentPrimaryObject.clearValidationError(null);
+					}
+				}
+			}
+			for (var i = 0; i < transaction.deleteObjects.length; i++) {
+				var o = transaction.deleteObjects[i];
+				if (o.openGroupObject && o != o.openGroupObject) {
+					o.openGroupObject.clearValidationError(null);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle validation error. The default implementation will associate
+			the message with the specified model object. If the property name
+			is specified, then the message will be associated with the property. If an object-level
+			error message is empty, the message will be replaced with a generic message.
+			@param string message: the validation error message
+			@param string propertyName: the property name
+		-->
+		<method args="transaction, message, propertyName" name="handleValidationError">
+			<![CDATA[
+			var property = null;
+			if (message == null || StringUtil.Singleton.trim(message).length == 0) {
+				transaction.o.addValidationError(null, foundationResources.Singleton.savingFailed.string);
+			}
+			else if (propertyName) {
+				var objs = transaction.saveObjects;
+				for (var i = 0; i < objs.length; i++) {
+					property = objs[i].propertyMap[propertyName];
+					if (property) {
+						break;
+					}
+				}
+				if (property != null) {
+					property.addValidationError(null, message);
+				}
+				else {
+					transaction.o.addValidationError(null, message);
+				}
+			}
+			else {
+				transaction.o.addValidationError(null, message);
+			}
+			if (transaction.o.openGroupObject != null && !transaction.o.openGroupObject.open) {
+				if (transaction.o.model.oEditor.workAreaContainer.activeView == null) {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceTransactionUtil", "handleValidationError", "validation error, re-opening object in activeView");
+					}
+					transaction.o.openGroupObject.doOpen();
+				}
+				else {
+					transaction.o.openGroupObject.doOpen(false);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Prepare the arguments for this transaction.
+			@param object transaction: transaction object
+			@param object args: arguments object
+		-->
+		<method args="transaction, args" name="prepareArguments">
+			<![CDATA[
+			var o = transaction.o;
+			if (transaction.recreate) {
+				transaction.recreateArgs = {};
+				transaction.recreateArgs.requestParent = transaction.requestParent;
+				transaction.recreateArgs.args = {};
+				for (var key in args) {
+					transaction.recreateArgs.args[key] = args[key];
+				}
+				var createService = o.objectDefinition.createService;
+				createService.prepareArguments(o, transaction.recreateArgs.args);
+				var oDef = o.objectDefinition;
+				for (var key in transaction.recreateArgs.args) {
+					var pDef = oDef.getPropertyDefinition(o, key);
+					if ((key == oDef.idProperty && !oDef.languageSensitive) || (pDef && pDef.serverManaged)) {
+						delete transaction.recreateArgs.args[key];
+					}
+				}
+				var enabledParams = ServiceUtil.Singleton.getEnabledParameters(createService.serviceParams, o);
+				ServiceUtil.Singleton.resolveParameters(enabledParams, transaction.recreateArgs);
+				transaction.recreateArgs.service = o.objectDefinition.createService;
+			}
+			transaction.service.prepareArguments(o, args);
+			var enabledParams = ServiceUtil.Singleton.getEnabledParameters(transaction.service.serviceParams, o);
+			transaction.args = args;
+			ServiceUtil.Singleton.resolveParameters(enabledParams, transaction);
+			]]>
+		</method>
+	</Node>
+	<!---
+		@keywords private
+		
+		A service dataset. A service dataset is used to invoke
+		a service request instance.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ServiceDataset">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="iframe" moduleName="dojo/request/iframe"/>
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="xhr" moduleName="dojo/request/xhr"/>
+		<dependency localName="ModelObject" moduleName="cmc/foundation/ModelObject"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		
+     	
+		<!---
+			Reference to the parent service. This is a required attribute.
+		-->
+		<variable name="service" value="${null}"/>
+		<!---
+			Arguments for this service request.
+		-->
+		<variable name="args" value="${null}"/>
+		<!---
+			Parent for this request.
+		-->
+		<variable name="requestParent" value="${null}"/>
+		<!---
+			Transaction object.
+		-->
+		<variable name="transaction" value="${null}"/>
+		<!---
+			An array of parameters to reresolve.
+		-->
+		<variable name="reresolveParameters" value="${null}"/>
+		<!---
+			An array of unresolved parameters that are loading.
+		-->
+		<variable name="loadingParameters" value="${null}"/>
+		<!---
+			An array of unresolved parameters that are server managed.
+		-->
+		<variable name="serverManagedParameters" value="${null}"/>
+		<!---
+			An array of unresolvable parameters.
+		-->
+		<variable name="unresolvableParameters" value="${null}"/>
+		<!---
+			Indicates that the service request has been completed.
+		-->
+		<variable name="complete" type="boolean" value="false"/>
+		<!---
+			Indicates that the service request has been submitted.
+		-->
+		<variable name="submitted" type="boolean" value="false"/>
+		<!---
+			Indicates that a request has been made to stop the service request.
+		-->
+		<variable name="stopped" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<variable name="requestIdentifier" type="number" value="0"/>
+		<!---
+			The URL for this service request. This value is set when the request is sent and can be
+			used for debug purposes.
+		-->
+		<variable name="url" value="${null}"/>
+		<!---
+			XML that contains the response for this service request.
+		-->
+		<variable name="dataXML" value="${null}"/>
+		
+		<!---
+			The ID of the user event that triggered this service request.
+		-->
+		<variable name="eventId" value="${null}"/>
+		<!---
+			The start index for this request. The start index will be greater than
+			zero if the user has requested to load the next page. This is only
+			available if the total number of search results exceeds 500.
+		-->
+		<variable name="startIndex" value="0"/>
+
+		<!--- @keywords private -->
+		<variable name="requestRetryLimit" type="number" value="1"/>
+
+		<!--- @keywords private -->
+		<variable name="requestRetryCount" type="number" value="0"/>
+		
+		<!--- @keywords private -->
+		<variable name="getAll" type="boolean" value="false"/>
+		
+		<!---
+			XML string for the service request.
+		-->
+		<variable name="xmlContent" type="string" value=""/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.doDeferredRequestDel = new EventHandler.Class(this, "doDeferredRequest");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.release();
+			delete this.doDeferredRequestDel;
+			if (this.doReleaseDeferredRequestDel) {
+				delete this.doReleaseDeferredRequestDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Release this service dataset so it can be reused.
+		-->
+		<method name="release">
+			<![CDATA[
+			this.doDeferredRequestDel.disconnectAll();
+			if (this.doReleaseDeferredRequestDel) {
+				this.doReleaseDeferredRequestDel.disconnectAll();
+			}
+			for (var i = 0; i < this.service.activeRequests.length; i++) {
+				if (this.service.activeRequests[i] == this) {
+					this.service.activeRequests.splice(i, 1);
+					break;
+				}
+			}
+			this.service = null;
+			this.args = null;
+			this.reresolveParameters = null;
+			this.loadingParameters = null;
+			this.serverManagedParameters = null;
+			this.unresolvableParameters = null;
+			this.complete = false;
+			this.submitted = false;
+			this.stopped = false;
+			this.requestIdentifier = 0;
+			this.dataXML = null;
+			this.url = null;
+			this.eventId = null;
+			this.startIndex = 0;
+			this.requestRetryCount = 0;
+			this.xmlContent = "";
+			if (this.transaction != null && this.transaction.fileref != null) {
+			}
+			this.transaction = null;
+			this.requestParent = null;
+			]]>
+		</method>
+		
+		<!---
+			Asynchronously invoke the service request. If the service request has
+			unresolved parameters, then the request will be deferred until the
+			context values are set.
+		-->
+		<method name="doRequest">
+			<![CDATA[
+			if (this.loadingParameters != null && this.loadingParameters.length > 0) {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceDataset", "doRequest", "deferring request " + this.service.url);
+					for (var i = 0; i < this.loadingParameters.length; i++) {
+						var param = this.loadingParameters[i];
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/ServiceDataset", "doRequest", "unresolved parameter:" + param.parameterName);
+					}
+				}
+				this.loadingParameters[0].registerDelegate(this.requestParent, this.doDeferredRequestDel);
+				if (this.transaction == null && this.requestParent && this.requestParent instanceof ModelObject.Class) {
+					if (this.doReleaseDeferredRequestDel) {
+						this.doReleaseDeferredRequestDel.disconnectAll();
+					}
+					else {
+						this.doReleaseDeferredRequestDel = new EventHandler.Class(this, "doReleaseDeferredRequest");
+					}
+					this.doReleaseDeferredRequestDel.connect(this.requestParent, "beingDestroyed");
+				}
+			}
+			else {
+				if (SingletonRegistry.progressIndicator != undefined) {
+					SingletonRegistry.progressIndicator.startAnimation();
+				}
+				this.url = this.service.url;
+				var firstParameter = this.url.indexOf("?") < 0;
+				if (this.service.sendRequestIdentifier) {
+					if (!firstParameter) {
+						this.url += "&requestIdentifier=" + this.requestIdentifier;
+					}
+					else {
+						firstParameter = false;
+						this.url += "?requestIdentifier=" + this.requestIdentifier;
+					}
+				}
+				if (EventTimer.Singleton.enabled && this.eventId != null) {
+					if (!firstParameter) {
+						this.url += "&eventId=" + this.eventId;
+					}
+					else {
+						firstParameter = false;
+						this.url += "?eventId=" + this.eventId;
+					}
+				}
+				var loadVars = null;
+				var hasContent = false;
+				if ((this.transaction == null || this.transaction.fileref == null) && (!this.service.xml || this.xmlContent == "")) {
+					loadVars = {};
+				}
+				for (var key in this.args) {
+					var sensitive = ServiceUtil.Singleton.sensitiveParams[key];
+					var val = this.args[key];
+					if (this.service.sendMultiValues && val instanceof Array) {
+						for (var i = 0; i < val.length; i++) {
+							if (loadVars == null || (!sensitive && (val[i].length < ServiceUtil.Singleton.MAX_URL_PARAM_LEN && this.url.length < ServiceUtil.Singleton.MAX_URL_LEN))) {
+								if (!sensitive) {
+									if (firstParameter) {
+										this.url += "?";
+										firstParameter = false;
+									}
+									else {
+										this.url += "&";
+									}
+									this.url += key + "." + i + "=" + encodeURIComponent(val[i]);
+								}
+							}
+							else {
+								loadVars[key + "." + i] = val[i];
+								hasContent = true;
+							}
+						}
+					}
+					else {
+						val = val.toString();
+						if (loadVars == null || (!sensitive && (val.length < ServiceUtil.Singleton.MAX_URL_PARAM_LEN && this.url.length < ServiceUtil.Singleton.MAX_URL_LEN))) {
+							if (!sensitive) {
+								if (firstParameter) {
+									this.url += "?";
+									firstParameter = false;
+								}
+								else {
+									this.url += "&";
+								}
+								this.url += key + "=" + encodeURIComponent(val);
+							}
+						}
+						else {
+							loadVars[key] = val;
+							hasContent = true;
+						}
+					}
+				}
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceDataset", "doRequest", this.maskSensitiveParam(this.url));
+				}
+				if (Logger.Singleton.perfTraceEnabled) {
+					Logger.Singleton.perfTrace("cmc/foundation/ServiceDataset", "doRequest", "requestIdentifier=" + this.requestIdentifier + " " + this.service.url);
+				}
+				if (this.transaction != null) {
+					var transactionGroup = ServiceTransactionUtil.Singleton.transactionGroupMap[this.transaction.transactionGroupId];
+					transactionGroup.submitted = true;
+				}
+				if (this.transaction != null && this.transaction.fileref != null) {
+					var uri = this.url;
+					var xhrt = new XMLHttpRequest();
+					var fd = new FormData();
+					fd.append('upLoadedFile', this.transaction.fileref);
+					var dataset = this;
+					xhrt.open("POST", uri, true);
+					xhrt.onreadystatechange = function(event) {
+						dataset.handleUploadComplete(event);
+					};
+					xhrt.send(fd);
+				}
+				else if (this.service.xml && this.xmlContent != "") {
+					var headers = {
+						"Content-Type": "application/xml"
+					};
+					if (this.service.requestHeader.length > 0) {
+						for (var i = 0; i < this.service.requestHeaders.length + 1; i += 2) {
+							headers[this.service.requestHeaders[i]] = this.service.requestHeaders[i + 1];
+						}
+					}
+					var dataset = this;
+					xhr(this.url, {
+						data: this.xmlContent,
+						method: "POST",
+						headers: headers
+					}).then(function(data) {
+						dataset.onData(data);
+					}, function(err) {
+						dataset.handleError("xhr", err);
+					});
+				}
+				else {
+					var dataset = this;
+					xhr(this.url, {
+						data: loadVars,
+						method: hasContent ? "POST" : "GET"
+					}).then(function(data) {
+						dataset.onData(data);
+					}, function(err) {
+						dataset.handleError("xhr", err);
+					});
+				}
+				this.submitted = true;
+				ServiceUtil.Singleton.lastSubmittedTime = (new Date()).getTime();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Release the deferred request. This method is called when the request parent of the service is released.
+		-->
+		<method args="e" name="doReleaseDeferredRequest">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.doReleaseDeferredRequestDel.disconnectAll();
+			if (this.transaction == null) {
+				ServiceUtil.Singleton.releaseServiceDataset(this);
+			}
+			]]>
+		</method>
+				
+		<!---
+			Stop the request currently associated with this dataset. If the service has already been submitted,
+			then the request will not actually be stopped, but when the request does return, the response will
+			from non-transactional services will be discarded. The response from transaction services will be
+			committed normally.
+		-->
+		<method name="stopRequest">
+			<![CDATA[
+			if (this.service.stoppable) {
+				this.stopped = true;
+				if (!this.submitted) {
+					this.doDeferredRequestDel.disconnectAll();
+					if (this.doReleaseDeferredRequestDel) {
+						this.doReleaseDeferredRequestDel.disconnectAll();
+					}
+					this.service.serviceStopped(this);
+				}
+			}
+			]]>
+		</method>		
+		
+		<!---
+			@keywords private
+			Generate a boundary value to append to a multipart/form-data content type when uploading a file.
+		-->
+		<method name="getBoundary">
+			<![CDATA[
+			var boundaryVal = "";
+			for (var i = 0; i < 0x20; i++) {
+				var tempVal = 97 + Math.random() * 25;
+				if (tempVal < 0) {
+					tempVal = Math.ceil(tempVal);
+				}
+				else {
+					tempVal = Math.floor(tempVal);
+				}
+				boundaryVal += String.fromCharCode(tempVal);
+			}
+			return boundaryVal;
+			]]>
+		</method>
+		
+		<!---
+			Attempt to resolve any unresolved parameters.
+		-->
+		<method name="resolveParameters">
+			<![CDATA[
+			var params = this.reresolveParameters;
+			for (var i = 0; i < params.length; i++) {
+				var param = params[i];
+				this.args[param.parameterName] = undefined;
+				delete this.args[param.parameterName];
+			}
+			ServiceUtil.Singleton.resolveParameters(this.reresolveParameters, this);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			replace the value of sensitive parameters (like password) to ****
+		-->
+		<method args="params" name="maskSensitiveParam">
+			<![CDATA[
+			var queryString;
+			if (params == null) {
+				return "";
+			}
+			else {
+				queryString = params.toString();
+			}
+			for (var key in ServiceUtil.Singleton.sensitiveParams) {
+				var sparam = key + "=";
+				var pos1 = queryString.indexOf(sparam);
+				if (pos1 != -1) {
+					var str1 = queryString.substring(0, pos1 + sparam.length);
+					var pos2 = queryString.indexOf("&", pos1);
+					if (pos2 != -1) {
+						queryString = str1 + "****" + queryString.substring(pos2);
+					}
+					else {
+						queryString = str1 + "****";
+					}
+				}
+			}
+			return queryString;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Send the XML request and Load the response back into the XML object.
+			@param String url: The URL to send the request to.
+			@param XML loadXML: The XML object that is making the request.  The results are also loaded back into this object.
+		-->
+		
+		
+		<!---
+			@keywords private
+			Called by the XML objects onLoad function, will handle the response of the xmlObject.
+			@param XML xmlObject: The XML object that has recieved the XML response.
+		-->
+		
+
+		<!---
+			Callback method that is called for a deferred request. This method is called
+			when the context value that is causing the deferreal is set.
+		-->
+		<method args="e" name="doDeferredRequest">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.doDeferredRequestDel.disconnectAll();
+			if (this.doReleaseDeferredRequestDel) {
+				this.doReleaseDeferredRequestDel.disconnectAll();
+			}
+			this.resolveParameters();
+			this.doRequest();
+			]]>
+		</method>	
+		
+		<!---
+			Handle the response from LoadVars.sendAndLoad.
+			@param string src The response XML. An undefined value indicates that an error occurred.
+		-->
+		<method args="src" name="onData">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ServiceDataset", "onData", "requestIdentifier=" + this.requestIdentifier + " URL returned: " + this.service.url);
+			}
+			if (EventTimer.Singleton.enabled && this.eventId != null) EventTimer.Singleton.restart(this.eventId);
+			if (src == undefined) {
+				if (this.service.retryOnError && this.requestRetryLimit > this.requestRetryCount) {
+					if (SingletonRegistry.progressIndicator != undefined) {
+						SingletonRegistry.progressIndicator.stopAnimation();
+					}
+					this.requestRetryCount++;
+					this.doRequest();
+				}
+				else {
+					this.handleError("onData");
+				}
+			}
+			else {
+				this.handleResponse(src);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ServiceDataset", "onDataComplete", "requestIdentifier=" + this.requestIdentifier);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is a listener for the ActionScript UploadCompleteData event that the FileReference will
+			receive on successful completion of a file upload.
+			It removes the listener that this has on the FileReference object.
+		-->	
+		
+
+		<!---
+			Handle response.
+			@param string responseData: the response XML string
+		-->
+		<method args="responseData" name="handleResponse">
+			<![CDATA[
+			this.complete = true;
+			if (this.stopped && this.transaction == null) {
+				this.service.serviceStopped(this);
+			}
+			else {
+				this.dataXML = XMLUtil.parseXML(responseData);
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceDataset", "handleResponse", "URL returned: " + this.maskSensitiveParam(this.url));
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "CONFIG", "cmc/foundation/ServiceDataset", "handleResponse", "XML returned: " + this.dataXML.toString());
+				}
+				try {
+					this.service.serviceComplete(this);
+				}
+				catch (e) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ServiceDataset", "handleResponse", "handleResponse failed, exception thrown: " + e.toString() + "; service request url: " + this.service.url);
+				}
+			}
+			if (SingletonRegistry.progressIndicator != undefined) {
+				SingletonRegistry.progressIndicator.stopAnimation();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is a listener for the ActionScript SecurityError event that will be
+			invoked when an upload or download fails because of a security error.
+			It also removes the listener that this has on the FileReference object.
+		-->	
+
+		<!---
+			Handle service request error.
+			@param string event: the name of the event that was triggered
+			@param object error: additional error information
+		-->
+		<method args="event, error" name="handleError">
+			<![CDATA[
+			if (typeof(error) == "undefined") error = null;
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ServiceDataset", event, "Error occurred while invoking URL [" + this.maskSensitiveParam(this.url) + "]" + (error ? (" " + error) : ""));
+			try {
+				this.service.handleServiceError(this, foundationResources.Singleton.serviceError.string);
+			}
+			catch (e) {
+				console.log("error calling handleError " + this.url);
+				console.log(e);
+			}
+			if (SingletonRegistry.progressIndicator != undefined) {
+				SingletonRegistry.progressIndicator.stopAnimation();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle the response from URLLoader.load.
+			@param string src The response XML. An undefined value indicates that an error occurred.
+		-->
+		<method args="event" name="handleComplete">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ServiceDataset", "handleComplete", "requestIdentifier=" + this.requestIdentifier + " URL returned: " + this.service.url);
+			}
+			if (EventTimer.Singleton.enabled && this.eventId != null) EventTimer.Singleton.restart(this.eventId);
+			if (this.urlLoader.data == undefined || this.urlLoader.data == null) {
+				if (this.service.retryOnError && this.requestRetryLimit > this.requestRetryCount) {
+					if (SingletonRegistry.progressIndicator != undefined) {
+						SingletonRegistry.progressIndicator.stopAnimation();
+					}
+					this.requestRetryCount++;
+					this.doRequest();
+				}
+				else {
+					this.handleError("handleComplete");
+				}
+			}
+			else {
+				this.handleResponse(this.urlLoader.data);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ServiceDataset", "handleComplete", "requestIdentifier=" + this.requestIdentifier);
+			}
+			]]>
+		</method>
+		
+		<method args="event" name="handleUploadComplete">
+			<![CDATA[
+			if (event.target.readyState == 4) {
+				if (event.target.status == 200) {
+					this.onData(event.target.responseText);
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ServiceDataset", "handleUploadComplete", "Error occurred while invoking URL [" + this.maskSensitiveParam(this.url) + "]" + " " + event.target.statusText);
+				}
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		This class declares a service parameter that will be resolved before invoking the parent service.
+		Service parameters can only be declared as immediate children of an instance of cmc/foundation/Service.
+		Refer to {@link cmc/foundation/ValueResolver} for details on how service parameters are resolved.
+		
+		<p>The following example demonstrates the declaration of two service parameters
+		for a custom service. The first parameter, "param1" is optional and does not need to resolve
+		to a value before the service can be invoked.
+		The second parameter, "param2" is required and must resolve to a value other than
+		an empty string before the service can be invoked.
+		
+		@START_CODE
+		<CustomService url="/cmc/MyObjectCustomService">
+			<ServiceParam name="param1" optional="true"/>
+			<ServiceParam name="param2"/>			
+		</CustomService>
+		@END_CODE
+	-->
+	<ValueResolver classDefinition="true" definitionName="cmc/foundation/ServiceParam">
+		<!---
+			Indicates that the service parameter is optional. The service
+			request will not be made if this is set to <code>false</code>
+			and the value cannot be resolved or resolves to an empty string.
+			The default value is "false".
+		-->
+		<variable name="optional" type="boolean" value="false"/>
+		
+		<!---
+			The parameter name. If this value is not specified, then the name of the parameter
+			will be taken from the "name" attribute.
+			
+			For example:
+			@START_CODE
+			<CustomService url="/cmc/MyObjectCustomService">
+				<ServiceParam name="param1" optional="true"/>
+				<ServiceParam name="param2" parameterName="parameter2"/>			
+			</CustomService>
+			@END_CODE
+			
+			This example will look up the context value "param2" and pass
+			it to the URL with parameter2 as the name. For example,
+			<code>/cmc/MyObjectCustomService?param1=value1&<b>parameter2=value2</b></code>
+		-->
+		<variable name="parameterName" type="string" value="${this.name}"/>
+
+		<!---
+			Indicates that the service parameter is sent even though its value resolves to an empty string.
+			The default is true.
+		-->
+		<variable name="sendEmpty" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var params = this.parent.serviceParams;
+			if (!params) {
+				params = [];
+				this.parent.serviceParams = params;
+			}
+			params.push(this);
+			]]>
+		</method>
+	</ValueResolver>
+	
+	<!---
+		This is the base class for all Management Center service request declarations. Its job is to build an URL with
+		all the specified parameters, send the URL request, and parse the response. This class must not be extended
+		or instantiated directly.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/Service">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="ServiceParam" moduleName="cmc/foundation/ServiceParam"/>
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FoundationConstants" moduleName="cmc/foundation/FoundationConstants"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="Node" moduleName="cmc/foundation/Node"/>
+		<dependency localName="EnablementCondition" moduleName="cmc/foundation/EnablementCondition"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelObject" moduleName="cmc/foundation/ModelObject"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			The URL for this service. If the URL begins with "/", then it will be
+			prefixed with the value of the global variable "serviceContextRooot". If the
+			global variable "serviceContextRoot" has not been set, then the value "/lobtools"
+			is used as the service context. This is a required attribute.
+		-->
+		<variable name="url" type="string"/>
+		<!---
+			Indicates that the children of the business object associated with this request will be refreshed after the service completes successfully. 
+			The user will be prompted to save unsaved changes before the refresh takes place. The refresh does not take place if the service fails. 
+			The default value is false. 
+		-->
+		<variable name="refreshChildren" type="boolean" value="false"/>
+		<!---
+			Indicates that property updates returned by this service are applied to the
+			parent object of the requesting object. The default value (false), indicates that
+			property updates are applied to the requesting object.
+		-->
+		<variable name="applyUpdatesToParent" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Array of declared service parameters for this service.
+		-->
+		<variable name="serviceParams" value="${[]}"/>
+		<!---
+			@keywords private
+			Send all of the object's "dirty" properties as service parameters.
+		-->
+		<variable name="sendDirty" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Send the object's object ID as a service parameter named "parentId".
+		-->
+		<variable name="sendParent" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Send all of the object's properties as service parameters.
+		-->
+		<variable name="sendAll" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Send properties from the default language sensitive object. The
+			default language sensitive object is a child object of the current
+			object and its "languageId" property matches the default language
+			for the current store.
+		-->
+		<variable name="sendDefaultLanguageProperties" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that identity token must be sent with the request. The default
+			is "true".
+		-->
+		<variable name="sendIdentity" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that current locale must be sent with the request. The default
+			is "true".
+		-->
+		<variable name="sendLocale" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that current timeZoneId must be sent with the request. The default
+			is "true".
+		-->
+		<variable name="sendTimeZoneId" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that this service is used to persist the state of a model object.
+		-->
+		<variable name="transactionService" type="boolean" value="false"/>		
+		<!---
+			@keywords private
+			Abort the request if the transaction is empty. The default is false.
+		-->
+		<variable name="abortEmptyTransactions" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The prefix for properties when the request is sent.
+		-->
+		<variable name="propertyPrefix" type="string" value="PROPERTY_"/>
+		<!---
+			@keywords private
+			Send all the properties with a prefix.
+		-->
+		<variable name="sendPrefix" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Send the maximum items to return
+		-->
+		<variable name="sendMaxItems" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The maximum items to return. 
+		-->
+		<variable name="maxItemsToReturn" type="number"/>		
+		<!---
+			When set to "true" this attribute will cause service parameters that resolve to multiple values to
+			be sent as individual request parameters of the form "parmName.0=value0&amp;paramName.1=value1".
+			When set to "false", service parameters that resolve to multiple values will be sent as a single
+			parameter with commas separating the values: "paramName=value0,value1". The default
+			is "false".
+		-->
+		<variable name="sendMultiValues" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			If true, the service will refresh itself when the associated model is reinitialized.
+		-->
+		<variable name="refreshOnModelInit" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			If true, the service will refresh itself when a user logs on.
+		-->
+		<variable name="refreshOnNewIdentity" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="requestIdentifier" type="number" value="0"/>
+		<!--- @keywords private -->
+		<variable name="sendRequestIdentifier" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that this is a GET type of service. Example for GET type of service will be
+			Refresh service, Get children service or Get reference service. The default
+			is "false".
+		-->
+		<variable name="getService" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that this service request can be stopped by the user. This
+			attribute only applies to services that are not transaction services.
+		-->
+		<variable name="stoppable" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that workspace context values must be sent with the request. The default
+			is "true".
+		-->
+		<variable name="sendWorkspaceContext" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates whether or not the <code>dataLanguageIds</code> URL parameter containing
+			the store default language identifier should be sent. The default is <code>false</code>.
+		-->
+		<variable name="sendDefaultLanguageId" type="boolean" value="false"/>
+		<!---
+			Indicates that multiple requests of this type can be sent in parallel (rather than being
+			serialized). This attribute is only applicable to {@link cmc/foundation/CreateService}, {@link cmc/foundation/UpdateService}, {@link cmc/foundation/DeleteService},
+			and {@link cmc/foundation/CustomService}. The default is "true".
+		-->
+		<variable name="sendSiblingRequestsInParallel" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that objectVersionId must be sent with the request. The default
+			is "false".
+		-->
+		<variable name="sendObjectVersionId" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that all requests made by this service instance will be serialized. This attribute
+			is ignored for transaction requests.
+		-->
+		<variable name="serializeRequests" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Array of active requests for this service. This is only used with non transaction requests.
+		-->
+		<variable name="activeRequests" value="${[]}"/>
+		<!---
+			@keywords private
+			Array of cmc/foundation/ContextValue objects populated by this service.
+		-->
+		<variable name="contextValues" value="${[]}"/>
+		<!---
+			@keywords private
+			Check that the result set size is over the limit. If this is set to <code>false</code>
+			then the total result set size will be ignored and the entire result set
+			will be unconditionally loaded. This attribute only applies to requests that
+			return a list of objects. The default is <code>true</code>.
+		-->
+		<variable name="checkResultsOverLimit" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Abort the service if the result set size is over the limit. If this is set to
+			<code>true</code> then the results will be discarded.
+			If this is set to <code>false</code>, then
+			page requests will continue until the maximum result set size is reached.
+			This attribute only applies if <code>checkResultsOverLimit</code> is active. The
+			default is <code>true</code>.
+		-->
+		<variable name="abortResultsOverLimit" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that an attempt should be made to retry this request if there is a communication error.
+		-->
+		<variable name="retryOnError" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that the service will be an XML request. 
+		-->
+		<variable name="xml" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Optional HTML request header for XML request.  
+		-->
+		<variable name="requestHeader" value="${[]}"/>
+		<!---
+			Indicates that the failure of this service will prevent subsequent service requests related to the same primary object from being sent.
+			This attribute is only applicable to {@link cmc/foundation/CreateService}, {@link cmc/foundation/UpdateService} and {@link cmc/foundation/DeleteService}. The default is "true".
+		-->
+		<variable name="abortOnError" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates whether or not the <code>dataLanguageIds</code> URL parameter containing
+			the current input languages should be sent. The default is <code>false</code>.
+		-->
+		<variable name="sendInputLanguageIds" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Indicates whether or not to omit empty object properties from the service params.
+			The default is <code>false</code>.
+		-->
+		<variable name="omitEmptyProperties" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (this.sendIdentity) {
+				new ServiceParam.Class(this, {
+					name: "identityId"
+				});
+				new ServiceParam.Class(this, {
+					name: "identitySignature"
+				});
+			}
+			if (this.sendMaxItems) {
+				new ServiceParam.Class(this, {
+					name: "maxItems",
+					value: this.getMaxItemsToReturn()
+				});
+			}
+			if (this.sendLocale) {
+				new ServiceParam.Class(this, {
+					name: "locale"
+				});
+			}
+			if (this.sendWorkspaceContext) {
+				new ServiceParam.Class(this, {
+					name: "workspaceName"
+				});
+				new ServiceParam.Class(this, {
+					name: "workspaceTaskGroup"
+				});
+				new ServiceParam.Class(this, {
+					name: "workspaceTask"
+				});
+				this.workspaceName.enablementCondition = new EnablementCondition.Class(this.workspaceName, {
+					contextName: "workspaceTask",
+					enablementValue: "",
+					negate: true
+				});
+				this.workspaceTaskGroup.enablementCondition = this.workspaceName.enablementCondition;
+				this.workspaceTask.enablementCondition = this.workspaceName.enablementCondition;
+			}
+			if (this.sendDefaultLanguageId) {
+				var model = ModelUtil.Singleton.findModelForView(this);
+				if (model && model.parent.multipleInputLanguages) {
+					new ServiceParam.Class(this, {
+						contextName: "defaultLanguageId",
+						parameterName: "dataLanguageIds"
+					});
+				}
+			}
+			if (this.sendInputLanguageIds) {
+				new ServiceParam.Class(this, {
+					contextName: "inputLanguageIds",
+					parameterName: "dataLanguageIds"
+				});
+			}
+			if (this.sendTimeZoneId) {
+				new ServiceParam.Class(this, {
+					name: "timeZoneId"
+				});
+			}
+			if (this.sendObjectVersionId) {
+				new ServiceParam.Class(this, {
+					name: "objectVersionId",
+					propertyName: "objectVersionId"
+				});
+				this.objectVersionId.enablementCondition = new EnablementCondition.Class(this.objectVersionId, {
+					propertyName: "objectVersionId",
+					enablementValue: "",
+					negate: true
+				});
+			}
+			if (this.url.charAt(0) == '/') {
+				if (cmcConfig.serviceContextRoot) {
+					this.url = cmcConfig.serviceContextRoot + this.url;
+				}
+				else {
+					this.url = "/lobtools" + this.url;
+				}
+			}
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			if (this.refreshOnModelInit) {
+				var model = ModelUtil.Singleton.findModelForView(this);
+				if (model != null) {
+					this.refreshDel = new EventHandler.Class(this, "doRefreshOnInit");
+					this.refreshDel.connect(model, "onmodelInitialized");
+					this.doRefreshOnInit(model.modelInitialized);
+				}
+			}
+			if (this.refreshOnNewIdentity) {
+				this.doRefreshOnNewIdentityDel = new EventHandler.Class(this, "doRefreshOnNewIdentity");
+				this.doRefreshOnNewIdentityDel.connect(RootComponent.Singleton, "onnewIdentity");
+				this.doRefreshOnNewIdentity();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="doRefreshOnNewIdentity">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var identityIdContext = ContextUtil.Singleton.findContextValue(null, "identityId");
+			if (identityIdContext != null && identityIdContext.value != null && identityIdContext.value != "") {
+				this.doRequest();
+			}
+			else {
+				for (var i = 0; i < this.contextValues.length; i++) {
+					var contextValue = this.contextValues[i];
+					contextValue.setVariable("value", null);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="modelInitialized" name="doRefreshOnInit">
+			<![CDATA[
+			if (modelInitialized == true) {
+				this.doRequest();
+			}
+			else {
+				for (var i = 0; i < this.contextValues.length; i++) {
+					var contextValue = this.contextValues[i];
+					contextValue.setVariable("value", null);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.refreshDel) {
+				this.refreshDel.disconnectAll();
+				delete this.refreshDel;
+			}
+			if (this.doRefreshOnNewIdentityDel) {
+				this.doRefreshOnNewIdentityDel.disconnectAll();
+				delete this.doRefreshOnNewIdentityDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Invoke this service for the specified object and arguments.
+			@param node requestParent: The request parent. Depending on the service type
+					this may be an instance of cmc/foundation/ModelObject or cmc/foundation/ModelSearchResults. If
+					it is "null", then the service will be used as the parent.
+			@param Object args: request parameters
+			@param Object extraArgs: contains extra parameters such as:
+				<ul>
+					<li>Number startIndex: The start index for this request. This is used to control paging</li>
+					<li>FileReference fileref: ActionScript FileReference object to upload</li>
+					<li>String content: XML string used in content of the request</li>
+				</ul>
+		-->
+		<method args="requestParent, args, extraArgs" name="doRequest">
+			<![CDATA[
+			if (typeof(requestParent) == "undefined") requestParent = null;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/Service", "doRequest", "Entering" + " requestIdentifier=" + (this.requestIdentifier + 1) + " " + this.url);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/Service", "doRequest(requestParent,args)", [requestParent, args]);
+			}
+			if (requestParent == null) {
+				requestParent = this;
+			}
+			else if (!(requestParent instanceof Node.Class) && typeof (requestParent.parent) == "undefined") {
+				requestParent.parent = this;
+			}
+			var o = (requestParent instanceof ModelObject.Class) ? requestParent : null;
+			var transaction = null;
+			var abort = false;
+			if (typeof (extraArgs) == "undefined") {
+				extraArgs = {};
+			}
+			if (this.transactionService) {
+				transaction = ServiceTransactionUtil.Singleton.createServiceTransaction(o, this);
+				this.initializeTransaction(transaction);
+				if (extraArgs.fileref != null) {
+					transaction.fileref = extraArgs.fileref;
+				}
+				var oDef = o.objectDefinition;
+				if (oDef.languageSensitive && o.parentObject != null) {
+					if (o.parentObject.getDefaultLanguageObject() == o) {
+						if (oDef.createService == this && o.parentObject.objectDefinition.createService != null && o.parentObject.objectDefinition.createService.sendDefaultLanguageProperties) {
+							abort = true;
+						}
+						if (oDef.saveService == this && o.parentObject.objectDefinition.saveService != null && o.parentObject.objectDefinition.saveService.sendDefaultLanguageProperties) {
+							abort = true;
+						}
+					}
+					if (oDef.createService == this && o.implicitNewObject && transaction.saveProperties.length == 0) {
+						abort = true;
+					}
+				}
+				if (this.abortEmptyTransactions && ServiceTransactionUtil.Singleton.isEmpty(transaction)) {
+					abort = true;
+				}
+				if (abort) {
+					ServiceTransactionUtil.Singleton.commit(transaction, true);
+				}
+			}
+			if (!abort) {
+				if (typeof (args) == "undefined") {
+					args = {};
+				}
+				else {
+					var newargs = {};
+					for (var key in args) {
+						newargs[key] = args[key];
+					}
+					args = newargs;
+				}
+				this.requestIdentifier++;
+				if (o != null && this.getService) {
+					o.incrementReferenceCount();
+				}
+				if (transaction == null) {
+					this.prepareArguments(o, args);
+					var enabledParams = ServiceUtil.Singleton.getEnabledParameters(this.serviceParams, o);
+					var rpds = {
+						requestParent: requestParent,
+						args: args
+					};
+					ServiceUtil.Singleton.resolveParameters(enabledParams, rpds);
+					var xmlContent = "";
+					if (extraArgs.content) {
+						xmlContent = extraArgs.content;
+					}
+					var startIndex = 0;
+					if (extraArgs.startIndex && extraArgs.startIndex != 0) {
+						startIndex = extraArgs.startIndex;
+						args.recordSetStartNumber = startIndex;
+					}
+					var getAll = false;
+					if (extraArgs.getAll) {
+						getAll = extraArgs.getAll;
+					}
+					var ds = ServiceUtil.Singleton.createServiceDataset({
+						requestParent: requestParent,
+						service: this,
+						args: rpds.args,
+						transaction: transaction,
+						reresolveParameters: rpds.reresolveParameters,
+						loadingParameters: rpds.loadingParameters,
+						serverManagedParameters: rpds.serverManagedParameters,
+						unresolvableParameters: rpds.unresolvableParameters,
+						requestIdentifier: this.requestIdentifier,
+						startIndex: startIndex,
+						xmlContent: xmlContent,
+						getAll: getAll
+					});
+					this.activeRequests.push(ds);
+					if (!this.serializeRequests || this.activeRequests.length == 1) {
+						ds.doRequest();
+					}
+				}
+				else {
+					transaction.requestIdentifier = this.requestIdentifier;
+					ServiceTransactionUtil.Singleton.prepareArguments(transaction, args);
+					ServiceTransactionUtil.Singleton.addPendingTransaction(transaction, true);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/Service", "doRequest(requestParent,args)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Add additional service parameters for the current request.
+			@param cmc/foundation/ModelObject o: The object for which this request is
+					being issued.
+			@param Object args: request parameters object
+		-->
+		<method args="o, args" name="prepareArguments">
+			<![CDATA[
+			if (o != null) {
+				var keyPrefix = this.sendPrefix ? this.propertyPrefix : null;
+				var omitEmptyProperties = this.omitEmptyProperties;
+				if (this.sendAll) {
+					o.getPropertyValues(args, false, true, keyPrefix, true, omitEmptyProperties);
+				}
+				else if (this.sendDirty) {
+					o.getPropertyValues(args, true, true, keyPrefix, true, omitEmptyProperties);
+				}
+				if (this.sendParent) {
+					args.parentId = o.objectId;
+				}
+				if (this.sendDefaultLanguageProperties) {
+					var languageObject = o.getDefaultLanguageObject();
+					if (languageObject != null) {
+						if (languageObject.newObject) {
+							languageObject.getPropertyValues(args, false, true, keyPrefix, true);
+						}
+						else {
+							languageObject.getPropertyValues(args, true, true, keyPrefix, true);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Initialize the service transaction object for this request.
+			@param Object transaction: the transaction object
+		-->
+		<method args="transaction" name="initializeTransaction">
+			<![CDATA[
+			if (this.sendDirty || this.sendAll) {
+				ServiceTransactionUtil.Singleton.addSaveObject(transaction, transaction.o);
+				if (this.sendDefaultLanguageProperties) {
+					var defaultLanguageObject = transaction.o.getDefaultLanguageObject();
+					if (defaultLanguageObject != null && (!defaultLanguageObject.implicitNewObject || defaultLanguageObject.hasUnsavedChanges())) {
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/Service", "initializeTransaction", "defaultLanguageObject=" + defaultLanguageObject.logString());
+						}
+						ServiceTransactionUtil.Singleton.addSaveObject(transaction, defaultLanguageObject);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the service has been stopped, aborting a request or response.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceStopped">
+			<![CDATA[
+			if (ds.requestParent.objectDefinition) {
+				if (this.getService) {
+					ds.requestParent.decrementReferenceCount();
+				}
+			}
+			var requestIdentifier = ds.requestIdentifier;
+			if (ds.transaction != null) {
+				ServiceTransactionUtil.Singleton.clearTransactionGroup(ds.transaction.transactionGroupId);
+				ServiceTransactionUtil.Singleton.rollback(ds.transaction);
+			}
+			else {
+				ServiceUtil.Singleton.releaseServiceDataset(ds);
+			}
+			EventUtil.trigger(this, "onserviceComplete", {
+				requestIdentifier: requestIdentifier
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when a service response is successfuly returned from the server. This does
+			not necessarily mean that the service completed successfully, it just means that there were no
+			communication errors. The specified dataset contains the response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceComplete">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/Service", "serviceComplete(ds)", [ds]);
+			}
+			if (ds.transaction != null) {
+				ServiceTransactionUtil.Singleton.clearServiceErrors(ds.transaction);
+			}
+			var commitTransaction = true;
+			var hasMoreRecordsFlag = false;
+			var isRecoveryNeeded = false;
+			var e = ds.dataXML;
+			if (e != null) {
+				if (this.xml) {
+					this.parseXML(ds.requestParent, e, ds.requestIdentifier);
+					this.handleServiceSuccess(ds.requestParent);
+				}
+				else if (e.nodeName == "objects") {
+					var abort = false;
+					if (this.hasResultsOverLimit(ds, e)) {
+						this.handleResultsOverLimit(ds, e);
+						if (this.abortResultsOverLimit) {
+							abort = true;
+						}
+					}
+					if (!abort) {
+						hasMoreRecordsFlag = this.hasMoreRecords(ds, e);
+						this.parseObjects(ds.requestParent, e, hasMoreRecordsFlag, ds.requestIdentifier, ds.startIndex);
+					}
+					this.handleServiceSuccess(ds.requestParent);
+				}
+				else if (e.nodeName == "object") {
+					this.parseObject(ds.requestParent, e, ds.requestIdentifier);
+					this.handleServiceSuccess(ds.requestParent);
+				}
+				else if (e.nodeName == "values") {
+					this.parseValues(ds.requestParent, e, ds.requestIdentifier);
+					this.handleServiceSuccess(ds.requestParent);
+				}
+				else if (e.nodeName == "errors") {
+					commitTransaction = false;
+					if (this.checkRequestRecovery(e)) {
+						ContextUtil.Singleton.findContextValue(null, "identityId").setVariable("value", null);
+						ContextUtil.Singleton.findContextValue(null, "identitySignature").setVariable("value", null);
+						ContextUtil.Singleton.findContextValue(null, "WCToken").setVariable("value", null);
+						ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").setVariable("value", null);
+						var enabledParams = ServiceUtil.Singleton.getEnabledParameters(this.serviceParams, ds.requestParent);
+						ServiceUtil.Singleton.resolveParameters(enabledParams, ds);
+						isRecoveryNeeded = true;
+					}
+					else {
+						if (ds.transaction != null) {
+							ServiceTransactionUtil.Singleton.setTransactionGroupHasError(ds.transaction);
+						}
+						this.parseErrors(ds, e);
+					}
+				}
+			}
+			if (hasMoreRecordsFlag || isRecoveryNeeded) {
+				ds.doRequest();
+			}
+			else if (ds.transaction != null) {
+				var requestIdentifier = ds.requestIdentifier;
+				if (commitTransaction) {
+					var o = ds.transaction.o;
+					ServiceTransactionUtil.Singleton.commit(ds.transaction);
+					if (this.refreshChildren && o.openGroupObject != null) {
+						o.openGroupObject.setGetChildrenServicesStale(null);
+					}
+				}
+				else {
+					ServiceTransactionUtil.Singleton.rollback(ds.transaction);
+				}
+				EventUtil.trigger(this, "onserviceComplete", {
+					requestIdentifier: requestIdentifier
+				});
+			}
+			else {
+				var requestIdentifier = ds.requestIdentifier;
+				if (ds.requestParent.objectDefinition != undefined && this.getService) {
+					ds.requestParent.decrementReferenceCount();
+				}
+				ServiceUtil.Singleton.releaseServiceDataset(ds);
+				if (this.serializeRequests && this.activeRequests.length > 0) {
+					this.activeRequests[0].doRequest();
+				}
+				EventUtil.trigger(this, "onserviceComplete", {
+					requestIdentifier: requestIdentifier
+				});
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "CONFIG", "cmc/foundation/Service", "serviceComplete", this.url);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/Service", "serviceComplete");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Checks if the total number of results of the service request is over the limit
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: "objects" element
+		-->
+		<method args="ds, e" name="hasResultsOverLimit">
+			<![CDATA[
+			var overLimit = false;
+			if (this.checkResultsOverLimit) {
+				var maxRecordSetTotal = this.getMaxRecordSetTotal();
+				if (this.abortResultsOverLimit) {
+					var recordSetTotal = Number(e.getAttribute("recordSetTotal"));
+					if (!isNaN(recordSetTotal)) {
+						overLimit = recordSetTotal > maxRecordSetTotal;
+					}
+				}
+				else {
+					var recordSetStartNumber = Number(e.getAttribute("recordSetStartNumber"));
+					if (isNaN(recordSetStartNumber)) {
+						recordSetStartNumber = 0;
+					}
+					var recordSetCount = Number(e.getAttribute("recordSetCount"));
+					var recordSetComplete = e.getAttribute("recordSetCompleteIndicator") != "false";
+					if (!isNaN(recordSetCount)) {
+						var currentTotal = recordSetStartNumber + recordSetCount - ds.startIndex;
+						if (currentTotal > maxRecordSetTotal || (currentTotal == maxRecordSetTotal && !recordSetComplete)) {
+							overLimit = true;
+						}
+					}
+				}
+			}
+			return overLimit;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the maximum record set size allowed.
+			@return integer: maximum record set total
+		-->
+		<method name="getMaxRecordSetTotal">
+			<![CDATA[
+			if (typeof (this.maxRecordSetTotal) == "undefined") {
+				var maxRecordSetTotalContextValue = ContextUtil.Singleton.findContextValue(null, "maxRecordSetTotal");
+				if (maxRecordSetTotalContextValue != null) {
+					this.maxRecordSetTotal = Number(maxRecordSetTotalContextValue.value);
+				}
+			}
+			return this.maxRecordSetTotal;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the maximum record returned per service call.
+			@return integer: maximum record returned per service call
+		-->
+		<method name="getMaxItems">
+			<![CDATA[
+			var maxItemsValue;
+			if (this.sendMaxItems && this.maxItems) {
+				maxItemsValue = this.maxItems.value;
+			}
+			else {
+				maxItemsValue = this.getMaxItemsToReturn();
+			}
+			return maxItemsValue;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Gets the valid maximum record returned per service call.
+			@return integer: maximum record returned per service call
+		-->
+		<method name="getMaxItemsToReturn">
+			<![CDATA[
+			var maxItems = this.maxItemsToReturn;
+			if (typeof (maxItems) == "undefined") {
+				var maxItemsContextValue = ContextUtil.Singleton.findContextValue(null, "maxItems");
+				if (maxItemsContextValue != null) {
+					maxItems = Number(maxItemsContextValue.value);
+				}
+			}
+			var pageSize = this.getMaxRecordSetTotal();
+			if (typeof (maxItems) != "undefined" && typeof (pageSize) != "undefined") {
+				if (maxItems > pageSize) {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/Service", "getMaxItemsToReturn", "Page size (" + pageSize + ") is smaller than the maximum items returned (" + maxItems + ") per service (" + this.url + ").");
+					}
+					maxItems = pageSize;
+				}
+				else if (maxItems != pageSize) {
+					var remainder = pageSize % maxItems;
+					if (remainder > 0) {
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/Service", "getMaxItemsToReturn", "Page size (" + pageSize + ") is not multiples of the maximum items returned (" + maxItems + ") per service (" + this.url + ").");
+						}
+						var quotient = Math.ceil(pageSize / maxItems);
+						while (remainder > 0 && quotient > 1) {
+							quotient = quotient - 1;
+							remainder = pageSize % quotient;
+						}
+						if (remainder > 0) {
+							maxItems = pageSize;
+						}
+						else {
+							maxItems = pageSize / quotient;
+						}
+					}
+				}
+			}
+			return maxItems;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This handler will update the maximum record set total if the user changes his page size preference
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCPageSize") {
+				this.maxRecordSetTotal = Number(ContextUtil.Singleton.findContextValue(null, "maxRecordSetTotal").value);
+				if (this.sendMaxItems && this.maxItems) {
+					var maxItemsValue = this.getMaxItemsToReturn();
+					if (this.maxItems.value != maxItemsValue) {
+						this.maxItems.setVariable("value", maxItemsValue);
+					}
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Check if there are more results awaiting to be returned from this service
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: "objects" element
+		-->		
+		<method args="ds, e" name="hasMoreRecords">
+			<![CDATA[
+			var moreRecords = false;
+			if (e.getAttribute("recordSetCompleteIndicator") && e.getAttribute("recordSetCompleteIndicator") == "false") {
+				if (e.getAttribute("recordSetReferenceId") && e.getAttribute("recordSetReferenceId") != "") {
+					ds.args.recordSetReferenceId = e.getAttribute("recordSetReferenceId");
+				}
+				var recordSetCount = Number(e.getAttribute("recordSetCount"));
+				if (!isNaN(recordSetCount)) {
+					var recordSetStartNumber = Number(e.getAttribute("recordSetStartNumber"));
+					if (isNaN(recordSetStartNumber)) {
+						recordSetStartNumber = 0;
+					}
+					if (ds.getAll || !this.checkResultsOverLimit || recordSetStartNumber + recordSetCount - ds.startIndex < this.getMaxRecordSetTotal()) {
+						ds.args.recordSetStartNumber = recordSetStartNumber + recordSetCount;
+						moreRecords = true;
+					}
+				}
+				else {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/Service", "hasMoreRecords", "Aborted: Record set count not available");
+					}
+				}
+			}
+			return moreRecords;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Checks if the recovery is needed on service request or not after a session related error occurred.
+			If it is a session related error, then ask the user to re-logon if necessary or force the user to log out.
+			@param XML e: the data element
+			@return boolean: True if the request recovery is needed; false otherwise.
+		-->
+		<method args="e" name="checkRequestRecovery">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/Service", "checkRequestRecovery(e)", [e]);
+			}
+			var nodes = e.childNodes;
+			var isRecoveryNeeded = false;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var message = null;
+				var textNode = node.firstChild;
+				if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+					message = textNode.nodeValue;
+				}
+				if (message != null) {
+					if (node.nodeName == "exception") {
+						var code = node.getAttribute("code");
+						if (code == FoundationConstants.Singleton.ERROR_EXPIRED_IDENTITY_TOKEN || code == FoundationConstants.Singleton.MSG_ID_EXPIRED_IDENTITY_TOKEN) {
+							RootComponent.Singleton.doSessionTimeout();
+							isRecoveryNeeded = true;
+						}
+						else if (code == FoundationConstants.Singleton.ERROR_TERMINATED_IDENTITY_TOKEN || code == FoundationConstants.Singleton.MSG_ID_TERMINATED_IDENTITY_TOKEN) {
+							RootComponent.Singleton.doSessionTerminated();
+							isRecoveryNeeded = true;
+						}
+						else if (code == FoundationConstants.Singleton.ERROR_CORRUPTED_IDENTITY_TOKEN || code == FoundationConstants.Singleton.MSG_ID_CORRUPTED_IDENTITY_TOKEN) {
+							RootComponent.Singleton.doSessionCorrupted();
+							isRecoveryNeeded = true;
+						}
+						else if (code == FoundationConstants.Singleton.ERROR_IDENTITY_TOKEN_NOT_FOUND || code == FoundationConstants.Singleton.MSG_ID_IDENTITY_TOKEN_NOT_FOUND) {
+							RootComponent.Singleton.doSessionCorrupted();
+							isRecoveryNeeded = true;
+						}
+						else if (code == FoundationConstants.Singleton.ERROR_IDENTITY_TOKEN_NOT_PERSISTED || code == FoundationConstants.Singleton.MSG_ID_IDENTITY_TOKEN_NOT_PERSISTED) {
+							RootComponent.Singleton.doSessionCorrupted();
+							isRecoveryNeeded = true;
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/Service", "checkRequestRecovery(e)", isRecoveryNeeded);
+			}
+			return isRecoveryNeeded;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Parse the specified "objects" element. This method is called when an element named "objects"
+			is found in the service response XML.
+			@param node requestParent: service request parent node
+			@param XML e: "objects" element
+			@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+			@param number startIndex: the start index for this request
+		-->
+		<method args="requestParent, e, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the specified XML response element. This method is called when the XML flag is true and a
+			service response XML has been retrieved.
+			@param node requestParent: service request parent node
+			@param XML e: XML document
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="requestParent, e, reqIdentifier" name="parseXML">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the specified data element and apply the properties to the
+			specified object. This method is called when an element named "object"
+			is found in the service response XML.
+			@param cmc/foundation/ModelObject o: the model object
+			@param XML e: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="o, e, reqIdentifier" name="parseObject">
+			<![CDATA[
+			if (this.applyUpdatesToParent && o.parentObject != null) {
+				o.parentObject.parseDataElement(e);
+			}
+			else {
+				o.parseDataElement(e);
+			}
+			]]>
+		</method>
+		
+
+		<!---
+			@keywords private
+			Parse the specified errors element. This method is called when an element named "errors"
+			is found in the service response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: the data element
+		-->
+		<method args="ds, e" name="parseErrors">
+			<![CDATA[
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var message = StringUtil.Singleton.escapeText(XMLUtil.getNodeValue(node));
+				if (node.nodeName == "exception") {
+					var code = node.getAttribute("code");
+					this.handleException(ds, message, code);
+				}
+				else if (node.nodeName == "validationError") {
+					var propertyName = node.getAttribute("propertyName");
+					ServiceTransactionUtil.Singleton.handleValidationError(ds.transaction, message, propertyName);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			if (ds.requestParent.objectDefinition) {
+				if (this.getService) {
+					ds.requestParent.decrementReferenceCount();
+				}
+			}
+			MessageLogger.Singleton.logException(code, message);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Handle results set over the UI limit. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: "values" data element
+		-->
+		<method args="ds, e" name="handleResultsOverLimit">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/Service", "handleResultsOverLimit", "Warning: Result set total (" + e.getAttribute("recordSetTotal") + ") exceeded maximum results (" + this.getMaxRecordSetTotal() + ").");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when an element named "values"
+			is found in the service response XML.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			if (this.requestIdentifier == requestIdentifier) {
+				this.contextValues = [];
+				var nodes = e.childNodes;
+				for (var i = 0; i < nodes.length; i++) {
+					var node = nodes[i];
+					var parameterName = node.nodeName;
+					var value = XMLUtil.getNodeValue(node);
+					var contextValue = ContextUtil.Singleton.findContextValue(this, parameterName);
+					if (contextValue != null) {
+						contextValue.setVariable("value", value);
+						this.contextValues.push(contextValue);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param node requestParent: the parent node for this service request
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/Service", "handleServiceSuccess", "Service completed for this URL: " + this.url);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when a communication error occurs during the service request.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: error message
+		-->
+		<method args="ds, message" name="handleServiceError">
+			<![CDATA[
+			this.handleException(ds, message);
+			var requestIdentifier = ds.requestIdentifier;
+			if (ds.transaction != null) {
+				ServiceTransactionUtil.Singleton.setTransactionGroupHasError(ds.transaction);
+				ServiceTransactionUtil.Singleton.rollback(ds.transaction);
+			}
+			else {
+				ServiceUtil.Singleton.releaseServiceDataset(ds);
+				if (this.serializeRequests && this.activeRequests.length > 0) {
+					this.activeRequests[0].doRequest();
+				}
+			}
+			EventUtil.trigger(this, "onserviceComplete", {
+				requestIdentifier: requestIdentifier
+			});
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		cmc/foundation/SOAPService will wrap a SOAP envelop around {@link cmc/foundation/Service}.
+		The XML attribute is set to true in this service.
+		
+		Use the addSOAPEnvelop and removeSOAPEvelop to add and remove the
+		SOAP wrapper from the content of your XML request.  The XML envelop will look
+		like this.	
+		
+		@START_CODE
+		<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/' xmlns:soap="your SOAP URL">
+			<soap:Header>
+				...
+			</soap:Header>
+			<soap:Body>
+				...
+			</soap:Body>
+		</soap:Envelope>
+		@END_CODE
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/SOAPService" xml="true">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		
+		<!---
+			@keywords private
+			Adds SOAP wrapper around the XML content.
+			@param String headerContent: A string that contains the SOAP header XML
+			@param String bodyContent: A string that contains the SOAP body XML
+			@return String content: returns the XML string including the SOAP envelop
+		-->
+		<method args="headerContent, bodyContent" name="createSOAPEnvelop">
+			<![CDATA[
+			var content = "<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/'>" + "<soap:Header>" + headerContent + "</soap:Header>" + "<soap:Body>" + bodyContent + "</soap:Body>" + "</soap:Envelope>";
+			return content;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Removes the SOAP wrapper and returns the content inside the <soap:Body>.
+			@param XML content: A string that contains the XML content including the SOAP envelop
+			@return String content: returns the XML string without the SOAP envelop
+		-->
+		<method args="content" name="getSOAPBody">
+			<![CDATA[
+			var soapBody = content.firstChild;
+			if (soapBody.nodeName == "soap:Body") {
+				var bodyContent = soapBody.firstChild;
+				content = new flash.xml.XMLDocument(StringUtil.Singleton.unescapeText(bodyContent.toString()));
+			}
+			return content;
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		
+		Service utilities.
+	-->
+	<Node definitionName="cmc/foundation/ServiceUtil" singletonDefinition="true">
+		<dependency localName="ServiceDataset" moduleName="cmc/foundation/ServiceDataset"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Maximum length that a service request URL can be before we
+			start adding in the URL parameters into the post content of the request.
+		-->
+		<variable name="MAX_URL_LEN" type="number" value="1500"/>
+		<!---
+			Maximum length for URL parameter value. Longer URL parameters will be added
+			to the POST content of the request.
+		-->
+		<variable name="MAX_URL_PARAM_LEN" type="number" value="100"/>
+		<!---
+			Array of active service datasets.
+		-->
+		<variable name="serviceDatasets" value="${[]}"/>
+		<!---
+			Array of service datasets that are available for service requests. Service datasets
+			are reused.
+		-->
+		<variable name="availableServiceDatasets" value="${[]}"/>
+		<!---
+			@keywords private
+			Active service dataset count.
+		-->
+		<variable name="activeServiceDatasetCount" type="number" value="0"/>
+		<!---
+			@keywords private
+			The map of parameters that contain sensitive data.
+		-->
+		<variable name="sensitiveParams" value="${{password: true,logonPassword: true,logonPasswordOld: true,logonPasswordNew: true,logonPasswordVerify: true,identitySignature: true,logonId: true}}"/>
+		<!--- 
+			@keywords private
+			The number of milliseconds since the last time any service has been submitted.
+		-->
+		<variable name="lastSubmittedTime" type="number" value="0"/>
+		
+		<!---
+			Stop service requests.
+			@param cmc/foundation/Model model: object model instance
+		-->
+		<method args="model" name="stopServiceRequests">
+			<![CDATA[
+			var stoppableServiceDatasets = [];
+			for (var i = 0; i < this.serviceDatasets.length; i++) {
+				var ds = this.serviceDatasets[i];
+				if (ds.service.stoppable && (typeof (model) == "undefined" || model == null || ds.requestParent.model == model)) {
+					stoppableServiceDatasets.push(ds);
+				}
+			}
+			while (stoppableServiceDatasets.length > 0) {
+				stoppableServiceDatasets.shift().stopRequest();
+			}
+			]]>
+		</method>
+
+		<!---
+			Returns all the parameters in the given array that are marked as an always resolve
+			parameter.
+			@param array params: an array of cmc/foundation/ServiceParam values
+			@param ModelObject o: in where the value being used to check with the enablementCondition
+			@return array: array of cmc/foundation/ServiceParam instances that has been validated with its enablementCondition (is there is any)
+		-->
+		<method args="params, o" name="getEnabledParameters">
+			<![CDATA[
+			var enabledParameters = [];
+			for (var i = 0; i < params.length; i++) {
+				var isEnabled = true;
+				if (!params[i].isContextValue && params[i].enablementCondition) {
+					if (!params[i].enablementCondition.isEnabled(o)) {
+						isEnabled = false;
+					}
+				}
+				if (isEnabled) {
+					enabledParameters.push(params[i]);
+				}
+			}
+			return enabledParameters;
+			]]>
+		</method>
+		
+		<!---
+			Resolve the declared parameters for this request and add the arguments and resolved parameters array to the specified ds object.
+			@param array params: an array of cmc/foundation/ServiceParam values to resolve
+			@param Object ds:  An object containing the following parameters:
+								node requestParent: the request parent node
+							   	Object args: request parameters object into which the resolved values will be populated
+								Array reresolveParameters:	An array of parameters to reresolve
+								Array loadingParameters: An array of unresolved parameters that are loading
+								Array serverManagedParameters: An array of unresolved parameters that are server managed
+								Array unresolvableParameters: An array of unresolvable parameters
+		-->
+		<method args="params, ds" name="resolveParameters">
+			<![CDATA[
+			var reresolveParameters = [];
+			var loadingParameters = [];
+			var serverManagedParameters = [];
+			var unresolvableParameters = [];
+			for (var i = 0; i < params.length; i++) {
+				var param = params[i];
+				var enabled = true;
+				if (param.isContextValue && param.enablementCondition && !param.enablementCondition.isEnabled(ds.requestParent)) {
+					enabled = false;
+				}
+				var value = null;
+				var values = param.getValues(ds.requestParent, true);
+				var noValue = false;
+				var reresolve = false;
+				var loading = false;
+				var serverManaged = false;
+				if (values.length > 1) {
+					value = values;
+				}
+				else if (values.length == 1) {
+					value = values[0];
+					if (value == "" && !param.optional) {
+						noValue = true;
+						if (param.isContextValue) {
+							reresolve = true;
+							loading = true;
+						}
+						else if (param.isPropertyValue) {
+							var valueSource = param.getValueSource(ds.requestParent);
+							if (valueSource.propertyName == valueSource.o.objectDefinition.idProperty || valueSource.propertyName == "objectStoreId" || (valueSource.propertyDefinition && valueSource.propertyDefinition.serverManaged)) {
+								reresolve = true;
+								serverManaged = true;
+							}
+						}
+					}
+					else if (param.isContextValue) {
+						reresolve = true;
+					}
+				}
+				if (value == null && !param.optional) {
+					noValue = true;
+					if (param.parentProperty) {
+						if (!ds.requestParent.isParentLoaded(param.parentType)) {
+							reresolve = true;
+							loading = true;
+						}
+						else {
+							if (Logger.Singleton.enabled) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/ServiceUtil", "resolveParameters", "Unable to resolve parameter: " + param.parameterName);
+							}
+						}
+					}
+					else if (param.isContextValue && param.isResolvable(ds.requestParent)) {
+						reresolve = true;
+						loading = true;
+					}
+					else {
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "WARNING", "cmc/foundation/ServiceUtil", "resolveParameters", "Unable to resolve parameter: " + param.parameterName);
+						}
+					}
+				}
+				if (value == null && param.loadChildren && ds.requestParent.isGetChildrenServicesLoading()) {
+					reresolve = true;
+					loading = true;
+					noValue = true;
+				}
+				if (reresolve) {
+					reresolveParameters.push(param);
+				}
+				if (noValue) {
+					if (loading && enabled) {
+						loadingParameters.push(param);
+					}
+					if (serverManaged) {
+						serverManagedParameters.push(param);
+					}
+					if (!reresolve && !param.optional) {
+						unresolvableParameters.push(param);
+					}
+				}
+				if (value == null) {
+					value = "";
+				}
+				if (enabled && (value != "" || param.sendEmpty)) {
+					ds.args[param.parameterName] = value;
+				}
+			}
+			ds.reresolveParameters = reresolveParameters;
+			ds.loadingParameters = loadingParameters;
+			ds.serverManagedParameters = serverManagedParameters;
+			ds.unresolvableParameters = unresolvableParameters;
+			]]>
+		</method>
+		
+		<!---
+			Returns a service dataset instance primed with the specified arguments. This may
+			be a new or recycled instance.
+			@param object args: the create arguments for the service dataset
+		-->
+		<method args="args" name="createServiceDataset">
+			<![CDATA[
+			var ds;
+			if (this.availableServiceDatasets.length > 0) {
+				ds = this.availableServiceDatasets.pop();
+				for (var i in args) {
+					ds.setVariable(i, args[i]);
+				}
+			}
+			else {
+				ds = new ServiceDataset.Class(this, args);
+			}
+			if (EventTimer.Singleton.enabled) ds.eventId = EventTimer.Singleton.currentEventId;
+			this.serviceDatasets.push(ds);
+			this.activeServiceDatasetCount++;
+			return ds;
+			]]>
+		</method>
+		
+		<!---
+			Release the specified service dataset and make it available for future requests.
+			@param cmc/foundation/ServiceDataset ds: the service dataset to release
+		-->
+		<method args="ds" name="releaseServiceDataset">
+			<![CDATA[
+			for (var i = 0; i < this.serviceDatasets.length; i++) {
+				if (this.serviceDatasets[i] == ds) {
+					this.serviceDatasets.splice(i, 1);
+					break;
+				}
+			}
+			this.activeServiceDatasetCount--;
+			ds.release();
+			this.availableServiceDatasets.push(ds);
+			]]>
+		</method>
+		
+	</Node>
+
+	<!---
+		A service that will return a list of business objects that reference the current object. References
+		are used to describe a relationship between two primary objects. A cmc/foundation/GetReferencesService may only
+		be declared as an immediate sub-node of an instance of {@link cmc/foundation/PrimaryObjectDefinition}.
+		The get references service will be invoked for business objects that are described by the parent object definition
+		when the framework determines that the references are required. The references of a business object are required when
+		the user performs the following actions:
+		<ul>
+			<li>launches the properties view for a business object</li>
+			<li>opens a references navigation view for an object by selecting it in the explorer view</li>
+		</ul>
+		
+		<p>Get references services must be prepared to accept the following implicit parameters:
+		<ul>
+			<li>maxItems: This is an integer value that indicates the desired page size for the result set.</li>
+			<li>recordSetStartNumber: This is an integer value that is sent if the result set is broken up
+			into multiple pages. The second and subsequent page requests will include this parameter.</li>
+			<li>dataLanguageIds: This is the default language ID. Get references services that return translated data
+			must respect this parameter and only return the translated data that matches the specified language identifiers.</li>
+		</ul>
+		
+		<p>Additional required service parameters can be defined by declaring instances of
+		{@link cmc/foundation/ServiceParam} as children of the cmc/foundation/GetReferencesService instance.
+		
+		<p>The following example demonstrates the declaration of a get references service
+		that loads the products that reference the current product through the merchandising
+		association relationship. The service requires three parameters, the store ID which
+		is resolved from the "storeId" context values, the catalog entry ID which is resolved
+		from the current object's "catentryId" property, and the catalog entry type which is
+		hard coded to "ProductBean".
+		
+		@START_CODE
+		<GetReferencesService url="/cmc/GetProductChildren-ReferenceAssociations">
+			<ServiceParam name="storeId" />
+			<ServiceParam name="catentryId" propertyName="catentryId" />
+			<ServiceParam name="catenttypeId" value="ProductBean" />
+		</GetReferencesService>
+		@END_CODE
+		
+		<p>The successful response from a get references service must be an XML document that has a root element named
+		"objects". The child elements of the "objects" element must all be named "reference" and they
+		must have a single child element named "object". The "object" elements must indicate their object type by specifying
+		the "objectType" attribute. The root "objects" element must include the following attributes:
+		<ul>
+			<li>recordSetCompleteIndicator - this value is true if the response is the last page of the result set</li>
+			<li>recordSetStartNumber - the starting index into the result set for the current page</li>
+			<li>recordSetCount - the number of objects returned by this page</li>
+			<li>recordSetTotal - the total number of objects in the complete result set</li>
+		</ul>
+		The "objects" element may optionally include an attribute called "recordSetReferenceId" that will be sent back
+		as a parameter on the request for the next page of referencing objects. This may be used to optimize the get references service.
+		
+		<p>Object and property elements returned from a get references service may optionally include a "readonly" attribute.
+		If the value is set to "true", then the framework will prevent the user from making changes to that object
+		or property instance.
+		
+		<p>The following sample demonstrates a response that returns two referencing product objects. Notice that
+		the list of objects returned are reference objects that include their parent primary object using
+		the "parent" tag.
+		
+		@START_CODE
+		<objects recordSetCompleteIndicator="true"
+				recordSetReferenceId="65024510-df44-11dc-83e5-829b47bb4a4f:5"
+				recordSetStartNumber="0" recordSetCount="2" recordSetTotal="2">
+			<reference>
+				<object objectType="ProductMerchandisingAssociation">
+					<associationId>10750</associationId>
+					<parent>
+						<object objectType="Product">
+							<type>Product</type>
+							<catenttypeId readonly="true">ProductBean</catenttypeId>
+							<catentryId>10275</catentryId>
+							<partnumber>FUCO-01</partnumber>
+							<object objectType="CatalogEntryDescription">
+								<languageId>-1</languageId>
+								<name>Sleek Occasional Table</name>
+								<sDesc>The sleek styling makes this occasional
+								table a perfect addition to your home.</sDesc>
+							</object>
+						</object>
+					</parent>
+				</object>
+			</reference>
+			<reference>
+				<object objectType="ProductMerchandisingAssociation">
+					<associationId>10752</associationId>
+					<parent>
+						<object objectType="Product">
+							<type>Product</type>
+							<catenttypeId readonly="true">ProductBean</catenttypeId>
+							<catentryId>10277</catentryId>
+							<partnumber>FUCO-02</partnumber>
+							<object objectType="CatalogEntryDescription">
+								<languageId>-1</languageId>
+								<name>Modern Occasional Table</name>
+								<sDesc>Modern occasional table to go with the
+								modern decor.</sDesc>
+							</object>
+						</object>
+					</parent>
+				</object>
+			</reference>
+		</objects>
+		@END_CODE
+		
+		<p>If an exception occurs while processing a get references service, the response must be an XML document that
+		has a root element named "errors". The "errors" element must include one child element named "exception".
+		The "exception" element includes a message suitable for display to the user. The following example demonstrates
+		a valid error response for a get references service.
+
+		@START_CODE
+		<errors>
+			<exception>You do not have the required access rights to perform this operation.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/GetReferencesService" getService="true" retryOnError="true" sendDefaultLanguageId="true" sendMaxItems="true" sendObjectVersionId="true" stoppable="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			A comma separated list of primary {@link cmc/foundation/ObjectDefinition#objectType object types} returned by this get references service.
+		-->
+		<variable name="primaryObjectTypes" type="string" value="${null}"/>
+		<!---
+			A comma separated list of reference {@link cmc/foundation/ObjectDefinition#objectType object types} returned by this get references service.
+			The reference object types will be matched against the primary object definitions identified by <code>primaryObjectTypes</code>. The
+			reference object definitions do not need to be declared as immediate children of the primary object definition. They can be anywhere
+			in the primary object definition.
+		-->
+		<variable name="referenceObjectTypes" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			The message to be shown in the widget that displays the list of business objects returned by this service when
+			the number of objects is over the limit.
+		-->
+		<variable name="serviceOverLimitMsg" type="string" value="${foundationResources.Singleton.tooManyObjectsMsg.string}"/>
+		<!---
+			@keywords private
+			Array of primary object definitions.
+		-->
+		<variable name="primaryObjectDefinitions" value="${null}"/>
+		<!---
+			@keywords private
+			String array of the object types specified by referenceObjectTypes.
+		-->
+		<variable name="referenceObjectTypesArray" value="${[]}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var services = this.parent.getReferencesServices;
+			if (!services) {
+				services = [];
+				this.parent.getReferencesServices = services;
+			}
+			services.push(this);
+			this.doParseCompleteDel = new EventHandler.Class(this, "doParseComplete");
+			this.doParseStopDel = new EventHandler.Class(this, "doParseStop");
+			if (this.referenceObjectTypes != null) {
+				this.referenceObjectTypesArray = StringUtil.Singleton.splitAndTrim(this.referenceObjectTypes, ",");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			delete this.doParseCompleteDel;
+			delete this.doParseStopDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the "objects" element returned from a successful request.
+			@param cmc/foundation/ModelObject o: the parent object
+			@param XML e: the objects data element
+			@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+			@param number startIndex: the start index for this request
+		-->
+		<method args="o, e, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			o.model.doDeferredParseObjects(e, o, this.doParseCompleteDel, {
+				o: o,
+				hasMoreRecordsFlag: hasMoreRecordsFlag,
+				reqIdentifier: reqIdentifier
+			}, this.stoppable, this.doParseStopDel, {
+				o: o,
+				hasMoreRecordsFlag: hasMoreRecordsFlag
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the specified data element and apply the properties to the
+			specified object. This method is called when an element named "object"
+			is found in the service response XML.
+			@param cmc/foundation/ModelObject o: the model object
+			@param XML e: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="o, e, reqIdentifier" name="parseObject">
+			<![CDATA[
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/GetReferencesService", "onerror", "Unexpected <object> tag returned by get references service: " + this.url + ". Get references services must return <objects> tag.");
+			]]>
+		</method>
+
+		
+		<!--- @keywords private -->		
+		<method args="args" name="doParseComplete">
+			<![CDATA[
+			var hasMoreRecordsFlag = args.hasMoreRecordsFlag;
+			var o = args.o;
+			o.updateReferences(true);
+			if (!hasMoreRecordsFlag) {
+				o.referenceServiceRequestCompleted(this);
+			}
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.updateObjCount(args.objects.length);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args" name="doParseStop">
+			<![CDATA[
+			if (!args.hasMoreRecordsFlag) {
+				args.o.referenceServiceRequestError(this);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the service has been stopped, aborting a request or response.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceStopped">
+			<![CDATA[
+			ds.requestParent.referenceServiceRequestError(this);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the specified errors element. This method is called when an element named "errors"
+			is found in the service response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: the data element
+		-->
+		<method args="ds, e" name="parseErrors">
+			<![CDATA[
+			ds.requestParent.referenceServiceRequestError(this);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle service exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			this.inherited(arguments);
+			ds.requestParent.referenceServiceRequestError(this, message);
+			]]>
+		</method>		
+		
+		<!---
+			@keywords private
+			Handle results set over the UI limit.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: "values" data element
+		-->
+		<method args="ds, e" name="handleResultsOverLimit">
+			<![CDATA[
+			ds.requestParent.referenceServiceRequestError(this, this.serviceOverLimitMsg);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the maximum record set size allowed.
+			@return integer: maximum record set total
+		-->
+		<method name="getMaxRecordSetTotal">
+			<![CDATA[
+			return 500;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the array of primary object definitions.
+			@param cmc/foundation/Model model: the model
+			@return [cmc/foundation/PrimaryObjectDefinition]: array of primary object definitions
+		-->
+		<method args="model" name="getPrimaryObjectDefinitions">
+			<![CDATA[
+			if (this.primaryObjectDefinitions == null) {
+				this.primaryObjectDefinitions = [];
+				if (this.primaryObjectTypes) {
+					var types = StringUtil.Singleton.splitAndTrim(this.primaryObjectTypes, ",");
+					for (var i = 0; i < types.length; i++) {
+						var def = model.getObjectDefinition(null, types[i]);
+						if (def) {
+							this.primaryObjectDefinitions.push(def);
+						}
+						else {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "SEVERE", "cmc/foundation/GetReferencesService", "getPrimaryObjectDefinitions", "Unable to resolve primary object type: " + types[i]);
+						}
+					}
+				}
+			}
+			return this.primaryObjectDefinitions;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if at least one of this service's primary object/reference object combinations match the specified array of object types.
+			@param cmc/foundation/PrimaryObjectDefinition referencedDef The referenced primary object definition to test
+			@param [string] types: an array of object types begining with the reference object type and progressing to the primary object type
+			@return boolean: true if the type array matches any of this services reference object paths
+		-->
+		<method args="referencedDef, types" name="matchesObjectTypes">
+			<![CDATA[
+			var match = false;
+			var primaryDefs = this.getPrimaryObjectDefinitions(referencedDef.model);
+			for (var i = 0; i < primaryDefs.length; i++) {
+				var primaryDef = primaryDefs[i];
+				var primaryIndex = null;
+				for (var j = 0; j < types.length; j++) {
+					if (primaryDef.matchesType(types[j])) {
+						primaryIndex = j;
+						break;
+					}
+				}
+				if (primaryIndex) {
+					var matchingDefs = [primaryDef];
+					for (var j = primaryIndex - 1; j >= 0; j--) {
+						var type = types[j];
+						var childDefs = [];
+						for (var k = 0; k < matchingDefs.length; k++) {
+							var defs = matchingDefs[k].getChildDefinitions(type);
+							while (defs.length > 0) {
+								childDefs.push(defs.shift());
+							}
+						}
+						matchingDefs = childDefs;
+					}
+					for (var j = 0; j < matchingDefs.length; j++) {
+						var def = matchingDefs[j];
+						if (def.reference && def.isReferencedDefinition(referencedDef)) {
+							for (var k = 0; k < this.referenceObjectTypesArray.length; k++) {
+								if (def.matchesType(this.referenceObjectTypesArray[k])) {
+									match = true;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+			return match;
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		Ping server service to check for connection.
+	-->
+	<Service definitionName="cmc/foundation/PingService" retryOnError="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/PingServer">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<!---
+			@keywords private
+			Parse the specified data element and apply the properties to the
+			specified object. This method is called when an element named "object"
+			is found in the service response XML.
+			@param cmc/foundation/ModelObject o: the model object
+			@param XML e: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="o, e, reqIdentifier" name="parseObject">
+			<![CDATA[
+
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param node requestParent: the parent node for this service request
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			ServiceTransactionUtil.Singleton.pingCompleted = true;
+			ServiceTransactionUtil.Singleton.triggerPendingTransactions();
+			this.inherited(arguments);
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Handle service exception. 
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			ServiceTransactionUtil.Singleton.pingCompleted = true;
+			ServiceTransactionUtil.Singleton.triggerPendingTransactions();
+			this.inherited(arguments);
+			]]>
+		</method>
+	</Service>
+
+</Definitions>

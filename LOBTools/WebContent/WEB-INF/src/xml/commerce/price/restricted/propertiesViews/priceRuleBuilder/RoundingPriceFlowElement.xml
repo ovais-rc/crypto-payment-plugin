@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		<p>
+		This validator checks whether a child object with non-empty value exists.
+		</p>
+	-->	 
+	<Validator classDefinition="true" definitionName="cmc/price/RequiredChildObjectPropertyValidator">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!--- 
+			The object path that describes required child objects. 
+		 -->
+		<variable name="objectPath" type="string"/>
+		<!--- 
+			The property name that is required by child object . 
+		 -->
+		<variable name="propertyName" type="string" value=""/>
+		<!--- 
+			The error message that is to be displayed when error happens. 
+		 -->
+		<variable name="errorMessage" type="string" value=""/>
+		<!--- 
+			@keywords private
+		 -->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (this.isEnabled(o)) {
+				var childObjects = o.getObjects(this.objectPath);
+				for (var i = 0; i < childObjects.length; ++i) {
+					var childObject = childObjects[i];
+					var property = childObject.getProperty(this.propertyName);
+					if (typeof (property.value) != 'undefined' && !StringUtil.Singleton.isBlankString(property.value)) {
+						o.clearValidationError(this);
+						return;
+					}
+				}
+				o.addValidationError(this, this.errorMessage);
+			}
+			else {
+				o.clearValidationError(this);
+			}
+			]]>
+		</method>
+	</Validator>
+	<!---
+		<p>
+		Validator for {@link cmc/price/RoundingRulePatternObject Rounding Element in Price Rule Builder}. This ensures that the input rounding patterns are lexer correct.
+		However,they might still be valid or invalid depending on the currency used.
+		</p>
+		
+		<p>This should only be child of PropertyDefinition.</p>
+	-->	 
+	<Validator classDefinition="true" definitionName="cmc/price/RoundingPatternValidator">
+		<dependency localName="priceResources" moduleName="cmc/price/PriceResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---@keywords private-->
+		<method args="o, changedProperty" name="validate">
+			<![CDATA[
+			if (typeof(changedProperty) == "undefined") changedProperty = null;
+			if (!o || !changedProperty) {
+				return;
+			}
+			if (this.isEnabled(o)) {
+				var message = null;
+				var patternString = changedProperty.value;
+				if (!patternString || StringUtil.Singleton.isBlankString(patternString) || patternString.indexOf("-") == 0 || !StringUtil.Singleton.isNumber(StringUtil.Singleton.replace("*" + patternString + "*", "*", "1"))) {
+					message = priceResources.Singleton.roundingPatternCharacterWaring.string;
+				}
+				if (!message && (patternString.indexOf("**") == 0)) {
+					message = priceResources.Singleton.roundingPatternLexerWaring_asterisk.string;
+				}
+				if (!message && (patternString.indexOf(".") == 0)) {
+					message = priceResources.Singleton.roundingPatternLexerWaring_decimalPoint_start.string;
+				}
+				if (!message && (patternString.indexOf(".") == (patternString.length - 1))) {
+					message = priceResources.Singleton.roundingPatternLexerWaring_decimalPoint_end.string;
+				}
+				if (message == null) {
+					changedProperty.clearValidationError(this);
+				}
+				else {
+					changedProperty.addValidationError(this, message);
+				}
+			}
+			else {
+				changedProperty.clearValidationError(this);
+			}
+			]]>
+		</method>
+	</Validator>
+	
+	<FlowElementSummary classDefinition="true" definitionName="cmc/price/RoundingElementSummary">
+		<dependency localName="priceResources" moduleName="cmc/price/PriceResources"/>
+		<!--- @keywords private -->
+		<FlowSummaryParam name="currencies" objectPath="prcRoundingRuleCurrencyObject" propertyName="definingCurrencyCodes"/>
+		<!--- @keywords private -->
+		<FlowSummaryParam name="patterns" objectPath="prcRoundingRulePatternObject" propertyName="pattern"/>
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateSummaryDel.connect(priceResources.Singleton.roundingPatternCharacterWaring, "onstring");
+			this.updateSummaryDel.connect(priceResources.Singleton.roundingPatternLexerWaring_asterisk, "onstring");
+			this.updateSummaryDel.connect(priceResources.Singleton.roundingPatternLexerWaring_decimalPoint, "onstring");
+			]]>
+		</handler>
+		<!--- @keywords private -->
+		<method args="e" name="updateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var summaryText = "";
+			var patterns = this.getValuesList("patterns").split(", ");
+			if (this.getValuesList("patterns").length > 0 && patterns.length > 0) {
+				if (patterns.length <= 3) {
+					summaryText = summaryText + priceResources.Singleton.replaceValues("full_roundingSummeryPattern", [patterns.join(", ")]);
+				}
+				else {
+					summaryText = summaryText + priceResources.Singleton.replaceValues("roundingSummeryPattern", patterns);
+				}
+			}
+			var currencies = this.getValuesList("currencies").split(",");
+			if (summaryText.length > 0 && this.getValuesList("currencies").length > 0 && currencies.length > 0) {
+				if (currencies.length <= 3) {
+					summaryText = summaryText + priceResources.Singleton.replaceValues("full_roundingSummeryCurrency", [currencies.join(", ")]);
+				}
+				else {
+					summaryText = summaryText + priceResources.Singleton.replaceValues("roundingSummeryCurrency", currencies);
+				}
+			}
+			this.setSummaryText(summaryText);
+			]]>
+		</method>
+	</FlowElementSummary>		
+</Definitions>

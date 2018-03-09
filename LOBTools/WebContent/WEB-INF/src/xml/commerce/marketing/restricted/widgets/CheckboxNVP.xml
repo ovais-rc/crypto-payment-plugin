@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		<p>Marketing checkbox implementation that allows for editing of individual elements
+		of name/value pair (NVP) strings. For example, assume the server property is in the format:
+		<code>name1=value1,name2=value2,name3=value3</code></p>
+
+		<p>This widget allows for editing one NVP like name2, while keeping the rest of the parameters as-is.
+		Ordering of the NVP's is not guaranteed.</p>
+	-->
+	<Checkbox classDefinition="true" definitionName="cmc/marketing/CheckboxNVP">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Reference to  cmc/foundation/ModelProperty object that is being edited.
+			@type cmc/foundation/ModelProperty
+		-->
+		<variable name="property" value="${null}"/>
+
+		<!--- Name in the name/value pair to edit -->
+		<variable name="pairName" type="string" value=""/>
+
+		<!--- Optional value to return when checked. Default is "true" -->
+		<variable name="trueValue" type="string" value="true"/>
+
+		<!---
+			Optional value to return when checked. Default is "false".
+			If blank (""), the NVP will not be set at all. For example, "name=" would not
+			be saved.
+		-->
+		<variable name="falseValue" type="string" value="false"/>
+
+		<!--- @keywords private -->
+		<variable name="nonTargetPairs" type="string" value=""/>
+		<!--- @keywords private -->
+		<variable name="targetPairValue" type="string" value=""/>
+
+		<!--- @keywords private -->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					if (this._initcomplete) {
+						this.setVariable("value", false);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete && this.property && (this.property != null)) {
+				this.parsePropertyString(this.property.value);
+				var newValue = (this.targetPairValue == this.trueValue);
+				if (newValue != this.value) {
+					this.setVariable("value", newValue);
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="storeValue">
+			<![CDATA[
+			if (this._initcomplete && this.property && (this.property != null)) {
+				this.parsePropertyString(this.property.value);
+				var prefix = this.nonTargetPairs;
+				if (this.value) {
+					if (prefix != "") {
+						prefix += ";";
+					}
+					prefix += this.pairName + "=";
+					this.property.change(prefix + this.trueValue);
+				}
+				else {
+					if (this.falseValue == "") {
+						this.property.change(prefix);
+					}
+					else {
+						if (prefix != "") {
+							prefix += ";";
+						}
+						prefix += this.pairName + "=";
+						this.property.change(prefix + this.falseValue);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="x" name="parsePropertyString">
+			<![CDATA[
+			this.nonTargetPairs = "";
+			this.targetPairValue = "";
+			var pairs = x.split(";");
+			for (var i = 0; i < pairs.length; i++) {
+				var nvp = pairs[i].split("=");
+				if (nvp.length == 2) {
+					if (nvp[0] != this.pairName) {
+						if (this.nonTargetPairs != "") {
+							this.nonTargetPairs += ";";
+						}
+						this.nonTargetPairs += pairs[i];
+					}
+					else {
+						this.targetPairValue = nvp[1];
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler args="newValue" name="onvalue">
+			<![CDATA[
+			this.storeValue();
+			]]>
+		</handler>
+	 <method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method></Checkbox>
+
+	<!---
+		@keywords final
+		<p>cmc/marketing/PropertyCheckboxNVP is a property editor and that uses {@link cmc/marketing/CheckboxNVP} to create a check box that
+		binds to a {@link cmc/foundation/ModelProperty property value}. Use cmc/marketing/PropertyCheckboxNVP when implementing a check box
+		inside a {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}. This class is similar to {@link cmc/foundation/PropertyCheckbox},
+		but should be used when the property value is stored in a name/value pair format. See {@link cmc/marketing/CheckboxNVP} for
+		more information about name/value pair format handling.</p>
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/marketing/PropertyCheckboxNVP">
+		<dependency localName="CheckboxNVP" moduleName="cmc/marketing/CheckboxNVP"/>
+		<!--- Name in the name/value pair to edit -->
+		<variable name="pairName" type="string" value=""/>
+
+		<!--- Optional value to return when checked. Default is "true" -->
+		<variable name="trueValue" type="string" value="true"/>
+
+		<!---
+			Optional value to return when checked. Default is "false".
+			If blank (""), the NVP will not be set at all. For example, "name=" would not
+			be saved.
+		-->
+		<variable name="falseValue" type="string" value="false"/>
+
+		<!---
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new CheckboxNVP.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				trueValue: this.trueValue,
+				falseValue: this.falseValue,
+				pairName: this.pairName,
+				text: ""
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+</Definitions>

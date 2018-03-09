@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report reportName="biCSRRevenueReport" online="true" dataSourceName="WCA DataSource">
+    <comment></comment>
+    <SQLvalue>
+SELECT
+	USRG.LOGONID AS CSRID,
+	CONCAT(COALESCE(M.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(M.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(M.LAST_NAME,'')))) AS NAME,
+	SUM(FS.RPT_REVENUE) AS REVENUE,
+	(CASE
+		WHEN WCA.IS_COST_AVAIL(FS.SUBMITTER_ID, DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$)) = 1
+		THEN SUM(FS.RPT_PROFIT)
+		ELSE NULL
+	END) AS PROFIT
+FROM
+	WCA.FACT_SALES FS,
+	WCA.USERREG USRG,
+	WCA.MEMBER M,
+	WCA.MBRGRPREL MGR
+WHERE
+	MGR.MEMBER_ID = USRG.USERS_ID AND
+	USRG.USERS_ID = FS.SUBMITTER_ID AND
+	M.MEMBER_ID = FS.SUBMITTER_ID AND
+	FS.STORE_ID IN ({storeent_id}) AND
+	MGR.MBRGRPTYPE = 'ServiceRepGroup' AND
+	WCA.PARAM_VALUE_IN(CHAR(FS.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED') = 1 AND
+	WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), FS.PER_ID) = 1
+GROUP BY
+	FS.SUBMITTER_ID,
+	USRG.LOGONID,
+	M.FIRST_NAME,
+	M.MIDDLE_NAME,
+	M.LAST_NAME
+ORDER BY {Sort} {Order}
+    </SQLvalue>
+	<display>
+		<standardInfo>
+			<resourceBundle>bi.biNLS</resourceBundle>
+			<title>biCSRRevenueReport</title>
+			<message>biCSRRevenueReport</message>
+		</standardInfo>
+		<userDefinedParameters>
+			<THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+			<TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+			<spaceBetweenColumns>25</spaceBetweenColumns>
+			<columnDefaultAttributes>
+				<displayInReport>true</displayInReport>
+				<columnWidth>0</columnWidth>
+				<maxEntryLength>999</maxEntryLength>
+				<columnType>string</columnType>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<displayInHeader>False</displayInHeader>
+				</columnDefaultAttributes>
+			<columns>
+				<columnKey>C0</columnKey>
+				<columnName>CSRRevenueReportCSRIDColumn</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C1</columnKey>
+				<columnName>CSRRevenueReportCSRName</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C2</columnKey>
+				<columnName>CSRRevenueReportRevenue</columnName>
+				<columnType>decimal</columnType>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				<displayTotal>True</displayTotal>
+			</columns>
+			<columns>
+				<columnKey>C3</columnKey>
+				<columnName>CSRRevenueReportProfit</columnName>
+				<columnType>decimal</columnType>
+				<columnDisplayIfNull>valueNotAvailable</columnDisplayIfNull>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			</columns>
+		</userDefinedParameters>
+	</display>
+  </Report>
+  <Report reportName="biCSRRevenueReportCSRId" online="true" dataSourceName="WCA DataSource">
+    <comment></comment>
+    <SQLvalue>
+SELECT
+	USRG.LOGONID AS CSRID,
+	CONCAT(COALESCE(M.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(M.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(M.LAST_NAME,'')))) AS USER_NAME,
+	FS.REVENUE as REVENUE ,
+	FS.PROFIT
+FROM
+	WCA.MEMBER M,
+	WCA.USERREG USRG,
+	(
+	SELECT
+		SUBMITTER_ID,
+		SUM(RPT_REVENUE) AS REVENUE,
+		(CASE
+			WHEN WCA.IS_COST_AVAIL(SUBMITTER_ID, DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$)) = 1
+			THEN SUM(RPT_PROFIT)
+			ELSE NULL
+		END) AS PROFIT	
+	FROM
+		WCA.FACT_SALES
+	WHERE
+		STORE_ID IN ({storeent_id}) AND
+		WCA.PARAM_VALUE_IN(CHAR(ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED') = 1 AND
+		WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), PER_ID) = 1
+	GROUP BY
+		SUBMITTER_ID
+	) AS FS
+WHERE
+	USRG.LOGONID = '{CSRId}' AND
+	M.MEMBER_ID = USRG.USERS_ID AND
+	FS.SUBMITTER_ID = M.MEMBER_ID
+Order by 
+	{Sort} {Order}
+    </SQLvalue>
+	<display>
+		<standardInfo>
+			<resourceBundle>bi.biNLS</resourceBundle>
+			<title>biCSRRevenueReport</title>
+			<message>biCSRRevenueReport</message>
+		</standardInfo>
+		<userDefinedParameters>
+			<THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+			<TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+			<spaceBetweenColumns>25</spaceBetweenColumns>
+			<columnDefaultAttributes>
+				<displayInReport>true</displayInReport>
+				<columnWidth>0</columnWidth>
+				<maxEntryLength>999</maxEntryLength>
+				<columnType>string</columnType>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<displayInHeader>False</displayInHeader>
+				</columnDefaultAttributes>
+			<columns>
+				<columnKey>C0</columnKey>
+				<columnName>CSRRevenueReportCSRID</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C1</columnKey>
+				<columnName>CSRRevenueReportCSRName</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C2</columnKey>
+				<columnName>CSRRevenueReportRevenue</columnName>
+				<columnType>decimal</columnType>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				<displayTotal>True</displayTotal>
+			</columns>
+			<columns>
+				<columnKey>C3</columnKey>
+				<columnName>CSRRevenueReportProfit</columnName>
+				<columnType>decimal</columnType>
+				<columnDisplayIfNull>valueNotAvailable</columnDisplayIfNull>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			</columns>
+		</userDefinedParameters>
+	</display>
+  </Report>
+  <Report reportName="biCSRRevenueReportCSRTeamId" online="true" dataSourceName="WCA DataSource">
+    <comment></comment>
+    <SQLvalue>
+SELECT
+	USRG.LOGONID AS CSRID,
+	CONCAT(COALESCE(M.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(M.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(M.LAST_NAME,'')))) AS NAME,
+	SUM(FS.RPT_REVENUE) AS REVENUE,
+	(CASE
+		WHEN WCA.IS_COST_AVAIL(FS.SUBMITTER_ID, DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$)) = 1
+		THEN SUM(FS.RPT_PROFIT)
+		ELSE NULL
+	END) AS PROFIT
+FROM
+	WCA.FACT_SALES FS,
+	WCA.USERREG USRG,
+	WCA.MEMBER M
+WHERE
+	USRG.USERS_ID = FS.SUBMITTER_ID AND
+	M.MEMBER_ID = FS.SUBMITTER_ID AND
+	FS.STORE_ID IN ({storeent_id}) AND
+	WCA.PARAM_VALUE_IN(CHAR(FS.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED') = 1 AND
+	WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), FS.PER_ID) = 1 AND
+	WCA.IN_CSR_GROUP(FS.SUBMITTER_ID, '{CSRTeamId}', FS.PER_ID) = 1
+GROUP BY
+	FS.SUBMITTER_ID,
+	USRG.LOGONID,
+	M.FIRST_NAME,
+	M.MIDDLE_NAME,
+	M.LAST_NAME
+ORDER BY {Sort} {Order}
+    </SQLvalue>
+	<display>
+		<standardInfo>
+			<resourceBundle>bi.biNLS</resourceBundle>
+			<title>biCSRRevenueReport</title>
+			<message>biCSRRevenueReport</message>
+		</standardInfo>
+		<userDefinedParameters>
+			<THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+			<TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+			<spaceBetweenColumns>25</spaceBetweenColumns>
+			<columnDefaultAttributes>
+				<displayInReport>true</displayInReport>
+				<columnWidth>0</columnWidth>
+				<maxEntryLength>999</maxEntryLength>
+				<columnType>string</columnType>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<displayInHeader>False</displayInHeader>
+				</columnDefaultAttributes>
+			<columns>
+				<columnKey>C0</columnKey>
+				<columnName>CSRRevenueReportCSRID</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C1</columnKey>
+				<columnName>CSRRevenueReportCSRName</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C2</columnKey>
+				<columnName>CSRRevenueReportRevenue</columnName>
+				<columnType>decimal</columnType>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				<displayTotal>True</displayTotal>
+			</columns>
+			<columns>
+				<columnKey>C3</columnKey>
+				<columnName>CSRRevenueReportProfit</columnName>
+				<columnType>decimal</columnType>
+				<columnDisplayIfNull>valueNotAvailable</columnDisplayIfNull>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			</columns>
+		</userDefinedParameters>
+	</display>
+  </Report>
+</Reporting>

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		A filter that will exclude the activities that have set activity id
+	-->
+	<Filter classDefinition="true" definitionName="cmc/marketing/FamilyChildListViewerFilter">
+		<!---
+			The activity id
+		-->
+		<variable name="activityId" type="string" value=""/>
+
+		<!---
+			Check if the specified message matches this filter.
+			@param cmc/shell/MessageObject o: the object to test
+			@return boolean: true if the object matches this filter
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return o.objectId != this.activityId;
+			]]>
+		</method>
+	</Filter>
+	
+	<!--- @keywords private -->
+	<ChildListViewer classDefinition="true" definitionName="cmc/marketing/FamilyChildListViewer" listClass="${ChildActivityGrid}" objectTypes="RelatedWebActivity,RelatedInheritedWebActivity,RelatedSearchActivity,RelatedInheritedSearchActivity,RelatedDialogActivity,RelatedInheritedDialogActivity">
+		<dependency localName="ChildActivityGrid" moduleName="cmc/marketing/ChildActivityGrid"/>
+		<!---
+			@keywords private
+		-->
+		<FamilyChildListViewerFilter name="baseFilter" package="cmc/marketing"/>
+		
+		<!---
+			@keywords private
+			This method sets the model object for this view to the specified object.
+			@param cmc/foundation/ModelObject newObject The new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			var familyObject = newObject;
+			if (newObject) {
+				this.baseFilter.activityId = newObject.objectId;
+				for (var i = 0; i < newObject.references.length; i++) {
+					var ref = newObject.references[i];
+					if (ref.objectDefinition.objectType == "RelatedWebActivity" || ref.objectDefinition.objectType == "RelatedInheritedWebActivity" || ref.objectDefinition.objectType == "RelatedSearchActivity" || ref.objectDefinition.objectType == "RelatedInheritedSearchActivity" || ref.objectDefinition.objectType == "RelatedDialogActivity" || ref.objectDefinition.objectType == "RelatedInheritedDialogActivity") {
+						familyObject = ref.parentObject;
+						break;
+					}
+				}
+				this.updateModelObjectDel.connect(newObject, "onreferences");
+				newObject.loadReferences();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			this.inherited(arguments);
+			this.editor.setVariable("baseFilter", this.baseFilter);
+			]]>
+		</method>
+		
+	</ChildListViewer>
+
+</Definitions>

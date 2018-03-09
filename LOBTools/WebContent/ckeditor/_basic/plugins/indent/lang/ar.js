@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","ar",{indent:"زيادة الازاحة للداخل",outdent:"تقليل الازاحة للداخل"});

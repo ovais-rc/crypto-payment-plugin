@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","sl",{clear:"Počisti",highlight:"Označi",options:"Možnosti barv",selected:"Izbrana barva",title:"Izbira barve",ibm:{currentColor:"Trenutna barva"}});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","hr",{toolbar:"Izvor",title:"Izvor"});

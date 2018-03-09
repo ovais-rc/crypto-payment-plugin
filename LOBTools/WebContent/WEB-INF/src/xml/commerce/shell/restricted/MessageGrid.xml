@@ -1,0 +1,1183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		A filter that will include only messages with the specified message type.
+	-->
+	<Filter classDefinition="true" definitionName="cmc/shell/MessageTypeFilter">
+		<!---
+
+			The message type.
+		-->
+		<variable name="messageType" type="string" value="${null}"/>
+
+		<!---
+			Check if the specified message matches this filter.
+			@param cmc/shell/MessageObject o: the object to test
+			@return boolean: true if the object matches this filter
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return o.messageType == this.messageType;
+			]]>
+		</method>
+	</Filter>
+
+	<!---
+		@keywords private
+		Base class for a message grid column.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/MessageGridColumn" focusable="false">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<!---
+			Indicates that this column can be sorted. The default is "true".
+		-->
+		<variable name="sortable" type="boolean" value="true"/>
+		<!---
+			The class used to create cell viewer instances for cells in this column.
+		-->
+		<variable name="cellViewerClass" type="module" value="${null}"/>
+		<!---
+			Indicates where the column should be attached to the parent grid.
+		-->
+		<variable name="placement" value="columns"/>
+		<!---
+			Indicates that the current sort is ascending. The sort will be reversed
+			if sort is requested twice.
+		-->
+		<variable name="sortAscending" type="boolean" value="false"/>
+		<!---
+			Minimum width for this column. The default is 40 pixels.
+		-->
+		<variable initialValue="40" name="minWidth" type="number"/>
+		<!---
+			Display text for this column.
+		-->
+		<variable name="text" type="string" value=""/>
+		<!---
+			The truncation text
+		-->
+		<variable name="truncationText" type="string" value="${foundationResources.Singleton.gridTruncationText.string}"/>
+		<!---
+			Indicates that the text is truncated.
+		-->
+		<variable name="truncated" type="boolean" value="false"/>
+		<!---
+			The name of the message object property displayed by this column. This is a required attribute.
+		-->
+		<variable name="propertyName" type="string"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			var columns = this.parent.columns;
+			if (!columns) {
+				columns = [];
+				this.parent.columns = columns;
+			}
+			columns.push(this);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			var columns = this.parent.columns;
+			if (columns) {
+				for (var i = 0; i < columns.length; i++) {
+					if (columns[i] == this) {
+						columns.splice(i, 1);
+						break;
+					}
+				}
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Create the cell viewer instance.
+			@param cmc/foundation/Component parent: the parent view
+			@param cmc/shell/MessageObject o: the message object instance
+		-->
+		<method args="parent, o" name="createViewer">
+			<![CDATA[
+			var viewer = null;
+			if (this.cellViewerClass != null) {
+				viewer = new this.cellViewerClass.Class(parent, {
+					name: "viewer",
+					o: o
+				});
+			}
+			return viewer;
+			]]>
+		</method>
+
+		<!---
+			Handle change to the column width.
+		-->
+		<handler args="newWidth" name="onwidth">
+			<![CDATA[
+			if (!this.visible && newWidth > 0) {
+				this.setVariable('width', 0);
+			}
+			]]>
+		</handler>
+		<!---
+			Sort the column.
+		-->
+		<method name="doSort">
+			<![CDATA[
+			if (this.sortable) {
+				var oList = ModelUtil.Singleton.findObjectListForView(this);
+				oList.doSort(this);
+				this.setVariable("sortAscending", oList.sortAscending);
+			}
+			]]>
+		</method>
+		
+		<!---
+			The sort compare value function for the given object.
+		-->
+		<method args="o" name="getCompareValue">
+			<![CDATA[
+			var value = o[this.propertyName];
+			if (value == null) {
+				value = "";
+			}
+			else {
+				value = value.toLowerCase();
+			}
+			return value;
+			]]>
+		</method>
+		
+		<!---
+			Sort compare function.
+		-->
+		<method args="o1, o2, sortAscending" name="compare">
+			<![CDATA[
+			var result = 0;
+			var v1 = null;
+			if (o1._compareValue != null) {
+				v1 = o1._compareValue;
+			}
+			else {
+				v1 = this.getCompareValue(o1);
+				o1._compareValue = v1;
+			}
+			var v2 = null;
+			if (o2._compareValue != null) {
+				v2 = o2._compareValue;
+			}
+			else {
+				v2 = this.getCompareValue(o2);
+				o2._compareValue = v2;
+			}
+			if (v1 > v2) {
+				result = sortAscending ? 1 : -1;
+			}
+			else if (v1 < v2) {
+				result = sortAscending ? -1 : 1;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<Component clip="true" focusable="${this.parent.visible}" height="28" name="title" width="${this.parent.width - this.parent.resizer.width - this.classroot.parent.listBorderSize}">
+			
+			<Component height="${this.parent.height}" bgcolor="#efefef" name="background" width="${this.parent.width}"/>
+			<Component clip="true" height="${this.parent.height}" name="txtView" width="${this.parent.width - 4}" fontstyle="bold">			
+				<TextComponent name="txt" text="${this.classroot.text}" x="4" width="${this.parent.width - (this.classroot.truncated ? this.parent.truncationText.width : 0) - this.x}" valign="middle"/>
+				<TextComponent name="truncationText" text="${this.classroot.truncationText}" visible="${this.classroot.truncated}" x="${this.parent.width - this.width}" valign="middle"/>
+				
+				<handler name="onwidth">
+					<![CDATA[
+					var truncated = this.txt.getTextWidth() + this.txt.x > this.width;
+					if (truncated != this.classroot.truncated) {
+						this.classroot.setVariable("truncated", truncated);
+					}
+					]]>
+				</handler>
+			</Component>			
+	
+			<handler args="code" name="onkeydown">
+				<![CDATA[
+				if (code == 32) {
+					this.parent.doSort();
+				}
+				]]>
+			</handler>
+			
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this
+					});
+				}
+				]]>
+			</handler>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.doSort();
+				]]>
+			</handler>
+		</Component>
+
+		<Component clickable="true" name="resizer" width="3" x="${this.parent.title.width}" y="${this.parent.title.y}" height="${this.parent.title.height}">
+			<!---
+				Indicates that the resizer is currently being dragged.
+			-->
+			<variable name="resizing" type="boolean" value="false"/>
+			<!---
+				Indicates that the mouse is hovering over the resizer.
+			-->
+			<variable name="hover" type="boolean" value="false"/>
+			<!---
+				The selected color for the resizer
+			-->
+			<variable name="selectedColor" type="string" value="${this.classroot.parent.headerSelectedColor}"/>
+
+			<handler name="onmouseover">
+				<![CDATA[
+				this.hover = true;
+				CursorUtil.setCursorGlobal("col-resize");
+				]]>
+			</handler>
+
+			<handler name="onmouseout">
+				<![CDATA[
+				this.hover = false;
+				CursorUtil.restoreCursor();
+				]]>
+			</handler>
+
+			<handler name="onmousedown">
+				<![CDATA[
+				this.setVariable("resizing", true);
+				CursorUtil.lock();
+				this.parent.rs.setVariable("active", true);
+				]]>
+			</handler>
+
+			<handler name="onmouseup">
+				<![CDATA[
+				this.setVariable("resizing", false);
+				CursorUtil.unlock();
+				if (this.hover) {
+					CursorUtil.setCursorGlobal("col-resize");
+				}
+				else {
+					CursorUtil.restoreCursor();
+				}
+				this.parent.rs.setVariable("active", false);
+				]]>
+			</handler>
+			<Component name="divider" x="2" width="1" bgcolor="#c8c8c8" height="${this.parent.height}"/>
+		</Component>
+
+		<State name="rs">
+			<variable initialValue="${this.x - this.width + this.getMouse('x')}" name="xroffset"/>
+			<variable name="width" value="${Math.max(this.minWidth, this.immediateParent.getMouse('x') - this.xroffset)}"/>
+		</State>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		Message grid cell.
+	-->
+	<Component classDefinition="true" clip="true" definitionName="cmc/shell/MessageGridCell">
+		<!---
+			The grid that owns this cell.
+		-->
+		<variable name="grid"/>
+		<!---
+			The grid column for this cell.
+		-->
+		<variable name="column"/>
+		<!---
+			The grid row for this cell.
+		-->
+		<variable name="row"/>
+		<!---
+			The default placement for content added to this cell.
+		-->
+		<variable name="defaultplacement" value="content"/>
+		<!---
+			x position. This is bound to the associated column's x position.
+		-->
+		<variable name="x" value="${this.column.x}"/>
+		<!---
+			Cell width. This is bound to the column's width.
+		-->
+		<variable name="width" value="${this.column.width}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.column.createViewer(this, this.row.o);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Handle object changed event.
+		-->
+		<handler eventSource="this.row" name="objectChanged">
+			<![CDATA[
+			this.updateMessageObject();
+			]]>
+		</handler>
+
+		<!---
+			Update the object associated with this cell.
+		-->
+		<method name="updateMessageObject">
+			<![CDATA[
+			if (this.viewer) {
+				this.viewer.setVariable("o", this.row.o);
+			}
+			]]>
+		</method>
+		
+		<AxisLayout/>
+		<Component name="content" width="${this.parent.width - 4}" x="4" y="4"/>
+		<Component height="4"/>
+	</Component>
+	
+	<!---
+		@keywords private
+		Message grid row.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/MessageGridRow" doesenter="true" focusable="${this.parent.multiSelect}">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="MessageGridCell" moduleName="cmc/shell/MessageGridCell"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			By default, children of a grid row instance are added to the "content" view.
+		-->
+		<variable name="defaultplacement" value="content"/>
+		<!---
+			Place grid rows under the "rowparent" view.
+		-->
+		<variable name="placement" value="rowparent"/>
+		<!---
+			Indicates that this row is currently selected.
+		-->
+		<variable name="selected" value="false"/>
+		<!---
+			Indicates the row will accept click events.
+		-->
+		<variable name="clickable" value="true"/>
+		<!---
+			cmc/shell/MessageObject instance associated with this row instance.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Array of cells.
+		-->
+		<variable name="cells" value="${[]}"/>
+		<!---
+			Width of the row is constrained to the grid row columns width.
+		-->
+		<variable name="width" value="${this.parent.header.columns.width}"/>
+		<!---
+			Background color changes based on whether this row is selected.
+		-->
+		<variable name="bgcolor" value="${this.getBGColor(this.selected, this.mouseIn)}"/>		
+		<!---
+			Indicates the mouse is hovered over the row. Used to get hilite colour. 
+		-->
+		<variable name="mouseIn" type="boolean" value="false"/>
+
+		<!---
+			This event is triggered when the associated object's instance is changed.
+		-->
+        
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			ViewUtil.Singleton.releaseLayouts(this);
+			if (this.o != null && this.parent.currentObject == this.o) {
+				this.parent.setVariable("currentObject", null);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Creates all the grid cells
+		-->
+		<method name="createGridCells">
+			<![CDATA[
+			var column = this.getNextCreateColumn();
+			while (column != null) {
+				var cell = new MessageGridCell.Class(this, {
+					grid: this.parent,
+					row: this,
+					column: column
+				});
+				this.cells.push(cell);
+				column = this.getNextCreateColumn();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the next visible column for which no cell exists.
+		-->
+		<method name="getNextCreateColumn">
+			<![CDATA[
+			var columns = this.parent.columns;
+			var column = null;
+			for (var i = 0; i < columns.length && column == null; i++) {
+				column = columns[i];
+				var cells = this.cells;
+				for (var j = 0; j < cells.length; j++) {
+					if (cells[j].column == column) {
+						column = null;
+						break;
+					}
+				}
+			}
+			return column;
+			]]>
+		</method>
+		
+		<!---
+			Get the background color.
+		-->
+		<method args="s, mi" name="getBGColor">
+			<![CDATA[
+			if (typeof(s) == "undefined") s = null;
+			if (typeof(mi) == "undefined") mi = null;
+			var color = this.parent.bgcolor;
+			if (this.selected) {
+				color = this.style.selectedcolor;
+			}
+			else if (this.mouseIn) {
+				color = this.style.hilitecolor;
+			}
+			return color;
+			]]>
+		</method>
+		
+		<!---
+			Set the model object instance for this row.
+			@param cmc/shell/ModelObject newObject: the new model object
+		-->
+		<method args="newObject" name="setMessageObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.o = newObject;
+				EventUtil.trigger(this, "objectChanged", newObject);
+				if (this.o) {
+					this.createGridCells();
+				}
+				this.setSelected(this.parent.isSelectedRow(this));
+				if (FocusUtil.getFocus() == this) {
+					this.parent.setVariable("currentObject", this.o);
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="select">
+			<![CDATA[
+			this.parent.selectRow(this);
+			]]>
+		</method>
+		
+		<method args="isSelected" name="setSelected">
+			<![CDATA[
+			this.setVariable("selected", isSelected);
+			]]>
+		</method>
+		
+		<!---
+			Handle mouse over.
+		-->
+		<handler name="onmouseover">
+			<![CDATA[
+			if (ViewUtil.Singleton.getLastMouseMove() < 100) {
+				this.setVariable("mouseIn", true);
+			}
+			]]>
+		</handler>
+		<!---
+			Handle mouse out.
+		-->
+		<handler name="onmouseout">
+			<![CDATA[
+			this.setVariable("mouseIn", false);
+			]]>
+		</handler>
+		
+
+		<!---
+			Handle mouse click.
+		-->
+		<handler name="onclick">
+			<![CDATA[
+			this.select();
+			]]>
+		</handler>
+		
+		<!---
+			Handle double click.
+		-->
+		<handler name="ondblclick">
+			<![CDATA[
+			this.parent.activateObject(this.o);
+			]]>
+		</handler>
+		
+		<!---
+			Handle onfocus event.
+		-->
+		<handler name="onfocus">
+			<![CDATA[
+			if (this.parent.currentObject != this.o) {
+				this.parent.setVariable("currentObject", this.o);
+			}
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					offset: 1
+				});
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Handle onblur event.
+		-->
+		<handler args="newFocus" name="onblur">
+			<![CDATA[
+			if (this.o != null && this.parent.currentObject == this.o) {
+				this.parent.setVariable("currentObject", null);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle key down events.
+		-->
+		<handler args="code" name="onkeydown">
+			<![CDATA[
+			this.parent.keyDown(code);
+			]]>
+		</handler>
+		
+		
+		<method name="doEnterDown">
+			<![CDATA[
+			this.parent.activateObject(this.o);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle sapace down events.
+		-->
+		<method name="doSpaceDown">
+			<![CDATA[
+			this.select();
+			]]>
+		</method>
+		
+		<AxisLayout/>
+		<Component name="content">
+		</Component>
+
+		<Component bgcolor="${this.classroot.parent.borderColor}" height="${this.classroot.parent.showhlines &amp;&amp; this.classroot.content.height &gt; 0 ? 1 : 0}" name="bottomBorder" width="${this.parent.width}"/>
+		
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setMessageObject(o);
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		A grid that displays a list of messages objects. Each row represents a message object
+		in the list. Each column displays an attribute or property of that message.
+	-->
+	<Grid classDefinition="true" definitionName="cmc/shell/MessageGrid" filterLeftPadding="5" filterTopPadding="8" objectClass="${MessageGridRow}">
+		<dependency localName="MessageGridRow" moduleName="cmc/shell/MessageGridRow"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		
+		<!---
+			Set focus on the row with the specified message.
+			@param cmc/shell/MessageObject o: the message object.
+		-->
+		<method args="o" name="moveToMessage">
+			<![CDATA[
+			if (o != null) {
+				this.oList.showObjectInView(o);
+				if (this.content.rowparent.height > this.availableHeight) {
+					if (o == this.oList.getView(this.oList.getViewsLength() - 1)["o"]) {
+						this.content.rowparent.setVariable("y", this.availableHeight - this.content.rowparent.height);
+					}
+					else if (o == this.oList.getView(0)["o"]) {
+						this.content.rowparent.setVariable("y", 0);
+					}
+				}
+				else {
+					this.content.rowparent.setVariable("y", 0);
+				}
+				var rows = this.getRows();
+				for (var i = 0; i < rows.length; i++) {
+					if (rows[i].o == o) {
+						if (this.multiSelect) {
+							FocusUtil.setFocus(rows[i], false);
+						}
+						else {
+							rows[i].select();
+						}
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Display the previous page of rows.
+		-->
+		<method args="e" name="pageUp">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentObject != null) {
+				var relativeIndex = this.endIndex - this.oList.filteredObjects.indexOf(this.currentObject);
+				var start = this.startIndex;
+				this.setEndIndex(start - 1);
+				if (start == 0) {
+					relativeIndex = 0;
+				}
+				else {
+					relativeIndex = Math.max(this.endIndex - relativeIndex, 0);
+				}
+				this.moveToMessage(this.oList.filteredObjects[relativeIndex]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Display the next page of rows.
+		-->
+		<method args="e" name="pageDown">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentObject != null) {
+				var relativeIndex = this.oList.filteredObjects.indexOf(this.currentObject) - this.startIndex;
+				var end = this.endIndex;
+				this.setStartIndex(end + 1);
+				if (end == this.oList.filteredObjects.length - 1) {
+					relativeIndex = this.endIndex;
+				}
+				else {
+					relativeIndex = Math.min(relativeIndex + this.startIndex, this.oList.filteredObjects.length - 1);
+				}
+				this.moveToMessage(this.oList.filteredObjects[relativeIndex]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Display the end row.
+		-->
+		<method args="e" name="end">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this) && this.oList.filteredObjects.length > 0) {
+				var o = this.oList.filteredObjects[this.oList.filteredObjects.length - 1];
+				this.moveToMessage(o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Display the first row.
+		-->
+		<method args="e" name="home">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this) && this.oList.filteredObjects.length > 0) {
+				var o = this.oList.filteredObjects[0];
+				this.moveToMessage(o);
+			}
+			]]>
+		</method>		
+		
+		<!---
+			Move up to the previous row.
+		-->
+		<method name="up">
+			<![CDATA[
+			var previousMessage = null;
+			if (this.currentObject != null) {
+				var o = this.currentObject;
+				var objects = this.oList.filteredObjects;
+				var index = objects.indexOf(o) - 1;
+				if (index >= 0) {
+					previousMessage = objects[index];
+				}
+			}
+			this.moveToMessage(previousMessage);
+			]]>
+		</method>
+
+		<!---
+			Move down to the next row.
+		-->
+		<method name="down">
+			<![CDATA[
+			var nextMessage = null;
+			if (this.currentObject != null) {
+				var o = this.currentObject;
+				var objects = this.oList.filteredObjects;
+				var index = objects.indexOf(o) + 1;
+				if (objects.length > index) {
+					nextMessage = objects[index];
+				}
+			}
+			this.moveToMessage(nextMessage);
+			]]>
+		</method>
+
+		<!---
+			Select previous row.
+		-->
+		<method name="selectUp">
+			<![CDATA[
+			if (this.currentObject != null) {
+				var selector = this.content.rowparent.selector;
+				selector.setVariable("rangeSelect", true);
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				this.up();
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				selector.setVariable("rangeSelect", false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Select next row.
+		-->
+		<method name="selectDown">
+			<![CDATA[
+			if (this.currentObject != null) {
+				var selector = this.content.rowparent.selector;
+				selector.setVariable("rangeSelect", true);
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				this.down();
+				this.content.rowparent.selector.selectObject(this.currentObject);
+				selector.setVariable("rangeSelect", false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Returns an array of the current selected message objects.
+			@return array: array of message objects
+		-->
+		<method name="getSelectedMessages">
+			<![CDATA[
+			return this.content.rowparent.selector.getSelectedObjects();
+			]]>
+		</method>
+
+		<!---
+			Clear the current selection.
+		-->		
+		<method name="clearSelection">
+			<![CDATA[
+			this.content.rowparent.selector.clearSelection();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="code" name="keyDown">
+			<![CDATA[
+			switch (code) {			
+				case 33:
+					this.pageUp();
+					break;
+				case 34:
+					this.pageDown();
+					break;
+				case 35:
+					this.end();
+					break;
+				case 36:
+					this.home();
+					break;
+				case 38:
+					if (KeyUtil.isKeyDown("shift") && this.multiSelect) {
+						this.selectUp();
+					}
+					else {
+						this.up();
+					}
+					break;
+				case 40:
+					if (KeyUtil.isKeyDown("shift") && this.multiSelect) {
+						this.selectDown();
+					}
+					else {
+						this.down();
+					}
+					break;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handles ondblclick and doEnterDown action from the message. 
+			@param modelObject o: The object to activate.
+		-->
+		<method args="o" name="activateObject">
+			<![CDATA[
+			MessageLogger.Singleton.openMessagePropertiesView(o);
+			]]>
+		</method>
+	</Grid>
+
+	<!---
+		@keywords private
+		Message text viewer.
+	-->
+	<TextComponent classDefinition="true" definitionName="cmc/shell/MessageGridTextViewer" multiline="true" resize="true" width="${this.immediateParent.width}">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			cmc/shell/MessageObject instance associated with this viewer.
+		-->
+		<variable name="o" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.updateFGColorDel = new EventHandler.Class(this, "updateFGColor");
+			this.updateFGColorDel.connect(this.parent.row, "onselected");
+			this.updateFGColor();
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateFGColorDel.disconnectAll();
+			delete this.updateFGColorDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Update the foreground color.
+		-->
+		<method args="e" name="updateFGColor">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var c = this.parent.row.style.textcolor;
+			if (this.parent.row.selected) {
+				c = this.parent.row.style.textselectedcolor;
+			}
+			this.setVariable("fgcolor", c);
+			]]>
+		</method>
+		
+		<!---
+			Set the message for this viewer.
+			@param cmc/shell/MessageObject newMessage: the new message object instance
+		-->
+		<method args="newMessage" name="setMessageObject">
+			<![CDATA[
+			if (typeof (this.o) == "undefined" || newMessage != this.o) {
+				this.o = newMessage;
+				if (this.o) {
+					this.updateValue();
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the text value.
+		-->
+		<method name="updateValue">
+			<![CDATA[
+
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setMessageObject(o);
+			]]>
+		</method>
+	</TextComponent>
+
+	<!---
+		@keywords private
+		Message text viewer.
+	-->
+	<MessageGridTextViewer classDefinition="true" definitionName="cmc/shell/MessageGridMessageViewer" package="cmc/shell">
+		<!---
+			Update the property value.
+		-->
+		<method name="updateValue">
+			<![CDATA[
+			var newText = this.escapeText(this.o.messageText);
+			if (this.text != newText) {
+				this.setVariable("text", newText);
+			}
+			]]>
+		</method>
+	</MessageGridTextViewer>
+
+	<!---
+		@keywords private
+		Message model object viewer.
+	-->
+	<MessageGridTextViewer classDefinition="true" definitionName="cmc/shell/MessageGridObjectViewer" package="cmc/shell">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<!---
+			Update the property value.
+		-->
+		<method name="updateValue">
+			<![CDATA[
+			var newText = shellResources.Singleton.systemDisplayName.string;
+			if (this.o.modelObject != null) {
+				newText = this.o.modelObject.openGroupObject.objectDisplayName;
+				var storeConfig = ContextUtil.Singleton.findStoreConfig(this.o.modelObject);
+				if (this.o.modelObject.objectDefinition.languageSensitive && (storeConfig != null)) {
+					var languageId = this.o.modelObject.getPropertyValue("languageId");
+					var language = storeConfig.getLanguageById(languageId);
+					if (language) {
+						newText += " (" + language.languageDescription + ")";
+					}
+				}
+			}
+			newText = this.escapeText(newText);
+			if (this.text != newText) {
+				this.setVariable("text", newText);
+			}
+			]]>
+		</method>
+	</MessageGridTextViewer>
+
+	<!---
+		@keywords private
+		Message type icon viewer for a message grid cell.
+	-->
+	<Component classDefinition="true" definitionName="cmc/shell/MessageGridTypeViewer">
+		<!---
+			cmc/shell/MessageObject instance associated with this viewer.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Icon resource name.
+		-->
+		<variable name="icon" type="string" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateIcon();
+			]]>
+		</method>
+		
+		<!---
+			Set the message for this viewer.
+			@param cmc/shell/MessageObject newMessage: the new message object instance
+		-->
+		<method args="newMessage" name="setMessageObject">
+			<![CDATA[
+			if (typeof (this.o) == "undefined" || newMessage != this.o) {
+				this.o = newMessage;
+				this.updateIcon();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Updates the icon image.
+		-->
+		<method name="updateIcon">
+			<![CDATA[
+			var newIcon = null;
+			if (this.o) {
+				if (this.o.messageType == "ERROR" || this.o.messageType == "EXCEPTION") {
+					newIcon = "errorIcon";
+				}
+			}
+			if (newIcon != this.icon) {
+				this.setVariable("icon", newIcon);
+			}
+			]]>
+		</method>
+
+		<Component imageSet="${this.classroot.icon}" name="display" visible="${this.classroot.icon ? true : false}"/>
+		<!--- @keywords private  -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setMessageObject(o);
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords private
+		Message date viewer.
+	-->
+	<MessageGridTextViewer classDefinition="true" definitionName="cmc/shell/MessageGridDateViewer" package="cmc/shell">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Update the property value.
+		-->
+		<method name="updateValue">
+			<![CDATA[
+			var newText = DateUtil.Singleton.formatUI(this.o.createDate, DateUtil.Singleton.UI_DATE_TIME_FORMAT_WITH_SECONDS);
+			if (this.text != newText) {
+				this.setVariable("text", newText);
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This handler will update the date and time field if the user changes their date format preference
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if ((preference == "CMCDateFormat" || preference == "CMCTimeFormat") && this.o && this.o.createDate) {
+				this.updateValue();
+			}
+			]]>
+		</handler>
+	</MessageGridTextViewer>
+
+	<!---
+		@keywords private
+		Message text grid column.
+	-->
+	<MessageGridColumn classDefinition="true" definitionName="cmc/shell/MessageGridMessage" package="cmc/shell" propertyName="messageText">
+		<dependency localName="MessageGridMessageViewer" moduleName="cmc/shell/MessageGridMessageViewer"/>
+		<!---
+			Use "cmc/shell/MessageGridMessageViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${MessageGridMessageViewer}"/>
+	</MessageGridColumn>
+	
+	<!---
+		@keywords private
+		Message model object grid column.
+	-->
+	<MessageGridColumn classDefinition="true" definitionName="cmc/shell/MessageGridObject" package="cmc/shell" propertyName="modelObject">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MessageGridObjectViewer" moduleName="cmc/shell/MessageGridObjectViewer"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<!---
+			Use "cmc/shell/MessageGridObjectViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${MessageGridObjectViewer}"/>
+		
+		<!---
+			The sort compare value function for the given object.
+		-->
+		<method args="o" name="getCompareValue">
+			<![CDATA[
+			var value = shellResources.Singleton.systemDisplayName.string;
+			if (o.modelObject != null) {
+				value = o.modelObject.openGroupObject.objectDisplayName;
+				var storeConfig = ContextUtil.Singleton.findStoreConfig(o.modelObject);
+				if (o.modelObject.objectDefinition.languageSensitive && (storeConfig != null)) {
+					var languageId = o.modelObject.getPropertyValue("languageId");
+					var language = storeConfig.getLanguageById(languageId);
+					if (language) {
+						value += " (" + language.languageDescription + ")";
+					}
+				}
+			}
+			return value.toLowerCase();
+			]]>
+		</method>
+	</MessageGridColumn>
+	
+	<!---
+		@keywords private
+		Message type grid column.
+	-->	
+	<MessageGridColumn classDefinition="true" definitionName="cmc/shell/MessageGridType" package="cmc/shell" propertyName="messageType">
+		<dependency localName="MessageGridTypeViewer" moduleName="cmc/shell/MessageGridTypeViewer"/>
+		<!---
+			Use "cmc/shell/MessageGridTypeViewer" to create instances of this column's viewer.
+		-->
+		<variable name="cellViewerClass" value="${MessageGridTypeViewer}"/>
+	</MessageGridColumn>
+
+	<!---
+		@keywords private
+		Message date grid column.
+	-->	
+	<MessageGridColumn classDefinition="true" definitionName="cmc/shell/MessageGridDate" package="cmc/shell" propertyName="createDate">
+		<dependency localName="MessageGridDateViewer" moduleName="cmc/shell/MessageGridDateViewer"/>
+		<!---
+			Use "cmc/shell/MessageGridDateViewer" to create instances of this column's viewer.
+		-->
+		<variable name="cellViewerClass" value="${MessageGridDateViewer}"/>
+		
+		<!---
+			The sort compare value function for the given object.
+		-->
+		<method args="o" name="getCompareValue">
+			<![CDATA[
+			return o.createDate;
+			]]>
+		</method>
+	</MessageGridColumn>
+	
+</Definitions>

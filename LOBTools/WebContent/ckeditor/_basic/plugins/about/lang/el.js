@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("about","el",{copy:"Copyright &copy; $1. Με την επιφύλαξη παντός δικαιώματος.",dlgTitle:"Πληροφορίες για το CKEditor",help:"Ανατρέξτε στην τεκμηρίωση ($1) για βοήθεια.",moreInfo:"Για πληροφορίες σχετικά με την άδεια χρήσης επισκεφθείτε το δικτυακό τόπο:",title:"Πληροφορίες για το CKEditor",userGuide:"Οδηγός χρήσης του CKEditor"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","kk",{toolbar:"Көзі",title:"Көзі"});

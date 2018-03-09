@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","hu",{options:"Hangulatjelek lehetőség",title:"Hangulatjelek",toolbar:"Hangulatjel beszúrása"});

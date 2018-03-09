@@ -1,0 +1,513 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		This class defines the base child list viewer widget. This class is similar to a {@link cmc/foundation/ChildListEditor} in that it
+		shows the list of children of an object. The difference is that this class does not allow you to add to or delete from the 
+		list. However, editing the children displayed is permitted - which items are in the list cannot be changed. 
+		
+		The class needs to be provided the value for {@link cmc/foundation/ObjectDefinition#objectType} of the child objects to be displayed, as well
+		as the name of the class to use for viewing the child list. 
+		
+		Copy/Paste and Drag/Drop is not enabled on the cmc/foundation/BaseChildListViewer.
+		
+		This class is an abstract class and should not be used directly nor should instances of it be created. Instead, see
+		{@link cmc/foundation/ChildListViewer}. 
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseChildListViewer">
+		<dependency localName="ChildListViewerMenu" moduleName="cmc/foundation/ChildListViewerMenu"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ChildClientActionButton" moduleName="cmc/foundation/ChildClientActionButton"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			@keywords private
+			The style, derived by parent properties component
+		-->
+		<variable name="style" value="${this.parent.style}"/>
+		<!---
+			The name of the class to use for viewing this list. This is often a class that extends {@link cmc/foundation/ObjectGrid}.
+		-->
+		<variable name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition to use for viewing this list. 
+			This is often a definition that extends {@link cmc/foundation/ObjectGrid}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+			@type string
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+		<!---
+			A comma separated list of {@link cmc/foundation/ObjectDefinition#objectType object types} to be displayed in this child object list.
+			This is a required attribute.
+		-->
+		<variable name="objectTypes" type="string"/>
+		<!---
+			@keywords private
+			The base filter used when we bind view to children.
+		-->
+		<variable name="baseFilter" value="${null}"/>
+		<!---
+			@keywords private
+			
+			Reference to the instance of cmc/foundation/ModelObject that is being modified by the
+			properties view that contains this child list viewer.
+		-->
+		<variable name="o"/>
+		<!---
+			@keywords private
+			
+			The closest ancestor view that defines an "availableHeight" attribute. This
+			is used to calculate the list view's available height.
+		-->
+		<variable name="availableHeightView" value="${ViewUtil.Singleton.getAvailableHeightView(this)}"/>
+		<!---
+			@keywords private
+			
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the list view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			@keywords private
+			Comma separated client action types. Client actions associated with the current object that have a matching action type will be displayed in the toolbar of the child list viewer.
+		-->
+		<variable name="clientActionTypes" type="string" value=""/>
+		<!---
+			@keywords private
+			Array of client actions that will be added to the child list viewer toolbar for the current parent object.
+		-->
+		<variable name="parentObjectClientActions"/>
+		<!---
+			@keywords private
+			Indicates that this child list viewer is embedded in a properties view.
+		-->
+		<variable name="embedded" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			The fraction of available height allocated for this editor. When one or more editors share the same available
+			space, this is used to determine the fraction of space allocated for each individual one.
+		-->
+		<variable name="fractionOfAvailableHeight" type="number" value="1"/>
+		<!---
+			@keywords private
+			An ancestor view that will be updated with the currently selected object.
+		-->
+		<variable name="selectedObjectView" value="${null}"/>
+		<!---
+			@keywords private
+			The name of the attribute of the selectedObjectVIew that will be updated with the currently selected object.
+		-->
+		<variable name="selectedObjectName" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Child list message.
+		-->
+		<variable name="messageText" type="string" value=""/>
+		<!---
+			@keywords private
+			Source of the child list message.
+		-->
+		<variable name="messageSource" value="${null}"/>
+					
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.listClass == null) {
+				this.listClass = this.listDefinition;
+			}
+			if (this.availableHeightView != null) {
+				this.updateAvailableHeightDel = new EventHandler.Class(this, "updateAvailableHeight");
+				this.updateAvailableHeightDel.connect(this.availableHeightView, "onavailableHeight");
+				this.updateAvailableHeightDel.connect(this.actionArea, "onheight");
+				this.updateAvailableHeight();
+			}
+			if (this.availableWidthView != null) {
+				this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+				this.updateAvailableWidthDel.connect(this.availableWidthView, "onavailableWidth");
+				this.updateAvailableWidth();
+			}
+			if (this.messageSource != null) {
+				this.updateMessageDel = new EventHandler.Class(this, "updateMessage");
+				this.updateMessageDel.connect(this.messageSource, "onmessageText");
+				this.updateMessage();
+			}
+			if (this.listClass.Class) {
+				new this.listClass.Class(this, {
+					name: "list",
+					placement: "content",
+					rowMenuClass: ChildListViewerMenu,
+					menuClass: null,
+					fitExistingRows: this.embedded,
+					listBorderSize: this.embedded ? 1 : 0,
+					filterLeftPadding: this.embedded ? 0 : 3,
+					selectedObjectName: this.selectedObjectName,
+					selectedObjectView: this.selectedObjectView
+				});
+			}
+			else {
+				DefinitionUtil.createDefinitionInstance(this.listClass, this, {
+					name: "list",
+					placement: "content",
+					rowMenuClass: ChildListViewerMenu,
+					menuClass: null,
+					fitExistingRows: this.embedded,
+					listBorderSize: this.embedded ? 1 : 0,
+					filterLeftPadding: this.embedded ? 0 : 3,
+					selectedObjectName: this.selectedObjectName,
+					selectedObjectView: this.selectedObjectView
+				});
+			}
+			if (this.o) {
+				this.o.bindViewToChildren(this.list, this.baseFilter, this.objectTypes);
+			}
+			if (this.list.filters && this.list.filters.length > 0) {
+				if (this.embedded) {
+					this.list.setVariable("padding", 5);
+				}
+			}
+			else {
+				this.list.setVariable("padding", 0);
+			}
+			if (this.embedded) {
+				this.createActions();
+				this.updateActions();
+			}
+			]]>
+		</handler>
+		
+		<handler name="onbaseFilter">
+			<![CDATA[
+			if (this.list && this.list.oList) {
+				this.list.oList.setVariable("baseFilter", this.baseFilter);
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.o) {
+				this.o.releaseViewFromChildren(this.list);
+			}
+			this.updateActionsDel.disconnectAll();
+			delete this.updateActionsDel;
+			if (this.updateMessageDel) {
+				this.updateMessageDel.disconnectAll();
+				delete this.updateMessageDel;
+			}
+			if (this.updateAvailableHeightDel) {
+				this.updateAvailableHeightDel.disconnectAll();
+				delete this.updateAvailableHeightDel;
+			}
+			if (this.updateAvailableWidthDel) {
+				this.updateAvailableWidthDel.disconnectAll();
+				delete this.updateAvailableWidthDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>		
+
+		<!---
+			@keywords private
+			Update the message.
+		-->
+		<method args="e" name="updateMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("messageText", this.messageSource.messageText);
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			Update the available height.
+		-->
+		<method args="e" name="updateAvailableHeight">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newHeight = this.availableHeightView.availableHeight * this.fractionOfAvailableHeight - this.content.y;
+			if (this.embedded) {
+				newHeight -= 2;
+			}
+			if (this.content.availableHeight != newHeight) {
+				this.content.setVariable("availableHeight", newHeight);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the available width.
+		-->
+		<method args="e" name="updateAvailableWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = this.availableWidthView.availableWidth;
+			if (this.embedded) {
+				newWidth -= 2;
+			}
+			if (this.content.availableWidth != newWidth) {
+				this.content.setVariable("availableWidth", newWidth);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args, parent" name="constructor">
+			<![CDATA[
+			this.updateActionsDel = new EventHandler.Class(this, "updateActions");
+			this.parentObjectClientActions = [];
+			this.childClientActionButtons = [];
+			this.o = null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will update the toolbar actions with the new object object definition.
+		-->
+		<method args="e" name="updateActions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateActionsDel.disconnectAll();
+			if (this.actionArea) {
+				this.updateActionsDel.connect(this.list, "onselect");
+				this.updateChildClientActionButtons();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="updateChildClientActionButtons">
+			<![CDATA[
+			var buttonIndex = 0;
+			for (var i = 0; i < this.parentObjectClientActions.length; i++) {
+				var clientAction = this.parentObjectClientActions[i];
+				var button = this.childClientActionButtons[buttonIndex];
+				button.setVariable("clientAction", clientAction);
+				button.setVariable("parentObjectAction", true);
+				button.setVariable("referencedObjectAction", false);
+				button.updateButton();
+				buttonIndex++;
+			}
+			if (this.actionArea.visible != buttonIndex > 0) {
+				this.actionArea.setVariable("visible", buttonIndex > 0);
+			}
+			while (buttonIndex < this.childClientActionButtons.length) {
+				var button = this.childClientActionButtons[buttonIndex];
+				button.setVariable("clientAction", null);
+				button.updateButton();
+				buttonIndex++;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method creates the toolbar actions for this list.
+		-->
+		<method name="createActions">
+			<![CDATA[
+			if (this.actionArea) {
+				var totalClientActionButtons = this.parentObjectClientActions.length;
+				while (this.childClientActionButtons.length < totalClientActionButtons) {
+					this.childClientActionButtons.push(new ChildClientActionButton.Class(this.actionArea, {
+						editor: this,
+						enabled: false
+					}));
+				}
+			}
+			]]>
+		</method>
+							
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BaseChildListViewer", "setModelObject(newObject)", [newObject]);
+			}
+			if (this.o !== newObject) {
+				if (this.o) {
+					if (this.list) {
+						this.o.releaseViewFromChildren(this.list);
+					}
+					this.parentObjectClientActions = [];
+				}
+				this.o = newObject;
+				if (this.o) {
+					if (this.list) {
+						this.o.bindViewToChildren(this.list, this.baseFilter, this.objectTypes);
+					}
+					if (this.embedded) {
+						var actionTypes = StringUtil.Singleton.splitAndTrim(this.clientActionTypes, ",");
+						if (actionTypes.length > 0) {
+							for (var i = 0; i < this.o.objectDefinition.clientActions.length; i++) {
+								if (actionTypes.indexOf(this.o.objectDefinition.clientActions[i].actionType) != -1) {
+									this.parentObjectClientActions.push(this.o.objectDefinition.clientActions[i]);
+								}
+							}
+						}
+					}
+				}
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			if (this.embedded) {
+				this.createActions();
+				this.updateActions();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BaseChildListViewer", "setModelObject");
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="y" spacing="5"/>
+
+		<Component name="actionArea" visible="false">
+			<AxisLayout axis="x" spacing="3"/>
+		</Component>
+		<Component name="content"/>
+		<TextComponent multiline="true" name="message" text="${this.classroot.messageText}" visible="${this.classroot.embedded &amp;&amp; this.classroot.messageText != ''}" width="${this.parent.content.width}"/>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Component>
+
+	<!---
+		@keywords final
+		This class defines the base child list viewer widget. This class is similar to a {@link cmc/foundation/ChildListEditor} in that it
+		shows the list of children of an object. The difference is that the child list viewer class does not allow you to add 
+		to or delete child objects from the list. However, editing the children displayed is permitted - which items are in the 
+		list cannot be changed. 
+		
+		The class needs to be provided the value for {@link cmc/foundation/ObjectDefinition#objectType} of the child objects to be displayed, as well
+		as the name of the class to use for viewing the child list. 
+		
+		This class extends {@link cmc/foundation/PropertiesComponent} and should be used in properties views. 
+		
+		Sample usage:
+		@START_CODE
+			<ChildListViewer objectTypes="SampleObject" listClass="SampleObjectGrid"/>
+		@END_CODE
+
+		A child list viewer can also be declared as a definition:
+
+		@START_CODE
+			<ChildListViewer objectTypes="SampleObject" listDefinition="SampleObjectGrid"/>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/ChildListViewer">
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="BaseChildListViewer" moduleName="cmc/foundation/BaseChildListViewer"/>
+		<!---
+			A comma separated list of {@link cmc/foundation/ObjectDefinition#objectType object types} to be displayed in this child object list.
+			This is a required attribute.
+		-->
+		<variable name="objectTypes" type="string"/>
+		<!---
+			The name of the class to use for viewing this list. This is often a class that extends {@link cmc/foundation/ObjectGrid}.
+			@type string, must be a class that extendes cmc/foundation/ObjectGrid
+		-->
+		<variable name="listClass" type="module" value="${null}"/>
+		<!---
+			The name of the definition to use for viewing this list. 
+			This is often a definition that extends {@link cmc/foundation/ObjectGrid}.
+			Only specify this attribute if you are not providing a value
+			for <code>listClass</code>.
+			@type string
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+		<!---
+			The types of client action.
+		-->
+		<variable name="clientActionTypes" type="string" value=""/>
+		<!---
+			The name of the currently selected object. This name must match one of the names declared
+			in the containing {@link cmc/foundation/ObjectProperties properties view} with the componentObjectNames
+			attribute. Other {@link cmc/foundation/PropertiesComponent properties components} can be configured to
+			use this selected object as their component object by specifying the same name with the
+			componentObjectName attribute.
+		-->
+		<variable name="selectedObjectName" type="string" value="${null}"/>
+		<!---
+			The fraction of the available vertical space that will be allocated to this component. This can be used to prevent the component from
+			consuming all of the visible space in a properties view. When multiple components share the same properties view,
+			they can each be assigned a fraction of the available height so that they are all visible at the same time. For example,
+			to ensure that a component only takes up half the available vertical space, set this attribute to "0.5".
+		-->
+		<variable name="fractionOfAvailableHeight" type="number" value="1"/>
+		<!---
+			@keywords private
+			Child list message.
+		-->
+		<variable name="messageText" type="string" value=""/>
+				
+		<!---
+			@keywords private
+			Child list viewer should determine their enablement on its own.  Overwrites the 
+			{@link cmc/foundation/PropertiesComponent#updateEnablement} method to do nothing.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var objectView = null;
+			var objectName = null;
+			if (this.selectedObjectName != null) {
+				objectName = "o_" + this.selectedObjectName;
+				objectView = ModelUtil.Singleton.findObjectView(this.parent, objectName);
+			}
+			new BaseChildListViewer.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				objectTypes: this.objectTypes,
+				embedded: true,
+				listClass: this.listClass,
+				listDefinition: this.listDefinition,
+				fractionOfAvailableHeight: this.fractionOfAvailableHeight,
+				selectedObjectView: objectView,
+				selectedObjectName: objectName,
+				clientActionTypes: this.clientActionTypes,
+				messageSource: this
+			});
+			]]>
+		</method>
+	</PropertiesComponent>
+</Definitions>

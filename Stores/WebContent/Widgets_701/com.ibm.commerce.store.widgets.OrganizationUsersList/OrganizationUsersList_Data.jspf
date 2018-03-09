@@ -1,0 +1,381 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- Begin OrganizationUsersList_Data.jspf -->
+
+<c:set var="widgetName" value="OrganizationUsersList" />
+<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}" />
+<c:set var="eventName" value="orgUsersListShowPage"/>
+<c:set var="linkPrefix" value="orgUsersResults"/>
+<c:set var="widgetSuffix" value="${widgetName}" />
+
+<%-- ****************************************************************
+     strings to to pass to UI JSP from properties file --%>
+
+<wcst:message var="registeredBuyers" key="ORGANIZATIONUSERSLIST_BUYERS_TABLE_HEADING" bundle="${widgetText}"/>
+<wcst:message var="hCol1Text" key="ORGANIZATIONUSERSLIST_TABLECOL_NAME" bundle="${widgetText}"/>
+<wcst:message var="hCol2Text" key="ORGANIZATIONUSERSLIST_TABLECOL_LOGONID" bundle="${widgetText}"/>
+<wcst:message var="hCol3Text" key="ORGANIZATIONUSERSLIST_TABLECOL_ROLES" bundle="${widgetText}"/>
+<wcst:message var="hCol4Text" key="ORGANIZATIONUSERSLIST_TABLECOL_STATUS" bundle="${widgetText}"/>
+<wcst:message var="hCol5Text" key="ORGANIZATIONUSERSLIST_TABLECOL_ACTIONS" bundle="${widgetText}"/>
+<wcst:message var="toolbarButton1Text" key="ORGANIZATIONUSERSLIST_BTN_ADD_BUYER" bundle="${widgetText}"/>
+
+<wcf:url var="OrganizationUsersListViewURL" value="OrganizationUsersListView" type="Ajax">
+	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+</wcf:url>
+
+<wcf:url var="addUserURL" value="OrganizationAdminCreateUserView" scope="request">
+	<wcf:param name="storeId" value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+</wcf:url>
+<wcf:url var="viewUserURL" value="OrganizationAdminEditUserView" scope="request">
+	<wcf:param name="storeId" value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+</wcf:url>
+<c:choose>
+	<c:when test="${!empty param.orgEntityId}">
+		<c:set var="orgEntityId" value="${param.orgEntityId}" scope="request"/>
+	</c:when>
+	<c:when test="${!empty WCParam.orgEntityId}">
+		<c:set var="orgEntityId" value="${WCParam.orgEntityId}" scope="request"/>
+	</c:when>
+</c:choose>
+
+<c:if test="${not empty requestScope.orgEntityId}" >
+	<wcf:rest var="usersList" url="store/{storeId}/person" scope="request">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="q" value="usersICanAdmin"/>
+		<wcf:param name="profileName" value="IBM_User_List_Basic_Summary"/>
+		<wcf:param name="startIndex" value="${beginIndex}" />
+		<wcf:param name="maxResults" value="${pageSize}" />
+		<c:if test="${not empty WCParam.userAccountStatus }">
+			<wcf:param name="accountStatus" value="${WCParam.userAccountStatus }" />
+		</c:if>
+		<c:if test="${not empty WCParam.userFirstName }">
+			<wcf:param name="firstName" value="${WCParam.userFirstName }" />
+			<wcf:param name="firstNameSearchType" value="4" />
+		</c:if>
+		<c:if test="${not empty WCParam.userLastName }">
+			<wcf:param name="lastName" value="${WCParam.userLastName}" />
+			<wcf:param name="lastNameSearchType" value="4" />
+		</c:if>
+		<c:if test="${not empty WCParam.userLogonId }">
+			<wcf:param name="logonId" value="${WCParam.userLogonId}" />
+			<wcf:param name="logonIdSearchType" value="4" />
+		</c:if>
+		<c:if test="${not empty requestScope.orgEntityId }">
+			<wcf:param name="parentOrgId" value="${requestScope.orgEntityId}" />
+		</c:if>
+		<c:if test="${not empty WCParam.userRoleId }">
+			<wcf:param name="roleId" value="${WCParam.userRoleId}" />
+		</c:if>
+	</wcf:rest>
+	
+	<c:set var="numEntries" value="${usersList.recordSetTotal}" />
+	<%-- The following variable are passed to ItemTable_UI.jsp --%>
+	
+	<%-- set toolbarType to determine which toolbar JSP to include --%>
+	<c:set var="toolbarType" value="InputsAndButtons_OrgUsersList" />
+	
+	<%-- ****************************************************************
+	     header row main div class name --%>
+	<c:set var="headerDivClass" value="row tableHeader" />
+	
+	<%-- 
+	hCells is an array holding div class and contents of the cells in the header row, we have 6 columns for 
+	requisiton list items page so there are 6 cells.
+	Structure of hCells array:
+	"hCells": [
+		"hCell":{
+			"cellDivClass": <DIV_CLASS>
+			"cellContent": <CELL_CONTENT>
+		},
+		
+	The HTML of the header row is:
+	<div class="<DIV_CLASS>">
+		<div class="cell">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	
+	if cell can be sorted then,
+	Structure of hCells array:
+	"hCells": [
+		"hCell":{
+			"cellDivClass": <DIV_CLASS>
+			"sortingAction": <JS_FUNCTION>
+			"cellDivId": <DIV_ID>
+			"cellContent": <CELL_CONTENT>
+		},
+		
+	The HTML of the header row is:
+	<div class="<DIV_CLASS>" id="<DIV_ID>">
+		<div class="cell" onclick="<JS_FUNCTION>" >
+			<CELL_CONTENT>
+		</div>
+	</div>
+	
+	--%>
+	<wcf:useBean var="hCells" classname="java.util.ArrayList"/>
+	
+		<%-- header row column 1 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col3 name orgUsersHeader" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol1Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+		
+		<%-- header row column 2 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col2 logonId orgUsersHeader" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol2Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+				
+		<%-- header row column 3 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col5 roles orgUsersHeader" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol3Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+		
+		<%-- header row column 4 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col1 status orgUsersHeader" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol4Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+		
+		<%-- header row column 5 --%>
+		<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+			<wcf:set key="cellDivClass" value="col1 actions orgUsersHeader" target="${hCell}" />
+			<wcf:set key="cellContent" value="${hCol5Text}" target="${hCell}" />
+		<wcf:set target="${hCells}" value="${hCell}" />
+		<c:remove var="hCell"/>
+	
+	
+	<%-- ****************************************************************
+	     table row main div class name --%>
+	<c:set var="rowDivClass" value="row entry " />
+	
+	<%-- 
+	rows is an array holding rCells, each rCells record holds data for one row of the table
+	rCells is an array holding div class, id and contents of the cells in a table row, we have 6 columns so there are 6 cells each row
+	Structure of rCells array:
+	"rCells": [
+		"rCell":{
+			"div1Class": <DIV1_CLASS>
+			"div2Class": <DIV2_CLASS>
+			"div2Id": <DIV2_ID>
+			"cellContent": <CELL_CONTENT>
+		},
+		
+	The HTML of a table cell is:
+	<div class="<DIV1_CLASS>">
+		<div class="<DIV2_CLASS>" id="<DIV2_ID">
+			<CELL_CONTENT>
+		</div>
+	</div>
+	--%>
+	
+	<wcf:useBean var="rows" classname="java.util.ArrayList"/>
+	<wcf:useBean var="orgIdNameMap" classname="java.util.HashMap" /> <%-- Map of organizaiton Id to Organization display Name --%>
+
+	<wcf:rest var="organizationList" url="store/${WCParam.storeId}/organization" scope="request">
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="q" value="organizationsICanAdmin"/>
+		<wcf:param name="profileName" value="IBM_Organization_List_Short_Summary"/>
+	</wcf:rest>
+
+	<c:forEach items="${usersList.userDataBeans}" var="user" varStatus="aStatus">
+			<wcf:rest var="userRoles" url="store/{storeId}/person/{userId}">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:var name="userId" value="${user.userId}" encode="true"/>
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="profileName" value="IBM_Roles_Of_User_All"/>
+			</wcf:rest>
+			<%-- 
+				store org name and role name in map for displaying 
+				The org name is key and the role names are value,
+				so that we can group all roles within one Org for displaying
+			--%>
+			<wcf:useBean var="orgRoleMap" classname="java.util.HashMap" />
+			<c:forEach var="org" items="${userRoles.orgIdRoleDataBeans}" >
+		
+				<c:if test="${empty orgIdNameMap[org.key]}" >
+					<%-- Check ifIcanAdmininster this organization. Only display roles played in Organizations I can administer --%>
+					<c:set var="iCanAdminister" value="false"/>
+					<c:forEach var="orgDataBean" items="${organizationList.organizationDataBeans}">
+						<c:if test="${org.key eq orgDataBean.organizationId}">
+							<c:set var="iCanAdminister" value="true"/>
+						</c:if>
+					</c:forEach>
+					<c:if test = "${iCanAdminister eq 'true'}">
+						<%-- Get orgName for this orgId and also save it in internal hashMap for later use --%>
+						<wcf:rest var="currentOrg" url="store/{storeId}/organization/{organizationId}" >
+							<wcf:var name="storeId" value="${storeId}" encode="true"/>
+							<wcf:var name="organizationId" value="${org.key}" encode="true"/>
+							<wcf:param name="responseFormat" value="json" />
+							<wcf:param name="profileName" value="IBM_Organization_Short_Summary"/>
+						</wcf:rest>
+						<wcf:set target="${orgIdNameMap}" key="${org.key}" value="${currentOrg.displayName}" />
+						<c:remove var="currentOrg"/>
+					</c:if>
+				</c:if>
+				<c:if test = "${!empty orgIdNameMap[org.key]}"> <%-- I can administer this organizaiton. Proceed with displaying roles played in this Organization --%>	
+					<c:set var="orgName" value="${orgIdNameMap[org.key]}" />
+					<c:set var="orgDisplayName" value=""/>
+					
+					<c:choose>
+						<c:when test="${not empty orgName}">
+							<wcst:message var="orgDisplayName" key="ORGANIZATIONUSERSLIST_ORG_DISPLAY" bundle="${widgetText}"> 
+								<wcst:param>${orgName}</wcst:param>
+							</wcst:message>
+						</c:when>
+					</c:choose>
+					
+					<c:forEach var="role" items="${org.value}" >
+						<c:choose>
+							<c:when test="${empty orgRoleMap[orgDisplayName]}" >
+								<wcf:set target="${orgRoleMap}" key="${orgDisplayName }" value="${role.displayName}" />
+							</c:when>
+							<c:otherwise>
+								<wcf:set target="${orgRoleMap}" key="${orgDisplayName}" value="${orgRoleMap[orgDisplayName]},&nbsp;${role.displayName}" />
+							</c:otherwise>
+						</c:choose>
+					</c:forEach>
+				</c:if>
+			</c:forEach>
+			
+			<c:set var="userRolesList" value="" />
+			<c:forEach var="orgRoleMapElement" items="${orgRoleMap}" >
+				<c:if test="${not empty userRolesList }" >
+					<c:set var="userRolesList" value="${userRolesList}<br/>" />
+				</c:if>
+					<c:set var="userRolesList" value="${userRolesList}${orgRoleMapElement.value}&nbsp;${fn:escapeXml(orgRoleMapElement.key)}" />
+			</c:forEach>
+			<c:set var="userAccountStatus" value="" />
+			<c:if test="${user.userRegistry.status == 0 || user.userRegistry.status == 1}">
+				<wcst:message var="userAccountStatus" key="ORGANIZATIONUSERSLIST_USER_ACCOUNT_STATUS_${user.userRegistry.status}" bundle="${widgetText}"/>
+			</c:if>
+			<%-- Display the name of the buyers according to locale --%>
+			<c:choose>
+				<c:when test="${locale eq 'ja_JP' || locale eq 'ko_KR' || locale eq 'zh_CN' || locale eq 'zh_TW'}">
+					<c:set var="userName" value="${user.lastName} ${user.firstName}"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="userName" value="${user.firstName} ${user.lastName}"/>
+				</c:otherwise>
+			</c:choose>
+			<wcf:useBean var="rCells" classname="java.util.ArrayList"/>
+				<%-- table row column 1 --%>
+				<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+					<wcf:set key="div1Class" value="col3 name orgUsersColumn" target="${rCell}" />
+					<wcf:set key="div2Class" value="cell" target="${rCell}" />
+					<wcf:set key="div2Id" value="" target="${rCell}" />
+					<wcf:set key='cellContent' value="<a id='WC_${widgetName}_Widget_Link_1_${aStatus.count}' href='JavaScript:OrganizationUsersListJS.viewDetails(&quot;${user.userId }&quot;);'>${fn:escapeXml(userName)}</a>" target="${rCell}"/>
+				<wcf:set target="${rCells}" value="${rCell}" />
+				<c:remove var="rCell"/>
+								
+				<%-- table row column 2 --%>
+				<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+					<wcf:set key="div1Class" value="col2 logonId orgUsersColumn" target="${rCell}" />
+					<wcf:set key="div2Class" value="cell" target="${rCell}" />
+					<wcf:set key="div2Id" value="" target="${rCell}" />
+					<wcf:set key='cellContent' value="${fn:escapeXml(user.logonId)}" target="${rCell}"/>
+				<wcf:set target="${rCells}" value="${rCell}" />
+				<c:remove var="rCell"/>
+				
+				<%-- table row column 3 --%>
+				<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+					<wcf:set key="div1Class" value="col5 roles orgUsersColumn" target="${rCell}" />
+					<wcf:set key="div2Class" value="cell" target="${rCell}" />
+					<wcf:set key="div2Id" value="" target="${rCell}" />
+					<wcf:set key='cellContent' value='${userRolesList}' target='${rCell}' />
+				<wcf:set target="${rCells}" value="${rCell}" />
+				<c:remove var="rCell"/>
+				
+				<%-- table row column 4 --%>
+				<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+					<wcf:set key="div1Class" value="col1 status orgUsersColumn" target="${rCell}" />
+					<wcf:set key="div2Class" value="cell" target="${rCell}" />
+					<wcf:set key="div2Id" value="" target="${rCell}" />
+					<wcf:set key='cellContent' value='${userAccountStatus}' target='${rCell}' />
+				<wcf:set target="${rCells}" value="${rCell}" />
+				<c:remove var="rCell"/>
+				
+				<%-- table row column 5 --%>
+				<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+					<wcf:set key="div1Class" value="col1 actions orgUsersColumn" target="${rCell}" />
+					<wcf:set key="div2Class" value="cell" target="${rCell}" />
+					<wcf:set key='cellContent' value='no content test' target='${rCell}' />
+					<wcf:useBean var="actionsMap" classname="java.util.LinkedHashMap"/>
+						<%-- use linked hash map the actions are ordered --%>
+						<wcf:set key="viewDetails" value="OrganizationUsersListJS.viewDetails('${user.userId }')" target="${actionsMap}" />
+						<c:set var="unlockValue" value="" />
+						<c:set var="lockValue" value="OrganizationUsersListJS.updateMemberStatus('${user.userId }','0')" />
+						<c:if test="${user.userRegistry.status == 0 }" >
+							<c:set var="unlockValue" value="OrganizationUsersListJS.updateMemberStatus('${user.userId }','1')" />
+							<c:set var="lockValue" value="" />
+						</c:if>
+						<c:if test="${user.userId == CommandContext.user.userId }" >
+							<c:set var="unlockValue" value="" />
+							<c:set var="lockValue" value=""/>
+						</c:if>
+						<wcf:set key="unlock" value="${unlockValue}" target="${actionsMap}" />
+						<wcf:set key="lock" value="${lockValue}" target="${actionsMap}" />
+						<wcf:set key="addUser" value="OrganizationUsersListJS.addUser();" target="${actionsMap}" />
+					<wcf:set key='actionsMap' value='${actionsMap}' target='${rCell}' />
+				<wcf:set target="${rCells}" value="${rCell}" />
+				<c:remove var="rCell"/>
+			<wcf:set target="${rows}" value="${rCells}" />
+			<c:remove var="rCells"/>
+			<c:remove var="actionsMap"/>
+			<c:remove var="orgRoleMap"/>
+			<c:remove var="userRoles"/>
+	</c:forEach>
+	<%-- ****************************************************************
+	     pagination --%>
+	
+	<fmt:formatNumber var="totalPages" value="${(numEntries%pageSize) > 0 ? (numEntries/pageSize) + 0.5 : numEntries/pageSize}" type="number" pattern="#"/>		
+	<fmt:parseNumber var="totalPages" integerOnly="true">${totalPages}</fmt:parseNumber>
+	<%-- 	to show/hide search according to number of pages
+			hide search form if only one page.
+	 --%>
+	
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= numEntries}">
+			<c:set var="endIndex" value="${numEntries}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+	
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	
+	<wcst:message var="pageDisplay1" key="ORGANIZATIONUSERSLIST_PAGE_DISPLAY1" bundle="${widgetText}"/>
+	<wcst:message var="pageDisplay2" key="ORGANIZATIONUSERSLIST_PAGE_DISPLAY2" bundle="${widgetText}"> 
+		<wcst:param><wcst:formatNumber value="${beginIndex < endIndex ? beginIndex + 1 : endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${numEntries}"/></wcst:param>
+	</wcst:message>
+</c:if>
+<!-- END OrganizationUsersList_Data.jspf -->

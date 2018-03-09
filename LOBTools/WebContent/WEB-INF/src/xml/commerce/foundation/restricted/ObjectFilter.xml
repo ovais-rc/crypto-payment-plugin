@@ -1,0 +1,1073 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords abstract
+
+		cmc/foundation/Filter is the base class for a filter on a list of {@link cmc/foundation/ModelObject}. It contains the basic methods required 
+		by filters. This class is extended in order to create a filter for a specific aspect of an object, such as a filter 
+		based on object type or value of an object property. 
+		
+		If a filter is declared as the child of {@link cmc/foundation/BusinessObjectEditor}, the filter will be selectable through a dropdown at the top of 
+		the explorer view.  
+		
+		If the filter is declared as a child of {@link cmc/foundation/Grid}, the filter will be selectable through a dropdown at the top of the list view.  
+		
+		cmc/foundation/Filter can be extended in order to define a custom filter. Classes that extend cmc/foundation/Filter must provide their own 
+		implementation of {@link cmc/foundation/Filter#matchesFilter}.
+		
+		{@link cmc/foundation/EnablementCondition} can be declared as a child of cmc/foundation/ObjectTypeFilter to control the availability of the filter.
+		
+		The <code>sortComparator</code> attribute can be used to specify which {@link cmc/foundation/Comparator} to use to sort objects for display.  Specify the
+		<code>id</code> of an instance of {@link cmc/foundation/Comparator} to override the default sort behaviour. By default, objects are sorted by object type and
+		and display name.
+		
+		@see cmc/foundation/ObjectTypeFilter
+		@see cmc/foundation/ObjectPropertyFilter
+
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/Filter">
+		<dependency localName="DisplayNameComparator" moduleName="cmc/foundation/DisplayNameComparator"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+	
+		<!---
+			A required string which identifies filter's type. 
+		-->
+		<variable name="filterType" type="string"/>
+		
+		<!---
+			The display name for this filter type. This value will be displayed in the user interface to represent the filter
+			in places such as dropdowns. 
+		-->
+		<variable name="displayName" type="string" value=""/>
+		
+		<!---
+			An indicator that this is the default filter.
+		-->
+		<variable name="isDefault" type="boolean" value="false"/>
+		<!---
+			Icon to display beside filter
+		-->
+		<variable name="icon" type="string" value=""/>
+		<!---
+			Sorting comparator {@link cmc/foundation/Comparator} used to return the order of the objects to be displayed in this filter.
+		-->
+		<variable name="sortComparator" type="module" value="${DisplayNameComparator}"/>		
+
+		<!--- 
+			@keywords private 
+			Initialization method for this class.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var filters = this.parent.filters;
+			if (!filters) {
+				filters = [];
+				this.parent.filters = filters;
+			}
+			filters.push(this);
+			if (this.isDefault) {
+				this.parent.defaultFilter = this;
+			}
+			if (this.sortComparator != null) {
+				if (this.sortComparator.Singleton) {
+					comparator = this.sortComparator.Singleton;
+				}
+				else if (this.sortComparator.Class) {
+					comparator = new this.sortComparator.Class(RootComponent.Singleton);
+					this.sortComparator.Singleton = comparator;
+				}
+				else {
+					comparator = DefinitionUtil.createDefinitionInstance(this.sortComparator, RootComponent.Singleton);
+					if (comparator == null) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "SEVERE", "cmc/foundation/Filter", "init", "Unable to resolve sortComparator: " + this.sortComparator);
+					}
+					else {
+						this.sortComparator.Singleton = comparator;
+					}
+				}
+				this.sortComparator = comparator;
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method checks if the specified objects matches this filter. The base class
+			implementation always returns true.
+			
+			@param cmc/foundation/ModelObject o The object to test.
+			@return boolean This method should returns true if the object matches this filter and false otherwise.
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return true;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method checks if the specified objectType matches this filter. The base class implementation always 
+			returns true. Classes that extend cmc/foundation/ObjectFilter that will make use of this method should provide their
+			own implementation of it. 
+			
+			@param string objectType The objectType to test.
+			@return boolean Returns true if the object type matches this filter and false otherwise.
+		-->
+		<method args="objectType" name="objectTypeMatchesFilter">
+			<![CDATA[
+			return true;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private 
+			This method checks if the filter is enabled or disabled.  A filter is disabled if an instance of 
+			{@link cmc/foundation/EnablementCondition} is declared as a child and it evaluates to false.
+			
+			@param cmc/foundation/ModelObject o The object to test.
+			@return boolean Returns false if an enablementCondition is defined and it evaluates to false.
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			if (this.enablementCondition && !this.enablementCondition.isEnabled(o)) {
+				return false;
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Compare two objects.
+
+			@param cmc/foundation/ModelObject o1: first object to compare
+			@param cmc/foundation/ModelObject o2: second object to compare
+			@return integer returns 1 if o1 has priority and -1 if o2 has priority, 0 if tie
+			for the specified model object.
+		-->
+		<method args="o1, o2" name="objectCompare">
+			<![CDATA[
+			var result = 0;
+			if (this.sortComparator != null) {
+				result = this.sortComparator.objectCompare(o1, o2, this);
+			}
+			return result;
+			]]>
+		</method>
+		
+	</Node>
+	
+	<!---
+		@keywords final
+		This is a filter class that filters {@link cmc/foundation/ModelObject} in the explorer view.  It will filter model objects to 
+		those that match one of the object types which is set by the <code>objectTypes</code> attribute.  
+		
+		{@link cmc/foundation/EnablementCondition} can be declared as a child of cmc/foundation/ObjectTypeFilter to control the availability of the filter.
+				
+		Here is an example of how to declare an instance of cmc/foundation/ObjectTypeFilter:
+
+		@START_CODE
+		<ObjectTypeFilter
+			filterType="Catalog Entry"
+			displayName="Catalog Entry"
+			objectTypes="Product,SKU,Bundle"
+			isDefault="true">
+			
+			<EnablementCondition contextName="storeType" enablementValue="B2C"/>
+			
+		</ObjectTypeFilter>
+		@END_CODE
+		
+		This example will create a new filter call "Catalog Entry" in the explorer view.  When the filter is selected, only model objects with 
+		the object types "Product", "SKU", or "Bundle" will be displayed.  An enablement condition is defined as a child of the filter.  This
+		indicates that the filter will only be available when a storeType of "B2C" is selected.
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/ObjectTypeFilter">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<!---
+			A comma separated list of object types that will be included in the filtered list.
+		-->
+		<variable name="objectTypes" type="string" value="${null}"/>
+		<!--- 
+			@keywords private 
+			An array used to hold the different objectType values. It is constructed from objectTypes.
+		-->
+		<variable name="objectTypesArray" value="${null}"/>
+
+		<!---
+			@keywords private
+			This method sets the list of valid object types for this filter.
+			@param string types A comma separated list of object types.
+		-->
+		<method args="types" name="setObjectTypes">
+			<![CDATA[
+			this.objectTypes = StringUtil.Singleton.replace(types, "\/", ",");
+			this.objectTypesArray = types ? StringUtil.Singleton.splitAndTrim(types, ",") : null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will check if the object type of the specified object matches this filter.
+			The object type of a model object is represented by its <code>objectType</code> attribute.
+			
+			@param cmc/foundation/ModelObject o The object to test.
+			@return boolean Returns true if the object's <code>objectTypes</code> attribute matches this filter and false otherwise.
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			var match = true;
+			if (this.objectTypesArray) {
+				match = false;
+				for (var i = 0; i < this.objectTypesArray.length && !match; i++) {
+					var pathSelectors = ModelUtil.Singleton.getPathSelectors(this.objectTypesArray[i]);
+					if (pathSelectors.length > 0) {
+						match = ModelUtil.Singleton.matchesPathSelector(o, pathSelectors[0]);
+						if (match && pathSelectors.length > 1) {
+							var objPath = this.objectTypesArray[i].substring(this.objectTypesArray[i].indexOf("/") + 1);
+							var objs = o.getObjects(objPath);
+							match = (objs.length > 0);
+						}
+					}
+				}
+			}
+			return match;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			if (this.objectTypesArray) {
+				for (var i = 0; i < this.objectTypesArray.length; i++) {
+					var pathSelectors = ModelUtil.Singleton.getPathSelectors(this.objectTypesArray[i]);
+					if (pathSelectors.length > 0) {
+						ModelUtil.Singleton.registerDelegateSelectors(o, pathSelectors[0].selectors, del);
+						if (pathSelectors.length > 1) {
+							var objPath = this.objectTypesArray[i].substring(this.objectTypesArray[i].indexOf("/") + 1);
+							var objs = o.getObjects(objPath);
+							for (var t = 0; t < pathSelectors.length; t++) {
+								for (var j = 0; j < objs.length; j++) {
+									ModelUtil.Singleton.registerDelegateSelectors(objs[j], pathSelectors[t].selectors, del);
+								}
+							}
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if the specified object type matches this filter.  The object type is represented 
+			by <code>o.objectType</code> attribute.
+			
+			@param string objectType The object type to check.
+			@return boolean Returns true if the object type matches this filter and false otherwise.
+		-->
+		<method args="objectType" name="objectTypeMatchesFilter">
+			<![CDATA[
+			var match = false;
+			var types = this.objectTypesArray;
+			for (var i = 0; i < types.length; i++) {
+				var pathSelectors = ModelUtil.Singleton.getPathSelectors(types[i]);
+				for (var j = 0; j < pathSelectors.length; j++) {
+					if (pathSelectors[j].type == objectType) {
+						match = true;
+						break;
+					}
+				}
+			}
+			return match;
+			]]>
+		</method>
+	<method args="objectTypes" name="set_objectTypes">
+			<![CDATA[
+			this.setObjectTypes(objectTypes);
+			]]>
+		</method></Filter>
+	
+	<!---
+		@keywords final
+		This is a filter class that filters {@link cmc/foundation/ModelObject} in the list view.  The filter must appear 
+		as a child of a {@link cmc/foundation/ObjectGrid}.  It will filter model objects based on the objectPath defined by the 
+		<code>objectPath</code> attribute.
+		
+		Here is an example of how to declare an instance of cmc/foundation/ObjectPathFilter:
+
+		@START_CODE
+		<ObjectPathFilter
+				filterType="AttributeChild"
+				displayName="Show objects with Attribute child"
+				objectPath="Attribute"
+		/>
+		@END_CODE
+
+		This example will create a new filter called "AttributeChild" in the list view.  When this filter is selected, model objects with 
+		that have an <code>objectPath</code> "Attribute" will be filtered.  That is, model objects like
+		the following will be displayed:
+		
+		@START_CODE
+		<object objectType="Product">
+			...
+			<object objectType="Attribute">
+				...
+			</object>
+			...
+		</object>
+		@END_CODE
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/ObjectPathFilter">
+	
+		<!---
+			This attribute is used to specify the path that is used to check the existance of a child object.  If an object exists
+			along that object path, then the filter is a match otherwise it is not. This is a required attribute.
+		-->
+		<variable name="objectPath" type="string"/>
+
+		<!---
+			@keywords private
+			This method check if the specified object matches this filter by seeing if the property of the given object matches
+			that required by the filter.
+			
+			@param cmc/foundation/ModelObject o The object to test. 
+			@return boolean Returns true if the object matches the value specified and false otherwise. 
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return o.getObject(this.objectPath) ? true : false;
+			]]>
+		</method>
+	</Filter>
+	
+	<!---
+		@keywords final
+		This class can be used to filter {@link cmc/foundation/ModelObject objects} in a list view.  The filter must appear 
+		as a child of a {@link cmc/foundation/ObjectGrid}.  It will filter model objects based on the value defined by the 
+		<code>propertyName</code> and <code>value</code> attributes.
+		
+		Here is an example of how to declare an instance of cmc/foundation/ObjectPropertyFilter:
+
+		@START_CODE
+		<ObjectPropertyFilter
+				filterType="Red Products"
+				displayName="Red Products"
+				objectPath="Attribute"
+				propertyName="color"
+				value="red"
+		/>
+		@END_CODE
+
+		This example will create a new filter called "Red Products" in the list view.  When this filter is selected, model objects with 
+		the value "red" for the property "color" in <code>objectPath</code> "Attribute" will be filtered.  That is, model objects like
+		the following will be displayed:
+		
+		@START_CODE
+		<object objectType="Product">
+			...
+			<object objectType="Attribute">
+				...
+				<color>red</color>
+				...
+			</object>
+		</object>
+		@END_CODE
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/ObjectPropertyFilter">
+	
+		<!---
+			This attribute is used to specify the path that is used to locate the property value specified under the propertyName attribute. 
+			If specified, the property will be resolved by searching for child objects that match the object path.
+			If the value is not provided, the value will be retrieved from the object itself.
+
+			The default value for this attribute is null. 
+		-->
+		<variable name="objectPath" type="string" value="${null}"/>
+		
+		<!---
+			The name of the property that the object list will be filtered based on. This is a required attribute.
+		-->
+		<variable name="propertyName" type="string"/>
+		
+		<!---
+			The value of the property that will be matched against the objects. This is a required attribute.
+		-->
+		<variable name="value" type="string"/>
+
+		<!---
+			@keywords private
+			This method check if the specified object matches this filter by seeing if the property of the given object matches
+			that required by the filter.
+			
+			@param cmc/foundation/ModelObject o The object to test. 
+			@return boolean Returns true if the object matches the value specified and false otherwise. 
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			if (this.value) {
+				return o.getPropertyValue(this.propertyName, this.objectPath) == this.value;
+			}
+			else {
+				return o.getPropertyValue(this.propertyName, this.objectPath);
+			}
+			]]>
+		</method>
+	</Filter>
+
+	<!---
+		@keywords final
+		This class can be used to filter a list of {@link cmc/foundation/ModelObject objects} to only include objects
+		that do not have a parent. The following example demonstrates the declaration of an organizational
+		object for unassigned catalog entries. Declaring <code>organizedObjectTypes</code> ensures that new catalog
+		entries created on the client are included in the list. Declaring the <code>cmc/foundation/UnassignedObjectFilter</code>
+		instance ensures that only those objects that do not have a parent are visible. The get children service will
+		load the unassigned catalog entries from the server. The filter will ensure that when those catalog
+		entries are assigned parents that they disappear from the list.
+
+		@START_CODE
+		<OrganizationalObjectDefinition definitionName="UnassignedCatalogEntries"
+				objectType="UnassignedCatalogEntries"
+				displayName="${catalogResources.unassignedCatalogEntries}"
+				detailsViewHeaderText="${catalogResources.UtilityPaneHeaderText}"
+				organizedObjectTypes="Product,Bundle,Kit,CatalogGroupSKU">
+			<GetChildrenService url="/cmc/GetUnassignedCatalogEntries">
+				<ServiceParam name="storeId"/>
+				<ServiceParam name="masterCatalogId"/>
+				<ServiceParam name="defaultLanguageId"/>
+			</GetChildrenService>
+			<UnassignedCatalogEntriesNavigationList package="cat"/>
+			<UnassignedObjectFilter/>
+		</OrganizationalObjectDefinition>
+		@END_CODE
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/UnassignedObjectFilter">
+		<!---
+			@keywords private
+			This method checks if the specified object matches this filter by checking if it has a parent. Objects
+			that don't have a parent will match the filter.
+			
+			@param cmc/foundation/ModelObject o The object to test. 
+			@return boolean Returns true if the object has no parent, false otherwise
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return o.getParentPrimaryObject() == null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			del.connect(o, "onreferences");
+			]]>
+		</method>
+	</Filter>
+
+	<!---
+		@keywords final
+		This class can be used to filter a list of {@link cmc/foundation/ModelObject objects} to only include objects
+		that are not referenced by any of the specified primary objects through the specified reference objects.
+		The following example demonstrates the declaration of an organizational
+		object for unreferenced e-marketing spots. Declaring <code>organizedObjectTypes</code> ensures that e-marketing
+		spots loaded through search requests are included in the list. Declaring the <code>cmc/foundation/UnreferencedObjectFilter</code>
+		instance ensures that only those objects that do not have matching references are visible. The get children service will
+		load the unreferenced e-marketing spots from the server. The filter will ensure that when those e-marketing spots
+		are assigned to activities that they disappear from the list.
+
+		@START_CODE
+		<OrganizationalObjectDefinition definitionName="UnreferencedEMarketingSpots"
+				objectType="UnreferencedEMarketingSpots"
+				displayName="${mktMarketingResources.unreferencedEMarketingSpots}"
+				organizedObjectTypes="EMarketingSpot">
+			<GetChildrenService url="/cmc/GetUreferencedEMarketingSpots">
+				<ServiceParam name="storeId"/>
+			</GetChildrenService>
+			<EMarketingSpotGridChildList package="mkt"/>
+			<UnreferencedObjectFilter primaryObjectTypes="WebActivity,InheritedWebActivity" referenceObjectTypes="ChildEMarketingSpot,ChildInheritedEMarketingSpot"/>
+		</OrganizationalObjectDefinition>
+		@END_CODE
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/UnreferencedObjectFilter">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			A comma separated list of primary {@link cmc/foundation/ObjectDefinition#objectType object types}.
+			This is a required attribute.
+		-->
+		<variable name="primaryObjectTypes" type="string"/>
+		<!---
+			A comma separated list of reference {@link cmc/foundation/ObjectDefinition#objectType object types}.
+			The reference object types will be matched against the primary object definitions identified by <code>primaryObjectTypes</code>. The
+			reference object definitions do not need to be declared as immediate children of the primary object definition. They can be anywhere
+			in the primary object definition. This is a required attribute.
+		-->
+		<variable name="referenceObjectTypes" type="string"/>
+		<!---
+			@keywords private
+			Array of primary object definitions.
+		-->
+		<variable name="primaryObjectDefinitions" value="${null}"/>
+		<!---
+			@keywords private
+			String array of the object types specified by referenceObjectTypes.
+		-->
+		<variable name="referenceObjectTypesArray" value="${[]}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.referenceObjectTypes != null) {
+				this.referenceObjectTypesArray = StringUtil.Singleton.splitAndTrim(this.referenceObjectTypes, ",");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the array of primary object definitions.
+			@param cmc/foundation/Model model: the model
+			@return [cmc/foundation/PrimaryObjectDefinition]: array of primary object definitions
+		-->
+		<method args="model" name="getPrimaryObjectDefinitions">
+			<![CDATA[
+			if (this.primaryObjectDefinitions == null) {
+				this.primaryObjectDefinitions = [];
+				if (this.primaryObjectTypes) {
+					var types = StringUtil.Singleton.splitAndTrim(this.primaryObjectTypes, ",");
+					for (var i = 0; i < types.length; i++) {
+						var def = model.getObjectDefinition(null, types[i]);
+						if (def) {
+							this.primaryObjectDefinitions.push(def);
+						}
+						else {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "SEVERE", "cmc/foundation/UnreferencedObjectFilter", "getPrimaryObjectDefinitions", "Unable to resolve primary object type: " + types[i]);
+						}
+					}
+				}
+			}
+			return this.primaryObjectDefinitions;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method checks if the specified object matches this filter by checking if it has a matching reference.
+			If the specified object has no matching references, then this method will return true.
+			
+			@param cmc/foundation/ModelObject o The object to test. 
+			@return boolean Returns true if the object has no matching references, false otherwise.
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			var referenceFound = false;
+			var primaryDefs = this.getPrimaryObjectDefinitions(o.objectDefinition.model);
+			for (var i = 0; i < o.references.length && !referenceFound; i++) {
+				var refO = o.references[i];
+				if (refO.objectDefinition.reference && !refO.objectDefinition.parentReference) {
+					for (var j = 0; j < this.referenceObjectTypesArray.length && !referenceFound; j++) {
+						if (refO.objectDefinition.matchesType(this.referenceObjectTypesArray[j])) {
+							var po = refO.getParentPrimaryObject();
+							for (var k = 0; k < primaryDefs.length; k++) {
+								if (po.objectDefinition == primaryDefs[k]) {
+									referenceFound = true;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+			return !referenceFound;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			del.connect(o, "onreferences");
+			]]>
+		</method>
+	</Filter>
+
+	<!---
+		@keywords final
+		This class can be used to filter a list of {@link cmc/foundation/ModelObject objects} to only include objects and folders
+		that do not have a parent. The following example demonstrates the declaration of an organizational
+		object for attribute dictionary folders. Declaring <code>organizedObjectTypes</code> ensures that new folders
+		created on the client are included in the list. Declaring the <code>cmc/foundation/UnassignedFolderFilter</code>
+		instance ensures that only those folders and objects that do not have a parent are visible. The get children service will
+		load the folders from the server. The filter will ensure that when those folders or objects are assigned parents
+		that they disappear from the list.
+
+		@START_CODE
+		<OrganizationalObjectDefinition definitionName="AllAttributeFoldersTop" detailsViewHeaderText="${catalogResources.allAttributeFolders_headerText}" displayName="${catalogResources.allAttributeFolders_displayText}" objectType="AllAttributeFoldersTop" organizedObjectTypes="AttributeFolder,InheritedAttributeFolder">
+            <GetChildrenService url="/cmc/GetTopFolders">
+                  <ServiceParam name="storeId"/>
+                  <ServiceParam name="folderType" value="IBM_AttributeFolder"/>
+                  <ServiceParam name="folderObjectType" value="AttributeFolder"/>
+            </GetChildrenService>
+            <NavigationListDefinition baseDefinition="cmc/catalog/TopAttributeFolderGridChildList"/>
+            <UnassignedFolderFilter/>
+      </OrganizationalObjectDefinition>
+		@END_CODE
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/UnassignedFolderFilter">
+		<!---
+			@keywords private
+			This method checks if an object has a parent or its parentId property is set.
+			Model objects that have neither will match the filter.
+			
+			@param cmc/foundation/ModelObject o The model object to test. 
+			@return boolean Returns true if the object has no parent, false otherwise
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			var hasNoParent = o.getParentPrimaryObject() == null;
+			if (hasNoParent) {
+				var parentId = o.getPropertyValue("parentFolderId", null, true);
+				hasNoParent = (parentId == null || parentId.length == 0);
+			}
+			return hasNoParent;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			del.connect(o, "onreferences");
+			]]>
+		</method>
+	</Filter>
+	
+	<!---
+		@keywords private
+		
+		This filter will return {@link cmc/foundation/ModelObject objects} based on its object group definition.
+		Objects that pass this filter have {@link cmc/foundation/ObjectDefinition#objectGroups object groups} that match the given
+		<code>objectGroup</code> attribute.
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/ObjectGroupFilter">
+		<!--- The {@link cmc/foundation/ObjectDefinition#objectGroups objectGroup} to filter on -->
+		<variable name="objectGroup" type="string" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Check if the specified object matches this filter.
+			@param cmc/foundation/ModelObject o the object to test
+			@returns boolean <code>true</code> if the object is in the <code>objectGroup</code> or <code>objectGroup</code> is not defined
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return (this.objectGroup) ? o.objectDefinition.matchesType(this.objectGroup) : true;
+			]]>
+		</method>
+	</Filter>
+
+	<!---
+		@keywords private
+		
+		cmc/foundation/GridColumnFilter filters the objects in the list based on the displayValue for a given column. Only those objects with the 
+		specified displayValue for the given column will match the filter.
+		
+		cmc/foundation/GridColumnFilter is a child element of {@link cmc/foundation/GridColumn}. Filters are created for the desired column by setting the 
+		{@link cmc/foundation/GridColumn#enableFilter} attribute on that {@link cmc/foundation/GridColumn} to true and a {@link cmc/foundation/ColumnFilterButton} is 
+		created for that column to display the filters. 
+		
+		As the displayValues of column entries change, the appropriate filters will be created and updated. 
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/GridColumnFilter">
+		<!---
+		 	The column that is being filtered. 
+		-->
+		<variable name="column"/>
+		<!---
+			The display value that the column must match. This is a required attribute.
+		-->
+		<variable name="displayValue" type="string"/>
+		
+		<!---
+			Check if the specified object matches this filter.
+			
+			@param cmc/foundation/ModelObject o The object to test.
+			@return boolean Returns true if the object matches this filter and false otherwise.
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			return this.column.matchesFilter(o, this.displayValue);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			if (!this.column.editable) {
+				this.column.registerDelegate(o, del);
+			}
+			]]>
+		</method>
+	</Filter>
+	
+	<!---
+		@keywords final
+		This is a filter class that filters {@link cmc/foundation/ModelObject model objects} based on the value of a specified {@link cmc/foundation/ModelProperty property}.
+		The filter will match the property value against a specified list of values. If the object's property value matches one of the specified
+		values, then the model object will be included in the filtered list. If the specified list of values is blank, then the filter will
+		match all of the model objects.
+
+		<p>The following example demonstrates the declaration of an instance of cmc/foundation/PropertyValuesFilter that will match
+		objects with the <code>templateId</code> property set to "1", "2" or "3".
+
+		@START_CODE
+		<PropertyValuesFilter displayName="Folder One" propertyName="templateId" values="1,2,3"/>
+		@END_CODE
+	-->
+	<Filter classDefinition="true" definitionName="cmc/foundation/PropertyValuesFilter">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			The name of the property that the filter will use to match the object with the specified values.
+			This is a required attribute.
+		-->
+		<variable name="propertyName" type="string"/>
+		<!---
+			This attribute is used to specify the path that is used to locate the property value specified under the propertyName attribute. 
+			If specified, the property will be resolved by searching for child objects that match the object path.
+			If the value is not provided, the property will be retrieved from the object itself.
+
+			The default value for this attribute is null. 
+		-->
+		<variable name="objectPath" type="string" value="${null}"/>		
+		<!---
+			A comma separated list of property values that will be included in the filtered list.  If the list is empty, then all of the 
+			objects in the list will match the filter.
+		-->
+		<variable name="values" type="string" value=""/>
+		<!---
+			Negate the filter condition. This means that objects that do not match the list of values will be included in the list.
+		-->
+		<variable name="negate" type="boolean" value="false"/>
+		<!--- 
+			@keywords private 
+			String array of the values specified with the values attribute.
+		-->
+		<variable name="valueArray" value="${null}"/>
+		
+		<!---
+			@keywords private
+			This method sets the list of valid property values for this filter.
+			@param string values A comma separated list of values
+		-->
+		<method args="values" name="setValues">
+			<![CDATA[
+			this.values = values;
+			this.valueArray = values ? StringUtil.Singleton.splitAndTrim(values, ",") : null;
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			This method will check if the property value of the specified object matches this filter.
+			@param cmc/foundation/ModelObject o The object to test.
+			@return boolean Returns true if the object's property value matches this filter and false otherwise.
+		-->
+		<method args="o" name="matchesFilter">
+			<![CDATA[
+			var match = true;
+			if (this.valueArray != null && this.valueArray.length > 0) {
+				match = false;
+				var values = this.valueArray;
+				var value = o.getPropertyValue(this.propertyName, this.objectPath);
+				for (var i = 0; i < values.length; i++) {
+					if (value == values[i]) {
+						match = true;
+						break;
+					}
+				}
+			}
+			return this.negate ? !match : match;
+			]]>
+		</method>
+	<method args="values" name="set_values">
+			<![CDATA[
+			this.setValues(values);
+			]]>
+		</method></Filter>
+	
+	<!---
+		@keywords abstract
+		The cmc/foundation/Comparator class is the base class for object comparators that sort a list of objects. This class contains utility methods 
+		that are used to implement the compare operation by overriding the <code>compareObject</code> method. 
+		
+		The following example demonstrates the implementation of a comparator that sorts objects based on their sequence number property.
+		@START_CODE
+		<Comparator id="extSequenceComparator" >
+			<method name="objectCompare" args="o1,o2,filter">
+				<![CDATA[
+				var result = 0;
+				var sequenceO1 = Number(o1.getPropertyValue("sequence"));
+				var sequenceO2 = Number(o2.getPropertyValue("sequence"));
+				if(sequenceO1>sequenceO2){
+					result = 1;
+				}else if(sequenceO1<sequenceO2){
+					result = -1;
+				}
+				return result;
+				]]>
+			</method>
+		</Comparator>
+		@END_CODE
+		
+		The following example shows how to assign extSequenceComparator to the sortComparator attribute of a {@link cmc/foundation/ObjectTypeFilter} 
+		definition to sort catalog objects by their sequence number property.
+		@START_CODE
+		<ObjectTypeFilter
+			filterType="Catalog Entry"
+			displayName="Catalog Entry"
+			objectTypes="Product,SKU,Bundle"
+			isDefault="true"
+			sortComparator="extSequenceComparator" />
+		@END_CODE
+
+		@see cmc/foundation/Filter
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/Comparator">
+		
+		<!---
+			This method compares objects based on their object type.
+			@param cmc/foundation/ModelObject o1: first object to compare
+			@param cmc/foundation/ModelObject o2: second object to compare
+			@param Array objectTypes: an array of object types that define the sort order
+			@return integer - returns 1 if o1 has priority, -1 if o2 has priority, and 0 if o1 and o2 have equal priority. 
+		-->
+		<method args="o1, o2, objectTypes" name="compareType">
+			<![CDATA[
+			var result = 0;
+			if (o1.objectType != o2.objectType) {
+				if (objectTypes) {
+					for (var i = 0; i < objectTypes.length; i++) {
+						if (o1.objectType == objectTypes[i]) {
+							result = -1;
+							break;
+						}
+						else if (o2.objectType == objectTypes[i]) {
+							result = 1;
+							break;
+						}
+					}
+				}
+				if (result == 0) {
+					if (o1.objectType > o2.objectType) {
+						result = 1;
+					}
+					else if (o1.objectType < o2.objectType) {
+						result = -1;
+					}
+				}
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			This method compares objects and gives priority to new objects.
+			@param cmc/foundation/ModelObject o1: first object to compare
+			@param cmc/foundation/ModelObject o2: second object to compare
+			@return integer - returns 1 if o1 has priority, -1 if o2 has priority, and 0 if o1 and o2 have equal priority.
+		-->
+		<method args="o1, o2" name="compareNew">
+			<![CDATA[
+			var result = 0;
+			if (o1.newObject != o2.newObject) {
+				if (o2.newObject) {
+					result = 1;
+				}
+				else if (o1.newObject) {
+					result = -1;
+				}
+			}
+			return result;
+			]]>
+		</method>
+		<!---
+			This method compares objects based on their display name.
+			@param cmc/foundation/ModelObject o1: first object to compare
+			@param cmc/foundation/ModelObject o2: second object to compare
+			@return integer - returns 1 if o1 has priority, -1 if o2 has priority, and 0 if o1 and o2 have equal priority.
+		-->
+		<method args="o1, o2" name="compareDisplayName">
+			<![CDATA[
+			var result = 0;
+			if (o1.lowerCaseDisplayName > o2.lowerCaseDisplayName) {
+				result = 1;
+			}
+			else if (o1.lowerCaseDisplayName < o2.lowerCaseDisplayName) {
+				result = -1;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Override this method to implement the compare operation for this comparator.
+			@param cmc/foundation/ModelObject o1: first object to compare
+			@param cmc/foundation/ModelObject o2: second object to compare
+			@param cmc/foundation/Filter filter: the object filter used to calculate the sort list
+			@return integer - returns 1 if o1 has priority, -1 if o2 has priority, and 0 if o1 and o2 have equal priority.
+		-->
+		<method args="o1, o2, filter" name="objectCompare">
+			<![CDATA[
+			return 0;
+			]]>
+		</method>
+	</Component>
+	
+	<Comparator definitionName="cmc/foundation/DisplayNameComparator" singletonDefinition="true">
+		<!---
+			objectCompare method used as default compare of two objects.
+			Sorts objects by type, then puts new (unsaved objects) on top.
+			The remaining objects that are not new are sorted by the lower case display name.
+
+			@param cmc/foundation/ModelObject o1: first object to compare
+			@param cmc/foundation/ModelObject o2: second object to compare
+			@param cmc/foundation/Filter filter: the object filter used to calculate the sort list
+			@return integer - returns 1 if o1 has priority, -1 if o2 has priority, and 0 if o1 and o2 have equal priority.
+		-->
+		<method args="o1, o2, filter" name="objectCompare">
+			<![CDATA[
+			var result = this.compareType(o1, o2, filter.objectTypesArray);
+			if (result == 0) {
+				result = this.compareNew(o1, o2);
+			}
+			if (result == 0) {
+				result = this.compareDisplayName(o1, o2);
+			}
+			return result;
+			]]>
+		</method>
+	</Comparator>
+
+	<!---
+		The cmc/foundation/NumericPropertyComparator class is used to sort a list of objects based on the value of a numeric property.
+		
+		The following example demonstrates the declaration of a comparator definition that compares objects based on the
+		"sequence" property.
+		@START_CODE
+		<NumericPropertyComparator definitionName="extSequencePropertyComparator" propertyName="sequence"/>
+		@END_CODE
+		
+		The following example shows how to assign extSequencePropertyComparator to the sortComparator attribute of a {@link cmc/foundation/ObjectTypeFilter} 
+		definition.
+		@START_CODE
+		<ObjectTypeFilter
+			filterType="Catalog Entry"
+			displayName="Catalog Entry"
+			objectTypes="Product,SKU,Bundle"
+			isDefault="true"
+			sortComparator="extSequencePropertyComparator" />
+		@END_CODE
+		
+		@see cmc/foundation/Filter
+	-->
+	<Comparator classDefinition="true" definitionName="cmc/foundation/NumericPropertyComparator">
+		<dependency localName="SequenceSortComparator" moduleName="cmc/foundation/SequenceSortComparator"/>
+		<!---
+			The name of the property used to compare objects. This attribute is required.
+		-->
+		<variable name="propertyName" type="string"/>
+
+		<!---
+			When a value for {@link cmc/foundation/NumericPropertyComparator#propertyName propertyName} is specified, the
+			value of this property will be used to help resolve the property value. This attribute is optional.
+		-->
+		<variable name="objectPath" type="string" value="${null}"/>
+		
+		<!---
+			Indicates if the sorting is done in ascending order. The default is true.
+		-->
+		<variable name="sortAscending" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			A reference to the sequence sorter.
+		-->
+		<variable name="sequencedSorter" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.sequencedSorter = new SequenceSortComparator.Class(this, {
+				sequencePropertyName: this.propertyName,
+				sequencePropertyPath: this.objectPath
+			});
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="o1, o2, filter" name="objectCompare">
+			<![CDATA[
+			return this.sequencedSorter.compare(o1, o2, this.sortAscending);
+			]]>
+		</method>
+	</Comparator>
+</Definitions>

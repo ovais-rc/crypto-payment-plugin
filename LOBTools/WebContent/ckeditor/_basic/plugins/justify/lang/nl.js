@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","nl",{block:"Uitgevuld uitlijnen",center:"Centreren",left:"Links uitlijnen",right:"Rechts uitlijnen"});

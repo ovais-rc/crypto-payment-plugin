@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","bg",{border:"Показване на граница на рамка",noUrl:"Въведете URl адрес на Iframe",scrolling:"Разрешаване на плъзгачи",title:"IFrame свойства",toolbar:"Вмъкване на IFrame",ibm:{title:"IFrame"}});

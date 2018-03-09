@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","en",{error:"Pasting images is currently not supported. Please use the 'Insert Image' toolbar option instead."});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","id",{bold:"Tebal",italic:"Miring",strike:"Coretan",subscript:"Subskrip",superscript:"Superskrip",underline:"Garis bawah"});

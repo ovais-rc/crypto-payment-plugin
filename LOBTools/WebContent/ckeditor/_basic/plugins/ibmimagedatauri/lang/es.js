@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","es",{error:"Actualmente, no se permite pegar imágenes. Use la opción de la barra de herramientas 'Insertar imagen' en su lugar."});

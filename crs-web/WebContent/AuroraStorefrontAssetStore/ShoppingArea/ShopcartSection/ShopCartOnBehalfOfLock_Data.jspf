@@ -1,0 +1,47 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- BEGIN ShopCartOnBehalfOfLock_Data.jspf -->
+
+<c:if test="${CommandContext.user.userId != '-1002' && empty requestScope.order}">
+	<wcf:rest var="order" url="store/{storeId}/cart/@self"> <%-- Do not put this order in requestScope. This call is made to retrieve the orderId only --%>
+		<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+		<wcf:param name="pageSize" value="1"/> <%-- We need only orderId from this REST API --%>
+	</wcf:rest>
+</c:if>
+
+<c:set var="lockedBy" value="${order.orderEditor.externalIdentifier.identifier }"/>
+<c:set var="currentOrderLocked" value="false" scope="request"/> <%-- Used to display status message to shopper --%>
+<c:if test="${order.locked == 'true'}">
+	<c:set var="currentOrderLocked" value="true" scope="request"/>
+</c:if>
+<c:if test="${(env_shopOnBehalfSessionEstablished eq true) and (env_buyOnBehalfAdminUserId eq order.orderEditor.uniqueID)}" >
+	<c:set var="currentOrderLocked" value="false" scope="request"/>
+</c:if>
+
+
+<%-- CSR related variables --%>
+<%-- Assume Order is NOT LOCKED --%>
+<c:set var="currentOrderStatus_CSR" value="unLocked" scope="request"/> <%-- Used to display status message + unlock/lock/takeOver button to CSR --%>
+<c:if test="${order.locked == 'true' && env_shopOnBehalfSessionEstablished eq true}">
+	<c:if test="${env_buyOnBehalfAdminUserId eq order.orderEditor.uniqueID}" >
+		<%-- Order is locked by current CSR --%>
+		<c:set var="currentOrderStatus_CSR" value="locked" scope="request"/>
+	</c:if>
+	<c:if test="${env_buyOnBehalfAdminUserId ne order.orderEditor.uniqueID}" >
+		<%-- Order is locked by other administrators/CSR --%>
+		<c:set var="currentOrderStatus_CSR" value="takeOver" scope="request"/>
+	</c:if>
+</c:if>
+
+<!-- END ShopCartOnBehalfOfLock_Data.jspf -->

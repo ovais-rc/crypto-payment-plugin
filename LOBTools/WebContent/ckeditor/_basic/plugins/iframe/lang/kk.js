@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","kk",{border:"Жақтау жиегін көрсету",noUrl:"iframe URL мекен-жайын енгізіңіз",scrolling:"Айналдыру тақталарын қосу",title:"IFrame сипаттары",toolbar:"IFrame қою",ibm:{title:"IFrame"}});

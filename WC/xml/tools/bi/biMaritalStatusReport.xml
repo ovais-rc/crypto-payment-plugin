@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+
+ <Report reportName="biMaritalStatusReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+SELECT 
+	MR.MARITAL_STAT_DESC AS Marital_Status,
+	SUM ( FOI.NUM_UNITS ) AS Units_Sold,
+	ROUND(SUM ( coalesce(FOI.RPT_SALES_VALUE + FOI.RPT_DISCOUNTS,0) ),cur.decimalplaces) AS Sales_Value,
+	FOI.REPORT_CURRENCY AS Currency
+FROM
+	WCA.FACT_ORDERITEMS FOI,
+	WCA.MEMBER M,
+	WCA.MARITAL_STAT_REF MR,
+	WCA.PERIOD P,
+	WCA.CURFORMAT CUR
+WHERE
+	(FOI.STORE_ID IN ({storeent_id}) AND
+	FOI.MEMBER_ID=M.MEMBER_ID AND
+	p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+	p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$ AND
+	MR.MARITAL_STATUS_ID=M.MARITAL_STATUS_ID AND
+	MR.LANGUAGE_ID IN ({lang_id}) AND
+	P.PER_ID=FOI.PER_ID)  AND
+	(FOI.ORDER_STATUS_ID IN (
+	SELECT
+		INTEGER(PR.PARAM_VALUE)
+	FROM
+		WCA.PARAMETERS PR
+	WHERE
+		PR.PARAM_TYPE in ('ORDER_STATUS_SUBMITTED','ORDER_STATUS_SHIPPED')))  
+		and ( CUR.CURFORMAT_ID = (
+			SELECT MAX(DISTINCT CURFORM.CURFORMAT_ID) 
+			FROM WCA.CURFORMAT CURFORM 
+			WHERE FOI.REPORT_CURRENCY= CURFORM.SETCCURR) )
+GROUP BY
+	MR.MARITAL_STAT_DESC,
+	FOI.REPORT_CURRENCY,
+	CUR.DECIMALPLACES
+ORDER BY
+       {sortBy} {sortOrder} 
+
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>maritalStatus</title>
+         <message>maritalStatus</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>maritalStatusLabel</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>unitsSold</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+           <setMinimumFractionDigits>0</setMinimumFractionDigits>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>salesValue</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+            <columnType>decimal</columnType>
+                     <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>currency</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+      </userDefinedParameters>
+   </display>
+  </Report>
+
+</Reporting>

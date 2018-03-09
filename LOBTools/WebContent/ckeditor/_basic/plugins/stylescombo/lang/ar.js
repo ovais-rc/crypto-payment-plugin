@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","ar",{label:"الأنماط",panelTitle:"الأنماط",panelTitle1:"أنماط الكتلة",panelTitle2:"أنماط مباشرة",panelTitle3:"أنماط العناصر"});

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		<p>Use this class to declare a property definition for a {@link cmc/foundation/ModelProperty property} that represents a 
+		language in a {@link cmc/store/StorePrimaryObjectDefinition object}. Do not explicitly include instances of {@link cmc/foundation/PropertyValue} 
+		with this class. An instance of {@link cmc/foundation/PropertyValue} is implicitly created for each supported language in the selected store. 
+		The attribute value of each instance of {@link cmc/foundation/PropertyValue} can be the language ID (for example, -1), 
+		or the locale (for example, en_US). This is controlled by the <code>{@link cmc/foundation/LanguagePropertyDefinition#useLanguageId useLanguageId}</code>
+		attribute.</p>
+		
+		<p>Instances of this class can only be declared as immediate sub-nodes of {@link cmc/foundation/ObjectDefinition}.</p>
+		
+		<p>The following example shows how to declare a property used to manage the supported language of a store.
+		@START_CODE	
+			<LanguagePropertyDefinition package="sto" propertyName="supportedLanguage" displayName="Supported language"/>
+		@END_CODE
+		</p>
+	-->
+	<LanguagePropertyDefinition classDefinition="true" definitionName="cmc/store/LanguagePropertyDefinition">
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+
+		<!---
+			@keywords private
+			Returns the property values for the given property
+			@param cmc/foundation/ModelObject o The model object that contains the property.
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change.
+			@return Array: An array of property values
+		-->
+		<method args="o, del, all" name="getPropertyValues">
+			<![CDATA[
+			if (typeof(o) == "undefined") o = null;
+			if (typeof(del) == "undefined") del = null;
+			if (typeof(all) == "undefined") all = false;
+			var supportedLanguages = [];
+			supportedLanguages = this.inherited(arguments);
+			var parentObject = o ? o.getParentPrimaryObject() : null;
+			if (parentObject && parentObject.objectType == "EsiteStore") {
+				var id = parentObject.getProperty("assetStoreId").value;
+				var assetStore = StoreUtil.Singleton.getStore(id);
+				if (!assetStore.configurationLoaded) {
+					supportedLanguages = [];
+					assetStore.loadConfiguration();
+				}
+				else {
+					for (var i = 0; i < supportedLanguages.length; ) {
+						var foundLanguage = false;
+						for (var s = 0; s < assetStore.supportedLanguages.length; s++) {
+							if (supportedLanguages[i].value == assetStore.supportedLanguages[s].languageId) {
+								foundLanguage = true;
+								break;
+							}
+						}
+						if (!foundLanguage) {
+							supportedLanguages.splice(i, 1);
+						}
+						else {
+							i++;
+						}
+					}
+				}
+				if (del) {
+					del.connect(assetStore, "onconfigurationLoaded");
+				}
+			}
+			return supportedLanguages;
+			]]>
+		</method>
+	</LanguagePropertyDefinition>
+	
+</Definitions>

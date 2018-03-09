@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","he",{bold:"מודגש",italic:"נטוי",strike:"קו חוצה",subscript:"כתב תחתי",superscript:"כתב עילי",underline:"קו תחתי"});

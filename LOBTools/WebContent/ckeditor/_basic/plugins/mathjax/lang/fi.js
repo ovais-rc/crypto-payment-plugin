@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("mathjax","fi",{title:"Matematiikkaympäristö TeX-järjestelmässä",button:"Matematiikka",dialogInput:"Kirjoita TeX-koodi tähän",docUrl:"http://en.wikibooks.org/wiki/LaTeX/Mathematics",docLabel:"TeX-käyttöohjeet",loading:"lataus on meneillään...",pathName:"matematiikka"});

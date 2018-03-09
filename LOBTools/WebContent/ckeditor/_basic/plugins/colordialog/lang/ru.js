@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","ru",{clear:"Очистить",highlight:"Выделить",options:"Свойства цвета",selected:"Выбранный цвет",title:"Выбор цвета",ibm:{currentColor:"Текущий цвет"}});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","nb",{label:"Stiler",panelTitle:"Stiler",panelTitle1:"Blokkstiler",panelTitle2:"Innebygde stiler",panelTitle3:"Objektstiler"});

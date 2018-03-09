@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	<!---
+		@keywords private
+	
+		cmc/catalog/SeoUrlViewer is a text viewer that displays the full URL. 
+		This viewer takes the URL keyword and generates the full URL for display.
+	-->
+	<TextViewer classDefinition="true" definitionName="cmc/catalog/SeoUrlViewer" fgcolor="#676767">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<!---
+			Generates and returns the full URL based on the properties value and sets it as the text
+			to be displayed in the viewer.
+			@param cmc/foundation/EventHandler del An optional delegate to call when a change in property value is caused by the value service.
+			@returns string: display value
+		-->
+		<method args="del" name="getDisplayValue">
+			<![CDATA[
+			var displayValue = "";
+			if (this.property != null) {
+				var prefixUrlProperty = this.property.o.getProperty("seo_prefixurl");
+				del.connect(prefixUrlProperty, "onvalue");
+				var urlKeywordValue = this.property.value;
+				var prefixUrlValue = prefixUrlProperty.value;
+				if (prefixUrlValue != "" && prefixUrlValue.indexOf("$SEO:PRIMARYTOKEN$") != -1 && urlKeywordValue != "") {
+					var fullURL = StringUtil.Singleton.replace(prefixUrlValue, "$SEO:PRIMARYTOKEN$", urlKeywordValue);
+					displayValue = catalogResources.Singleton.replaceValues("seoDesktopUrlPreviewPrompt", [fullURL]);
+				}
+			}
+			return displayValue;
+			]]>
+		</method>
+	</TextViewer>
+	
+	<!---  
+		@keywords private
+	-->
+	<Component classDefinition="true" definitionName="cmc/catalog/UrlPreview">	
+		
+		<AxisLayout axis="y" inset="3" spacing="3"/>
+		<TextEditor property="${this.classroot.property}" width="${this.classroot.width}"/>
+		<SeoUrlViewer package="cmc/catalog" property="${this.classroot.property}" width="${this.classroot.width}"/>
+	</Component>
+		
+	<!---  
+		@keywords private
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/catalog/PropertyUrlPreview" sizeToAvailableWidth="true">
+		<dependency localName="UrlPreview" moduleName="cmc/catalog/UrlPreview"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new UrlPreview.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		This class defines a radio button descriptor that can be used with {@link cmc/foundation/PropertyRadioGroup}. The radio
+		button will display a property input text field below the radio button title.
+	-->
+	<RadioButtonWithInputTextDescriptor classDefinition="true" definitionName="cmc/catalog/SeoUrlRadioButtonDescriptor" editorPropertyName="seo_urlkeyword">
+		<dependency localName="SeoUrlViewer" moduleName="cmc/catalog/SeoUrlViewer"/>
+		<!--- @keywords private -->
+		<method args="content, property" name="updateProperty">
+			<![CDATA[
+			this.inherited(arguments);
+			var editorProperty = null;
+			if (property != null) {
+				editorProperty = property.o.getProperty(this.editorPropertyName);
+			}
+			if (typeof content.viewer == "undefined") {
+				new SeoUrlViewer.Class(content, {
+					name: "viewer",
+					property: editorProperty,
+					width: content.editor.width
+				});
+			}
+			else {
+				content.viewer.setVariable("property", editorProperty);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="content" name="updateContentWidth">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.sizeToAvailableWidth && content.viewer) {
+				content.viewer.setVariable("width", content.editor.width);
+			}
+			]]>
+		</method>
+	</RadioButtonWithInputTextDescriptor>
+
+
+	<!---
+		@keywords private
+		
+		This class overrides the <code>updateValue</code> method in the {@link cmc/foundation/GridTextViewer} class.
+	-->
+	<GridTextViewer classDefinition="true" definitionName="cmc/catalog/GridSSeoUrlViewer">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			@keywords private
+			Updates and refreshes the SEO URL with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var displayValue = "";
+			if (this.property != null) {
+				var prefixUrlProperty = this.property.o.getProperty("seo_prefixurl");
+				this.updateValueDel.connect(prefixUrlProperty, "onvalue");
+				var urlKeywordValue = this.property.value;
+				var prefixUrlValue = prefixUrlProperty.value;
+				if (prefixUrlValue != "" && prefixUrlValue.indexOf("$SEO:PRIMARYTOKEN$") != -1 && urlKeywordValue != "") {
+					displayValue = StringUtil.Singleton.replace(prefixUrlValue, "$SEO:PRIMARYTOKEN$", urlKeywordValue);
+				}
+			}
+			this.setVariable('text', displayValue);
+			]]>
+		</method>
+	</GridTextViewer>
+
+	<!---
+		Use this class to show simple text data in a grid cell. Use this class instead of cmc/foundation/GridText if you
+		need to display text for some rows and something else for other rows.
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/catalog/GridSeoUrlCellDescriptor">
+		<dependency localName="GridSSeoUrlViewer" moduleName="cmc/catalog/GridSSeoUrlViewer"/>
+		<!---
+			@keywords private
+			Use {@link cmc/foundation/GridTextViewer} to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridSSeoUrlViewer}"/>
+	</GridCellDescriptor>
+
+
+	<GridColumn classDefinition="true" definitionName="cmc/catalog/GridSeoUrl" editable="false" enableFilter="false" width="300">
+		<dependency localName="GridSSeoUrlViewer" moduleName="cmc/catalog/GridSSeoUrlViewer"/>
+		<!---
+			@keywords private
+		 	Use "cmc/foundation/GridDisplayNameViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridSSeoUrlViewer}"/>
+	</GridColumn>
+
+
+</Definitions>

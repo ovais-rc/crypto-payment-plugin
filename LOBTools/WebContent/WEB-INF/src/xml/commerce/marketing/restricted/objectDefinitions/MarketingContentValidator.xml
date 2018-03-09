@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for {@link cmc/marketing/MarketingContentPrimaryObjectDefinition Marketing Content}. This ensures that at
+		least an {@link cmc/attachment/AttachmentPrimaryObjectDefinition Attachment} is selected when the Marketing Content is of "File" type.
+		It also calls the {@link cmc/marketing/MarketingContentDescriptionValidator Marketing Content Description validator} on each 
+		{@link cmc/marketing/MarketingContentDescription Marketing Content Description} object.
+	-->
+	<Validator classDefinition="true" definitionName="cmc/marketing/MarketingContentValidator">
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!--- Warning message to show when an attachment is missing. -->
+		<variable name="attachmentRequiredErrorMessage" type="string" value="${marketingResources.Singleton.attachmentRequired.string}"/>
+		<!--- Object group of the ChildAttachment objects -->
+		<variable name="attachmentObjectGroup" type="string" value="ChildAttachment"/>
+		<!--- Object type of the attachment reference objects -->
+		<variable name="attachmentReferenceObjectTypes" type="string" value="AttachmentReference,InheritedAttachmentReference"/>
+		<!--- Property name containing the Marketing Content format value -->
+		<variable name="formatPropertyName" type="string" value="format"/>
+		<!--- Property name containing the Marketing Content URL value -->
+		<variable name="urlPropertyName" type="string" value="url"/>
+		<!--- Property name containing the Source value -->
+		<variable name="sourcePropertyName" type="string" value="source"/>
+		<!--- Object type of the Marketing Content Description objects -->
+		<variable name="contentDescriptionObjectType" type="string" value="MarketingContentDescription"/>
+		<!--- Property name containing the click action value -->
+		<variable name="clickActionPropertyName" type="string" value="clickAction"/>
+		<!--- Property name containing the input option value -->
+		<variable name="inputOptionPropertyName" type="string" value="inputOption"/>
+		<!--- Object type of the Marketing Content Image Map objects -->
+		<variable name="contentImageMapObjectType" type="string" value="MarketingContentImageMap"/>
+		<!--- Object type of the Marketing Content Image Map Area objects -->
+		<variable name="contentImageMapAreaObjectType" type="string" value="MarketingContentImageMapArea"/>
+
+		<!--- @keywords private -->		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			var selectedFormat = o.getPropertyValue(this.formatPropertyName);
+			var selectedClickAction = o.getPropertyValue(this.clickActionPropertyName);
+			var selectedInputOption = o.getPropertyValue(this.inputOptionPropertyName);
+			var attachmentTypes = StringUtil.Singleton.splitAndTrim(this.attachmentReferenceObjectTypes, ",");
+			o.clearValidationError(this);
+			var childAttachments = o.getObjects(this.attachmentObjectGroup);
+			if ((selectedFormat == "File") && (childAttachments.length != 1)) {
+				o.addValidationError(this, this.attachmentRequiredErrorMessage);
+			}
+			else if (selectedFormat != "File") {
+				for (var i = 0; i < childAttachments.length; i++) {
+					if (!childAttachments[i].pendingDelete) {
+						childAttachments[i].deleteObject();
+					}
+				}
+				if (selectedClickAction == "Multiple") {
+					o.setPropertyValue(this.clickActionPropertyName, null, "None");
+				}
+			}
+			var childContentDescriptions = o.getObjects(this.contentDescriptionObjectType);
+			for (var i = 0; i < childContentDescriptions.length; i++) {
+				childContentDescriptions[i].validate();
+			}
+			if (selectedClickAction == "None" || selectedClickAction == "Single") {
+				var childImageMaps = o.getObjects(this.contentImageMapObjectType);
+				for (var i = 0; i < childImageMaps.length; i++) {
+					if (!childImageMaps[i].pendingDelete) {
+						childImageMaps[i].deleteObject();
+					}
+				}
+			}
+			else {
+				var childImageMaps = o.getObjects(this.contentImageMapObjectType);
+				for (var i = 0; i < childImageMaps.length; i++) {
+					if (childImageMaps[i] != null) {
+						if (selectedInputOption == "Source") {
+							var childAreas = childImageMaps[i].getObjects(this.contentImageMapAreaObjectType);
+							for (var j = 0; j < childAreas.length; j++) {
+								if (!childAreas[j].pendingDelete) {
+									childAreas[j].deleteObject();
+								}
+							}
+						}
+						if (selectedInputOption == "Area") {
+							childImageMaps[i].clearServiceErrors();
+							childImageMaps[i].setPropertyValue(this.sourcePropertyName, null, "");
+						}
+					}
+				}
+			}
+			if (selectedClickAction == "None" || selectedClickAction == "Multiple") {
+				o.setPropertyValue(this.urlPropertyName, null, "");
+			}
+			]]>
+		</method>
+	</Validator>
+	
+</Definitions>

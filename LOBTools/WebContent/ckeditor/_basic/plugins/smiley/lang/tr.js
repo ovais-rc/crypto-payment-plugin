@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","tr",{options:"Duygu Simgesi Seçenekleri",title:"Duygu Simgeleri",toolbar:"Duygu Simgesi Ekle"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","ro",{bulletedlist:"Listă de marcatori",numberedlist:"Listă numerotată",ibm:{numberedTitle:"Listă numerotată",bulletedTitle:"Listă de marcatori",description:"Setările vor fi afişate la nivelul de listă curent",fontsize:"Dimensiune font:"}});

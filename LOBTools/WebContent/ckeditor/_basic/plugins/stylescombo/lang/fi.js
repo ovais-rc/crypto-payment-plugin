@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","fi",{label:"Tyylit",panelTitle:"Tyylit",panelTitle1:"Lohkotyylit",panelTitle2:"Sisäiset tyylit",panelTitle3:"Objektityylit"});

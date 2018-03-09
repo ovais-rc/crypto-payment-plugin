@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","it",{label:"Stili",panelTitle:"Stili",panelTitle1:"Stili blocco",panelTitle2:"Stili in linea",panelTitle3:"Stili oggetto"});

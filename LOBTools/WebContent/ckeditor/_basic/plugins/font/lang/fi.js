@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","fi",{fontSize:{label:"Koko",voiceLabel:"Fonttikoko",panelTitle:"Fonttikoko"},label:"Fontti",panelTitle:"Fontin nimi",voiceLabel:"Fontti"});

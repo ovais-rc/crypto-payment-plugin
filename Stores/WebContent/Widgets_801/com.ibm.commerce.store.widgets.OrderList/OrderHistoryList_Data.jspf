@@ -1,0 +1,432 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN OrderHistoryList_Data.jspf -->
+
+<flow:ifEnabled feature="SideBySideIntegration">
+    <c:set var="lastExternalOrderIds" value="${WCParam.lastExternalOrderIds}" />
+     <c:if test="${empty lastExternalOrderIds}">
+      <c:set var="lastExternalOrderIds" value="" />
+    </c:if>
+    <%-- used to check the order total change in external system --%>
+    <fmt:parseNumber var="recordSetTotal" value="${WCParam.recordSetTotal}" integerOnly="true" />
+     <c:if test="${empty recordSetTotal}">
+      <c:set var="recordSetTotal" value="0" />
+    </c:if>
+</flow:ifEnabled>
+
+<c:set var="isProcessedOrdersTab" value="${param.selectedTab == 'PreviouslyProcessed' || WCParam.selectedTab == 'PreviouslyProcessed'}"/>
+<c:set var="isWaitingForApprovalOrdersTab" value="${param.selectedTab == 'WaitingForApproval' || WCParam.selectedTab == 'WaitingForApproval'}"/>
+
+<%-- Retrieve a list of orders. --%>
+<c:choose>
+    <c:when test="${isProcessedOrdersTab}">
+        <c:choose>
+            <c:when test="${param.isQuote eq true}">
+                <wcf:rest var="orders" url="store/{storeId}/order">
+                    <wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+                    <wcf:param name="q" value="findQuoteByStatus"/>
+                    <wcf:param name="status" value="N,M,A,B,C,R,S,D,F,G"/>
+                    <wcf:param name="pageSize" value="${pageSize}"/>
+                    <wcf:param name="pageNumber" value="${currentPage}"/>
+                </wcf:rest>
+            </c:when>
+            <c:otherwise>
+                <flow:ifEnabled feature="SideBySideIntegration">
+                    <c:forTokens var="splitStr" items="${lastExternalOrderIds}" delims=";" varStatus="status">
+                    <c:if test="${status.last}">
+                        <c:set var="extOrderId" value="${splitStr}" />
+                    </c:if>
+                    </c:forTokens>
+                    <wcf:rest var="orders" url="store/{storeId}/order">
+                        <wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+                        <wcf:param name="q" value="findByStatusExt"/>
+                        <wcf:param name="status" value="N,M,A,B,C,R,S,D,F,H"/>
+                        <wcf:param name="extOrderId" value="${extOrderId}"/>
+                        <wcf:param name="recordSetTotal" value="${recordSetTotal}"/>
+                        <wcf:param name="pageSize" value="${pageSize}"/>
+                        <wcf:param name="pageNumber" value="${currentPage}"/>
+                    </wcf:rest>
+                </flow:ifEnabled>
+                <flow:ifDisabled feature="SideBySideIntegration">
+                    <wcf:rest var="orders" url="store/{storeId}/order/byStatus/{status}">
+                        <wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+                        <wcf:var name="status" value="N,M,A,B,C,R,S,D,F,G,L"/>
+                        <wcf:param name="pageSize" value="${pageSize}"/>
+                        <wcf:param name="pageNumber" value="${currentPage}"/>
+                    </wcf:rest>
+                </flow:ifDisabled>
+            </c:otherwise>
+        </c:choose>
+    </c:when>
+    <c:when test="${isWaitingForApprovalOrdersTab}">
+        <c:choose>
+            <c:when test="${param.isQuote eq true}">
+                <wcf:rest var="orders" url="store/{storeId}/order">
+                    <wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+                    <wcf:param name="q" value="findQuoteByStatus"/>
+                    <wcf:param name="status" value="W"/>
+                    <wcf:param name="pageSize" value="${pageSize}"/>
+                    <wcf:param name="pageNumber" value="${currentPage}"/>
+                </wcf:rest>
+            </c:when>
+            <c:otherwise>
+                <wcf:rest var="orders" url="store/{storeId}/order/byStatus/{status}">
+                    <wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+                    <wcf:var name="status" value="W"/>
+                    <wcf:param name="pageSize" value="${pageSize}"/>
+                    <wcf:param name="pageNumber" value="${currentPage}"/>
+                </wcf:rest>
+            </c:otherwise>
+        </c:choose>
+    </c:when>
+</c:choose>
+<c:set var="allOrdersInThisCategory" value="${orders.Order}"/>
+
+<%-- Pagination --%>
+<fmt:parseNumber var="totalCount" value="${orders.recordSetTotal}" integerOnly="true"/>
+<c:if test="${empty totalCount}">
+    <fmt:parseNumber var="totalCount" value="0" integerOnly="true"/>
+</c:if>
+<fmt:formatNumber var="totalPages" value="${(totalCount / pageSize)}"/>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+<c:if test="${totalCount - (totalPages * pageSize) > 0}" >
+    <c:set var="totalPages" value="${totalPages + 1}" />
+</c:if>
+
+<c:choose>
+    <c:when test="${beginIndex + pageSize >= totalCount}">
+        <c:set var="endIndex" value="${totalCount}" />
+    </c:when>
+    <c:otherwise>
+        <c:set var="endIndex" value="${beginIndex + pageSize}" />
+    </c:otherwise>
+</c:choose>
+
+<c:choose>
+    <c:when test="${totalCount == 0}">
+        <c:set var="hideTable" value="true" scope="request"/>
+    </c:when>
+    <c:otherwise>
+        <c:if test="${allOrdersInThisCategory != null}">
+            <wcf:useBean var="orderListMappingList" classname="java.util.ArrayList" />
+
+            <c:forEach var="order" items="${allOrdersInThisCategory}" varStatus="status">
+                <c:choose>
+                    <c:when test="${param.isQuote eq true}">
+                        <c:set var="quote" value="${order}"/>
+                        <c:set var="order" value="${quote.orderTemplate}"/>
+                        <c:choose>
+                            <c:when test="${quote.quoteIdentifier.externalQuoteID != null}">
+                                <c:set var="objectId" value="${quote.quoteIdentifier.externalQuoteID}"/>
+                                <c:set var="objectIdParam" value="externalQuoteId"/>
+                            </c:when>
+                            <c:otherwise>
+                                <c:set var="objectId" value="${quote.quoteIdentifier.uniqueID}"/>
+                                <c:set var="objectIdParam" value="quoteId"/>
+                            </c:otherwise>
+                        </c:choose>
+                    </c:when>
+                    <c:otherwise>
+                        <c:choose>
+                            <c:when test="${!empty order.externalOrderID}">
+                                <c:set var="objectId" value="${order.externalOrderID}"/>
+                                <c:set var="objectIdParam" value="externalOrderId"/>
+                            </c:when>
+                            <c:otherwise>
+                                <c:set var="objectId" value="${order.orderId}"/>
+                                <c:set var="objectIdParam" value="orderId"/>
+                            </c:otherwise>
+                        </c:choose>
+                    </c:otherwise>
+                </c:choose>
+
+                <%-- Need to reset currencyFormatterDB as initialized in JSTLEnvironmentSetup.jspf, as the currency code used there is from commandContext. We want to display with currency used when the order was placed. --%>
+                <c:set var="currencyDecimal" value="${currencyFormatterDB.decimalPlaces}"/>
+
+                <%-- Total price for Orders History --%>
+                <c:if test ="${order.grandTotal != null}">
+                    <c:set var="totalCostCurrency" value="${order.grandTotalCurrency}"/>
+                </c:if>
+
+                <c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${totalCostCurrency}+-1+${langId}"/>
+                <c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+                <c:if test="${empty currencyFormatterDB}">
+                    <wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+                        <wcf:var name="storeId" value="${storeId}" />
+                        <wcf:param name="q" value="byCurrency" />
+                        <wcf:param name="currency" value="${totalCostCurrency}" />
+                        <wcf:param name="numberUsage" value="-1" />
+                        <wcf:param name="langId" value="${langId}" />
+                    </wcf:rest>
+                    <c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+                    <wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+                </c:if>
+
+                <c:if test="${totalCostCurrency == 'KRW'}">
+                    <c:set property="currencySymbol" value="&#8361;" target="${currencyFormatterDB}"/>
+                </c:if>
+                <c:if test="${totalCostCurrency == 'PLN'}">
+                    <c:set property="currencySymbol" value="z&#322;" target="${currencyFormatterDB}"/>
+                </c:if>
+                <c:if test="${totalCostCurrency == 'ILS' && locale == 'iw_IL'}">
+                    <c:set property="currencySymbol" value="&#1513;&#1524;&#1495;" target="${currencyFormatterDB}"/>
+                </c:if>
+
+                <%-- These variables are used to hold the currency symbol --%>
+                <c:choose>
+                    <c:when test="${locale == 'ar_EG' && totalCostCurrency == 'EGP'}">
+                        <c:set var="CurrencySymbolToFormat" value=""/>
+                        <c:set var="CurrencySymbol" value="${currencyFormatterDB.currencySymbol}"/>
+                    </c:when>
+                    <c:otherwise>
+                        <c:set var="CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}"/>
+                        <c:set var="CurrencySymbol" value=""/>
+                    </c:otherwise>
+                </c:choose>
+
+                <wcst:message bundle="${widgetText}" key="X_DETAILS" var="OrderDetailBreadcrumbLinkLabel">
+                    <wcst:param>
+                        <flow:ifEnabled feature="SideBySideIntegration">
+                            <c:out value="${order.orderId}"/>
+                        </flow:ifEnabled>
+                        <flow:ifDisabled feature="SideBySideIntegration">
+                            <c:out value="${objectId}"/>
+                        </flow:ifDisabled>
+                    </wcst:param>
+                </wcst:message>
+
+                <wcf:useBean var="orderListMap" classname="java.util.HashMap"/>
+
+                <%-- Prepare order detail URL --%>
+                <wcf:useBean var="orderListNumberandDetailList" classname="java.util.ArrayList" />
+
+                <wcf:url var="OrderDetailUrl" value="OrderDetail">
+                    <wcf:param name="${objectIdParam}" value="${objectId}"/>
+                    <wcf:param name="orderStatusCode" value="${order.orderStatus}"/>
+                    <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                    <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                    <wcf:param name="langId" value="${WCParam.langId}"/>
+                    <c:if test="${param.isQuote eq true}">
+                        <wcf:param name="isQuote" value="true"/>
+                    </c:if>
+                </wcf:url>
+                <wcf:set target="${orderListNumberandDetailList}" value="${OrderDetailUrl}"/>
+
+                <c:choose>
+                    <c:when test="${!empty objectId}">
+                        <flow:ifEnabled feature="SideBySideIntegration">
+                            <wcf:set target="${orderListNumberandDetailList}" value="${order.orderId}"/>
+                        </flow:ifEnabled>
+                        <flow:ifDisabled feature="SideBySideIntegration">
+                            <wcf:set target="${orderListNumberandDetailList}" value="${objectId}"/>
+                        </flow:ifDisabled>
+                    </c:when>
+                    <c:otherwise>
+                        <wcst:message bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                    </c:otherwise>
+                </c:choose>
+                <wcf:set target="${orderListMap}" key="order" value="${orderListNumberandDetailList}"/>
+
+                <c:if test="${isProcessedOrdersTab}">
+                    <%-- Prepare order date for processed orders --%>
+                    <c:remove var="orderDate"/>
+                    <c:catch>
+                        <fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+                    </c:catch>
+                    <c:if test="${empty orderDate}">
+                        <c:catch>
+                            <fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                        </c:catch>
+                    </c:if>
+                    <c:choose>
+                        <c:when test="${!empty orderDate}">
+                            <fmt:formatDate var="orderDateToDisplay" value="${orderDate}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+                        </c:when>
+                        <c:otherwise>
+                            <wcst:message var="orderDateToDisplay" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                        </c:otherwise>
+                    </c:choose>
+                    <wcf:set target="${orderListMap}" key="date" value="${orderDateToDisplay}"/>
+
+                    <%-- Prepare status for processed orders --%>
+                    <flow:ifEnabled feature="SideBySideIntegration">
+                        <c:choose>
+                            <c:when test="${!empty order.orderStatus}">
+                                <c:set var="ordStatus" value="${order.orderStatus }"/>
+                                <c:if test="${order.orderStatus eq 'H' }">
+                                    <c:set var="ordStatus" value="M"/>
+                                </c:if>
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="MO_OrderStatus_${ordStatus}"/>
+                            </c:when>
+                            <c:otherwise>
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                            </c:otherwise>
+                        </c:choose>
+                    </flow:ifEnabled>
+                    <flow:ifDisabled feature="SideBySideIntegration">
+                        <c:choose>
+                            <c:when test="${!empty order.orderStatus}">
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="MO_OrderStatus_${order.orderStatus}"/>
+                            </c:when>
+                            <c:otherwise>
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                            </c:otherwise>
+                        </c:choose>
+                    </flow:ifDisabled>
+                    <wcf:set target="${orderListMap}" key="status" value="${ordStatus}"/>
+
+                    <%-- Prepare actions for processed orders --%>
+                    <flow:ifEnabled feature="AllowReOrder">
+                        <c:if test="${param.isQuote != true}">
+                            <wcf:url value="AjaxRESTOrderCopy" var="OrderCopyUrl" type="Ajax">
+                                <wcf:param name="fromOrderId_1" value="${objectId}"/>
+                                <wcf:param name="toOrderId" value=".**."/>
+                                <wcf:param name="copyOrderItemId_1" value="*"/>
+                                <wcf:param name="URL" value="AjaxOrderItemDisplayView"/>
+                                <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                                <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                                <wcf:param name="langId" value="${WCParam.langId}"/>
+                                <wcf:param name="inventoryValidation" value="true"/>
+                            </wcf:url>
+
+                            <flow:ifEnabled feature="SideBySideIntegration">
+                                <c:if test="${ordStatus != 'X'}">
+                                    <c:choose>
+                                        <c:when test="${objectIdParam=='externalOrderId'}">
+                                            <wcf:url value="AjaxSSFSOrderCopy" var="SSFSOrderCopyUrl" type="Ajax">
+                                                <wcf:param name="OrderHeaderKey" value="${objectId}"/>
+                                                <wcf:param name="OrderNo" value="${order.orderId}"/>
+                                                <wcf:param name="toOrderId" value=".**."/>
+                                                <wcf:param name="calculate" value="1"/>
+                                                <wcf:param name="URL" value="AjaxOrderItemDisplayView"/>
+                                                <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                                                <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                                                <wcf:param name="langId" value="${WCParam.langId}"/>
+                                                <wcf:param name="inventoryValidation" value="true"/>
+                                            </wcf:url>
+                                            <wcf:set target="${orderListMap}" key="reorder" value="setCurrentId('OrderStatusDetailsDisplayExt_option_button_link_1_${status.count}'); OrderListJS.prepareSSFSOrderCopy('${SSFSOrderCopyUrl}');"/>
+                                        </c:when>
+                                        <c:otherwise>
+                                            <wcf:set target="${orderListMap}" key="reorder" value="setCurrentId('OrderStatusDetailsDisplayExt_option_button_link_1_${status.count}'); OrderListJS.prepareOrderCopy('${OrderCopyUrl}');"/>
+                                        </c:otherwise>
+                                    </c:choose>
+                                </c:if>
+                            </flow:ifEnabled>
+                            <flow:ifDisabled feature="SideBySideIntegration">
+                                <c:choose>
+                                    <c:when test="${env_shopOnBehalfSessionEstablished eq 'true'}">
+                                        <%-- CSR can re-order, cancel or modify order --%>
+                                        <wcf:set target="${orderListMap}" key="modify" value="OrderListJS.showActionsPopup(null,'showOptions_${order.orderId}','actions_popup_${order.orderId}' 'actions_popup_widget_history_order');"/>
+                                        <wcf:set target="${orderListMap}" key="reorder" value="setCurrentId('HistoryOrderDetailsDisplayExt_option_button_3b_${order.orderId}'); OrderListJS.prepareOrderCopy('${OrderCopyUrl}');"/>
+                                        <c:if test = "${fn:contains(validOrderStatusForCancel,order.orderStatus)}">
+                                            <c:set var="enableCancelButton" value="true"/>
+                                            <wcf:set target="${orderListMap}" key="cancel" value="setCurrentId(this.id); $('#actions_popup_widget_history_order').hide(); onBehalfUtilitiesJS.cancelOrder('${order.orderId}', '', 'true');"/>
+                                        </c:if>
+                                    </c:when>
+                                    <c:otherwise>
+                                        <%-- Just display REORDER button for Shopper --%>
+                                        <wcf:set target="${orderListMap}" key="reorder" value="setCurrentId('OrderStatusDetailsDisplayExt_option_button_link_1_${status.count}'); OrderListJS.prepareOrderCopy('${OrderCopyUrl}');"/>
+                                    </c:otherwise>
+                                </c:choose>
+                            </flow:ifDisabled>
+                        </c:if>
+                    </flow:ifEnabled>
+                </c:if>
+
+                <c:if test="${isWaitingForApprovalOrdersTab}">
+                    <%-- Prepare last updated date for waiting orders --%>
+                    <c:catch>
+                        <fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+                    </c:catch>
+                    <c:if test="${empty lastUpdateDate}">
+                        <c:catch>
+                            <fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                        </c:catch>
+                    </c:if>
+                    <fmt:formatDate var="lastUpdateDate" value="${lastUpdateDate}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+                    <wcf:set target="${orderListMap}" key="last_updated" value="${lastUpdateDate}"/>
+                </c:if>
+
+                <%-- Prepare purchase order number --%>
+                <c:if test="${param.showPONumber}">
+                    <c:set var="purchaseOrderNumber" value="${order.buyerPONumber}"/>
+                    <c:choose>
+                        <c:when test="${empty purchaseOrderNumber}">
+                            <wcst:message var="purchaseOrderNumber" bundle="${widgetText}" key="MO_NONE" />
+                        </c:when>
+                        <c:otherwise>
+                            <c:remove var="purchaseOrderBean"/>
+                            <wcf:rest var="purchaseOrderBean" url="/store/{storeId}/cart/@self/buyer_purchase_order/{buyerPurchaseOrderId}">
+                                <wcf:var name="storeId" value="${storeId}" />
+                                <wcf:var name="buyerPurchaseOrderId" value="${purchaseOrderNumber}" />
+                            </wcf:rest>
+                            <c:choose>
+                                <c:when test="${empty purchaseOrderBean.resultList[0].purchaseOrderNumber}">
+                                    <wcst:message var="purchaseOrderNumber" bundle="${widgetText}" key="MO_NONE" />
+                                </c:when>
+                                <c:otherwise>
+                                    <c:set var="purchaseOrderNumber" value='${purchaseOrderBean.resultList[0].purchaseOrderNumber}'/>
+                                </c:otherwise>
+                            </c:choose>
+                        </c:otherwise>
+                    </c:choose>
+                    <wcf:set target="${orderListMap}" key="po" value="${purchaseOrderNumber}"/>
+                </c:if>
+
+                <%-- Total price for Orders History --%>
+                <c:choose>
+                    <c:when test="${order.grandTotal != null && !empty order.grandTotal}">
+                        <fmt:formatNumber var="total_price" value="${order.grandTotal}" type="currency" maxFractionDigits="${currencyDecimal}" currencySymbol="${CurrencySymbolToFormat}"/>
+                    </c:when>
+                    <c:otherwise>
+                        <wcst:message var="total_price" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                    </c:otherwise>
+                </c:choose>
+
+                <wcf:set target="${orderListMap}" key="total_price" value="${total_price}"/>
+                <wcf:set target="${orderListMappingList}" value="${orderListMap}"/>
+
+                <c:remove var="orderListMap"/>
+                <c:remove var="orderListNumberandDetailList"/>
+                <c:remove var="orderListNameandDetailList"/>
+            </c:forEach>
+        </c:if>
+    </c:otherwise>
+</c:choose>
+
+<%-- The following data is passed to List Table UI --%>
+<c:set var="tableValueMapping" value="${orderListMappingList}"/>
+<c:choose>
+    <c:when test="${isProcessedOrdersTab}">
+        <c:set var="tableHeading" value="order;date;status;total_price;actions"/>
+        <c:if test="${param.showPONumber}">
+            <c:set var="tableHeading" value="order;date;po;status;total_price;actions"/>
+        </c:if>
+		<c:choose>
+			<c:when test="${enableCancelButton}">
+				<c:set var="tableAction" value="reorder;cancel"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="tableAction" value="reorder"/>
+			</c:otherwise>
+		</c:choose>
+        <wcst:message var="viewAllMessage" bundle="${widgetText}" key="MA_VIEWALL" />
+    </c:when>
+    <c:when test="${isWaitingForApprovalOrdersTab}">
+        <c:set var="tableHeading" value="order;last_updated;po;total_price"/>
+    </c:when>
+</c:choose>
+
+<!-- END OrderHistoryList_Data.jspf -->

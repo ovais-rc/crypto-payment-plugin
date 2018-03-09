@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","pt",{keystrokeForContextMenu:"Ctrl + clique com o botão direito do rato para mais opções",keystrokeForContextMenuMac:"Cmd + clique com o botão direito do rato para mais opções"});

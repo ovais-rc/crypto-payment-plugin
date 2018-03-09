@@ -1,0 +1,126 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<wcf:rest var="person" url="store/{storeId}/person/@self">
+	<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+</wcf:rest>
+<div id="${widgetId}_loggedInDropdown" class="menuDropdown active menuDropdown_csr" role="dialog" tabindex="0" aria-label="<wcst:message bundle="${widgetText}" key="GLOBALLOGIN_SIGN_OUT_PANEL"/>" onmouseover="javaScript:GlobalLoginJS.hideGLPanel(false);" onmouseout="javaScript:GlobalLoginJS.hideGLPanel(true);">
+	 <div class="panel loggedInContractSelectPanel">
+
+		<%-- Do we need these hidden fields ??? --%>
+		<input type="hidden" id="${widgetId}_userDisplayNameField" value="<c:out value='${userDisplayName}'/>"/>
+		<input type="hidden" id="${widgetId}_shopOnBehalfSessionEstablished" value="<c:out value="${env_shopOnBehalfSessionEstablished}"/>"/>
+		<input type="hidden" id="${widgetId}_callerId" value="${CommandContext.callerId}"/>
+
+		<%-- Add Global Error TODO --%>
+		<c:choose>
+			<c:when test="${env_shopOnBehalfSessionEstablished eq 'true' && !empty userType && userType ne 'G'}">
+				<div class="field" tabindex="0">
+					<div class="textLabel label">
+						<p><wcst:message key="CSR_ACCESSING_ACCOUNT_OF" bundle="${widgetText}"><wcst:param value="${fn:escapeXml(userDisplayName)}"/></wcst:message></p>
+						<p>
+							<strong>
+								<span class="signedInUserName panelUsername"><c:out value='${buyOnBehalfUserFullName}'/></span>(<span class="signedInUserInitials"><c:out value='${person.logonId}'/></span>)
+							</strong>
+							<br>
+						</p>
+					</div>
+				</div>
+
+				<c:if test="${env_contractSelection eq 'true' && env_b2bStore eq 'true'}">	
+				<div class="field" tabindex="0">
+					<form name="${widgetId}_ContractSetInSessionForm" id="${widgetId}_ContractSetInSessionForm" action="ContractSetInSession" method="get">
+						<input type="hidden" name="storeId"   value="<c:out value="${WCParam.storeId}"/>" />
+						<input type="hidden" name="catalogId" value="<c:out value="${WCParam.catalogId}"/>" />
+						<input type="hidden" id="${widgetId}_contractSetInSessionURL" name="URL" value="<c:out value="${env_TopCategoriesDisplayURL}"/>" />
+						<div class="textLabel label">						
+							<c:choose>
+								<c:when test="${numEntitledContracts > 1}">
+									<%-- if there is more than one contract available, display in dropdown format --%>	
+									<p class="label"><wcst:message bundle="${widgetText}" key="GLOBALLOGIN_SIGN_OUT_PANEL_CONTRACT"/></p>
+									<div id="${widgetId}_globalLogin_Contract_List" class="globalLogin selectWrapper globalLoginCSR">									
+										<c:set var="selectOptions" value='{"appendTo": "#${widgetId}_globalLogin_Contract_List"}' />						
+										<select name="contractId" id="${widgetId}_WC_B2BMyAccountParticipantRole_select_2" data-widget-type="wc.Select" data-widget-options="${fn:escapeXml(selectOptions)}" title="<wcst:message key='ACCE_SORT_BY_CONTRACT' bundle='${widgetText}'/>" baseClass="wcSelect dijitValidationTextBox orderBySelect">	
+											<c:forEach items="${entitledContracts.contracts}" var="entitledContract">
+												<c:set var="check" value="false" />
+												<c:forTokens items="${activeContractIds}" delims=";" var="currentContractKey">
+													<c:if test="${entitledContract.key == currentContractKey}">
+														<c:set var="check" value="true" />
+													</c:if>
+												</c:forTokens>																																														
+												<option value="${entitledContract.key}"<c:if test="${check}"> selected="selected"</c:if>>
+													<c:out value='${entitledContract.value}'/>
+												</option>																						
+											</c:forEach>
+										</select>
+									</div>	
+									<a id="${widgetId}_${env_shopOnBehalfEnabled eq true ? 'onBehalfOf_' : ''}GlobalLoginContinueShopping" class="button_primary button_primary_CSR" role="button" href='#' onclick="javascript:GlobalLoginJS.updateContract('${widgetId}_ContractSetInSessionForm')";>
+										<div class="left_border"></div>
+										<div class="button_text"><span><wcst:message bundle="${widgetText}" key="GLOBALLOGIN_CONTINUE_SHOPPING"/></span></div>							
+										<div class="right_border"></div>
+									</a>
+								</c:when>
+								<c:otherwise>
+									<%-- if there is only one contract available, display in plain text --%>
+									<c:forEach items="${entitledContracts.contracts}" var="entitledContract">
+										<input name="contractId" type="hidden" id='${widgetId}_WC_B2BMyAccountParticipantRole_checkbox_<c:out value="${entitledContract.key}"/>' value="${entitledContract.key}" /> 
+										<wcst:message bundle="${widgetText}" key="GLOBALLOGIN_SIGN_OUT_PANEL_CONTRACT"/> <c:out value='${entitledContract.value}'/>
+									</c:forEach>
+								</c:otherwise>
+							</c:choose>																											
+						</div>
+					</form>
+					</div>
+				</c:if>
+				<div style="cursor:pointer" class="field">
+					<ul>
+						<li class="quickCSRLinks lastElement">
+							<a href="#"  onClick="javascript:GlobalLoginShopOnBehalfJS.clearUserSetInSession(this, '${CustomerServiceURL}');" class="link"><wcst:message key="SIGN_IN_AS_YOURSELF" bundle="${widgetText}"/></a>
+						</li>
+					</ul>
+				</div>
+			</c:when>
+			<c:when test="${env_shopOnBehalfSessionEstablished eq 'true' && userType eq 'G'}">
+				<div class="field"  tabindex="0">
+					<div class="textLabel label">
+						<p><wcst:message key="CSR_ACCESSING_ACCOUNT_OF_GUEST" bundle="${widgetText}"><wcst:param value="${fn:escapeXml(userDisplayName)}"/></wcst:message></p>
+					</div>
+				</div>
+				<div style="cursor:pointer" class="field">
+					<ul>
+						<li class="quickCSRLinks">
+							<a href="#" onClick="javascript:GlobalLoginShopOnBehalfJS.restoreCSRSessionAndRedirect('${RegisterURL}');" class="link"><wcst:message key="REGISTER_GUEST_USER" bundle="${widgetText}"/></a>
+						</li>
+						<li class="quickCSRLinks lastElement">
+							<a href="#"  onClick="javascript:GlobalLoginShopOnBehalfJS.clearUserSetInSession(this, '${CustomerServiceURL}');" class="link"><wcst:message key="SIGN_IN_AS_YOURSELF" bundle="${widgetText}"/></a>
+						</li>
+					</ul>
+				</div>
+			</c:when>
+		</c:choose>
+
+		<c:if test="${env_shopOnBehalfSessionEstablished eq 'true'}">
+		<div class="footer">
+		</c:if>
+			 <a id="${widgetId}_${env_shopOnBehalfEnabled eq true ? 'onBehalfOf_' : ''}loggedInDropdown_SignOut" href='<c:out value="${Logon_LogoutURL}"/>' class="button_secondary signOutButton" role="button">
+			   <div class="left_border"></div>
+				 <div class="button_text"><span><wcst:message bundle="${widgetText}" key="GLOBALLOGIN_SIGN_OUT_TEXT"/></span></div>								
+			   <div class="right_border"></div>
+			 </a>
+		<c:if test="${env_shopOnBehalfSessionEstablished eq 'true'}">
+		</div>
+		</c:if>
+
+	</div>
+</div>   
+

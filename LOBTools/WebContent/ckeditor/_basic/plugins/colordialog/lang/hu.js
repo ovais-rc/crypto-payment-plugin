@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","hu",{clear:"Kiürítés",highlight:"Kiemelés",options:"Színbeállítások",selected:"Kiválasztott szín",title:"Szín kiválasztása",ibm:{currentColor:"Aktuális szín"}});

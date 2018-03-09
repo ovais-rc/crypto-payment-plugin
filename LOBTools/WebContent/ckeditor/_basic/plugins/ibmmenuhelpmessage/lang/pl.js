@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","pl",{keystrokeForContextMenu:"Kliknij prawym przyciskiem myszy z wciśniętym klawiszem Ctrl, aby uzyskać więcej opcji",keystrokeForContextMenuMac:"Kliknij prawym przyciskiem myszy z wciśniętym klawiszem Cmd, aby uzyskać więcej opcji"});

@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This summary view provides brief information about the {@link cmc/marketing/TimeElementObject} flow element.
+		It is shown beneath the element on the Activity Builder flow diagram and to generate the text, it looks at the
+		following property names of the {@link cmc/marketing/TimeElementObject} object:
+		<ul>
+			<li>daysOfTheWeekString</li>
+			<li>startTime</li>
+			<li>endTime</li>
+		</ul>
+	-->
+	<FlowElementSummary classDefinition="true" definitionName="cmc/marketing/TimeSummary">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<FlowSummaryParam name="daysOfTheWeekString" propertyName="daysOfTheWeekString"/>
+		<FlowSummaryParam name="startTime" propertyName="startTime"/>
+		<FlowSummaryParam name="endTime" propertyName="endTime"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryEveryDay, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryOnDays, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryBetweenTimes, "onstring");
+			]]>
+		</handler>
+
+		<!---
+			Sets the summary text for the {@link cmc/marketing/TimeElementObject} flow element. Classes overriding
+			this method must call <code>setSummaryText</code> with the desired summary text.
+		-->
+		<method args="e" name="updateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var summary = this.getDays();
+			var times = this.getTimes();
+			if (times != "") {
+				if (summary != "") {
+					summary += "\n";
+				}
+				summary += times;
+			}
+			this.setSummaryText(summary);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCTimeFormat" || preference == "CMCFirstDayOfWeek") {
+				this.updateSummary();
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="getTimes">
+			<![CDATA[
+			var summary = "";
+			var startTime = "";
+			var endTime = "";
+			if ((this.resolvedParams.startTime != null) && (this.resolvedParams.startTime != "")) {
+				startTime = DateUtil.Singleton.getFormattedTime(DateUtil.Singleton.parse(this.resolvedParams.startTime, DateUtil.Singleton.TIME_FORMAT), false);
+			}
+			if ((this.resolvedParams.endTime != null) && (this.resolvedParams.endTime != "")) {
+				endTime = DateUtil.Singleton.getFormattedTime(DateUtil.Singleton.parse(this.resolvedParams.endTime, DateUtil.Singleton.TIME_FORMAT), false);
+			}
+			if ((startTime != "") || (endTime != "")) {
+				if (startTime == "") {
+					startTime = DateUtil.Singleton.getFormattedTime(DateUtil.Singleton.parse("00:00", DateUtil.Singleton.TIME_FORMAT), false);
+				}
+				if (endTime == "") {
+					endTime = DateUtil.Singleton.getFormattedTime(DateUtil.Singleton.parse("23:59", DateUtil.Singleton.TIME_FORMAT), false);
+				}
+				summary = marketingResources.Singleton.replaceValues("summaryBetweenTimes", [startTime, endTime]);
+			}
+			return summary;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="getDays">
+			<![CDATA[
+			var daysArray = ["U", "M", "T", "W", "R", "F", "S"];
+			var firstDay = PreferenceManager.Singleton.getPreference("CMCFirstDayOfWeek");
+			if (firstDay != null && firstDay != "") {
+				switch (firstDay) {				
+					case "SUN":
+						firstDay = "U";
+						break;
+					case "MON":
+						firstDay = "M";
+						break;
+					case "TUE":
+						firstDay = "T";
+						break;
+					case "WED":
+						firstDay = "W";
+						break;
+					case "THU":
+						firstDay = "R";
+						break;
+					case "FRI":
+						firstDay = "F";
+						break;
+					case "SAT":
+						firstDay = "S";
+						break;
+				}
+				for (var i = 0; i < daysArray.length; i++) {
+					if (firstDay == daysArray[i]) {
+						var newDays = new Array();
+						var j = 0;
+						while (j < 7) {
+							newDays.push(daysArray[i]);
+							i = (i == 6) ? 0 : i + 1;
+							j++;
+						}
+						daysArray = newDays;
+						break;
+					}
+				}
+			}
+			var summary = "";
+			var daysString = this.resolvedParams.daysOfTheWeekString;
+			if ((daysString == null) || (daysString == "") || (daysString == "MTWRFSU")) {
+				summary = marketingResources.Singleton.summaryEveryDay.string;
+			}
+			else {
+				for (var i = 0; i < daysArray.length; i++) {
+					if (daysString.indexOf(daysArray[i]) >= 0) {
+						if (summary != "") {
+							summary += ", ";
+						}
+						switch (daysArray[i]) {						
+							case "U":
+								summary += foundationResources.Singleton.sunday.string;
+								break;
+							case "M":
+								summary += foundationResources.Singleton.monday.string;
+								break;
+							case "T":
+								summary += foundationResources.Singleton.tuesday.string;
+								break;
+							case "W":
+								summary += foundationResources.Singleton.wednesday.string;
+								break;
+							case "R":
+								summary += foundationResources.Singleton.thursday.string;
+								break;
+							case "F":
+								summary += foundationResources.Singleton.friday.string;
+								break;
+							case "S":
+								summary += foundationResources.Singleton.saturday.string;
+								break;
+						}
+					}
+				}
+				summary = marketingResources.Singleton.replaceValues("summaryOnDays", [summary]);
+			}
+			return summary;
+			]]>
+		</method>
+	</FlowElementSummary>
+</Definitions>

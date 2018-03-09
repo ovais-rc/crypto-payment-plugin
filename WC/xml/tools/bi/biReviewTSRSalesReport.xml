@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2005
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+	<Report reportName="biReviewTSRSalesReport" online="true" dataSourceName="WCA DataSource">
+   		<comment></comment>
+		<SQLvalue>
+			SELECT DISTINCT
+				FS2.SUBMITTER_ID AS "SUBMITTER_ID",
+				FS2.ORDER_ID AS "Order Id",
+				COALESCE( CHAR(DATE(FO.TIMEPLACED)) ,   WCA.LOCALE_STRING('NA') ) AS "OrderDate",
+				FS2.TOTAL AS "TOTAL"
+            FROM 
+	            WCA.FACT_ORDERS FO,
+				(SELECT  DISTINCT
+					FS.ORDER_ID,
+					FS.SUBMITTER_ID,
+					FS.RPT_REVENUE AS "TOTAL"
+				FROM 
+					WCA.FACT_SALES FS,
+					WCA.USERREG AS U,
+					WCA.MBRGRPREL MGR					
+				WHERE   
+					MGR.MBRGRPTYPE = 'ServiceRepGroup'
+					AND MGR.MEMBER_ID = U.USERS_ID 
+					AND U.LOGONID='{tsr_id}'
+					AND  FS.SUBMITTER_ID= U.USERS_ID
+					AND FS.STORE_ID IN ({storeent_id}) 
+					AND  WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), FS.PER_ID) = 1
+					AND WCA.PARAM_VALUE_IN(CHAR(FS.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED')=1) AS FS2	
+			WHERE 
+				FO.ORDER_ID=FS2.ORDER_ID								
+			ORDER BY
+				{orderby}
+		</SQLvalue>
+		<display>
+			<standardInfo>
+				<resourceBundle>bi.biNLS</resourceBundle>
+				<title>biReviewTSRSalesReportTitle</title>
+				<message>biReviewTSRSalesReportMsg</message>
+			</standardInfo>
+			<userDefinedParameters>
+				<THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+				<TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+				<spaceBetweenColumns>20</spaceBetweenColumns>
+				<columnDefaultAttributes>
+					<displayInReport>true</displayInReport>
+					<displayInHeader>false</displayInHeader>
+					<displayInSummary>false</displayInSummary>
+					<displayTotal>false</displayTotal>
+					<columnWidth>0</columnWidth>
+					<maxEntryLength>999</maxEntryLength>
+					<columnType>string</columnType>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columnDefaultAttributes>
+				<columns>
+					<columns>
+						<columnKey>C0</columnKey>
+						<columnName>biReviewTSRSalesReportColumnCSRId</columnName>
+						<displayInReport>false</displayInReport>
+					</columns>
+					<columnKey>C1</columnKey>
+					<columnName>biReviewTSRSalesReportColumnOrderId</columnName>
+					<columnLink>
+							<title>biReviewTSRSalesDetailsReportTitle</title> 
+							<url>DialogView</url> 				
+							<parameters name="csr_id" value="$C0$" />
+							<parameters name="order_id" value="$C1$" />
+							<parameters name="XMLFile" value="bi.biReviewTSRSalesDetailsReportOutputDialog" />
+							<parameters name="reportName" value="biReviewTSRSalesDetailsReport" />
+							<parameters name="reportXML" value="bi.biReviewTSRSalesDetailsReport" />
+							<parameters name="keyList" value="reportXML,reportName,XMLFile,order_id,csr_id" />
+					</columnLink>
+				</columns>
+				<columns>
+					<columnKey>C2</columnKey>
+					<columnName>biReviewTSRSalesReportColumnOrderCreated</columnName>
+					<columnType>date</columnType>
+				</columns>
+				<columns>
+					<columnKey>C3</columnKey>
+					<columnName>biReviewTSRSalesReportColumnTotal</columnName>
+					<columnType>decimal</columnType>
+					<setMaximumFractionDigits>2</setMaximumFractionDigits>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				</columns>
+			</userDefinedParameters>
+		</display>
+	</Report>
+	<Report reportName="biReviewTSRSalesReportForAll" online="true" dataSourceName="WCA DataSource">
+   		<comment></comment>
+		<SQLvalue>
+			SELECT DISTINCT
+				FS2.SUBMITTER_ID AS "SUBMITTER_ID",
+				FS2.ORDER_ID AS "Order Id",
+				COALESCE( CHAR(DATE(FO.TIMEPLACED)) ,   WCA.LOCALE_STRING('NA') ) AS "OrderDate",
+				FS2.TOTAL AS "TOTAL",
+				FS2.LOGONID AS CSRID,
+				CONCAT(COALESCE(FS2.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(FS2.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(FS2.LAST_NAME,'')))) AS NAME
+	
+            FROM 
+	            WCA.FACT_ORDERS FO,
+				(SELECT  DISTINCT
+					FS.ORDER_ID,
+					FS.SUBMITTER_ID,
+					FS.RPT_REVENUE AS "TOTAL",
+					U.LOGONID,
+					M.FIRST_NAME,
+					M.MIDDLE_NAME,
+					M.LAST_NAME
+				FROM 
+					WCA.FACT_SALES FS,
+					WCA.USERREG U,
+					WCA.MEMBER M,
+					WCA.MBRGRPREL MGR
+				WHERE   
+					MGR.MBRGRPTYPE = 'ServiceRepGroup'
+					AND MGR.MEMBER_ID = U.USERS_ID 
+					AND U.USERS_ID=M.MEMBER_ID	
+					AND FS.SUBMITTER_ID=U.USERS_ID
+					AND FS.STORE_ID IN ({storeent_id}) 
+					AND  WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), FS.PER_ID) = 1
+					AND WCA.PARAM_VALUE_IN(CHAR(FS.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED')=1) AS FS2	
+			WHERE 
+				FO.ORDER_ID=FS2.ORDER_ID								
+			ORDER BY
+				{orderby}
+		</SQLvalue>
+		<display>
+			<standardInfo>
+				<resourceBundle>bi.biNLS</resourceBundle>
+				<title>biReviewTSRSalesReportTitle</title>
+				<message>biReviewTSRSalesReportMsg</message>
+			</standardInfo>
+			<userDefinedParameters>
+				<THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+				<TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+				<spaceBetweenColumns>20</spaceBetweenColumns>
+				<columnDefaultAttributes>
+					<displayInReport>true</displayInReport>
+					<displayInHeader>false</displayInHeader>
+					<displayInSummary>false</displayInSummary>
+					<displayTotal>false</displayTotal>
+					<columnWidth>0</columnWidth>
+					<maxEntryLength>999</maxEntryLength>
+					<columnType>string</columnType>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columnDefaultAttributes>
+				<columns>
+					<columnKey>C4</columnKey>
+					<columnName>CSRRevenueReportCSRIDColumn</columnName>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>string</columnType>
+				</columns>
+				<columns>
+					<columnKey>C5</columnKey>
+					<columnName>CSRRevenueReportCSRName</columnName>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+					<columnType>string</columnType>
+				</columns>
+				<columns>
+					<columns>
+						<columnKey>C0</columnKey>
+						<columnName>biReviewTSRSalesReportColumnCSRId</columnName>
+						<displayInReport>false</displayInReport>
+					</columns>
+					<columnKey>C1</columnKey>
+					<columnName>biReviewTSRSalesReportColumnOrderId</columnName>
+					<columnLink>
+			  				<title>biReviewTSRSalesDetailsReportTitle</title> 
+			  				<url>DialogView</url> 				
+			 				<parameters name="csr_id" value="$C0$" />
+			 				<parameters name="order_id" value="$C1$" />
+			 				<parameters name="XMLFile" value="bi.biReviewTSRSalesDetailsReportOutputDialog" />
+			 				<parameters name="reportName" value="biReviewTSRSalesDetailsReport" />
+			 				<parameters name="reportXML" value="bi.biReviewTSRSalesDetailsReport" />
+			 				<parameters name="keyList" value="reportXML,reportName,XMLFile,order_id,csr_id" />
+			 		</columnLink>
+				</columns>
+				<columns>
+					<columnKey>C2</columnKey>
+					<columnName>biReviewTSRSalesReportColumnOrderCreated</columnName>
+					<columnType>date</columnType>
+				</columns>
+				<columns>
+					<columnKey>C3</columnKey>
+					<columnName>biReviewTSRSalesReportColumnTotal</columnName>
+					<columnType>decimal</columnType>
+					<setMaximumFractionDigits>2</setMaximumFractionDigits>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+				</columns>
+			</userDefinedParameters>
+		</display>
+	</Report>
+</Reporting>

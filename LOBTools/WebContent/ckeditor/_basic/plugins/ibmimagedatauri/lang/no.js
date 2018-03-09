@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","no",{error:"Innliming av bilder støttes ikke i denne versjonen. Bruk verktøylinjealternativet 'Sett inn bilde' i stedet."});

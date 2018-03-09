@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	
+	<!---
+		This class is a grid column representing a catalog entry defining
+		attribute with a set of allowed values available for selection via a combo
+		box in the grid cell.
+		
+		The CMC property that this column is managing is 'attrValValue', which
+		is a language sensitive property of:
+		CatalogEntryAttribute
+		AttributeDictionaryAttribute
+		
+		This code is not customizable.
+		
+		@keywords private
+	-->
+	 <GridColumn classDefinition="true" definitionName="cmc/catalog/SKUAttributeColumn" propertyName="attrValValue">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="SKUAttributeComboBoxViewer" moduleName="cmc/catalog/SKUAttributeComboBoxViewer"/>
+		<dependency localName="SKUAttributeEditor" moduleName="cmc/catalog/SKUAttributeEditor"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+
+	 	<!---
+			Use "cmc/foundation/GridTextViewer" for the viewer class.
+			@keywords private
+		-->
+		<variable name="cellViewerClass" value="${SKUAttributeComboBoxViewer}"/>
+		<!---
+			Use "cmc/catalog/SKUAttributeEditor" for the editor class.
+			@keywords private
+		-->
+		<variable name="cellEditorClass" value="${SKUAttributeEditor}"/>
+		<!---
+			The attribute object being managed in this grid column.
+			@keywords private
+		-->		
+		<variable name="attributeObject" value="${null}"/>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="newAttributeObject" name="setAttributeObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "setAttributeObject", [newAttributeObject]);
+			}
+			this.attributeObject = newAttributeObject;
+			this.updateObjectPath();
+			this.updateHeaderText();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "setAttributeObject");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will update the object path of the attribute column based on the attribute's ID.
+			
+			@keywords private
+		-->
+		<method name="updateObjectPath">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "updateObjectPath");
+			}
+			if (this.attributeObject && this.attributeObject != null) {
+				var attrIdPropertyValue = null;
+				var newObjectPath = null;
+				var newProperty = null;
+				if (this.attributeObject.objectType == "CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues" || this.attributeObject.objectType == "CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues") {
+					attrIdPropertyValue = this.attributeObject.getPropertyValue("attrId", "AttributeDictionaryAttributes");
+					newObjectPath = this.parent.definingAttributeObjectPath + "[attrId=" + attrIdPropertyValue + "]";
+					newProperty = "attrValId";
+				}
+				else {
+					attrIdPropertyValue = this.attributeObject.getPropertyValue(this.attributeObject.objectDefinition.idProperty);
+					newObjectPath = this.parent.definingAttributeObjectPath + "[xdata_attrId=" + attrIdPropertyValue + "]";
+					newProperty = "attrValValue";
+				}
+				this.setObjectPath(newObjectPath);
+				this.setPropertyName(newProperty);
+				this.getCellDescriptorMap().setDefaultDisabled(false);
+			}
+			else {
+				this.getCellDescriptorMap().setDefaultDisabled(true);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "updateObjectPath");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will update the attribute column's header with the name of the attribute in the store 
+			default language. 
+			
+			Ie. If the attribute name in the store default language is "Color", Color will be displayed as the 
+			header text of the column representing the attribute.
+			
+			@keywords private
+		-->
+		<method args="e" name="updateHeaderText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "updateHeaderText");
+			}
+			if (this.updateHeaderTextDel) {
+				this.updateHeaderTextDel.disconnectAll();
+			}
+			else {
+				this.updateHeaderTextDel = new EventHandler.Class(this, "updateHeaderText");
+			}
+			if (this.attributeObject) {
+				var storeConfig = ContextUtil.Singleton.findStoreConfig(this.attributeObject, this.updateHeaderTextDel);
+				var defaultLanguage = storeConfig != null ? storeConfig.defaultLanguage : null;
+				var attrNameProperty = null;
+				if (defaultLanguage != null) {
+					if (this.attributeObject.objectType == "CatalogEntryDefiningAttribute") {
+						attrNameProperty = this.attributeObject.getProperty("attrName", "DefiningAttributeLanguageSensitiveObject[languageId=" + defaultLanguage.languageId + "]");
+					}
+					if (this.attributeObject.objectType == "CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues") {
+						attrNameProperty = this.attributeObject.getProperty("attrName", "AttributeDictionaryAttributeWithAllowedValuesAlias/AttributeDictionaryAttributeDescription[languageId=" + defaultLanguage.languageId + "]");
+					}
+					if (this.attributeObject.objectType == "CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues") {
+						attrNameProperty = this.attributeObject.getProperty("attrName", "AttributeDictionaryAttributeWithAllowedValuesAlias/AttributeDictionaryAttributeDescription[languageId=" + defaultLanguage.languageId + "]");
+					}
+				}
+				if (attrNameProperty && attrNameProperty != null) {
+					this.updateHeaderTextDel.connect(attrNameProperty, "onvalue");
+					var attrName = attrNameProperty.value;
+					this.setVariable("text", attrName ? attrName : "");
+				}
+				else {
+					this.setVariable("text", "");
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "updateHeaderText");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will cleanup any delegates used throughout this class.
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "destroy");
+			}
+			if (this.updateHeaderTextDel) {
+				this.updateHeaderTextDel.disconnectAll();
+				delete this.updateHeaderTextDel;
+			}
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/SKUAttributeColumn", "destroy");
+			}
+			]]>
+		</method>
+
+	<method args="attributeObject" name="set_attributeObject">
+			<![CDATA[
+			this.setAttributeObject(attributeObject);
+			]]>
+		</method></GridColumn>
+	 
+	 <!---
+		This class represents a combo box viewer used for an attribute value.
+		
+		@keywords private
+	-->
+	<GridTextViewer classDefinition="true" definitionName="cmc/catalog/SKUAttributeComboBoxViewer">
+		<dependency localName="RichTextEditorUtil" moduleName="cmc/foundation/RichTextEditorUtil"/>
+
+	<!---
+			Update and refresh cmc/foundation/GridTextViewer value with a new {@link cmc/foundation/ModelProperty} value.			
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = this.property.value;
+			var newText = null;
+			if (this.parent.column.attributeObject.objectType == "CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues" || this.parent.column.attributeObject.objectType == "CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues") {
+				newText = this.getADDisplayName(value);
+			}
+			else {
+				newText = value;
+			}
+			if (!this.html) {
+				newText = this.escapeText(newText);
+			}
+			else {
+				newText = RichTextEditorUtil.Singleton.removeTags(newText);
+			}
+			if (this.text != newText) {
+				this.setVariable("text", newText);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get display name for AD attribute 
+		-->
+		<method args="attrValId" name="getADDisplayName">
+			<![CDATA[
+			var displayName = null;
+			if (attrValId) {
+				var attributeAllowedValueType = null;
+				var attributeDataType = this.parent.column.attributeObject.getPropertyValue("attrDataType", "AttributeDictionaryAttributes");
+				if (attributeDataType == "String") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeStringValueAlias";
+				}
+				else if (attributeDataType == "Integer") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeIntegerValueAlias";
+				}
+				else if (attributeDataType == "Float") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeFloatValueAlias";
+				}
+				if (attributeDataType != null) {
+					var definingAttributeAllowedValue = this.parent.column.attributeObject.getObject("AttributeDictionaryAttributeWithAllowedValuesAlias/" + attributeAllowedValueType + "[attrValId=" + attrValId + "]");
+					displayName = definingAttributeAllowedValue.getPropertyValue("value", "AttributeDictionaryAttributeValueDescription");
+				}
+			}
+			return displayName;
+			]]>
+		</method>
+		
+	</GridTextViewer>
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("bidi","ko",{ltr:"왼쪽에서 오른쪽 텍스트 방향",rtl:"오른쪽에서 왼쪽 텍스트 방향"});

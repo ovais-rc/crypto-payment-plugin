@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","tr",{indent:"Girintiyi Artır",outdent:"Girintiyi Azalt"});

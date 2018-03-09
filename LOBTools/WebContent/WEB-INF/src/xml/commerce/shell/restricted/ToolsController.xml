@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		This controller class controls the behavior of the tools in Management Center. It allows
+		a tool to be opened, focused and closed. It also checks for the state of each tool.
+	-->
+	<Node classDefinition="true" definitionName="cmc/shell/ToolsControllerClass">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!--- @keywords private -->
+		<variable name="toolList" value="${[]}"/>
+		
+		<!---
+			This method will check to see if a specified tool is open in the work area in Management Center.
+			@param string objectId: ID of the tool
+			@returns boolean: True if tool is open in the work area.
+		-->
+		<method args="objectId" name="isToolOpen">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "isToolOpen(objectId)", [objectId]);
+			}
+			var isToolOpen = false;
+			for (var i = 0; i < this.toolList.length; i++) {
+				if (this.toolList[i] == objectId) {
+					isToolOpen = true;
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "isToolOpen(objectId)", isToolOpen);
+			}
+			return isToolOpen;
+			]]>
+		</method>
+
+		<!---
+			This method opens the specified tool in the work area in Management Center.
+			@param string objectId: ID of the tool
+			@param string objectClass: class that implements the tool
+			@param string usage: usage of the tool for access control purpose
+			@param boolean availableToWorkspaceTasks Flag that indicates whether the tool is available or not when working on a workspace task
+			@param boolean userAction indicates that this request was initiated by a user action
+			@param cmc/foundation/Store store: the store
+			@param boolean setFocus indicates that the tool should be given focus
+		-->
+		<method args="objectId, objectClass, usage, availableToWorkspaceTasks, userAction, store, setFocus" name="openTool">
+			<![CDATA[
+			if (typeof(userAction) == "undefined") userAction = true;
+			if (typeof(store) == "undefined") store = null;
+			if (typeof(setFocus) == "undefined") setFocus = true;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "openTool(objectId,objectClass,usage,availableToWorkspaceTasks,userAction,setFocus)", [objectId, objectClass, usage, availableToWorkspaceTasks, userAction, setFocus]);
+			}
+			if (this.isToolOpen(objectId)) {
+				if (setFocus) {
+					this.focusTool(objectId);
+				}
+			}
+			else {
+				this.addToolToList(objectId);
+				SingletonRegistry.toolPanesWidget.openPane(objectId, objectClass, usage, availableToWorkspaceTasks, store, setFocus);
+				SingletonRegistry.toolTabsWidget.openTab(objectId, SingletonRegistry.toolPanesWidget[objectId], setFocus);
+				var tool = SingletonRegistry.toolPanesWidget.getPane(objectId);
+				if (userAction && tool.handleUserOpen) {
+					tool.handleUserOpen();
+				}
+				if (setFocus && ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true" && tool.respectWorkspaceContext && SingletonRegistry.workspaceIndicator.currentState != 'BASE') {
+					if (ConfigProperties.Singleton.readOnlyOnApprovedContent) {
+						require(["cmc/shell/ApplicationInReadOnlyModeInApprovedContentDialog"], function(ApplicationInReadOnlyModeInApprovedContentDialog) {
+							ApplicationInReadOnlyModeInApprovedContentDialog.Singleton.openWindow();
+						});
+					}
+					else {
+						require(["cmc/shell/ApplicationInReadOnlyModeDialog"], function(ApplicationInReadOnlyModeDialog) {
+							ApplicationInReadOnlyModeDialog.Singleton.openWindow();
+						});
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "openTool(objectId,objectClass,usage,availableToWorkspaceTasks,userAction,setFocus)");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method opens the specified tool in the work area in Management Center by the ID of the tool.
+			@param string objectId: ID of the tool
+			@param cmc/foundation/Store store: the store
+		-->
+		<method args="objectId, store" name="openToolById">
+			<![CDATA[
+			if (typeof(store) == "undefined") store = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "openToolById(objectId)", [objectId]);
+			}
+			if (SingletonRegistry[objectId]) {
+				if (store && SingletonRegistry[objectId].objectClass) {
+					this.openTool(objectId, SingletonRegistry[objectId].objectClass, SingletonRegistry[objectId].usage, SingletonRegistry[objectId].availableToWorkspaceTasks, false, store);
+				}
+				else {
+					SingletonRegistry[objectId].invokeAction();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "openToolById(objectId)");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method brings the specified tool into focus.
+			@param string objectId: ID of the tool
+		-->
+		<method args="objectId" name="focusTool">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "focusTool(objectId)", [objectId]);
+			}
+			this.addToolToList(objectId);
+			SingletonRegistry.toolTabsWidget.focusTab(objectId);
+			SingletonRegistry.toolPanesWidget.focusPane(objectId);
+			if (ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true" && SingletonRegistry.toolPanesWidget.getPane(objectId)["respectWorkspaceContext"] && SingletonRegistry.workspaceIndicator.currentState != 'BASE') {
+				if (ConfigProperties.Singleton.readOnlyOnApprovedContent) {
+					require(["cmc/shell/ApplicationInReadOnlyModeInApprovedContentDialog"], function(ApplicationInReadOnlyModeInApprovedContentDialog) {
+						ApplicationInReadOnlyModeInApprovedContentDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					require(["cmc/shell/ApplicationInReadOnlyModeDialog"], function(ApplicationInReadOnlyModeDialog) {
+						ApplicationInReadOnlyModeDialog.Singleton.openWindow();
+					});
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "focusTool(objectId)");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method resets the specified tool.
+			@param string objectId: ID of the tool
+		-->
+		<method args="objectId" name="resetTool">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "resetTool(objectId)", [objectId]);
+			}
+			SingletonRegistry.toolPanesWidget.resetPane(objectId);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "resetTool(objectId)");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method closes the specified tool in the work area in Management Center. It opens
+			cmc/shell/ToolOnCloseWithChangesDialog when the tool has unsaved changes.
+			@param string objectId: ID of the tool
+		-->
+		<method args="objectId" name="closeTool">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "closeTool(objectId)", [objectId]);
+			}
+			var tool = SingletonRegistry.toolPanesWidget.getPane(objectId);
+			if (tool.model && ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				if (this.hasUnsavedChangesByTool(objectId)) {
+					require(["cmc/shell/ToolOnCloseWithChangesDialog"], function(ToolOnCloseWithChangesDialog) {
+						ToolOnCloseWithChangesDialog.Singleton.openToolOnCloseWithChangesDialog(objectId);
+					});
+				}
+				else {
+					this.destroyTool(objectId);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "closeTool(objectId)");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectId, userAction" name="destroyTool">
+			<![CDATA[
+			if (typeof(userAction) == "undefined") userAction = true;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "destroyTool(objectId,userAction)", [objectId, userAction]);
+			}
+			this.removeToolFromList(objectId);
+			if (this.toolList.length > 0 && SingletonRegistry.toolTabsWidget.getCurrentTab() == objectId) {
+				var lastFocusedTool = this.toolList[this.toolList.length - 1];
+				SingletonRegistry.toolTabsWidget.focusTab(lastFocusedTool);
+				SingletonRegistry.toolPanesWidget.focusPane(lastFocusedTool);
+			}
+			else if (this.toolList.length == 0) {
+				FocusUtil.setFocus(SingletonRegistry.applicationMenu, false);
+			}
+			if (userAction) {
+				var tool = SingletonRegistry.toolPanesWidget.getPane(objectId);
+				if (tool.handleUserClose) {
+					tool.handleUserClose();
+				}
+			}
+			SingletonRegistry.toolTabsWidget.closeTab(objectId);
+			SingletonRegistry.toolPanesWidget.closePane(objectId);
+			MessageLogger.Singleton.clearToolMessages(objectId);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "destroyTool(objectId,userAction)");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectId" name="addToolToList">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "addToolToList(objectId)", [objectId]);
+			}
+			if (this.toolList.indexOf(objectId) == -1) {
+				this.toolList.push(objectId);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "addToolToList(objectId)");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectId" name="removeToolFromList">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "removeToolFromList(objectId)", [objectId]);
+			}
+			for (var i = 0; i < this.toolList.length; i++) {
+				if (this.toolList[i] == objectId) {
+					this.toolList.splice(i, 1);
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "removeToolFromList(objectId)");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectId" name="hasUnsavedChangesByTool">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "hasUnsavedChangesByTool(objectId)", [objectId]);
+			}
+			var result = false;
+			var thisTool = SingletonRegistry.toolPanesWidget.childComponents[SingletonRegistry.toolPanesWidget.findPane(objectId)];
+			if (thisTool != undefined) {
+				var thisToolModel = thisTool.model;
+				if (thisToolModel != undefined && thisToolModel != null) {
+					for (var i = 0; i < thisToolModel.openObjects.length; i++) {
+						if (thisToolModel.openObjects[i].hasUnsavedChanges()) {
+							result = true;
+							break;
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "hasUnsavedChangesByTool(objectId)", result);
+			}
+			return result;
+			]]>
+		</method>
+
+		<!---
+			This method checks whether there are unsaved changes in one of the tool in the work area
+			in Management Center.
+			@returns boolean: True if one or more tools contains unsaved changes; false otherwise.
+		-->
+		<method name="hasUnsavedChangesAllTools">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "hasUnsavedChangesAllTools");
+			}
+			var result = false;
+			for (var i = 0; i < this.toolList.length; i++) {
+				if (this.hasUnsavedChangesByTool(this.toolList[i])) {
+					result = true;
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "hasUnsavedChangesAllTools", result);
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			This method checks whether there are unsaved changes in one of the tool that respects
+			workspace context and are currently opened in the work area in Management Center.
+			@returns boolean: True if one or more tools contains unsaved changes; false otherwise.
+		-->
+		<method name="hasUnsavedChangesAllWorkspaceContextTools">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "hasUnsavedChangesAllWorkspaceContextTools");
+			}
+			var result = false;
+			for (var i = 0; i < this.toolList.length; i++) {
+				if (SingletonRegistry.toolPanesWidget.getPane(this.toolList[i])["respectWorkspaceContext"] && this.hasUnsavedChangesByTool(this.toolList[i])) {
+					result = true;
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "hasUnsavedChangesAllWorkspaceContextTools", result);
+			}
+			return result;
+			]]>
+		</method>
+
+		<!---
+			This method resets the tools that are respecting workspace context and are currently
+			opened in the work area in Management Center.
+		-->
+		<method name="resetWorkspaceContextTools">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "resetWorkspaceContextTools");
+			}
+			for (var i = 0; i < this.toolList.length; i++) {
+				if (SingletonRegistry.toolPanesWidget.getPane(this.toolList[i])["respectWorkspaceContext"]) {
+					if (SingletonRegistry.toolPanesWidget.getPane(this.toolList[i])["availableToWorkspaceTasks"] || ContextUtil.Singleton.findContextValue(null, "workspaceTask").value == "") {
+						SingletonRegistry.toolPanesWidget.resetPane(this.toolList[i]);
+					}
+					else {
+						this.closeTool(this.toolList[i]);
+					}
+					MessageLogger.Singleton.clearToolMessages(this.toolList[i]);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "resetWorkspaceContextTools");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method closes all the tools that are currently opened in the work area in
+			Management Center.
+		-->
+		<method name="closeAllTools">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "closeAllTools");
+			}
+			if (this.toolList.length > 0) {
+				for (var i = this.toolList.length - 1; i >= 0; i--) {
+					this.destroyTool(this.toolList[i], false);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "closeAllTools");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method resets the tools that are currently opened in Management Center.
+		-->
+		<method name="resetAllTools">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "resetAllTools");
+			}
+			for (var i = 0; i < this.toolList.length; i++) {
+				SingletonRegistry.toolPanesWidget.resetPane(this.toolList[i]);
+				MessageLogger.Singleton.clearToolMessages(this.toolList[i]);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "resetAllTools");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method returns the tool instance with the specified ID. If the tool is not open,
+			then this method returns null.
+			@param string objectId: ID of the tool
+		-->
+		<method args="objectId" name="getTool">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "getTool(objectId)", [objectId]);
+			}
+			var tool = null;
+			if (this.isToolOpen(objectId)) {
+				tool = SingletonRegistry.toolPanesWidget.getPane(objectId);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ToolsControllerClass", "getTool(objectId)" + tool);
+			}
+			return tool;
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

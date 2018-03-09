@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","sk",{button:"Šablóny",emptyListMsg:"(Nie sú definované žiadne šablóny)",insertOption:"Nahradiť skutočný obsah",options:"Možnosti šablóny",selectPromptMsg:"Vyberte šablónu, ktorú chcete otvoriť v editore",title:"Šablóny obsahu"});

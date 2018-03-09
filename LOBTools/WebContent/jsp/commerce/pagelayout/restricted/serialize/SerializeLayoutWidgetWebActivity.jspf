@@ -1,0 +1,205 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf"%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"%>
+
+<%--
+	Hash map with key 'activityId' and value a comma separated list of associated marketing spot identifiers 'emsId'.
+--%>
+<jsp:useBean id="ACTIVITY_ESPOT_HASH_MAP" class="java.util.HashMap" type="java.util.Map"/>
+<%--
+	Hash map with key 'activityId' and value 'activeWidget.extendedData business object'.
+--%>
+<jsp:useBean id="ACTIVITY_EXTENDEDDATA_HASH_MAP" class="java.util.HashMap" type="java.util.Map"/>
+<%--
+	Hash map with key 'activityId' and value 'activity business object' (marketing service call to retrieve activity details).
+--%>
+<jsp:useBean id="ACTIVITY_BUSINESSOBJECT_HASH_MAP" class="java.util.HashMap" type="java.util.Map"/>
+<%--
+	Hash map with key 'emsId' and value 'true' if the marketing spot is inherited, 'false' otherwise.
+--%>
+<jsp:useBean id="IS_ESPOT_INHERITED_HASH_MAP" class="java.util.HashMap" type="java.util.Map"/>
+<%--
+	A comma separated list of activity unique internal identifiers.
+--%>
+<c:set var="activityList" value="" />
+<%--
+	A comma separated list of marketing spot unique internal identifiers.
+--%>
+<c:set var="emsList" value="" />
+
+<%--
+	Process the extended data from the service call and cache it for efficient
+	use (to avoid multiple service calls to fetch data from marketing)
+--%>
+<c:forEach var="extData" items="${activeWidget.extendedData}" varStatus="status">
+	<c:if test="${extData.dataType == 'IBM_WebActivity'}">
+		<%-- 
+			Generate activity list 
+		--%>
+		<c:set var="activityId" value="${extData.uniqueID}" />
+		<c:choose>
+			<c:when test="${status.first}">
+				<c:set var="activityList" value="${activityId}" />	
+			</c:when>
+			<c:otherwise>
+				<c:set var="activityList" value="${activityList},${activityId}" />	
+			</c:otherwise>
+		</c:choose>	
+		<%-- 
+			Generate marketing spot list 
+		--%>
+		<c:set var="emsId" value="" />			
+		<c:forEach var="attributes" items="${extData.attributes}">
+			<c:forEach var="attribute" items="${attributes.attribute}">
+				<c:if test="${attribute.typedKey == 'emsId'}">
+					<c:set var="emsId" value="${attribute.typedValue}" />
+				</c:if>
+			</c:forEach>
+		</c:forEach>
+		<c:choose>
+			<c:when test="${status.first}">
+				<c:set var="emsList" value="${emsId}" />	
+			</c:when>
+			<c:otherwise>
+				<c:if test="${!fn:contains(emsList, emsId)}">
+					<c:set var="emsList" value="${emsList},${emsId}" />	
+				</c:if>
+			</c:otherwise>
+		</c:choose>
+		<%-- 
+			Get and put cache for activity to marketing spot association
+		--%>		
+		<c:set var="emsIdForActivity" value="${ACTIVITY_ESPOT_HASH_MAP[activityId]}"/>
+		<c:choose>
+			<c:when test="${fn:length(emsIdForActivity) > 0}">
+				<c:set var="emsIdForActivity" value="${emsIdForActivity},${emsId}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="emsIdForActivity" value="${emsId}"/>
+			</c:otherwise>
+		</c:choose>
+		<c:set target="${ACTIVITY_ESPOT_HASH_MAP}" property="${activityId}" value="${emsIdForActivity}"/>
+		<%-- 
+			Put cache for the business object returned from the layout widget service call
+		--%>		
+		<c:set target="${ACTIVITY_EXTENDEDDATA_HASH_MAP}" property="${activityId}_${emsId}" value="${extData}"/>
+	</c:if>
+</c:forEach>
+
+<%--
+	Determine if the active marketing spots are inherited or not, cache for later use.
+--%>
+<c:if test="${fn:length(emsList) > 0}">
+	<wcf:getData
+		type="com.ibm.commerce.marketing.facade.datatypes.MarketingSpotType[]"
+		var="espots" expressionBuilder="findByUniqueIDs" varShowVerb="showVerb">
+		<wcf:contextData name="storeId" data="${param.storeId}" />
+		<c:forTokens var="value" items="${emsList}" delims=",">
+			<wcf:param name="UniqueID" value="${value}" />
+		</c:forTokens>
+	</wcf:getData>
+	<c:forEach var="spot" items="${espots}">
+		<c:set var="emsId" value="${spot.marketingSpotIdentifier.uniqueID}"/>
+		<c:choose>
+			<c:when test="${spot.marketingSpotIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+				<c:set var="isInheritedEspot" value="true" />
+			</c:when>
+			<c:otherwise>
+				<c:set var="isInheritedEspot" value="false" />
+			</c:otherwise>
+		</c:choose>
+		<c:set target="${IS_ESPOT_INHERITED_HASH_MAP}" property="${emsId}" value="${isInheritedEspot}"/>
+	</c:forEach>
+</c:if>
+
+<%--
+	Generate a cache of the web activity business objects, fetched in a batch for later processing.
+--%>
+<c:if test="${fn:length(activityList) > 0}">
+	<wcf:getData
+		type="com.ibm.commerce.marketing.facade.datatypes.ActivityType[]"
+		var="activities" expressionBuilder="findByUniqueIDs" varShowVerb="activityShowVerb">
+		<c:forTokens var="value" items="${activityList}" delims=",">
+			<wcf:param name="UniqueID" value="${value}" />
+		</c:forTokens>
+		<wcf:param name="dataLanguageIds" value="${param.defaultLanguageId}"/> 
+		<wcf:contextData name="storeId" data="${param.storeId}"/>
+	</wcf:getData>
+	<c:forEach var="activity" items="${activities}">
+		<c:set var="activityId" value="${activity.activityIdentifier.uniqueID}"/>
+		<c:set target="${ACTIVITY_BUSINESSOBJECT_HASH_MAP}" property="${activityId}" value="${activity}"/>
+	</c:forEach>
+</c:if>
+
+<%--
+	Generate the web activity reference objects using the cache generated above.
+	
+	1) Iterate over all of the activities registered.
+	2) For each activity, get its list of associated marketing spots.
+	3) For each associated marketing spot, determine if the spot is inherited or not.
+	4) For each associated marketing spot, determine the store ID the activity was created in.
+	5) If the store ID is the same as the current store, generate 'ActivityReference'
+	   Otherwise, assume it is an inherited reference object and need to determine what type.
+	   If the marketing spot is inherited, generate 'InheritedActivityInheritedReference'.
+	   If not, generate 'InheritedActivityReference'.
+--%>
+<c:forEach var="entry" items="${ACTIVITY_ESPOT_HASH_MAP}">
+
+	<c:set var="activityId" value="${entry.key}"/>
+	<c:set var="emsIdList" value="${entry.value}"/>
+	
+	<c:forTokens var="emsId" items="${emsIdList}" delims=",">
+		<c:set var="isInheritedEspot" value="${IS_ESPOT_INHERITED_HASH_MAP[emsId]}"/>
+		<c:set var="activity" value="${ACTIVITY_BUSINESSOBJECT_HASH_MAP[activityId]}"/>
+		<c:set var="objStoreId" value="${activity.activityIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+		<c:if test="${activity.activityIdentifier.externalIdentifier.storeIdentifier.uniqueID == '0'}">
+			<c:set var="objStoreId" value="${param.storeId}"/>
+		</c:if>
+		<c:set var="activityReferenceType" value=""/>
+		<c:choose>
+			<c:when test="${objStoreId == param.storeId}">
+				<c:set var="activityReferenceType" value="ActivityReference"/>
+				<c:set var="owningStoreId" value="${param.storeId}"/>
+			</c:when>
+			<c:otherwise>
+				<c:choose>
+					<c:when test="${isInheritedEspot == 'true'}">
+						<c:set var="activityReferenceType" value="InheritedActivityInheritedReference" />
+						<c:set var="owningStoreId" value="${objStoreId}"/>
+					</c:when>
+					<c:otherwise>
+						<c:set var="activityReferenceType" value="InheritedActivityReference" />
+						<c:set var="owningStoreId" value="${param.storeId}"/>
+					</c:otherwise>
+				</c:choose>
+			</c:otherwise>
+		</c:choose>
+		<c:set var="extDataKey" value="${activityId}_${emsId}"/>
+		<c:set var="extData" value="${ACTIVITY_EXTENDEDDATA_HASH_MAP[extDataKey]}"/>		
+		<object objectType="${activityReferenceType}">
+			<c:set var="showVerb" value="${activeWidgetShowVerb}" scope="request"/>
+			<c:set var="businessObject" value="${extData}" scope="request"/>				
+			<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+			<uniqueId>${activityId}</uniqueId>
+			<objectStoreId>${owningStoreId}</objectStoreId>
+			<c:set var="showVerb" value="${activityShowVerb}" scope="request"/>
+			<c:set var="businessObject" value="${activity}" scope="request"/>
+			<jsp:directive.include file="../../../marketing/restricted/SerializeActivity.jspf" />
+		</object>
+	</c:forTokens>
+</c:forEach>

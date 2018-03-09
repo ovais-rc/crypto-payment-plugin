@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("preview","th",{preview:"แสดงตัวอย่าง:"});

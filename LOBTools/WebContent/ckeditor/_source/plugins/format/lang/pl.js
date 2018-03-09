@@ -1,0 +1,19 @@
+/*
+Copyright (c) 2003-2014, CKSource - Frederico Knabben. All rights reserved.
+For licensing, see LICENSE.md or http://ckeditor.com/licensePortions Copyright IBM Corp., 2009-2015.
+*/
+CKEDITOR.plugins.setLang( 'format', 'pl', {
+	label		: "Format",
+	panelTitle	: "Format akapitu",
+	tag_address	: "Adres",
+	tag_div		: "Zwykły (DIV)",
+	tag_h1		: "Nagłówek 1",
+	tag_h2		: "Nagłówek 2",
+	tag_h3		: "Nagłówek 3",
+	tag_h4		: "Nagłówek 4",
+	tag_h5		: "Nagłówek 5",
+	tag_h6		: "Nagłówek 6",
+	tag_p		: "Zwykły",
+	tag_pre		: "Formatowany"
+});
+

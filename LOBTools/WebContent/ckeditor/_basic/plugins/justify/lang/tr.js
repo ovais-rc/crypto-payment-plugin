@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","tr",{block:"Yaslamalı Hizala",center:"Ortaya Hizala",left:"Sola Hizala",right:"Sağa Hizala"});

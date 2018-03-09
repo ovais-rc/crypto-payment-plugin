@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords abstract
+
+		This class declares a view option that business users can use to toggle between different views within the
+		properties view of an object. You can use {@link cmc/foundation/EnablementCondition enablement conditions} that reference
+		view options to control the visibility of {@link cmc/foundation/PropertyGroup property groups} and
+		{@link cmc/foundation/PropertyTabPane property tab panes}.
+
+		You can declare more than one instance of cmc/foundation/ViewOption as a child of {@link cmc/foundation/PrimaryObjectDefinition}. When
+		the properties view of the primary object is visible, the view options are enabled in the "View" menu.
+
+		<p>The following example demonstrates the declaration of view options. It toggles the properties view of a web
+		activity between displaying summary text and statistics.
+
+		@START_CODE
+		<PrimaryObjectDefinition definitionName="cmc/marketing/BaseWebActivityPrimaryObjectDefinition">
+		        <ViewOption displayName="Show summary" viewOptionType="showSummary" />
+		        <ViewOption displayName="Show statistics" viewOptionType="showStatistics" />
+		</PrimaryObjectDefinition>
+		@END_CODE
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ViewOption">
+		<!---
+			The display name for this view option. This name will appear in the View menu.
+			This is a required attribute.
+		-->
+		<variable name="displayName" type="string"/>
+
+		<!---
+			The type of this view option. This is a required attribute.
+		-->
+		<variable name="viewOptionType" type="string"/>
+
+		<!---
+			The group name of this view option. If multiple view options share the same group name, then they will be mutually
+			exclusive view options. Selecting one view option in the group will disable all of the other view options in the same group.
+			This is an optional attribute.
+		-->
+		<variable name="viewOptionGroup" type="string" value="${null}"/>
+		
+		<!---
+			Indicates whether to add the viewOption to the "View" menu. The default value is "true".
+		-->		
+		<variable name="addToViewMenu" type="boolean" value="true"/>
+
+		<!---
+			Indicates whether to add the viewOption to the Tool bar. The default value is "true".
+		-->	
+		<variable name="addToToolBar" type="boolean" value="true"/>
+		
+		<!---
+			The value of this view option. This value is a boolean type value. If the view option is selected,
+			the value is true. If the view option is not selected, the value is false.
+		-->
+		<variable name="value" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var options = this.parent.viewOptions;
+			if (!options) {
+				options = [];
+				this.parent.viewOptions = options;
+			}
+			options.push(this);
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords final
+		Use cmc/foundation/PropertyViewOption to display a {@link cmc/foundation/ViewOption view option} or a group of view options in a properties view.
+		
+		The following example demonstrates the declaration of a view option widget that controls whether a tree view
+		or a grid view is displayed in the catalog filter properties view.
+		@START_CODE
+			<PropertyViewOption
+				viewOptionGroup="categoryDisplayViewOptionGroup"
+				promptText="${resourceBundles.displayMode}"/>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyViewOption">
+		<dependency localName="ViewOptionRadioGroup" moduleName="cmc/foundation/ViewOptionRadioGroup"/>
+		<dependency localName="ViewOptionCheckbox" moduleName="cmc/foundation/ViewOptionCheckbox"/>
+		<!---
+			The view option type of the view option that is managed by this properties component.
+			Only specify this attribute if you have not specified a value for <code>viewOptionGroup</code>.
+		-->
+		<variable name="viewOptionType" type="string" value="${null}"/>
+		<!---
+			The view option group of the view options that are managed by this properties component.
+			Only specify this attribute if you have not specified a value for <code>viewOptionType</code>.
+		-->
+		<variable name="viewOptionGroup" type="string" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Creates the editor for the given property component.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			if (this.viewOptionGroup != null) {
+				new ViewOptionRadioGroup.Class(parentComponent, {
+					name: "editor",
+					x: parentComponent.promptWidth + parentComponent.xspacing,
+					o: parentComponent.o,
+					enabled: parentComponent.enabled,
+					viewOptionGroup: this.viewOptionGroup
+				});
+			}
+			else {
+				new ViewOptionCheckbox.Class(parentComponent, {
+					name: "editor",
+					x: parentComponent.promptWidth + parentComponent.xspacing,
+					y: 1,
+					o: parentComponent.o,
+					viewOptionType: this.viewOptionType
+				});
+			}
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		
+		This radio group implementation is for internal use by {@link cmc/foundation/PropertyViewOption}
+		to bind a set of {@link cmc/foundation/ViewOption view options} to a radio button group.
+	-->
+	<BaseRadioGroup classDefinition="true" definitionName="cmc/foundation/ViewOptionRadioGroup">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<variable name="o"/>
+		<variable name="viewOptionGroup" type="string"/>
+
+		<!--- 
+			@keywords private
+			Cleanup delegates when this widget is destroyed  
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateViewOptionDel) {
+				this.updateViewOptionDel.disconnectAll();
+				delete this.updateViewOptionDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+	
+		<!---
+			@keywords private
+			@param cmc/foundation/ModelObject newObject The new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ViewOptionRadioGroup", "setModelObject(newObject)", [newObject]);
+			}
+			if (typeof (this.o) == "undefined" || newObject != this.o) {
+				if (typeof (this.updateViewOptionDel) == "undefined") {
+					this.updateViewOptionDel = new EventHandler.Class(this, "updateViewOption");
+				}
+				this.updateViewOptionDel.disconnectAll();
+				this.o = newObject;
+				if (this.o) {
+					if (this.isinited) {
+						this.createRadioButtons();
+					}
+					for (var i = 0; i < this.o.objectDefinition.viewOptions.length; i++) {
+						if (this.o.objectDefinition.viewOptions[i].viewOptionGroup == this.viewOptionGroup) {
+							this.updateViewOptionDel.connect(this.o.objectDefinition.viewOptions[i], "onvalue");
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ViewOptionRadioGroup", "setModelObject(newObject)");
+			}
+			]]>
+		</method>
+			
+		<!--- 
+			@keywords private
+			Create the radio buttons once the widget is initialized.
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.o) {
+				this.createRadioButtons();
+			}
+			]]>
+		</handler>
+	
+		<!--- Create the actual radio group and child radio buttons -->
+		<method args="e" name="createRadioButtons">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.o.objectDefinition != null) {
+				var objDef = this.o.objectDefinition;
+				var viewOptions = [];
+				for (var i = 0; i < this.o.objectDefinition.viewOptions.length; i++) {
+					if (this.o.objectDefinition.viewOptions[i].viewOptionGroup == this.viewOptionGroup) {
+						viewOptions.push(this.o.objectDefinition.viewOptions[i]);
+					}
+				}
+				var createItems = false;
+				if (!this._viewOptions) {
+					createItems = true;
+				}
+				if (!createItems && this._viewOptions.length != viewOptions.length) {
+					createItems = true;
+				}
+				if (!createItems) {
+					for (var i = 0; i < this._viewOptions.length; i++) {
+						if (this._viewOptions[i] != viewOptions[i]) {
+							createItems = true;
+							break;
+						}
+					}
+				}
+				if (createItems) {
+					this._viewOptions = viewOptions;
+					for (var i = this.getNumItems() - 1; i >= 0; i--) {
+						this.removeItemAt(i);
+					}
+					for (var i = 0; i < viewOptions.length; i++) {
+						var viewOption = viewOptions[i];
+						this.addItem(viewOption.displayName, viewOption.viewOptionType);
+						var newItem = this.getItem(viewOption.viewOptionType);
+						newItem.setVariable("propertyValue", viewOption);
+					}
+				}
+				this.updateViewOption();
+			}
+			]]>
+		</method>
+	
+		<!--- Update the widget with a new view option. -->
+		<method args="e" name="updateViewOption">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.__updateValueLock) {
+				var selectedViewOptionType = null;
+				for (var i = 0; i < this._viewOptions.length; i++) {
+					if (this._viewOptions[i].value) {
+						selectedViewOptionType = this._viewOptions[i].viewOptionType;
+						break;
+					}
+				}
+				if (selectedViewOptionType != this.value) {
+					if (selectedViewOptionType != null) {
+						this.selectItem(selectedViewOptionType);
+					}
+					else {
+						this.clearSelection();
+						this.value = selectedViewOptionType;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- 
+			When the selection of the radio group is changed by the business user, storeValue method will be called.
+		-->
+		<handler name="onvalue">
+			<![CDATA[
+			if (this._viewOptions) {
+				this.__updateValueLock = true;
+				for (var i = 0; i < this._viewOptions.length; i++) {
+					var viewOption = this._viewOptions[i];
+					var newValue = this.value == viewOption.viewOptionType;
+					if (newValue != viewOption.value) {
+						viewOption.setVariable("value", newValue);
+					}
+				}
+				this.__updateValueLock = false;
+			}
+			]]>
+		</handler>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></BaseRadioGroup>
+	
+	<!---
+		@keywords private
+		
+		This check box implementation is for internal use by {@link cmc/foundation/PropertyViewOption}
+		to bind a {@link cmc/foundation/ViewOption view option} to a check box.
+	-->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/foundation/ViewOptionCheckbox">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<variable name="o"/>
+		<variable name="viewOption" value="${null}"/>
+		<variable name="viewOptionType" type="string"/>
+				
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.o) {
+				this.updateValue();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+				
+		<!--- @keywords private -->
+        <method args="s" name="_applystyle">
+			<![CDATA[
+			if (this.style != null) {
+				if (this._enabled) {
+					this._title.setVariable('fgcolor', "#000000");
+				}
+				else {
+					this._title.setVariable('fgcolor', s.textdisabledcolor);
+				}
+			}
+			]]>
+		</method>
+	
+		<!---
+			Set the {@link cmc/foundation/ModelObject} to be associated with this check box. The model object
+			is used to locate the view option.
+			@param cmc/foundation/ModelProperty o: New object associated with this check box.
+		-->
+		<method args="o" name="setModelObject">
+			<![CDATA[
+			if (typeof (this.o) == "undefined" || o != this.o) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.viewOption = null;
+				this.o = o;
+				for (var i = 0; i < this.o.objectDefinition.viewOptions.length; i++) {
+					if (this.o.objectDefinition.viewOptions[i].viewOptionType == this.viewOptionType) {
+						this.viewOption = this.o.objectDefinition.viewOptions[i];
+						break;
+					}
+				}
+				if (this.viewOption) {
+					this.updateValueDel.connect(this.viewOption, "onvalue");
+					this.updateValue();
+				}
+				else {
+					this.__updateValueLock = true;
+					this.setVariable("value", false);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update and refresh the cmc/foundation/ViewOptionCheckbox value with a new cmc/foundation/ViewOption value.
+			@event onvalue the event that indicates the value of this checkbox is changed
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete) {
+				if (this.viewOption.value != this.value) {
+					this.__updateValueLock = true;
+					this.setVariable("value", this.viewOption.value);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			When the value of the check box is changed by the business user, the associated view option will be updated
+			with the new checkbox value.
+		-->		
+		<handler name="onvalue">
+			<![CDATA[
+			if (!this.__updateValueLock) {
+				if (this.viewOption != null && this.viewOption.value != this.value) {
+					this.viewOption.setVariable("value", this.value);
+				}
+			}
+			]]>
+		</handler>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></BaseCheckbox>
+</Definitions>

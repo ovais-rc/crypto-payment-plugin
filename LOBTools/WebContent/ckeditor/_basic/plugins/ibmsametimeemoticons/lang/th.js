@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmsametimeemoticons","th",{angel:"เทวดา",angry:"โกรธ",cool:"เจ๋ง",crying:"ร้องไห้",eyebrow:"คิ้ว",frown:"หน้าบึ้ง",goofy:"น่าขำ",grin:"ยิ้มยิงฟัน",half:"ครึ่ง",idea:"ไอเดีย",laughing:"กำลังหัวเราะ",laughroll:"นอนกลิ้งหัวเราะ",no:"ไม่",oops:"อุ๊บ",shy:"อาย",smile:"ยิ้ม",tongue:"แลบลิ้น",wink:"ขยิบตา",yes:"ใช่"});

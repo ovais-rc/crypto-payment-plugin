@@ -1,0 +1,290 @@
+<!-- ========================================================================
+  Licensed Materials - Property of IBM
+   
+  WebSphere Commerce
+   
+  (c) Copyright IBM Corp. 2001, 2002
+   
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+  -------------------------------------------------------------------
+  ReportProductHelper.jsp
+ ===========================================================================-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+<%@page import="java.util.*" %>
+<%@page import="com.ibm.commerce.command.CommandContext"%>
+<%@page import="com.ibm.commerce.server.ECConstants"%>
+
+<%
+   CommandContext productHelperCC = (CommandContext) request.getAttribute(ECConstants.EC_COMMANDCONTEXT);
+   Hashtable      productHelperRB = (Hashtable)com.ibm.commerce.tools.util.ResourceDirectory.lookup("reporting.reportStrings", productHelperCC.getLocale());
+%>
+
+
+<%!
+private String generateSelectProducts(String container, Hashtable reportsRB, String title)
+{
+   String resultTitle = "";
+
+   if (title != null) resultTitle = "   <TR>\n" +
+                                    "      <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32 COLSPAN=5>\n" + reportsRB.get(title) + "</TD>\n" +
+                                    "   </TR>\n";
+
+   String result = 
+      "<FORM NAME=" + container + ">\n" + 
+      "   <TABLE CELLPADDING=0 CELLSPACING=0>\n" + resultTitle +
+      "      <TR>\n" +
+      "         <TD ALIGN=LEFT VALIGN=TOP>\n" +
+      "            <BR>\n" +
+      "            <INPUT TYPE=RADIO NAME=ProductHelperAllProducts VALUE=all ONCLICK=\"productHelperShowEntryBox('" + container + "',false)\">\n" +
+      "               " + reportsRB.get("ProductHelperSelectAllItems") + "\n" +
+      "            </INPUT>\n" +
+      "            <BR>\n" +
+      "            <INPUT TYPE=RADIO NAME=ProductHelperAllProducts VALUE=some ONCLICK=\"productHelperShowEntryBox('" + container + "',true)\">\n" +
+      "               " + reportsRB.get("ProductHelperSelectSomeItems") + "\n" +
+      "            </INPUT>\n" +
+      "         </TD>\n" +
+      "         <TD WIDTH=50>&nbsp;</TD>\n" +
+      "         <TD ALIGN=LEFT VALIGN=TOP>\n" +
+      "            <SELECT NAME=ProductHelperSelectBox id=\"ProductHelperSelectBox\" TABINDEX=1 MULTIPLE CLASS=selectWidth SIZE=5\n" +
+      "                    ONCHANGE=\"productHelperShowEntryBox('" + container +"', true)\"></SELECT>\n" +
+      "         </TD>\n" +
+      "         <TD>&nbsp;&nbsp;</TD>\n" +
+      "         <TD VALIGN=TOP><BR>\n" +
+      "            <BUTTON type=BUTTON\n" +
+      "                    name=ProductHelperAddButton\n" +
+      "                    CLASS=enabled\n" +
+      "                    onClick=\"addSelectedProducts('" + container + "');\">\n" + 
+      "                    " + reportsRB.get("ReportsAddProductsButton") + "\n" +
+      "            </BUTTON>\n" +
+      "            <BR>\n" +
+      "            <BUTTON type=BUTTON\n" +
+      "                    name=ProductHelperRemoveButton\n" +
+      "                    CLASS=enabled\n" +
+      "                    onClick=\"removeSelectedProducts('" + container + "');\">\n" + 
+      "                    " + reportsRB.get("ReportsRemoveProductsButton") + "\n" +
+      "            </BUTTON>\n" +
+      "         </TD>\n" +
+      "      <TR>\n" +
+      "   </TABLE>\n" +
+      "</FORM>\n";
+      
+
+  return result;
+ }
+%>
+
+<SCRIPT>
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Load any data from the parent (if it exists)
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function onLoadSelectProducts(container) 
+   {
+      var myContainer = parent.get(container, null);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // If this is the first time then initialize the container to all products
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      if (myContainer == null) {
+         myContainer = new Object();
+         myContainer.AllProducts = true;
+         parent.put(container, myContainer);
+         productHelperShowEntryBox(container,false);
+         return;
+      }
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Load the previously saved SKUs to the selection box
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      var products = myContainer.selectedProducts;
+      if (products != null) {
+         with (document.forms[container]) {
+            for (var i=0; i<products.length; i++) {
+               ProductHelperSelectBox.options[i] = new Option(products[i].sku,products[i].id, false, false);
+            }
+         }
+      }
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Variables set by the search page
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      var alreadyExists = false;
+      var productSearchSkuArray = parent.get("productSearchSkuArray",null);
+      var productSearchIdArray  = parent.get("productSearchIdArray",null);
+      var productSearchContainerName = parent.get("productSearchContainerName",null);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Load the selected (from Add dialog) SKUs into the selection box
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      if (productSearchSkuArray != null && productSearchContainerName == container) {
+
+         for (var i=0; i<productSearchSkuArray.length; i++) {
+
+            //////////////////////////////////////////////////////////////////////////////////////////////
+            // Ensure it has not already been added from before
+            //////////////////////////////////////////////////////////////////////////////////////////////
+            alreadyExists=false;
+            for (var k=0; k<products.length; k++) {
+               if (productSearchSkuArray[i] == products[k].sku) { alreadyExists=true; break; }
+            }
+
+            if (alreadyExists == false) {
+               with (document.forms[container]) {
+                  ProductHelperSelectBox.options[ProductHelperSelectBox.length] = new Option(productSearchSkuArray[i],productSearchIdArray[i], false, false);
+               }
+            }
+         }
+         parent.put("productSearchIdArray",null);    // reset to null
+         parent.put("productSearchSkuArray",null);
+      }
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Set the appropriate radio button... all items or some items
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      productHelperShowEntryBox(container,!myContainer.AllProducts);
+      return;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Save the selected products for when returning
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function saveSelectProducts(container) 
+   {
+      myContainer = parent.get(container,null);
+      if (myContainer == null) return;
+
+      with (document.forms[container]) {
+
+         myContainer.AllProducts = ProductHelperAllProducts[0].checked;
+
+         myContainer.selectedProducts = new Array();
+         for (var i=0; i<ProductHelperSelectBox.length; i++) {
+            myContainer.selectedProducts[i] = new Object();
+            myContainer.selectedProducts[i].sku = ProductHelperSelectBox.options[i].text;
+            myContainer.selectedProducts[i].id  = ProductHelperSelectBox.options[i].value;
+         }
+      }
+
+      parent.put(container, myContainer);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Validate that some items have been chosen if the "some items" radio is checked
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function validateSelectProducts(container) 
+   {
+      with (document.forms[container]) {
+         if (ProductHelperAllProducts[1].checked && ProductHelperSelectBox.length == 0) {
+            parent.alertDialog("<%=UIUtil.toJavaScript(productHelperRB.get("ProductHelperNoItemsSelected"))%>");
+            return false;
+         }
+      }
+      return true;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Add SKUs to the list via the dialog box
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function addSelectedProducts(container) 
+   {
+      with (document.forms[container]) {
+         if(ProductHelperAddButton.id == 'disabled') return; // if the Add button is disabled, do noting
+         parent.remove("productSearchSkuArray");
+         parent.remove("productSearchIdArray");
+         parent.put("productSearchContainerName", container);
+         if (savePanelData) savePanelData();
+         top.setContent("<%=UIUtil.toJavaScript(productHelperRB.get("productFindPrompt"))%>", '/webapp/wcs/tools/servlet/DialogView?XMLFile=reporting.ProductFindDialog', true);
+     }      
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Remove the selected SKUs from the list
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function removeSelectedProducts(container) 
+   {
+      with (document.forms[container]) {
+         if(ProductHelperRemoveButton.id == 'disabled') return;   // if the Remove button is disabled, do noting
+         for (var i=ProductHelperSelectBox.length-1; i>=0 ;i--) {
+            if (ProductHelperSelectBox.options[i].selected) ProductHelperSelectBox.options[i] = null;
+         }
+      }
+      productHelperShowEntryBox(container, true);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Set the add/remove buttons on or off
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function productHelperShowEntryBox(container,TF)
+   {
+      with (document.forms[container]) {
+
+         ProductHelperAllProducts[0].checked = !TF;
+         ProductHelperAllProducts[1].checked = TF;
+
+         if (TF) {
+	    var selectedTF = ProductHelperSelectBox.selectedIndex >= 0;
+            ProductHelperAddButton.disabled    = false;
+            ProductHelperRemoveButton.disabled = false;
+            ProductHelperAddButton.className    = 'enabled';        
+            ProductHelperAddButton.id    = 'enabled';   
+            if(selectedTF) {
+               ProductHelperRemoveButton.className = 'enabled';        
+               ProductHelperRemoveButton.id = 'enabled';
+            } else {
+               ProductHelperRemoveButton.className = 'disabled';        
+               ProductHelperRemoveButton.id = 'disabled';
+            } 
+         } else {
+            ProductHelperAddButton.disabled    = false;
+            ProductHelperRemoveButton.disabled = false;
+            ProductHelperAddButton.className    = 'disabled';        
+            ProductHelperRemoveButton.className = 'disabled';        
+            ProductHelperAddButton.id    = 'disabled';   
+            ProductHelperRemoveButton.id = 'disabled';   
+         }
+      }
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return true if all products have been selected
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function allProductsSelectedTF(container) 
+   {
+      myContainer = parent.get(container,null);
+      if (myContainer == null) return;
+      return myContainer.AllProducts;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return a list of selected product ids
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedProductIDs(container)
+   {
+      var items = new Array();
+      with (document.forms[container]) {
+         for (var i=0; i<ProductHelperSelectBox.length; i++) {
+            items[items.length] = ProductHelperSelectBox.options[i].value;
+         }
+      }
+      return items;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return a list of selected product skus
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedProductSKUs(container)
+   {
+      var items = new Array();
+      with (document.forms[container]) {
+         for (var i=0; i<ProductHelperSelectBox.length; i++) {
+            items[items.length] = ProductHelperSelectBox.options[i].text;
+         }
+      }
+      return items;
+   }
+   
+	function setSelectProductVisible(container, s) {
+		document.forms[container].ProductHelperSelectBox.style.visibility = s;
+	}
+</SCRIPT>

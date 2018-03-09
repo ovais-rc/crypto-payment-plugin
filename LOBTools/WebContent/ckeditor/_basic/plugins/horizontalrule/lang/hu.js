@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("horizontalrule","hu",{toolbar:"Vízszintes vonal beszúrása"});

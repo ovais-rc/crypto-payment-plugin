@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("newpage","iw",{toolbar:"דף חדש"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","ca",{closed:"S'ha tancat la notificació."});

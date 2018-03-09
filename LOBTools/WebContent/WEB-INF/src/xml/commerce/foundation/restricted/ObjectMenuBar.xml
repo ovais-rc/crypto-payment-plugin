@@ -1,0 +1,1902 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		Menu item.
+	-->
+	<BaseListItem classDefinition="true" definitionName="cmc/foundation/MenuItem" focusable="false" placement="menuItemList">
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Reference to business object editor instance.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			The original parent for the menu item.
+		-->
+		<variable name="menuItemParent"/>
+		<!---		
+			A flag to indicate whether this menuItem is to be enabled when a store is selected.  By default,
+			the item is enabled when a store is selected and disabled when there is no store selected.
+		-->
+		<variable name="storeRequired" type="boolean" value="true"/>
+		<!---
+			Indicates that the menu item action is enabled. This is used instead of "enabled".
+		-->
+		<variable name="actionEnabled" type="boolean" value="true"/>
+		<!---
+			Indicates that this menu item has a checkmark. The visibility of the checkmark is controlled by showCheckMark.
+		-->
+		<variable name="hasCheckMark" type="boolean" value="false"/>
+		<!---
+			Indicates that a checkbox will be displayed before the menu text.
+		-->
+		<variable name="showCheckMark" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.menuItemParent = this.parent;
+			this.selectMenuItemCallbackDel = new EventHandler.Class(this, "selectMenuItemCallback");
+			var items = this.parent.menuItems;
+			if (!items) {
+				items = [];
+				this.parent.menuItems = items;
+			}
+			items.push(this);
+			this.parent = this.parent.menuItemList;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.selectCallbackAdded) {
+				CallbackUtil.Singleton.cancelCallback(this.selectMenuItemCallbackDel);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Set the action enabled state.
+		-->
+		<method args="e" name="setActionEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.actionEnabled != e) {
+				this.actionEnabled = e;
+				if (this._initcomplete) {
+					this._applystyle(null);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Apply the style.
+		-->
+		<method args="s" name="_applystyle">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this.actionEnabled) {
+				if (this.hilited) {
+					this.setVariable("fgcolor", "#9d9d9d");
+				}
+				else {
+					this.setVariable("fgcolor", "#b1b1b1");
+				}
+			}
+			else {
+				if (this.selected) {
+					this.setVariable("fgcolor", "#ffffff");
+				}
+				else if (this.hilited) {
+					this.setVariable("fgcolor", "#464646");
+				}
+				else {
+					this.setVariable("fgcolor", "#464646");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Initialize the menu item. This method is called every time the parent
+			menu is initialized.
+			@param cmc/foundation/BusinessObjectEditor boe: business object editor
+		-->
+		<method args="boe" name="initializeMenuItem">
+			<![CDATA[
+			this.oEditor = boe;
+			var newActionEnabled = true;
+			if (this.storeRequired) {
+				newActionEnabled = !boe.showStoreSelection || boe.isStoreSelected;
+			}
+			if (newActionEnabled != this.actionEnabled) {
+				this.setVariable("actionEnabled", newActionEnabled);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="onselected">
+			<![CDATA[
+			if (this.selected) {
+				this.selectMenuItem();
+			}
+			else {
+				this.deselectMenuItem();
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="selectMenuItem">
+			<![CDATA[
+			if (!this.selectCalbackAdded) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/MenuItem selectMenuItem: " + this.text);
+				CallbackUtil.Singleton.addDeferredCallback(this.selectMenuItemCallbackDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				this.selectCallbackAdded = true;
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method is called when the menu item is selected. If the
+			action is enabled, then "doAction" is called.
+		-->
+		<method args="args" name="selectMenuItemCallback">
+			<![CDATA[
+			this.selectCallbackAdded = false;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/MenuItem", "doAction", "Action " + this.text + " Start ");
+			}
+			this.parent.closeAll();
+			this.oEditor.header.menubar.restoreFocus();
+			if (this.actionEnabled) {
+				this.doAction();
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/MenuItem", "doAction", "Action " + this.text + " End ");
+			}
+			]]>
+		</method>
+
+		<method name="deselectMenuItem">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<method name="doAction">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<Component name="title" valign="middle" x="14" height="28">
+			<AxisLayout axis="x" spacing="3"/>
+			<Component height="16" name="checkMarkArea" width="16" visible="${this.classroot.hasCheckMark}">
+				<Component imageSet="checkmarkIcon" name="checkMark" valign="middle" visible="${this.classroot.showCheckMark}"/>
+			</Component>
+			<TextComponent name="itemText" resize="true" text="${this.classroot.text}" valign="middle" visible="${this.classroot.text ? true : false}"/>
+		</Component>
+		<!--- @keywords private -->
+		<method args="actionEnabled" name="set_actionEnabled">
+			<![CDATA[
+			this.setActionEnabled(actionEnabled);
+			]]>
+		</method>
+	</BaseListItem>
+
+	<!--- @keywords private -->
+	<FloatingList classDefinition="true" definitionName="cmc/foundation/MenuItemList" visible="false" bgcolor="#959595">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<variable name="menuParent"/>
+		<variable name="open" type="boolean" value="false"/>
+		<variable name="submenu" type="boolean" value="false"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			]]>
+		</method>
+
+		<method name="destroy">
+			<![CDATA[
+			this.checkMouseDel.disconnectAll();
+			delete this.checkMouseDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<method name="updateAttachLocation">
+			<![CDATA[
+			this.inherited(arguments);
+			var right = this.x + this.width;
+			if (right > RootComponent.Singleton.width) {
+				var newX = this.x - (right - RootComponent.Singleton.width);
+				if (newX < 0) {
+					newX = 0;
+				}
+				this.setVariable("x", this.x - (right - RootComponent.Singleton.width));
+			}
+			if (this.y > 0 && this.submenu) {
+				this.setVariable("y", this.y - 1);
+			}
+			]]>
+		</method>
+		
+		<method name="checkWidth">
+			<![CDATA[
+			var newWidth = 0;
+			var numItems = this.getNumItems();
+			for (var i = 0; i < numItems; i++) {
+				var item = this.getItemAt(i);
+				var itemWidth = item.title.itemText.getTextWidth();
+				if (item.hasCheckMark) {
+					itemWidth = itemWidth + item.title.checkMarkArea.width + 3;
+				}
+				if (itemWidth > newWidth) {
+					newWidth = itemWidth;
+				}
+			}
+			this.setVariable('width', newWidth + 30);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getNextVisibleItem">
+			<![CDATA[
+			var nextView = null;
+			var components = this.content.childComponents;
+			for (var i = 0; i < components.length; i++) {
+				if (components[i].visible) {
+					nextView = components[i];
+					break;
+				}
+			}
+			return nextView;
+			]]>
+		</method>
+		
+		<method args="newValue" name="setOpen">
+			<![CDATA[
+			if (typeof (this.open) == "undefined" || this.open != newValue) {
+				this.open = newValue;
+				if (this.open) {
+					if (this.menuParent.openMenu != this) {
+						this.clearSelection();
+						this.owner.initializeMenu(this.menuParent.oEditor);
+						if (this.menuParent.openMenu != null) {
+							this.menuParent.openMenu.setVariable("open", false);
+						}
+						this.checkWidth();
+						this.setVariable("visible", true);
+						this.bringToFront();
+						FocusUtil.setFocus(this, false);
+						ModalUtil.makeModal(this);
+						this.checkMouseDel.connect(MouseUtil, "onmousedown");
+						this.menuParent.openMenu = this;
+						var firstMenuItem = this.getNextVisibleItem();
+						if (firstMenuItem) {
+							firstMenuItem.setHilite(true);
+							this.hilitedItem = firstMenuItem;
+							this.setVariable("doesenter", true);
+						}
+					}
+				}
+				else {
+					if (this._initcomplete) {
+						if (this.owner.openMenu != null) {
+							this.owner.openMenu.setVariable("open", false);
+						}
+						if (this.menuParent.openMenu == this) {
+							this.menuParent.openMenu = null;
+							this.owner.closeMenu();
+						}
+						this.setVariable("visible", false);
+						this.checkMouseDel.disconnectAll();
+						if (this.submenu) {
+							FocusUtil.setFocus(this.menuParent.menuItemList, false);
+							this.owner.parent.clearSelection();
+							this.owner.setHilite(true);
+							this.menuParent.menuItemList._hiliteview = this.owner;
+						}
+						else {
+							FocusUtil.setFocus(this.owner, false);
+						}
+						ModalUtil.release(this);
+					}
+				}
+				EventUtil.trigger(this, "onopen");
+			}
+			]]>
+		</method>
+
+		<method args="e, v" name="passModeEvent">
+			<![CDATA[
+			var result = false;
+			if (v) {
+				if (this.submenu) {
+					result = v.childOf(this.menuParent.menuItemList) || this.menuParent.menuItemList.passModeEvent(e, v);
+				}
+				else {
+					result = v.childOf(this.menuParent);
+				}
+			}
+			return result;
+			]]>
+		</method>
+		
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.containsPt(this.getMouse("x"), this.getMouse("y"))) {
+				if (this.owner.openMenu != null) {
+					this.owner.openMenu.checkMouse();
+				}
+				else {
+					this.closeAll();
+					this.menuParent.oEditor.header.menubar.restoreFocus();
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="closeAll">
+			<![CDATA[
+			this.setVariable("open", false);
+			if (this.submenu) {
+				this.menuParent.menuItemList.closeAll();
+			}
+			]]>
+		</method>
+		
+		<method args="kc" name="_dokeydown">
+			<![CDATA[
+			if (kc == 27) {
+				this.setVariable("open", false);
+			}
+			else if (kc == 39) {
+				if (this.hilitedItem && this.hilitedItem.menuItemList) {
+					this.hilitedItem.setVariable("selected", true);
+				}
+				else {
+					this.openNextMenu();
+				}
+			}
+			else if (kc == 37) {
+				if (this.submenu) {
+					this.setVariable("open", false);
+				}
+				else {
+					this.openPreviousMenu();
+				}
+			}
+			else if (kc == 38 || kc == 40) {
+				this.setVariable('doesenter', true);
+				var s = this.hilitedItem;
+				if (s == null) {
+					s = this.getSelection();
+				}
+				var next = kc == 40 ? this.getNextItem(s) : this.getPreviousItem(s);
+				while (s != next && !next.visible) {
+					s = next;
+					next = kc == 40 ? this.getNextItem(s) : this.getPreviousItem(s);;
+				}
+				if (next.visible) {
+					if (this.hilitedItem && this.hilitedItem.setHilite && this.hilitedItem != 0) {
+						this.hilitedItem.setHilite(false);
+					}
+					next.setHilite(true);
+					this.hilitedItem = next;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Open the next menu.
+		-->
+		<method name="openNextMenu">
+			<![CDATA[
+			if (this.submenu) {
+				this.setVariable("open", false);
+				this.menuParent.menuItemList.openNextMenu();
+			}
+			else {
+				var menus = this.menuParent.menus;
+				for (var i = 0; i < menus.length; i++) {
+					var menu = menus[i];
+					if (menu.menuItemList == this) {
+						i++;
+						if (i == menus.length) {
+							i = 0;
+						}
+						menus[i].menuItemList.setVariable("open", true);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Open the previous menu.
+		-->
+		<method name="openPreviousMenu">
+			<![CDATA[
+			if (this.submenu) {
+				this.menuParent.menuItemList.openPreviousMenu();
+			}
+			else {
+				var menus = this.menuParent.menus;
+				for (var i = 0; i < menus.length; i++) {
+					var menu = menus[i];
+					if (menu.menuItemList == this) {
+						i--;
+						if (i < 0) {
+							i = menus.length - 1;
+						}
+						menus[i].menuItemList.setVariable("open", true);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			var startIndex = 0;
+			for (var i = 0; i < this.getNumItems(); i++) {
+				var item = this.getItemAt(i);
+				if (item.hilited == true && String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.text.toUpperCase().charCodeAt(0)) {
+					startIndex = i + 1;
+					break;
+				}
+			}
+			for (var i = 0; i < this.getNumItems(); i++) {
+				if (startIndex >= this.getNumItems()) {
+					startIndex = 0;
+				}
+				var item = this.getItemAt(startIndex);
+				if (String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.text.charCodeAt(0)) {
+					this.setHilite(item);
+					this.setVariable('doesenter', true);
+					break;
+				}
+				startIndex++;
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="doSpaceDown">
+			<![CDATA[
+			if (this.hilitedItem && this.hilitedItem.selectMenuItem) {
+				this.hilitedItem.selectMenuItem();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if the specified view belongs to the menu.
+		-->
+		<method args="v" name="isMenuView">
+			<![CDATA[
+			var result = v == this;
+			if (!result) {
+				for (var i = 0; i < this.getNumItems(); i++) {
+					var item = this.getItemAt(i);
+					if (item.menuItemList && item.menuItemList.isMenuView(v)) {
+						result = true;
+						break;
+					}
+				}
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getNextSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+		<!--- @keywords private -->
+        <method name="getPrevSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="open" name="set_open">
+			<![CDATA[
+			this.setOpen(open);
+			]]>
+		</method>
+	</FloatingList>
+	
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/SubmenuItem">
+		<dependency localName="MenuItemList" moduleName="cmc/foundation/MenuItemList"/>
+		<variable name="menuItemList"/>
+		<variable name="openMenu" value="${null}"/>
+		<variable name="menuItems"/>
+		
+		<handler name="onconstruct">
+			<![CDATA[
+			this.menuItemList = new MenuItemList.Class(this, {
+				menuParent: this.parent,
+				submenu: true,
+				attach: "right"
+			});
+			]]>
+		</handler>
+
+		<method args="v, p, a" name="determinePlacement">
+			<![CDATA[
+			if (p == "menuItemList") {
+				return this.menuItemList;
+			}
+			return this;
+			]]>
+		</method>
+		
+		<method args="boe" name="initializeMenu">
+			<![CDATA[
+			if (this.menuItems) {
+				for (var i = 0; i < this.menuItems.length; i++) {
+					var item = this.menuItems[i];
+					item.initializeMenuItem(boe);
+				}
+			}
+			]]>
+		</method>
+		
+		<method args="boe" name="closeMenu">
+			<![CDATA[
+			if (typeof(boe) == "undefined") boe = null;
+
+			]]>
+		</method>
+
+		<method name="selectMenuItem">
+			<![CDATA[
+			if (this.actionEnabled) {
+				this.menuItemList.setVariable("open", true);
+			}
+			else {
+				this.parent.closeAll();
+			}
+			]]>
+		</method>
+		
+		<method name="deselectMenuItem">
+			<![CDATA[
+			if (this.actionEnabled) {
+				this.menuItemList.setVariable("open", false);
+			}
+			]]>
+		</method>
+		
+		<!--- 	
+			View to display the right-arrow-icon for this submenu.
+			By default, views embedded within textlistitems appear in the left-most position (x=0) of the textlistitem.
+			For this reason, we calculate the appropriate position into which to place the view and set it's x co-ordinate
+			appropriately.
+		-->
+		<Component imageSet="rightArrowIcon" currentImage="${this.parent.selected ? 2 : 1}" name="rightArrow" x="${this.parent.width - this.width}" valign="middle"/>
+	</MenuItem>
+
+	<!---
+		@keywords private
+		
+		Menu class.
+	-->
+    <FocusableComponent classDefinition="true" definitionName="cmc/foundation/Menu" doesenter="true" focusable="true" height="${this.parent.height}" width="${this.menuText.width + 30}">
+		<dependency localName="MenuItemList" moduleName="cmc/foundation/MenuItemList"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+    	<!---
+    		Menu text.
+    	-->
+		<variable name="text" type="string" value=""/>
+		<!---
+			Reference to object management instance.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			The menu item list.
+		-->
+		<variable name="menuItemList" value="${null}"/>
+		<!---
+			List of menu items.
+		-->
+		<variable name="menuItems"/>
+		<!---
+			The submenu that is currently open.
+		-->
+		<variable name="openMenu" value="${null}"/>
+		<!---
+			Indicates that the mouse is over this menu.
+		-->
+		<variable name="mouseIn" type="boolean" value="false"/>
+		<!---
+			Indicates that the mouse is down.
+		-->
+		<variable name="mouseDown" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.menuItemList = new MenuItemList.Class(this, {
+				menuParent: this.parent,
+				attach: "bottom"
+			});
+			]]>
+		</handler>
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var menus = this.parent.menus;
+			if (!menus) {
+				menus = [];
+				this.parent.menus = menus;
+			}
+			menus.push(this);
+			this.showDel = new EventHandler.Class(this, "show");
+			this.showDel.connect(this.menuItemList, "onopen");
+			]]>
+		</method>
+
+		<method name="destroy">
+			<![CDATA[
+			this.showDel.disconnectAll();
+			delete this.showDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method args="v, p, a" name="determinePlacement">
+			<![CDATA[
+			if (p == "menuItemList") {
+				return this.menuItemList;
+			}
+			return this;
+			]]>
+		</method>
+		
+		<method args="boe" name="initializeMenu">
+			<![CDATA[
+			this.oEditor = boe;
+			if (this.menuItems) {
+				for (var i = 0; i < this.menuItems.length; i++) {
+					var item = this.menuItems[i];
+					item.initializeMenuItem(boe);
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="closeMenu">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<method name="showDown">
+			<![CDATA[
+			this.setVariable("bgcolor", "#4178be");
+			this.setVariable("fgcolor", "#ffffff");
+			]]>
+		</method>
+		
+		<method name="showUp">
+			<![CDATA[
+			this.setVariable("bgcolor", null);
+			this.setVariable("fgcolor", null);
+			]]>
+		</method>
+		
+		<method name="showOver">
+			<![CDATA[
+			this.setVariable("bgcolor", "null");
+			this.setVariable("fgcolor", null);
+			]]>
+		</method>
+		
+		<method args="e" name="show">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.menuItemList.open) {
+				this.showDown();
+			}
+			else if (this.mouseIn && this.mouseDown) {
+				this.showDown();
+			}
+			else if (this.mouseIn) {
+				this.showOver();
+			}
+			else {
+				this.showUp();
+			}
+			]]>
+		</method>
+		
+		<handler name="onmouseover">
+			<![CDATA[
+			this.mouseIn = true;
+			if (this.parent.openMenu != null) {
+				this.menuItemList.setVariable("open", true);
+			}
+			this.show();
+			]]>
+		</handler>
+		
+		<handler name="onmouseout">
+			<![CDATA[
+			this.mouseIn = false;
+			this.show();
+			]]>
+		</handler>
+		
+		<handler name="onmousetrackover">
+			<![CDATA[
+			this.mouseDown = true;
+			this.mouseIn = true;
+			this.menuItemList.setVariable("open", true);
+			this.show();
+			]]>
+		</handler>
+		
+		<handler name="onmousetrackout">
+			<![CDATA[
+			this.mouseDown = false;
+			this.mouseIn = false;
+			this.show();
+			]]>
+		</handler>
+		
+		<handler name="onmousetrackup">
+			<![CDATA[
+			this.mouseDown = false;
+			this.mouseIn = false;
+			this.show();
+			]]>
+		</handler>
+
+		<handler name="onenabled">
+			<![CDATA[
+			if (this.menuItems) {
+				for (var i = 0; i < this.menuItems.length; i++) {
+					var item = this.menuItems[i];
+					item.setVariable("actionEnabled", this.enabled);
+				}
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="doEnterDown">
+			<![CDATA[
+			this.menuItemList.setVariable("open", true);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="doSpaceDown">
+			<![CDATA[
+			this.menuItemList.setVariable("open", true);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 27) {
+				this.parent.restoreFocus();
+			}
+			else if (k == 39 || k == 37) {
+				for (var i = 0; i < this.parent.menus.length; i++) {
+					if (this.parent.menus[i] == this) {
+						if (k == 37) {
+							i--;
+							if (i < 0) {
+								i = this.parent.menus.length - 1;
+							}
+						}
+						else {
+							i++;
+							if (i >= this.parent.menus.length) {
+								i = 0;
+							}
+						}
+						FocusUtil.setFocus(this.parent.menus[i], false);
+						break;
+					}
+				}
+			}
+			else if (k == 40) {
+				this.menuItemList.setVariable("open", true);
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			this.parent.saveRestoreFocusView(FocusUtil.lastFocus);
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this
+				});
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Check if the specified view belongs to the menu.
+		-->
+		<method args="v" name="isMenuView">
+			<![CDATA[
+			return v == this || this.menuItemList.isMenuView(v);
+			]]>
+		</method>
+			
+		<TextComponent name="menuText" text="${this.parent.text}" x="15" valign="middle"/>
+	</FocusableComponent>
+	
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/NewMenuItem" text="${this.objectDefinition.displayName}">
+		<variable name="objectDefinition"/>
+
+		<method args="boe" name="initializeMenuItem">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.actionEnabled && !this.objectDefinition.isCreatable()) {
+				this.setVariable("actionEnabled", false);
+			}
+			]]>
+		</method>
+		
+		<method name="doAction">
+			<![CDATA[
+			var contextObject = this.oEditor.getSelectedObject();
+			this.objectDefinition.doCreate({
+				contextObject: contextObject
+			});
+			]]>
+		</method>
+	</MenuItem>
+	
+	<!--- @keywords private -->
+	<SubmenuItem classDefinition="true" definitionName="cmc/foundation/NewMenu" text="${foundationResources.Singleton.menuNew.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="NewMenuItem" moduleName="cmc/foundation/NewMenuItem"/>
+		<method args="boe" name="initializeMenuItem">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this.menuItems) {
+				var creatableObjectDefinitions = [];
+				for (var i = 0; i < boe.model.objectDefinitions.length; i++) {
+					var def = boe.model.getObjectDefinition(null, boe.model.objectDefinitions[i].objectType);
+					if (def.creatable && !def.isBaseDefinition) {
+						creatableObjectDefinitions.push(def);
+					}
+				}
+				for (var i = 0; i < creatableObjectDefinitions.length; i++) {
+					var def = creatableObjectDefinitions[i];
+					new NewMenuItem.Class(this, {
+						oEditor: boe,
+						objectDefinition: def
+					});
+				}
+			}
+			if (this.menuItems) {
+				this.setVariable("visible", true);
+			}
+			else {
+				this.setVariable("visible", false);
+			}
+			]]>
+		</method>
+		
+	</SubmenuItem>
+	
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/LogModelMenuItem" text="${foundationResources.Singleton.menuLogModel.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<method name="doAction">
+			<![CDATA[
+			this.oEditor.model.logModel();
+			]]>
+		</method>
+	</MenuItem>
+	
+	<!--- @keywords private -->
+	<Menu classDefinition="true" definitionName="cmc/foundation/FileMenu" text="${foundationResources.Singleton.menuFile.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="LogModelMenuItem" moduleName="cmc/foundation/LogModelMenuItem"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<variable name="logModelMenuItem" value="${null}"/>
+	
+		<method args="boe" name="initializeMenu">
+			<![CDATA[
+			if (Logger.Singleton.display) {
+				if (this.logModelMenuItem == null) {
+					this.logModelMenuItem = new LogModelMenuItem.Class(this);
+				}
+			}
+			else {
+				if (this.logModelMenuItem != null) {
+					this.logModelMenuItem.destroy();
+					this.logModelMenuItem = null;
+				}
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<MenuItem text="${foundationResources.Singleton.menuWorkspaceWorkOnBase.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.setVariable("visible", boe.name == "workspaceManagement" && !ConfigProperties.Singleton.readOnlyOnApprovedContent);
+				this.inherited(arguments);
+				]]>
+			</method>
+			<method name="doAction">
+				<![CDATA[
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+				});
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuWorkspaceWorkOnBaseInReadOnlyMode.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.setVariable("visible", boe.name == "workspaceManagement" && ConfigProperties.Singleton.readOnlyOnApprovedContent);
+				this.inherited(arguments);
+				]]>
+			</method>
+			<method name="doAction">
+				<![CDATA[
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+				});
+				]]>
+			</method>
+		</MenuItem>
+		<NewMenu text="${foundationResources.Singleton.menuNew.string}"/>
+		<MenuItem text="${foundationResources.Singleton.menuOpen.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.openEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doOpen();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="openInCompareViewMenuItem" text="${foundationResources.Singleton.menuOpenInCompareView.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("visible", boe.showCompareView);
+				this.setVariable("actionEnabled", boe.openInCompareViewEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doOpenInCompareView();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuClose.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				var enable = false;
+				this.setVariable("actionEnabled", boe.closeEnabled);
+				]]>
+			</method>
+				
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doClose();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuCloseAll.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.model.openObjects.length > 0);
+				]]>
+			</method>
+				
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.model.closeOpenObjects(true);
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuSave.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.saveEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doSave();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuSaveAll.string}">
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doSaveAll();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuRefresh.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.refreshEnabled);
+				]]>
+			</method>
+			
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doRefresh();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.menuRefreshAll.string}">
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.model.refreshAll(true);
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem text="${foundationResources.Singleton.storePreview.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.setVariable("visible", boe.showStorePreview);
+				this.inherited(arguments);
+				]]>
+			</method>
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.openStorePreviewDialog();
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem text="${foundationResources.Singleton.toolbarLaunchCoremetricsAnalytics.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				var storeConfig = boe.localContext != null ? boe.localContext.storeConfig : null;
+				var coremetricsEnabled = storeConfig != null && storeConfig.analytics != null && storeConfig.analytics.isEnabled == "true" && storeConfig.analytics.provider == "coremetrics";
+				this.setVariable("visible", coremetricsEnabled);
+				this.inherited(arguments);
+				]]>
+			</method>
+			
+			<method name="doAction">
+				<![CDATA[
+				var caller = this;
+				require(["cmc/foundation/GetAnalyticsSSOTokenService"], function(GetAnalyticsSSOTokenService) {
+					GetAnalyticsSSOTokenService.Singleton.doRequest(caller.oEditor);
+				});
+				]]>
+			</method>
+		</MenuItem>
+
+		<MenuItem text="${foundationResources.Singleton.toolbarLaunchMarketingCenter.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				var storeConfig = boe.localContext != null ? boe.localContext.storeConfig : null;
+				var mcEnabled = storeConfig != null && storeConfig.analytics != null && storeConfig.analytics.isMarketingCenterEnabled == "true";
+				this.setVariable("visible", mcEnabled && boe.showLaunchMarketingCenter);
+				this.inherited(arguments);
+				]]>
+			</method>
+			
+			<method name="doAction">
+				<![CDATA[
+				var caller = this;
+				require(["cmc/foundation/GetMarketingCenterSSOTokenService"], function(GetMarketingCenterSSOTokenService) {
+					GetMarketingCenterSSOTokenService.Singleton.doRequest(caller.oEditor);
+				});
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem storeRequired="false" text="${foundationResources.Singleton.menuExitTool.string}">			
+			<method name="doAction">
+				<![CDATA[
+				ToolsController.Singleton.closeTool(this.oEditor.name);
+				]]>
+			</method>
+		</MenuItem>
+	</Menu>
+	
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/CustomServiceMenuItem">
+		<variable name="customService"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("text", this.customService.getMenuDisplayName());
+			]]>
+		</method>
+
+		<method name="doAction">
+			<![CDATA[
+			this.oEditor.doCustomService(this.customService);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="selectMenuItem">
+			<![CDATA[
+			if (this.customService.isFileUploadService && this.actionEnabled) {
+				this.selectMenuItemCallback(null);
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+	</MenuItem>
+
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/ClientActionMenuItem">
+		<variable name="clientAction"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("text", this.clientAction.getMenuDisplayName());
+			]]>
+		</method>
+
+		<method name="doAction">
+			<![CDATA[
+			this.oEditor.doClientAction(this.clientAction);
+			]]>
+		</method>
+	</MenuItem>
+	
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/PropertyTreeMenuItem">
+		<variable name="propertyTreeAction"/>
+		<variable name="o"/>
+		<variable name="treeNodeObject"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("text", this.propertyTreeAction.getMenuDisplayName());
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method name="doAction">
+			<![CDATA[
+			this.propertyTreeAction.performAction(this.o, this.treeNodeObject);
+			if (this.propertyTreeAction.parent.selectionHandler != null) {
+				this.propertyTreeAction.parent.selectionHandler.handleSelection(this.o, this.treeNodeObject);
+			}
+			]]>
+		</method>
+	</MenuItem>
+
+	<!--- @keywords private -->		
+	<Menu classDefinition="true" definitionName="cmc/foundation/EditMenu" text="${foundationResources.Singleton.menuEdit.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="PropertyTreeMenuItem" moduleName="cmc/foundation/PropertyTreeMenuItem"/>
+		<dependency localName="PropertyBrowseObjectTree" moduleName="cmc/foundation/PropertyBrowseObjectTree"/>
+		<dependency localName="CustomServiceMenuItem" moduleName="cmc/foundation/CustomServiceMenuItem"/>
+		<dependency localName="ClientActionMenuItem" moduleName="cmc/foundation/ClientActionMenuItem"/>
+		<variable name="customServiceMenuItems" value="${[]}"/>
+		<variable name="clientActionMenuItems" value="${[]}"/>
+		<variable name="propertyTreeActionMenuItems" value="${[]}"/>
+		
+		<method args="boe" name="initializeMenu">
+			<![CDATA[
+			var customServices = boe.enabledCustomServices;
+			for (var i = 0; i < customServices.length; i++) {
+				if (customServices[i].addToEditMenu) {
+					this.customServiceMenuItems.push(new CustomServiceMenuItem.Class(this, {
+						customService: customServices[i]
+					}));
+				}
+			}
+			var clientActions = boe.enabledClientActions;
+			for (var i = 0; i < clientActions.length; i++) {
+				if (clientActions[i].addToEditMenu) {
+					this.clientActionMenuItems.push(new ClientActionMenuItem.Class(this, {
+						clientAction: clientActions[i]
+					}));
+				}
+			}
+			var activeView = boe.model.activeSelectionView;
+			if (activeView instanceof PropertyBrowseObjectTree.Class && activeView.parent.enabled) {
+				var selectedNode = activeView.getSelection();
+				if (selectedNode && selectedNode.o) {
+					var treeNodeObject = selectedNode.o;
+					var o = activeView.parent.o;
+					var propertyTreeActions = activeView.parent.propertyTree.actions;
+					for (var i = 0; i < propertyTreeActions.length; i++) {
+						if (propertyTreeActions[i].isEnabled(o, treeNodeObject)) {
+							this.propertyTreeActionMenuItems.push(new PropertyTreeMenuItem.Class(this, {
+								propertyTreeAction: propertyTreeActions[i],
+								o: o,
+								treeNodeObject: treeNodeObject
+							}));
+						}
+					}
+				}
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method name="closeMenu">
+			<![CDATA[
+			while (this.customServiceMenuItems.length > 0) {
+				this.customServiceMenuItems.shift().destroy();
+			}
+			while (this.clientActionMenuItems.length > 0) {
+				this.clientActionMenuItems.shift().destroy();
+			}
+			while (this.propertyTreeActionMenuItems.length > 0) {
+				this.propertyTreeActionMenuItems.shift().destroy();
+			}
+			]]>
+		</method>
+
+		<MenuItem name="copyMenuItem" text="${foundationResources.Singleton.menuCopy.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.copyEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doCopy();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="copyToClipboardMenuItem" text="${foundationResources.Singleton.menuCopyToClipboard.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.copyToClipboardEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doCopyToClipboard();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="duplicateItem" text="${foundationResources.Singleton.menuDuplicate.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.duplicateEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doDuplicate();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="pasteMenuItem" text="${foundationResources.Singleton.menuPaste.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.pasteEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doPaste();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="deleteMenuItem" text="${foundationResources.Singleton.menuDelete.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.deleteEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doDelete();
+				]]>
+			</method>
+		</MenuItem>
+
+		<MenuItem text="${foundationResources.Singleton.menuSelectAll.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.selectAllEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doSelectAll();
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem text="${foundationResources.Singleton.menuDeselectAll.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.deselectAllEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doDeselectAll();
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem name="editColumnMenuItem" text="${foundationResources.Singleton.menuEditColumn.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.editColumnEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doEditColumn();
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem name="findMenuItem" text="${foundationResources.Singleton.menuFindAndReplace.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.findEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doFindAndReplace();
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem name="sequenceUpMenuItem" text="${foundationResources.Singleton.contextMenuSequenceUp.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.sequenceUpEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doSequenceUp();
+				]]>
+			</method>
+		</MenuItem>
+		
+		<MenuItem name="sequenceDownMenuItem" text="${foundationResources.Singleton.contextMenuSequenceDown.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.sequenceDownEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doSequenceDown();
+				]]>
+			</method>
+		</MenuItem>
+	</Menu>
+
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/NavigationListMenuItem">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="navigationListDefinition"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var menuItemText = foundationResources.Singleton.replaceValues("menuShowNavigationList", [this.navigationListDefinition.displayName]);
+			this.setVariable("text", menuItemText);
+			]]>
+		</method>
+
+		<method args="boe" name="initializeMenuItem">
+			<![CDATA[
+			this.inherited(arguments);
+			var navSelection = boe.navigationTree.getSelection();
+			this.setVariable("actionEnabled", (navSelection && this.navigationListDefinition !== navSelection.navigationListDefinition));
+			]]>
+		</method>
+
+		<method name="doAction">
+			<![CDATA[
+			this.oEditor.showNavigationList(this.navigationListDefinition);
+			]]>
+		</method>
+	</MenuItem>
+	
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/PropertiesMenuItem" text="${foundationResources.Singleton.menuShowProperties.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<method name="doAction">
+			<![CDATA[
+			this.oEditor.showProperties();
+			]]>
+		</method>
+
+		<method args="boe" name="initializeMenuItem">
+			<![CDATA[
+			this.inherited(arguments);
+			var navSelection = boe.navigationTree.getSelection();
+			this.setVariable("actionEnabled", (navSelection && navSelection.navigationListDefinition != null));
+			]]>
+		</method>
+	</MenuItem>
+
+	<!--- @keywords private -->
+	<MenuItem classDefinition="true" definitionName="cmc/foundation/ViewOptionMenuItem" hasCheckMark="true">
+		<variable name="viewOption"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("text", this.viewOption.displayName);
+			this.setVariable("showCheckMark", this.viewOption.value);
+			]]>
+		</method>
+
+		<method name="doAction">
+			<![CDATA[
+			if (this.viewOption.viewOptionGroup != null) {
+				this.viewOption.setVariable("value", true);
+				for (var i = 0; i < this.viewOption.parent.viewOptions.length; i++) {
+					var viewOption = this.viewOption.parent.viewOptions[i];
+					if (viewOption.viewOptionGroup == this.viewOption.viewOptionGroup) {
+						viewOption.setVariable("value", this.viewOption == viewOption);
+					}
+				}
+			}
+			else {
+				this.viewOption.setVariable("value", !this.viewOption.value);
+			}
+			]]>
+		</method>
+	</MenuItem>
+
+	<!--- @keywords private -->
+	<Menu classDefinition="true" definitionName="cmc/foundation/ViewMenu" text="${foundationResources.Singleton.menuView.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="NavigationListMenuItem" moduleName="cmc/foundation/NavigationListMenuItem"/>
+		<dependency localName="ViewOptionMenuItem" moduleName="cmc/foundation/ViewOptionMenuItem"/>
+		<dependency localName="Grid" moduleName="cmc/foundation/Grid"/>
+		<dependency localName="PropertiesMenuItem" moduleName="cmc/foundation/PropertiesMenuItem"/>
+		<dependency localName="ClientActionMenuItem" moduleName="cmc/foundation/ClientActionMenuItem"/>
+		<variable name="navigationListMenuItems" value="${[]}"/>
+		<variable name="propertiesMenuItem" value="${null}"/>
+		<variable name="viewOptionMenuItems" value="${[]}"/>
+		<variable name="clientActionMenuItems" value="${[]}"/>
+		
+		<method args="boe" name="initializeMenu">
+			<![CDATA[
+			var navigationListDefinitions = boe.getNavigationListDefinitions();
+			for (var i = 0; i < navigationListDefinitions.length; i++) {
+				this.navigationListMenuItems.push(new NavigationListMenuItem.Class(this, {
+					navigationListDefinition: navigationListDefinitions[i]
+				}));
+			}
+			if (boe.isShowPropertiesEnabled()) {
+				this.propertiesMenuItem = new PropertiesMenuItem.Class(this);
+			}
+			var viewOptions = boe.enabledViewOptions;
+			for (var i = 0; i < viewOptions.length; i++) {
+				if (viewOptions[i].addToViewMenu) {
+					this.viewOptionMenuItems.push(new ViewOptionMenuItem.Class(this, {
+						viewOption: viewOptions[i]
+					}));
+				}
+			}
+			var clientActions = boe.enabledClientActions;
+			for (var i = 0; i < clientActions.length; i++) {
+				if (clientActions[i].addToViewMenu) {
+					this.clientActionMenuItems.push(new ClientActionMenuItem.Class(this, {
+						clientAction: clientActions[i]
+					}));
+				}
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method name="closeMenu">
+			<![CDATA[
+			while (this.navigationListMenuItems.length > 0) {
+				this.navigationListMenuItems.shift().destroy();
+			}
+			if (this.propertiesMenuItem != null) {
+				this.propertiesMenuItem.destroy();
+				this.propertiesMenuItem = null;
+			}
+			while (this.viewOptionMenuItems.length > 0) {
+				this.viewOptionMenuItems.shift().destroy();
+			}
+			while (this.clientActionMenuItems.length > 0) {
+				this.clientActionMenuItems.shift().destroy();
+			}
+			]]>
+		</method>
+
+		<MenuItem name="backMenuItem" text="${foundationResources.Singleton.menuBack.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.backEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doBack();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="forwardMenuItem" text="${foundationResources.Singleton.menuForward.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("actionEnabled", boe.forwardEnabled);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.doForward();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="toggleNavigationViewMenuItem">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				if (boe.navigationViewVisible) {
+					this.setVariable("text", foundationResources.Singleton.menuHideNavigationView.string);
+				}
+				else {
+					this.setVariable("text", foundationResources.Singleton.menuShowNavigationView.string);
+				}
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.toggleNavigationView();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="toggleUtilitiesViewMenuItem">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.setVariable("visible", boe.showUtilitiesView);
+				this.inherited(arguments);
+				if (boe.utilitiesViewVisible) {
+					this.setVariable("text", foundationResources.Singleton.menuHideUtilitiesView.string);
+				}
+				else {
+					this.setVariable("text", foundationResources.Singleton.menuShowUtilitiesView.string);
+				}
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.toggleUtilitiesView();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="toggleWorkAreaDetailsMenuItem">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("visible", !boe.compareViewVisible);
+				this.setVariable("actionEnabled", boe.workAreaDetailsEnabled);
+				if (boe.workAreaDetailsBelowVisible) {
+					this.setVariable("text", foundationResources.Singleton.menuHideDetailsBelowList.string);
+				}
+				else {
+					this.setVariable("text", foundationResources.Singleton.menuShowDetailsBelowList.string);
+				}
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.toggleWorkAreaDetailsBelow();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="toggleWorkAreaDetailsBesideMenuItem">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("visible", !boe.compareViewVisible);
+				this.setVariable("actionEnabled", boe.workAreaDetailsEnabled);
+				if (boe.workAreaDetailsBesideVisible) {
+					this.setVariable("text", foundationResources.Singleton.menuHideDetailsBesideList.string);
+				}
+				else {
+					this.setVariable("text", foundationResources.Singleton.menuShowDetailsBesideList.string);
+				}
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.toggleWorkAreaDetailsBeside();
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="splitCompareViewHorizontallyMenuItem" text="${foundationResources.Singleton.menuShowDetailsBelowList.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("visible", boe.compareViewVisible);
+				this.setVariable("actionEnabled", boe.compareViewSplitVertically);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.splitCompareViewVertically(false);
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="splitCompareViewVerticallyMenuItem" text="${foundationResources.Singleton.menuShowDetailsBesideList.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("visible", boe.compareViewVisible);
+				this.setVariable("actionEnabled", !boe.compareViewSplitVertically);
+				]]>
+			</method>
+
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.splitCompareViewVertically(true);
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="configureColumnMenuItem" text="${foundationResources.Singleton.contextMenuConfigureColumns.string}">
+			<method args="boe" name="initializeMenuItem">
+				<![CDATA[
+				this.inherited(arguments);
+				var activeView = this.oEditor.model.activeSelectionView;
+				if (activeView instanceof Grid.Class && activeView.isConfigurable) {
+					this.setVariable("visible", true);
+					this.setVariable("actionEnabled", true);
+				}
+				else {
+					this.setVariable("visible", false);
+					this.setVariable("actionEnabled", false);
+				}
+				]]>
+			</method>
+			<method name="doAction">
+				<![CDATA[
+				this.oEditor.model.activeSelectionView.configure();
+				]]>
+			</method>
+		</MenuItem>
+	</Menu>
+
+	<!--- @keywords private -->
+	<Menu classDefinition="true" definitionName="cmc/foundation/HelpMenu" text="${foundationResources.Singleton.menuHelp.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<MenuItem name="gettingStartedMenuItem" storeRequired="false" text="${foundationResources.Singleton.menuGettingStarted.string}">
+			<method name="doAction">
+				<![CDATA[
+				require(["cmc/shell/HelpManager"], function(HelpManager) {
+					HelpManager.Singleton.openGettingStarted();
+				});
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="informationCenterMenuItem" storeRequired="false" text="${foundationResources.Singleton.menuInformationCenter.string}">
+			<method name="doAction">
+				<![CDATA[
+				require(["cmc/shell/HelpManager"], function(HelpManager) {
+					HelpManager.Singleton.openInfoCenter();
+				});
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="contextSensitiveHelpMenuItem" storeRequired="false" text="${foundationResources.Singleton.menuContextSensitiveHelp.string}">
+			<method name="doAction">
+				<![CDATA[
+				require(["cmc/shell/HelpManager"], function(HelpManager) {
+					HelpManager.Singleton.openContextSensitiveHelp();
+				});
+				]]>
+			</method>
+		</MenuItem>
+		<MenuItem name="shortcutKeysMenuItem" storeRequired="false" text="${foundationResources.Singleton.menuShortcutKeyLegend.string}">
+			<method name="doAction">
+				<![CDATA[
+				require(["cmc/shell/HelpManager"], function(HelpManager) {
+					HelpManager.Singleton.openShortcutKeyLegend();
+				});
+				]]>
+			</method>
+		</MenuItem>
+	</Menu>
+	
+	<!---
+		@keywords private
+		
+		Menu bar.
+	-->
+	<TrackComponent classDefinition="true" definitionName="cmc/foundation/MenuBar" focusable="false" height="44">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<variable name="openMenu" value="${null}"/>
+		<variable name="menus" value="${[]}"/>
+		<variable name="selectedObjects" value="${null}"/>
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			@keywords private
+			
+			This attribute indicates if the shortcutKeys are registered. The default value for this attribute is "false". 
+		-->			
+		<variable name="keysRegistered" type="boolean" value="false"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="restoreFocusView" value="${null}"/>
+		
+		<!---
+			Initialize the menu bar.
+			@param cmc/foundation/BusinessObjectEditor boe: Business object editor
+		-->
+		<method args="boe" name="initializeMenu">
+			<![CDATA[
+			this.oEditor = boe;
+			]]>
+		</method>
+
+		<!---
+			Open the first menu from the menu list
+		-->
+		<method name="openDefaultMenu">
+			<![CDATA[
+			this.saveRestoreFocusView(FocusUtil.getFocus());
+			this.menus[0].menuItemList.setVariable("open", true);
+			]]>
+		</method>
+		
+		<!---
+			Save the restore focus view.
+		-->
+		<method args="v" name="saveRestoreFocusView">
+			<![CDATA[
+			if ((v == null || !this.isMenuView(v)) && !KeyUtil.isKeyDown("tab")) {
+				this.setVariable("restoreFocusView", v);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if the specified view belongs to the menu.
+		-->
+		<method args="v" name="isMenuView">
+			<![CDATA[
+			var result = false;
+			for (var i = 0; i < this.menus.length; i++) {
+				if (this.menus[i].isMenuView(v)) {
+					result = true;
+					break;
+				}
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Restore focus to the previous focused view.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			if (this.restoreFocusView != null && this.restoreFocusView.visible && ViewUtil.Singleton.getInvisibleAncestor(this.restoreFocusView) == null) {
+				FocusUtil.setFocus(this.restoreFocusView, false);
+			}
+			else {
+				this.oEditor.restoreFocus();
+			}
+			this.setVariable("restoreFocusView", null);
+			]]>
+		</method>
+		
+		<AxisLayout axis="x"/>
+		<FileMenu name="fileMenu"/>
+		<EditMenu name="editMenu"/>
+		<ViewMenu name="viewMenu"/>
+		<HelpMenu name="helpMenu"/>
+	</TrackComponent>
+</Definitions>

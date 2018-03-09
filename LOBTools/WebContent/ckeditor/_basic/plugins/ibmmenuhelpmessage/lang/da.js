@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","da",{keystrokeForContextMenu:"Ctrl + højreklik for flere indstillinger",keystrokeForContextMenuMac:"Cmd + højreklik for flere indstillinger"});

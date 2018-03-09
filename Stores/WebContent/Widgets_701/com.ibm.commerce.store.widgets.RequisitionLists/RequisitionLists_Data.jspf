@@ -1,0 +1,236 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN RequisitionLists_Data.jspf -->
+
+<c:set var="search01" value="'"/>
+<c:set var="search02" value='"'/>
+<c:set var="replaceStr01" value="\\\\'"/>
+<c:set var="replaceStr02" value='\\\\"'/>
+
+<%-- Indicates whether there are requisition lists or not --%>
+<c:set var="hideTable" value="false" scope="request"/>
+<c:set var="requisitionListPerPage" value="${pageSize}"/>
+<c:set var="beginIndex" value="${WCParam.beginIndex}" />
+<c:if test="${empty beginIndex}">
+	<c:set var="beginIndex" value="0" />
+</c:if>
+<%-- Counts the page number we are drawing in.  --%>
+<c:choose>
+	<c:when test="${beginIndex == 0}">
+		<c:set var="currentPage" value="1" />
+	</c:when>
+	<c:otherwise>
+		<fmt:formatNumber var="currentPage" value="${(beginIndex/requisitionListPerPage)+1}"/>
+		<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	</c:otherwise>
+</c:choose>
+
+<wcf:rest var="response" url="store/{storeId}/requisition_list">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:param name="q" value="usable"/>
+	<wcf:param name="pageNumber" value="${currentPage}"/>
+	<wcf:param name="pageSize" value="${pageSize}"/>
+	<wcf:param name="orderBy" value="D-lastUpdate"/>
+</wcf:rest>
+<%-- find out how many pages we need in total to display all the requisition lists --%>
+<c:set var="totalCount" value="${response.recordSetTotal}"/>
+<c:set var="requisitionListList" value="${response.resultList}"/>
+<wcf:url var="requisitionListViewURL" value="RequisitionListsView" type="Ajax">
+	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}" />
+	<wcf:param name="requisitionListStyle" value="strong"/>
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+</wcf:url>
+
+<%-- Check whether there are requisition lists for the current page number to be displayed or not --%>
+<c:if test="${(fn:length(requisitionListList) <= 0)}">
+	<c:choose>
+		<c:when test="${totalCount == 0}">
+			<c:set var="hideTable" value="true"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="currentPage" value="${currentPage - 1}" />
+			<c:set var="beginIndex" value="${beginIndex - requisitionListPerPage}" />
+			<wcf:url var="requisitionListViewURL" value="RequisitionListsView" type="Ajax">
+				<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<wcf:param name="langId" value="${langId}" />
+				<wcf:param name="requisitionListStyle" value="strong"/>
+				<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+				<wcf:param name="currentPage" value="${currentPage}" />
+				<wcf:param name="beginIndex" value="${beginIndex}" />
+			</wcf:url>
+			<wcf:rest var="response" url="store/{storeId}/requisition_list">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:param name="q" value="usable"/>
+				<wcf:param name="pageNumber" value="${currentPage}"/>
+				<wcf:param name="pageSize" value="${pageSize}"/>
+			</wcf:rest>
+			<c:set var="totalCount" value="${response.recordSetTotal}"/>
+			<c:set var="requisitionListList" value="${response.resultList}"/>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<fmt:formatNumber var="totalPages" value="${(totalCount/requisitionListPerPage)+1}"/>
+<c:if test="${totalCount%requisitionListPerPage == 0}">
+	<fmt:parseNumber var="totalPages" value="${totalCount/requisitionListPerPage}"/>
+</c:if>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+
+<c:choose>
+	<c:when test="${beginIndex + requisitionListPerPage >= totalCount}">
+		<c:set var="endIndex" value="${totalCount}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="endIndex" value="${beginIndex + requisitionListPerPage}" />
+	</c:otherwise>
+</c:choose>
+<%-- End:  Calculate amount of entries to be shown --%>
+
+<c:set var="arrowUpImgDir" value="${jspStoreImgDir}images/sort_arrow_OFF.png" />
+<wcf:useBean var="reqListMappingList" classname="java.util.ArrayList" />
+
+<c:forEach var="requisitionList" items="${requisitionListList}" varStatus="varStatus1">
+	<wcf:useBean var="reqListMap" classname="java.util.HashMap"/>
+	<wcf:useBean var="reqListNameAndDetailLinkList" classname="java.util.ArrayList" />
+
+	<%-- Display the name of the requisition list creator according to locale --%>
+	<c:choose>
+		<c:when test="${locale eq 'ja_JP' || locale eq 'ko_KR' || locale eq 'zh_CN' || locale eq 'zh_TW'}">
+			<c:set var="createdBy" value="${requisitionList.userRegistration.lastName} ${requisitionList.userRegistration.firstName}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="createdBy" value="${requisitionList.userRegistration.firstName} ${requisitionList.userRegistration.lastName}"/>
+		</c:otherwise>
+	</c:choose>
+	
+	<wcf:url var="reqListUpdateUrl" value="RequisitionListDetailView" >
+		<wcf:param name="requisitionListId" value="${requisitionList.orderId}"/>
+		<wcf:param name="storeId" value="${WCParam.storeId}"/>
+		<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+		<wcf:param name="langId" value="${WCParam.langId}"/>
+		<wcf:param name="editable" value="true"/>
+		<wcf:param name="createdBy" value="${createdBy}"/>
+		<wcf:param name="description" value="${requisitionList.description}"/>
+	</wcf:url>
+
+	<wcf:url value="AjaxRESTRequisitionListSubmit" var="AddReqListToCartUrl" type="Ajax">
+		<wcf:param name="requisitionListId" value="${requisitionList.orderId}"/>
+		<wcf:param name="storeId" value="${WCParam.storeId}"/>
+		<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+		<wcf:param name="langId" value="${WCParam.langId}"/>
+		<wcf:param name="calculationUsage" value="-1,-2,-3,-4,-5,-6,-7"/>
+		<wcf:param name="mergeToCurrentPendingOrder" value="Y"/>
+		<wcf:param name="URL" value=""/>		
+	</wcf:url>
+
+	<wcf:set target="${reqListNameAndDetailLinkList}" value="${reqListUpdateUrl}"/>
+	<wcf:set target="${reqListNameAndDetailLinkList}" value="${requisitionList.description}"/>
+
+	<wcf:rest var="order" url="store/{storeId}/order/{orderId}">
+		<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+		<wcf:var name="orderId" value="${requisitionList.orderId}" encode="true"/>
+		<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+	</wcf:rest>
+	<wcf:set target="${reqListMap}" key="selected" value=""/>
+	<wcf:set target="${reqListMap}" key="name" value="${reqListNameAndDetailLinkList}"/>
+	<fmt:parseNumber var="orderQuantity" value="${order.recordSetTotal}" integerOnly="true"/>
+	<wcf:set target="${reqListMap}" key="quantity" value="${orderQuantity}"/>
+	<%-- Prevent req lists not owned by user from being deleted by overriding the default actions--%>	
+	
+	<c:choose>
+		<c:when test="${requisitionList.memberId ne userId}">	
+			<wcf:set target="${reqListMap}" key="tableRowActionOverride" value="add_to_cart;duplicate"/>
+			<%-- Prevent req lists from being added to current order if the list is empty--%>	
+			<c:if test="${orderQuantity eq 0}">		
+				<wcf:set target="${reqListMap}" key="tableRowActionOverride" value="duplicate"/>	
+			</c:if>	
+		</c:when>			
+		<c:otherwise>
+			<c:if test="${orderQuantity eq 0}">		
+				<wcf:set target="${reqListMap}" key="tableRowActionOverride" value="duplicate;delete"/>	
+			</c:if>	
+		</c:otherwise>
+	</c:choose>
+	
+	<c:remove var="reqLastUpdate"/>
+	<c:remove var="formattedReqLastUpdate"/>
+	<c:catch>
+		<fmt:parseDate var="reqLastUpdate" value="${requisitionList.lastUpdate}" pattern="yyyy-MM-dd'T'HH:mm:ss'+'SSSS" timeZone="GMT"/>
+	</c:catch>
+	<c:if test="${empty reqLastUpdate}">
+		<c:catch>
+			<fmt:parseDate var="reqLastUpdate" value="${requisitionList.lastUpdate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+		</c:catch>
+	</c:if>
+	<c:if test="${empty reqLastUpdate}">
+		<c:catch>
+			<fmt:parseDate var="reqLastUpdate" value="${requisitionList.lastUpdate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+		</c:catch>
+	</c:if>
+	<c:if test="${empty reqLastUpdate}">		
+		<c:if test="${fn:indexOf(requisitionList.lastUpdate,'000000Z') ne -1}">
+			<c:set var="parseableLastUpdate" value="${fn:replace(requisitionList.lastUpdate,'000000','')}"/>			
+			<c:catch>
+				<fmt:parseDate var="reqLastUpdate" value="${parseableLastUpdate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+	</c:if>
+	
+	<c:choose>
+		<c:when test="${!empty reqLastUpdate}">
+			<fmt:formatDate var="formattedReqLastUpdate" value="${reqLastUpdate}" dateStyle="long"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="formattedReqLastUpdate" value=""/>
+		</c:otherwise>
+	</c:choose>
+	<wcf:set target="${reqListMap}" key="updated" value="${formattedReqLastUpdate}"/>
+	<wcf:set target="${reqListMap}" key="creator" value="${createdBy}"/>
+	<c:choose>
+		<c:when test="${requisitionList.status == 'Y'}">
+			<wcst:message key="REQUISITIONLIST_TYPE_PRIVATE" var="listType" bundle="${widgetText}" />
+			<c:set var="reqStatus" value="Y"/>
+		</c:when>
+		<c:otherwise>
+			<wcst:message key="REQUISITIONLIST_TYPE_SHARED" var="listType" bundle="${widgetText}" />
+			<c:set var="reqStatus" value="Z"/>
+		</c:otherwise>
+	</c:choose>
+	<wcf:set target="${reqListMap}" key="type" value="${listType}"/>
+	<%-- Map javascript calls for each row on the table --%>
+	<wcf:set target="${reqListMap}" key="delete" value="RequisitionListJS.deleteList('${requisitionList.orderId}');"/>
+	<wcf:set target="${reqListMap}" key="duplicate" value="RequisitionListJS.duplicateReqList('${fn:replace(fn:replace(requisitionList.description, search01, replaceStr01), search02, replaceStr02)}_2','${reqStatus}','${requisitionList.orderId}');"/>
+	<wcf:set target="${reqListMap}" key="add_to_cart" value="RequisitionListJS.addReqListToCart('${AddReqListToCartUrl}');"/>
+	<wcf:set target="${reqListMappingList}" value="${reqListMap}" />
+	<c:remove var="reqListMap"/>
+	<c:remove var="reqListNameAndDetailLinkList"/>
+</c:forEach>
+
+<%-- The following data is passed to the List Table UI  --%>
+<c:set var="widgetName" value="RequisitionList"/>
+<c:set var="uploadListOption" value="true" />
+<c:set var="tableHeading" value="name;quantity;updated;creator;type;actions"/>
+<c:set var="tableValueMapping" value="${reqListMappingList}"/>
+<c:set var="fieldWithUrl" value="name"/>
+<c:set var="tableAction" value="add_to_cart;duplicate;delete"/>
+<wcst:message key="REQUISITIONLIST_TYPE_SHARED" var="listTypeOne" bundle="${widgetText}" />
+<wcst:message key="REQUISITIONLIST_TYPE_PRIVATE" var="listTypeTwo" bundle="${widgetText}" />
+<c:set var="listTypeOneJS" value="RequisitionListJS.setListStatus('Z','${listTypeOne}');"/>
+<c:set var="listTypeTwoJS" value="RequisitionListJS.setListStatus('Y','${listTypeTwo}');"/>
+
+<!-- END RequisitionLists_Data.jspf -->

@@ -1,0 +1,47 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%-- Pick catalogEntryId from the param, if empty look in WCParam --%>
+<c:set var ="catalogEntryId" value="${param.productId}" />
+<c:if test="${empty catalogEntryId}">
+	<c:set var ="catalogEntryId" value="${WCParam.productId}" />
+</c:if>
+
+<c:if test="${!empty catalogEntryId}">
+	<jsp:useBean id="discountsMap" class="java.util.HashMap" type="java.util.Map"/>
+	<wcf:rest var="discounts" url="/store/{storeId}/associated_promotion">
+		<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+		<wcf:param name="profileName" value="IBM_catalogEntryDetailed"/>
+		<wcf:param name="q" value="byProduct"/>
+		<wcf:param name="qProductId" value="${catalogEntryId}"/>
+		<wcf:param name="qIncludeParentProduct" value="true"/>
+		<wcf:param name="qIncludeChildItems" value="true"/>
+		<%-- UsageId for discount is -1 --%>
+		<wcf:param name="qCalculationUsageId" value="-1"/>
+	</wcf:rest>
+	<c:if test="${!empty discounts.resultList}" >
+		<c:forEach var="discountEntry" items="${discounts.resultList}" varStatus="discountCounter">
+			<c:url var="DiscountDetailsDisplayViewURL" value="DiscountDetailsDisplayView">
+				<c:param name="code" value="${discountEntry.code}" />
+				<c:param name="langId" value="${langId}" />
+				<c:param name="storeId" value="${storeId}" />
+				<c:param name="catalogId" value="${catalogId}" />
+				<c:param name="productId" value="${catalogEntryId}"/> 
+			</c:url>
+			<c:set target="${discountsMap}" property="${discountEntry.descriptionString}" value="${DiscountDetailsDisplayViewURL}"/>
+		</c:forEach>
+	</c:if>
+	<c:if test="${empty discounts.resultList}" >
+		<c:set var="emptyWidget" value="true" />
+	</c:if>
+</c:if>

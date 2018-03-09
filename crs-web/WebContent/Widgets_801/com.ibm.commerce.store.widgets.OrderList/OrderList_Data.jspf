@@ -1,0 +1,162 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN OrderList_Data.jspf -->
+
+<c:set var="widgetPrefix" value="${param.widgetPrefix}"/>
+
+<%-- Get current order id (The current shopping cart). --%>
+<c:set var="cart" value="${requestScope.orderInCart}"/>
+
+<c:if test="${empty cart || cart == null}">
+    <wcf:rest var="cart" url="store/{storeId}/cart/@self">
+        <wcf:var name="storeId" value="${storeId}" encode="true"/>
+        <wcf:param name="sortOrderItemBy" value="orderItemID"/>
+        <wcf:param name="isSummary" value="true"/>
+    </wcf:rest>
+</c:if>
+
+<c:set var="currentOrderId" value="${cart.orderId}"/>
+<c:set var="currentOrderLocked" value="${cart.locked}"/>
+<c:if test="${currentOrderLocked == 'true'}" >
+    <c:set var="currentOrderEidtorId" value="${cart.orderEditor.uniqueID}" />
+</c:if>
+
+<c:if test="${empty OrderListJSInit}">
+    <script type="text/javascript">
+        $(document).ready(function() {
+        	MyAccountServicesDeclarationJS.setCommonParameters('<c:out value="${WCParam.langId}"/>','<c:out value="${WCParam.storeId}"/>','<c:out value="${WCParam.catalogId}"/>');
+            OrderListServicesDeclarationJS.setCommonParameters('<c:out value="${WCParam.langId}"/>','<c:out value="${WCParam.storeId}"/>','<c:out value="${WCParam.catalogId}"/>');
+            <wcst:message bundle="${widgetText}" key="MO_ORDER_CANCELED_MSG" var="MO_ORDER_CANCELED_MSG"/>
+            <wcst:message bundle="${widgetText}" key="SCHEDULE_ORDER_CANCEL_MSG" var="SCHEDULE_ORDER_CANCEL_MSG"/>
+            <wcst:message bundle="${widgetText}" key="SCHEDULE_ORDER_PENDING_CANCEL_MSG" var="SCHEDULE_ORDER_PENDING_CANCEL_MSG"/>
+            <wcst:message bundle="${widgetText}" key="SUBSCRIPTION_CANCEL_MSG" var="SUBSCRIPTION_CANCEL_MSG"/>
+            <wcst:message bundle="${widgetText}" key="SUBSCRIPTION_PENDING_CANCEL_MSG" var="SUBSCRIPTION_PENDING_CANCEL_MSG"/>
+            <wcst:message bundle="${widgetText}" key="CANNOT_RENEW_NOW_MSG" var="CANNOT_RENEW_NOW_MSG"/>
+        <!-- JR54936 -->
+        <wcst:message bundle="${widgetText}" key="CANNOT_REORDER_ANY_MSG" var="CANNOT_REORDER_ANY_MSG"/>
+            MessageHelper.setMessage("CANNOT_REORDER_ANY_MSG", <wcf:json object="${CANNOT_REORDER_ANY_MSG}"/>);
+            MessageHelper.setMessage("MO_ORDER_CANCELED_MSG", <wcf:json object="${MO_ORDER_CANCELED_MSG}"/>);
+            MessageHelper.setMessage("SCHEDULE_ORDER_CANCEL_MSG", <wcf:json object="${SCHEDULE_ORDER_CANCEL_MSG}"/>);
+            MessageHelper.setMessage("SCHEDULE_ORDER_PENDING_CANCEL_MSG", <wcf:json object="${SCHEDULE_ORDER_PENDING_CANCEL_MSG}"/>);
+            MessageHelper.setMessage("SUBSCRIPTION_CANCEL_MSG", <wcf:json object="${SUBSCRIPTION_CANCEL_MSG}"/>);
+            MessageHelper.setMessage("SUBSCRIPTION_PENDING_CANCEL_MSG", <wcf:json object="${SUBSCRIPTION_PENDING_CANCEL_MSG}"/>);
+            MessageHelper.setMessage("CANNOT_RENEW_NOW_MSG", <wcf:json object="${CANNOT_RENEW_NOW_MSG}"/>);
+        });
+    </script>
+
+    <c:if test="${!empty errorMessage}">
+        <wcst:message bundle="${widgetText}" var ="msgType" key="ERROR_MESSAGE_TYPE"/>
+        <c:set var = "errorMessage" value ="${msgType}${errorMessage}"/>
+        <script type="text/javascript">
+            $(document).ready(function() { 
+                $('#MessageArea').css("display", "block");
+                $('#ErrorMessageText').html(<wcf:json object="${errorMessage}"/>);
+                $('#MessageArea').focus();
+                setTimeout(function() {
+                    $('#ErrorMessageText').focus();
+                },2000);
+            });
+        </script>
+    </c:if>
+
+    <c:set var="OrderListJSInit" value="true" scope="request" />
+</c:if>
+
+<wcf:url var="trackOrderStatusURL" value="TrackOrderStatus">
+    <wcf:param name="storeId" value="${WCParam.storeId}"/>
+    <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+    <wcf:param name="langId" value="${langId}" />
+    <wcf:param name="isRecurringOrder" value="${param.isRecurringOrder}" />
+    <wcf:param name="isSubscription" value="${param.isSubscription}" />
+    <wcf:param name="isQuote" value="${param.isQuote}" />
+</wcf:url>
+
+<wcf:url var="TableDetailsDisplayURL" value="AjaxOrderListViewV2" type="Ajax">
+    <wcf:param name="storeId" value="${WCParam.storeId}"/>
+    <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+    <wcf:param name="langId" value="${langId}" />
+    <wcf:param name="ajaxStoreDir" value="${jspStoreDir}" />
+    <wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+    <wcf:param name="showPONumber" value="${param.showPONumber}" />
+    <wcf:param name="selectedTab" value="${param.selectedTab}"/>
+    <wcf:param name="isRecurringOrder" value="${param.isRecurringOrder}" />
+    <wcf:param name="isSubscription" value="${param.isSubscription}" />
+    <wcf:param name="isSavedOrder" value="${param.isSavedOrder}" />
+    <wcf:param name="isQuote" value="${param.isQuote}" />
+    <wcf:param name="isMyAccountMainPage" value="${param.isMyAccountMainPage}" />
+    <wcf:param name="widgetPrefix" value="${widgetPrefix}" />
+</wcf:url>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        OrderListJS.initOrderListUrl("${widgetPrefix}","${TableDetailsDisplayURL}");
+    });
+</script>
+
+<%-- Indicates whether there are order lists or not --%>
+<c:set var="hideTable" value="false" scope="request"/>
+
+<c:set var="beginIndex" value="${WCParam.beginIndex}" />
+<c:if test="${empty beginIndex|| beginIndex < 0}">
+    <c:set var="beginIndex" value="0" />
+</c:if>
+
+<c:set var="pageSize" value="${WCParam.pageSize}" />
+<c:if test="${empty pageSize}">
+    <c:set var="pageSize" value="${maxOrderItemsPerPage}"/>
+</c:if>
+<c:if test="${param.isMyAccountMainPage}">
+    <c:set var="pageSize" value="3"/>
+    <c:set var="beginIndex" value="0"/>
+</c:if>
+
+<fmt:formatNumber var="currentPage" value="${(beginIndex / pageSize) + 1}"/>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+
+<c:if test="${param.isSavedOrder ne true}">
+    <c:set var="noToolBar" value="true"/>
+</c:if>
+
+<jsp:useBean id="now" class="java.util.Date" scope="page"/>
+
+<c:set var="formattedTimeZone" value="${fn:replace(cookie.WC_timeoffset.value, '%2B', '+')}"/>
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.75', ':45')}"/>
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.5', ':30')}"/>
+
+<%-- Set variables used by pagination controls --%>
+<c:set var="eventName" value="showPageResultsForOrders"/>
+<script type="text/javascript">
+    $(document).ready(function(){
+        wcTopic.subscribe("showPageResultsForOrders", $.proxy(OrderListJS.showResultsPage, OrderListJS));
+    });
+</script>
+
+<%-- The following variables are passed to List Table UI --%>
+<c:set var="widgetName" value="OrderList"/>
+<c:set var="fieldWithUrl" value="order;subscription"/>
+
+<c:choose>
+    <c:when test="${param.isSavedOrder eq true}">
+        <%@ include file="SavedOrderList_Data.jspf" %>
+    </c:when>
+    <c:when test="${param.isRecurringOrder eq true || param.isSubscription eq true}">
+        <%@ include file="RecurringOrderList_Data.jspf" %>
+    </c:when>
+    <c:otherwise>
+        <%@ include file="OrderHistoryList_Data.jspf" %>
+    </c:otherwise>
+</c:choose>
+
+<!-- END OrderList_Data.jspf -->

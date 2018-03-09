@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("showblocks","ar",{toolbar:"عرض الفقرات"});

@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		A split view. This view expects two child views. The child views
+		will be displayed on each side of a draggable divider.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/SplitView">
+		<dependency localName="Resizer" moduleName="cmc/foundation/Resizer"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			The axis along which the split will be drawn. Valid values
+			are "x" and "y". The default is "y".
+		-->
+		<variable name="axis" type="string" value="y"/>
+		<!---
+			The number of pixels to initially allocate to the first view if
+			the split is axis is "x".
+		-->
+		<variable name="xSplitSize" type="number" value="220"/>
+		<!---
+			The number of pixels to initially allocate to the first view if
+			the split is axis is "y".
+		-->
+		<variable name="ySplitSize" type="number" value="200"/>
+		<!---
+			Indicates that "xSplitSize" and "ySplitSize" should be applied to
+			the second view.
+		-->
+		<variable name="reverseSplit" type="boolean" value="false"/>
+		<!---
+			Indicates that the view has been minimized.
+		-->
+		<variable name="minimized" type="boolean" value="false"/>
+		<!---
+			Indicates that the view has been maximized.
+		-->
+		<variable name="maximized" type="boolean" value="false"/>
+		<!---
+			Indicates that the view has been closed.
+		-->
+		<variable name="closed" type="boolean" value="false"/>
+		<!---
+			Minimum width for this view.
+		-->
+		<variable name="minWidth" type="number" value="0"/>
+		<!---
+			Minimum hieght for this view.
+		-->
+		<variable name="minHeight" type="number" value="0"/>
+		<!---
+			Indicates that this view can be split into master/details panels.
+		-->
+		<variable name="splittable" type="boolean" value="true"/>
+		<!---
+			Indicates that the splittable flag is being ignored.
+		-->
+		<variable name="ignoreSplittable" type="boolean" value="false"/>
+		<!---
+			Current maximized panel.
+		-->
+		<variable name="maximizedPanel" value="${null}"/>
+		
+		<Resizer axis="${this.parent.axis}" name="resizer" reverseSplit="${this.parent.reverseSplit}" xSplitSize="${this.parent.xSplitSize}" ySplitSize="${this.parent.ySplitSize}"/>
+		
+		<StretchLayout axis="${this.parent.axis == 'x' ? 'y' : 'x'}" name="stretchLayout"/>
+		<SplitViewLayout axis="${this.parent.axis}" name="splitViewLayout"/>
+
+		<method name="init">
+			<![CDATA[
+			var views = this.childComponents;
+			var l = views.length;
+			for (var i = 0; i < l; i++) {
+				var v = views[i];
+				if (!(v instanceof Resizer.Class)) {
+					this.splitViewLayout.setLayoutOrder(v, this.resizer);
+					break;
+				}
+			}
+			if (this.splitViewLayout.components.length == 3) {
+				var v1 = this.splitViewLayout.components[0];
+				var v2 = this.splitViewLayout.components[2];
+				this.resizer.v1 = v1;
+				this.resizer.v2 = v2;
+				this.updateMinWidthDel = new EventHandler.Class(this, "updateMinWidth");
+				if (!this.ignoreSplittable) {
+					this.updateMinWidthDel.connect(v1, "onsplittable");
+				}
+				this.updateMinWidthDel.connect(v1, "onminWidth");
+				this.updateMinWidthDel.connect(v1, "onclosed");
+				this.updateMinWidthDel.connect(v1, "onminimized");
+				this.updateMinWidthDel.connect(v2, "onminWidth");
+				this.updateMinWidthDel.connect(v2, "onclosed");
+				this.updateMinWidthDel.connect(v2, "onminimized");
+				this.updateMinWidth();
+				this.updateMinHeightDel = new EventHandler.Class(this, "updateMinHeight");
+				if (!this.ignoreSplittable) {
+					this.updateMinHeightDel.connect(v1, "onsplittable");
+				}
+				this.updateMinHeightDel.connect(v1, "onminHeight");
+				this.updateMinHeightDel.connect(v1, "onclosed");
+				this.updateMinHeightDel.connect(v1, "onminimized");
+				this.updateMinHeightDel.connect(v2, "onminHeight");
+				this.updateMinHeightDel.connect(v2, "onclosed");
+				this.updateMinHeightDel.connect(v2, "onminimized");
+				this.updateMinHeight();
+			}
+			else if (this.splitViewLayout.components.length == 2) {
+				var v1 = this.splitViewLayout.components[0];
+				this.resizer.v1 = v1;
+				this.updateMinWidthDel = new EventHandler.Class(this, "updateMinWidth");
+				if (!this.ignoreSplittable) {
+					this.updateMinWidthDel.connect(v1, "onsplittable");
+				}
+				this.updateMinWidthDel.connect(v1, "onminWidth");
+				this.updateMinWidthDel.connect(v1, "onclosed");
+				this.updateMinWidthDel.connect(v1, "onminimized");
+				this.updateMinWidth();
+				this.updateMinHeightDel = new EventHandler.Class(this, "updateMinHeight");
+				if (!this.ignoreSplittable) {
+					this.updateMinHeightDel.connect(v1, "onsplittable");
+				}
+				this.updateMinHeightDel.connect(v1, "onminHeight");
+				this.updateMinHeightDel.connect(v1, "onclosed");
+				this.updateMinHeightDel.connect(v1, "onminimized");
+				this.updateMinHeight();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateMinWidthDel) {
+				this.updateMinWidthDel.disconnectAll();
+				delete this.updateMinWidthDel;
+			}
+			if (this.updateMinHeightDel) {
+				this.updateMinHeightDel.disconnectAll();
+				delete this.updateMinHeightDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<handler name="onaddChildComponent" args="childComponent">
+			<![CDATA[
+			if (this.resizer.v1 != null && this.resizer.v2 == null) {
+				v2 = childComponent;
+				this.resizer.setVariable("v2", v2);
+				this.updateMinWidthDel.connect(v2, "onminWidth");
+				this.updateMinWidthDel.connect(v2, "onclosed");
+				this.updateMinWidthDel.connect(v2, "onminimized");
+				this.updateMinWidth();
+				this.updateMinHeightDel.connect(v2, "onminHeight");
+				this.updateMinHeightDel.connect(v2, "onclosed");
+				this.updateMinHeightDel.connect(v2, "onminimized");
+				this.updateMinHeight();
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateMinWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("minWidth", this.calcMinWidth());
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateMinHeight">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("minHeight", this.calcMinHeight());
+			]]>
+		</method>
+		
+		<method name="calcMinWidth">
+			<![CDATA[
+			var v1 = this.splitViewLayout.components[0];
+			var v2 = this.splitViewLayout.components[2];
+			var resizerWidth = this.splitViewLayout.resizer.size;
+			var minWidth1 = v1.minWidth;
+			var minWidth2 = v2 ? v2.minWidth : 0;
+			var v2Closed = (v1.splittable || this.ignoreSplittable) ? (!v2 || v2.closed) : true;
+			if (v1.closed || v2Closed || v1.minimized || !v2 || v2.minimized) {
+				resizerWidth = 0;
+			}
+			if (v1.closed) {
+				minWidth1 = 0;
+			}
+			if (v2Closed) {
+				minWidth2 = 0;
+			}
+			return minWidth1 + minWidth2 + resizerWidth;
+			]]>
+		</method>
+		
+		<method name="calcMinHeight">
+			<![CDATA[
+			var v1 = this.splitViewLayout.components[0];
+			var v2 = this.splitViewLayout.components[2];
+			var resizerHeight = this.splitViewLayout.resizer.size;
+			var minHeight1 = v1.minHeight;
+			var minHeight2 = v2 ? v2.minHeight : 0;
+			var v2Closed = (v1.splittable || this.ignoreSplittable) ? (!v2 || v2.closed) : true;
+			if (v1.closed || v2Closed || v1.minimized || !v2 || v2.minimized) {
+				resizerHeight = 0;
+			}
+			if (v1.closed) {
+				minHeight1 = 0;
+			}
+			if (v2Closed) {
+				minHeight2 = 0;
+			}
+			return minHeight1 + minHeight2 + resizerHeight;
+			]]>
+		</method>
+		
+		<method name="close">
+			<![CDATA[
+			this.setVariable("closed", true);
+			]]>
+		</method>
+	
+		<method name="open">
+			<![CDATA[
+			this.setVariable("closed", false);
+			]]>
+		</method>
+
+	</Component>
+
+</Definitions>

@@ -1,0 +1,92 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- BEGIN Heading_Data.jsp --%>
+
+<%-- Try to get product description --%>
+ 
+<c:set var="productId" value="${param.productId}" />
+<c:if test="${empty productId}">
+ 	<c:set var="productId" value="${WCParam.productId}" />
+</c:if> 
+
+<c:choose>
+    <c:when test="${!empty productId}">
+		<%-- Try to get it from our internal hashMap --%>
+		<c:set var="key1" value="${productId}+getCatalogEntryViewAllByID"/>
+		<c:set var="catalogEntryDetails" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+		<c:if test="${empty catalogEntryDetails}">
+			<c:catch var="searchServerException">
+				<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}" >	
+					<wcf:param name="langId" value="${langId}"/>
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="responseFormat" value="json"/>		
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+					<c:forEach var="contractId" items="${env_activeContractIds}">
+						<wcf:param name="contractId" value="${contractId}"/>
+					</c:forEach>
+				</wcf:rest>
+				<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			</c:catch>
+		</c:if>
+		<c:if test="${!empty catalogEntryDetails}">	
+			<c:set var="productName" value="${catalogEntryDetails.name}" />
+			<c:set var="catalogEntryID" value="${catalogEntryDetails.uniqueID}" />
+		</c:if>
+	</c:when>	
+	<c:otherwise>
+		<%-- Try to get category name --%>
+		
+		<c:set var="categoryId" value="${param.categoryId}" />
+		<c:if test="${empty categoryId}">
+ 			<c:set var="categoryId" value="${WCParam.categoryId}" />
+		</c:if> 
+		
+		<c:if test="${!empty categoryId}">	
+			<c:set var="key1" value="categoryview/byId/${categoryId}"/>
+			<c:set var="catGroupDetailsView" value="${cachedCategoryViewMap[key1]}"/>
+			<c:if test="${empty catGroupDetailsView}">
+				<c:catch var="searchServerException">
+					<wcf:rest var="catGroupDetailsView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/byId/${categoryId}" >	
+						<wcf:param name="langId" value="${langId}"/>
+						<wcf:param name="currency" value="${env_currencyCode}"/>
+						<wcf:param name="responseFormat" value="json"/>		
+						<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+						<c:forEach var="contractId" items="${env_activeContractIds}">
+							<wcf:param name="contractId" value="${contractId}"/>
+						</c:forEach>
+					</wcf:rest>
+				</c:catch>
+			</c:if>
+			<wcf:set target = "${cachedCategoryViewMap}" key="${key1}" value="${catGroupDetailsView}"/>
+		</c:if>
+		
+		<c:if test="${!empty catGroupDetailsView}">
+			<%-- For CI --%>
+			<c:set var="categoryIdentifier" value="${catGroupDetailsView.catalogGroupView[0].identifier}"/>
+			
+			<c:set var="categoryName" value="${catGroupDetailsView.catalogGroupView[0].name}"/>
+		</c:if>		
+	</c:otherwise>
+</c:choose>			
+
+<c:if test="${empty productId && empty categoryId}">
+	<c:set var="emptyWidget" value="true" />
+</c:if> 
+
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+<%-- END Heading_Data.jsp --%>

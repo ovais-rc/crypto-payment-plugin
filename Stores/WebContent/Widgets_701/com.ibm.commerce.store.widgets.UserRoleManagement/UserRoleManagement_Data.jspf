@@ -1,0 +1,97 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN UserRoleManagement_Data.jspf -->
+<c:set var="fromPage" value="${param.fromPage}"/>
+<c:set var="memberId" value="" />
+<%@ include file="orgList/UserRoleManagementOrgList_Data.jspf" %>
+
+<c:set var="OrgDisplayPattern"><wcst:message bundle="${widgetText}" key="${widgetNameCaps}_ORG_ROLE_DISPLAY"/></c:set>
+<c:set var="roleDisplayPattern"><wcst:message bundle="${widgetText}" key="${widgetNameCaps}_ROLE_DISPLAY"/></c:set>
+<wcf:url var="roleSelectorViewUrl" value="UserRoleManagementRoleSelectorView" type="Ajax">
+	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+</wcf:url>
+<wcf:url var="orgListViewUrl" value="UserRoleManagementOrgListView" type="Ajax">
+	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+</wcf:url>
+<wcf:url var="MyAccountURL" value="AjaxLogonForm">
+  	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+  	<wcf:param name="myAcctMain" value="1" />
+</wcf:url>
+<wcf:useBean var="assignedRoleNameMap" classname="java.util.HashMap"/>
+<wcf:useBean var="assignedOrgNameMap" classname="java.util.HashMap"/>
+<c:remove var="userRoles" />
+<wcf:useBean var="userRoles" classname="java.util.HashMap"/>
+<c:if test="${fromPage == 'editUser'}" >
+	<c:if test="${not empty WCParam.memberId }" >
+		<c:set var="memberId" value="${WCParam.memberId}" />
+	</c:if>
+	<c:if test="${not empty param.memberId }" >
+		<c:set var="memberId" value="${param.memberId}" />
+	</c:if>
+	<c:if test="${not empty memberId}" >
+		<wcf:rest var="rolesForUser" url="store/{storeId}/person/{memberId}" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:var name="memberId" value="${memberId}" encode="true"/>
+			<wcf:param name="profileName" value="IBM_Roles_Of_User_In_Orgs_I_Can_Admin"/>
+		</wcf:rest>
+		<c:forEach var="orgRolesMap" items="${rolesForUser.orgIdRoleDataBeans}">
+			<wcf:useBean var="roleList" classname="java.util.ArrayList"/>
+			<c:forEach var="role" items="${orgRolesMap.value}">
+				<wcf:set target="${roleList}" value="${role.roleId}" />
+				<%-- 
+				role Id can be duplicated, since only roleId + orgId is unique 
+				we use map, key is role Id, value is an array [roleName, roleNameFrequence],
+				we will use frequency to determine when to delete the roleName from the javaScript Object selectedRoleName map,
+				change of selection will cause the roleName frequency to change,
+				if no this role selected in any organization, the frequency for the role will be 0, 
+				and we delete it from the JavaScript Object SelectedRoleNameMap.
+				--%>
+				<wcf:useBean var="roleNameFrequence" classname="java.util.ArrayList"/>
+				<wcf:set target="${roleNameFrequence}" value="${role.displayName }" />
+				<c:choose>
+					<c:when test="${not empty assignedRoleNameMap[role.roleId]}">
+						<wcf:set target="${roleNameFrequence}" value="${assignedRoleNameMap[role.roleId][1]+1}" />
+					</c:when>
+					<c:otherwise>
+						<c:set var="frequence" value="${0}"/>
+						<wcf:set target="${roleNameFrequence}" value="${frequence + 1}" />
+					</c:otherwise>
+				</c:choose>
+				<wcf:set key="${role.roleId}" value="${roleNameFrequence}" target="${assignedRoleNameMap}"/>
+				<c:remove var="roleNameFrequence"/>
+			</c:forEach>
+			<wcf:set target="${userRoles}" key="${orgRolesMap.key}" value="${roleList}" />
+			<wcf:rest var="org" url="store/{storeId}/organization/{organizationId}">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:var name="organizationId" value="${orgRolesMap.key}" encode="true"/>
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="profileName" value="IBM_Organization_Short_Summary"/>
+			</wcf:rest>
+			<wcf:set key="${orgRolesMap.key}" value="${org.displayName}" target="${assignedOrgNameMap}"/>
+			<c:remove var="org" />
+			<c:remove var="roleList"/>
+		</c:forEach>
+	</c:if>
+</c:if>
+
+<!-- END UserRoleManagement_Data.jspf -->

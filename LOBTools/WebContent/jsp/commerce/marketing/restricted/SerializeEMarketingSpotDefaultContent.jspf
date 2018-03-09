@@ -1,0 +1,154 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf"%>
+
+<c:forEach var="defaultContent" items="${spot.defaultContent}">
+
+	<c:set var="contentStoreId" value=""/>
+	<c:choose>
+		<c:when test="${defaultContent.format == 'MarketingContent'}">
+			<wcf:getData type="com.ibm.commerce.marketing.facade.datatypes.MarketingContentType[]"
+				var="marketingContents" expressionBuilder="findByUniqueIDs"
+				varShowVerb="showVerbContent">
+				<wcf:contextData name="storeId" data="${param.storeId}" />
+				<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}" />
+				<wcf:param name="UniqueID" value="${defaultContent.contentUniqueID}" />
+			</wcf:getData>
+			
+			<c:forEach var="content" items="${marketingContents}">
+				<c:set var="contentStoreId" value="${content.marketingContentIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+			</c:forEach>
+		</c:when>
+		<c:when test="${defaultContent.format == 'CatalogGroup'}">
+			<wcf:getData type="com.ibm.commerce.catalog.facade.datatypes.CatalogGroupType[]"
+				var="categories" expressionBuilder="getCatalogGroupDetailsByIDs"
+				varShowVerb="showVerbContent">
+				<wcf:contextData name="storeId" data="${param.storeId}" />
+				<wcf:contextData name="catalogId" data="${param.masterCatalogId}" />
+				<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}" />
+				<wcf:param name="UniqueID" value="${defaultContent.contentUniqueID}" />
+			</wcf:getData>
+			
+			<c:forEach var="catalogGroup" items="${categories}">
+				<c:set var="contentStoreId" value="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+			</c:forEach>
+		</c:when>
+		<c:when test="${defaultContent.format == 'CatalogEntry'}">
+			<wcf:getData type="com.ibm.commerce.catalog.facade.datatypes.CatalogEntryType[]"
+				var="catentries" expressionBuilder="getCatalogEntryDetailsByIDs"
+				varShowVerb="showVerbContent">
+				<wcf:contextData name="storeId" data="${param.storeId}" />
+				<wcf:contextData name="catalogId" data="${param.masterCatalogId}" />
+				<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}" />
+				<wcf:param name="UniqueID" value="${defaultContent.contentUniqueID}" />
+			</wcf:getData>
+			
+			<c:forEach var="catentry" items="${catentries}">
+				<c:set var="contentStoreId" value="${catentry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+			</c:forEach>
+		</c:when>
+	</c:choose>
+	
+
+	<c:choose>
+		<c:when  test="${defaultContent.format == 'CatalogEntry'}">
+			<c:set var="format" value="CatalogEntry"/>
+		</c:when>
+		<c:when  test="${defaultContent.format == 'CatalogGroup'}">
+			<c:set var="format" value="CatalogGroup"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="format" value="Marketing"/>
+		</c:otherwise>
+	</c:choose>	
+
+	<c:set var="objectType" value=""/>
+
+	
+	<c:choose>
+		<c:when test="${spot.marketingSpotIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId || defaultContent.storeIdentifier.uniqueID == param.storeId}">
+			<c:choose>
+				<c:when test="${contentStoreId == param.storeId}">
+					<c:set var="objectType" value="DefaultEMarketingSpot${format}ContentReference"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="objectType" value="InheritedDefaultEMarketingSpot${format}ContentReference"/>
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		<c:otherwise>
+			<c:set var="objectType" value="InheritedDefaultEMarketingSpotInherited${format}ContentReference"/>
+		</c:otherwise>
+	</c:choose>
+	
+
+	
+	
+	<object objectType="${objectType}">
+		<c:set var="showVerb" value="${showVerb}" scope="request"/>
+		<c:set var="businessObject" value="${defaultContent}" scope="request"/>
+		<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+		
+		<uniqueId>${defaultContent.uniqueID}</uniqueId>	
+		<objectStoreId>${defaultContent.storeIdentifier.uniqueID}</objectStoreId>
+		<contentId>${defaultContent.contentUniqueID}</contentId>
+		<contentType><wcf:cdata data="${defaultContent.format}"/></contentType>
+		<sequence><wcf:cdata data="${defaultContent.displaySequence}"/></sequence> 
+		
+		<c:if test="${defaultContent.format == 'MarketingContent'}">
+			<c:forEach var="content" items="${marketingContents}">
+				<c:set var="showVerb" value="${showVerbContent}" scope="request" />
+				<c:set var="businessObject" value="${content}" scope="request" />
+				<jsp:directive.include file="SerializeMarketingContent.jspf" /> 
+			</c:forEach>
+		</c:if> 
+		
+		<c:if test="${defaultContent.format == 'CatalogGroup'}">
+			<c:forEach var="catalogGroup" items="${categories}">
+				<c:set var="showVerb" value="${showVerbContent}" scope="request" />
+				<c:set var="businessObject" value="${catalogGroup}" scope="request" />
+
+				<c:set var="inherited" value=""/>
+				<c:set var="dynamic" value=""/>	
+				<c:set var="type" value="CatalogGroup"/>	
+		
+				<c:if test="${param.storeId != catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}">
+					<c:set var="inherited" value="Inherited"/>
+				</c:if>
+				<c:if test="${catalogGroup.dynamicCatalogGroup == '1'}">
+					<c:set var="dynamic" value="Dynamic"/>
+				</c:if>	
+				
+			 	 <c:forEach var="attribute" items="${catalogGroup.attributes}">
+						<c:if test="${attribute.typedKey == 'catalog_group_type'}">
+							<c:set var="type" value="${attribute.typedValue}"/>
+						</c:if>
+				</c:forEach>
+								
+				<c:set var="objectType" value="${inherited}${dynamic}${type}"/>	
+					
+				<jsp:directive.include file="../../catalog/restricted/serialize/SerializeCatalogGroup.jspf" />
+			</c:forEach>
+		</c:if> 
+		
+		<c:if test="${defaultContent.format == 'CatalogEntry'}">
+			<c:forEach var="catentry" items="${catentries}">
+				<c:set var="showVerb" value="${showVerbContent}" scope="request" />
+				<c:set var="businessObject" value="${catentry}" scope="request" />
+				<jsp:directive.include file="../../catalog/restricted/serialize/SerializeGenericCatalogEntry.jspf" />
+			</c:forEach>
+		</c:if> 
+	</object>
+</c:forEach>

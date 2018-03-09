@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+
+	<!---
+	    This validator will check that at most one attribute value is set to be the default value.
+	    
+	    @private
+	-->
+	<Validator classDefinition="true" definitionName="cmc/catalog/AttributeDictionaryAttributeValueHasOneDefaultValueValidator">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+	
+		<!--- 
+			The validation error message.
+		 -->
+		<variable name="errorMessage" type="string" value="${catalogResources.Singleton.attributeTooManySelected.string}"/>	
+				
+		<!--- 
+		    This validator will warn the user that more than one allowed value has
+		    been selected as the default.
+        	
+			@param cmc/foundation/ModelObject o the model object that is to be validated.
+		-->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			var checked = -1;
+			var attributeValues = o.getObjects("AttributeDictionaryAttributeValueAlias");
+			for (var i = 0; i < attributeValues.length; i++) {
+				attributeValues[i].getProperty("default").clearValidationError(this);
+				if (attributeValues[i].getPropertyValue("default") == "true") {
+					if (checked != -1) {
+						attributeValues[i].getProperty("default").addValidationError(this, this.errorMessage);
+						attributeValues[checked].getProperty("default").addValidationError(this, this.errorMessage);
+					}
+					else {
+						checked = i;
+					}
+				}
+			}
+			]]>
+		</method>
+		
+	</Validator>
+	
+	<!---
+		@keywords private
+		
+		Validator for attributes that have allowed values.
+		This ensures that changing the attribute type will remove any invalid
+		child objects and prevent saving invalid objects.
+	 -->
+
+	<Validator classDefinition="true" definitionName="cmc/catalog/AttributeDictionaryAttributeAllowedValuesValidator">
+	
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			var type = o.getPropertyValue("attrDataType");
+			switch (type) {			
+				case "String":
+					var objectsToDelete = o.getObjects("AttributeDictionaryAttributeFloatValueAlias");
+					for (var i = 0; i < objectsToDelete.length; i++) {
+						objectsToDelete[i].deleteObject();
+					}
+					objectsToDelete = o.getObjects("AttributeDictionaryAttributeIntegerValueAlias");
+					for (var i = 0; i < objectsToDelete.length; i++) {
+						objectsToDelete[i].deleteObject();
+					}
+					break;
+				case "Integer":
+					var objectsToDelete = o.getObjects("AttributeDictionaryAttributeFloatValueAlias");
+					for (var i = 0; i < objectsToDelete.length; i++) {
+						objectsToDelete[i].deleteObject();
+					}
+					objectsToDelete = o.getObjects("AttributeDictionaryAttributeStringValueAlias");
+					for (var i = 0; i < objectsToDelete.length; i++) {
+						objectsToDelete[i].deleteObject();
+					}
+					break;
+				case "Float":
+					var objectsToDelete = o.getObjects("AttributeDictionaryAttributeIntegerValueAlias");
+					for (var i = 0; i < objectsToDelete.length; i++) {
+						objectsToDelete[i].deleteObject();
+					}
+					objectsToDelete = o.getObjects("AttributeDictionaryAttributeStringValueAlias");
+					for (var i = 0; i < objectsToDelete.length; i++) {
+						objectsToDelete[i].deleteObject();
+					}
+					break;
+			}
+			]]>
+		</method>
+	
+	</Validator>
+	
+</Definitions>

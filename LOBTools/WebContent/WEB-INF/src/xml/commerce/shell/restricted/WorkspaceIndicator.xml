@@ -1,0 +1,567 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		This class implements the workspace indicator in the banner area in Management Center
+		that displays the name of task and workspace the user is currently working within.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/WorkspaceIndicator" focusable="false">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<!--- @keywords private -->
+		<variable name="currentState" type="string" value=""/>
+		<!--- @keywords private -->
+		<variable name="taskName" type="string" value=""/>
+		<!--- @keywords private -->
+		<variable name="workspaceName" type="string" value=""/>
+
+		<!--- This view will be visible when the user selects a task to work on. -->
+		<Component visible="${this.classroot.currentState == 'TASK'}">
+			<Component clickable="true" imageSet="bannerTaskIcon" valign="middle">
+				<Tooltip text="${workspaceResources.Singleton.task.string}"/>
+			</Component>
+			<TextComponent fgcolor="${this.classroot.style.titletextcolor}" text="${this.classroot.taskName}"/>
+			<Component/>
+			<Component clickable="true" imageSet="bannerWorkspaceIcon" valign="middle">
+				<Tooltip text="${workspaceResources.Singleton.workspace.string}"/>
+			</Component>
+			<TextComponent fgcolor="${this.classroot.style.titletextcolor}" text="${this.classroot.workspaceName}"/>
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>
+
+		<!--- This view will be visible when the user chooses to work on production-ready content. -->
+		<Component visible="${this.classroot.currentState == 'BASE' &amp;&amp; !ConfigProperties.Singleton.readOnlyOnApprovedContent}">
+			<Component imageSet="bannerWorkOnBaseIcon" valign="middle"/>
+			<TextComponent fgcolor="${this.classroot.style.titletextcolor}" text="${shellResources.Singleton.workspaceWorkOnBase.string}"/>
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>
+		
+		<Component visible="${this.classroot.currentState == 'BASE' &amp;&amp; ConfigProperties.Singleton.readOnlyOnApprovedContent}">
+			<Component imageSet="bannerWorkOnBaseIcon" valign="middle"/>
+			<TextComponent fgcolor="${this.classroot.style.titletextcolor}" text="${shellResources.Singleton.workspaceWorkOnBaseInReadOnlyMode.string}"/>
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		This utility class provides methods to handle global workspace-related actions in
+		Management Center.
+	-->
+	<Node definitionName="cmc/shell/WorkspaceUtil" singletonDefinition="true">
+		<dependency localName="TaskGroupCancelService" moduleName="cmc/workspace/TaskGroupCancelService"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="TaskGroupRejectService" moduleName="cmc/workspace/TaskGroupRejectService"/>
+		<dependency localName="TaskCompleteService" moduleName="cmc/workspace/TaskCompleteService"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="TaskGroupApproveService" moduleName="cmc/workspace/TaskGroupApproveService"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			@keywords private
+			This method sets all the required context values, and updates the workspace indicator
+			in the banner area in Management Center with task and workspace name based on the
+			specified task object.
+			@param Object task: Task object that contains all the required workspace data.
+		-->
+		<method args="task" name="updateWorkspaceContext">
+			<![CDATA[
+			if (typeof(task) == "undefined") task = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "updateWorkspaceContext(task)", [task]);
+			}
+			ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "false");
+			ContextUtil.Singleton.findContextValue(null, "workspaceName").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTask").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceId").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroupId").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTaskId").setVariable("value", "");
+			if (task) {
+				var taskGroup = task.getParentPrimaryObject("TaskGroup");
+				var workspace = task.getParentPrimaryObject("Workspace");
+				ContextUtil.Singleton.findContextValue(null, "workspaceName").setVariable("value", workspace.getPropertyValue("workspaceIdentifier"));
+				ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").setVariable("value", taskGroup.getPropertyValue("taskGroupIdentifier"));
+				ContextUtil.Singleton.findContextValue(null, "workspaceTask").setVariable("value", task.getPropertyValue("taskIdentifier"));
+				ContextUtil.Singleton.findContextValue(null, "workspaceId").setVariable("value", workspace.getPropertyValue("workspaceId"));
+				ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroupId").setVariable("value", taskGroup.getPropertyValue("taskGroupId"));
+				ContextUtil.Singleton.findContextValue(null, "workspaceTaskId").setVariable("value", task.getPropertyValue("taskId"));
+			}
+			else if (ConfigProperties.Singleton.readOnlyOnApprovedContent) {
+				ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "true");
+			}
+			ToolsController.Singleton.resetWorkspaceContextTools();
+			if (task) {
+				SingletonRegistry.workspaceIndicator.setVariable("taskName", task.getPropertyValue("taskName"));
+				SingletonRegistry.workspaceIndicator.setVariable("workspaceName", workspace.getPropertyValue("wrkspcName"));
+				SingletonRegistry.workspaceIndicator.setVariable("currentState", "TASK");
+			}
+			else {
+				SingletonRegistry.workspaceIndicator.setVariable("taskName", "");
+				SingletonRegistry.workspaceIndicator.setVariable("workspaceName", "");
+				SingletonRegistry.workspaceIndicator.setVariable("currentState", "BASE");
+			}
+			MessageLogger.Singleton.clearStatusMessage();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "updateWorkspaceContext(task)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to switch to the given task. It updates the workspace context 
+			with the given task.
+			@param Object params: params object that contains all the required workspace data.
+		-->
+		<method args="params" name="changeWorkspaceContext">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "changeWorkspaceContext(params)", [params]);
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "false");
+				ContextUtil.Singleton.findContextValue(null, "workspaceName").setVariable("value", "");
+				ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").setVariable("value", "");
+				ContextUtil.Singleton.findContextValue(null, "workspaceTask").setVariable("value", "");
+				ContextUtil.Singleton.findContextValue(null, "workspaceId").setVariable("value", "");
+				ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroupId").setVariable("value", "");
+				ContextUtil.Singleton.findContextValue(null, "workspaceTaskId").setVariable("value", "");
+				if (params != null) {
+					ContextUtil.Singleton.findContextValue(null, "workspaceName").setVariable("value", params.workspaceIdentifier);
+					ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").setVariable("value", params.taskGroupIdentifier);
+					ContextUtil.Singleton.findContextValue(null, "workspaceTask").setVariable("value", params.taskIdentifier);
+					ContextUtil.Singleton.findContextValue(null, "workspaceId").setVariable("value", params.workspaceId);
+					ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroupId").setVariable("value", params.taskGroupId);
+					ContextUtil.Singleton.findContextValue(null, "workspaceTaskId").setVariable("value", params.taskId);
+				}
+				else if (ConfigProperties.Singleton.readOnlyOnApprovedContent) {
+					ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "true");
+				}
+				ToolsController.Singleton.resetWorkspaceContextTools();
+				if (params != null) {
+					SingletonRegistry.workspaceIndicator.setVariable("taskName", params.taskName);
+					SingletonRegistry.workspaceIndicator.setVariable("workspaceName", params.workspaceName);
+					SingletonRegistry.workspaceIndicator.setVariable("currentState", "TASK");
+				}
+				else {
+					SingletonRegistry.workspaceIndicator.setVariable("taskName", "");
+					SingletonRegistry.workspaceIndicator.setVariable("workspaceName", "");
+					SingletonRegistry.workspaceIndicator.setVariable("currentState", "BASE");
+				}
+				MessageLogger.Singleton.clearStatusMessage();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "changeWorkspaceContext(params)", [params]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method clears all the required context values, and clears the workspace indicator
+			in the banner area in Management Center.
+		-->
+		<method name="clearContext">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "clearContext");
+			}
+			ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "true");
+			ContextUtil.Singleton.findContextValue(null, "workspaceName").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTask").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceId").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroupId").setVariable("value", "");
+			ContextUtil.Singleton.findContextValue(null, "workspaceTaskId").setVariable("value", "");
+			ToolsController.Singleton.resetWorkspaceContextTools();
+			SingletonRegistry.workspaceIndicator.setVariable("taskName", "");
+			SingletonRegistry.workspaceIndicator.setVariable("workspaceName", "");
+			SingletonRegistry.workspaceIndicator.setVariable("currentState", "");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "clearContext");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to start working on the given task. It checks whether
+			there is any unsaved change in the tools, and then updates workspace context if
+			proceeds to work on the given task.
+			@param Object task: Task object that contains all the required workspace data.
+		-->
+		<method args="task" name="workOnTask">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "workOnTask(task)", [task]);
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				if (ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+					require(["cmc/shell/SwitchTaskWithChangesDialog"], function(SwitchTaskWithChangesDialog) {
+						SwitchTaskWithChangesDialog.Singleton.openSwitchTaskWithChangesDialog(task);
+					});
+				}
+				else {
+					this.updateWorkspaceContext(task);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "workOnTask(task)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to start working on production-ready content. It checks
+			whether there is any unsaved change in the tools, and then updates workspace context
+			if proceeds to work on production-ready content. It clears all the workspace-related
+			context values, and updates the workspace indicator in the banner area in Management
+			Center with the corresponding static text.
+		-->
+		<method name="workOnBase">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "workOnBase");
+			}
+			if (SingletonRegistry.workspaceIndicator.currentState == 'BASE') {
+				return;
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				if (ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+					require(["cmc/shell/SwitchTaskWithChangesDialog"], function(SwitchTaskWithChangesDialog) {
+						SwitchTaskWithChangesDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					this.updateWorkspaceContext();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "workOnBase");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to complete the specified tasks. It checks whether there is
+			any unsaved changes in the tools, and then invokes the complete task services if proceeds
+			to complete the specified tasks.
+			@param [cmc/foundation/ModelObject] objects The array of model objects associated with the specified tasks.
+		-->
+		<method args="objects" name="completeTasks">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "completeTasks(objects)", [objects]);
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				var hasUnsavedComment = false;
+				var hasUnsavedChanges = false;
+				var i = 0;
+				while (!hasUnsavedComment && !hasUnsavedChanges && i < objects.length) {
+					var o = objects[i];
+					var objectTaskGroup = o.getParentPrimaryObject("TaskGroup");
+					if (objectTaskGroup.hasUnsavedChanges()) {
+						hasUnsavedComment = true;
+					}
+					else if (o.getPropertyValue("taskIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTask").value && ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+						hasUnsavedChanges = true;
+					}
+					i++;
+				}
+				if (hasUnsavedComment) {
+					require(["cmc/shell/ProcessTasksWithUnsavedChangesDialog"], function(ProcessTasksWithUnsavedChangesDialog) {
+						ProcessTasksWithUnsavedChangesDialog.Singleton.openWindow();
+					});
+				}
+				else if (hasUnsavedChanges) {
+					require(["cmc/shell/CompleteTasksWithChangesDialog"], function(CompleteTasksWithChangesDialog) {
+						CompleteTasksWithChangesDialog.Singleton.openCompleteTasksWithChangesDialog(objects);
+					});
+				}
+				else {
+					this.invokeCompleteTaskService(objects);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "completeTasks(objects)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to approve the specified task groups. It checks whether there
+			is any unsaved changes in the tools, and then invokes the approve task group services if
+			proceeds to approve the specified task groups.
+			@param [cmc/foundation/ModelObject] objects The array of model objects associated with the specified task groups.
+		-->
+		<method args="objects" name="approveTaskGroups">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "approveTaskGroups(objects)", [objects]);
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				var hasUnsavedComment = false;
+				var hasUnsavedChanges = false;
+				var i = 0;
+				while (!hasUnsavedComment && !hasUnsavedChanges && i < objects.length) {
+					var o = objects[i];
+					if (o.hasUnsavedChanges()) {
+						hasUnsavedComment = true;
+					}
+					else if (o.getPropertyValue("taskGroupIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").value && ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+						hasUnsavedChanges = true;
+					}
+					i++;
+				}
+				if (hasUnsavedComment) {
+					require(["cmc/shell/ProcessTasksWithUnsavedChangesDialog"], function(ProcessTasksWithUnsavedChangesDialog) {
+						ProcessTasksWithUnsavedChangesDialog.Singleton.openWindow();
+					});
+				}
+				else if (hasUnsavedChanges) {
+					require(["cmc/shell/ApproveTaskGroupsWithChangesDialog"], function(ApproveTaskGroupsWithChangesDialog) {
+						ApproveTaskGroupsWithChangesDialog.Singleton.openApproveTaskGroupsWithChangesDialog(objects);
+					});
+				}
+				else {
+					this.invokeApproveTaskGroupService(objects);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "approveTaskGroups(objects)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to reject the specified task groups. It checks whether there
+			is any unsaved changes in the tools, and then invokes the reject task group services if
+			proceeds to reject the specified task groups.
+			@param [cmc/foundation/ModelObject] objects The array of model objects associated with the specified task groups.
+		-->
+		<method args="objects" name="rejectTaskGroups">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "rejectTaskGroups(objects)", [objects]);
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				var hasUnsavedComment = false;
+				var hasUnsavedChanges = false;
+				var i = 0;
+				while (!hasUnsavedComment && !hasUnsavedChanges && i < objects.length) {
+					var o = objects[i];
+					if (o.hasUnsavedChanges()) {
+						hasUnsavedComment = true;
+					}
+					else if (o.getPropertyValue("taskGroupIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").value && ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+						hasUnsavedChanges = true;
+					}
+					i++;
+				}
+				if (hasUnsavedComment) {
+					require(["cmc/shell/ProcessTasksWithUnsavedChangesDialog"], function(ProcessTasksWithUnsavedChangesDialog) {
+						ProcessTasksWithUnsavedChangesDialog.Singleton.openWindow();
+					});
+				}
+				else if (hasUnsavedChanges) {
+					require(["cmc/shell/RejectTaskGroupsWithChangesDialog"], function(RejectTaskGroupsWithChangesDialog) {
+						RejectTaskGroupsWithChangesDialog.Singleton.openRejectTaskGroupsWithChangesDialog(objects);
+					});
+				}
+				else {
+					this.invokeRejectTaskGroupService(objects);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "rejectTaskGroups(objects)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables the user to cancel the specified task groups. It checks whether there
+			is any unsaved changes in the tools, and then invokes the cancel task group services if
+			proceeds to cancel the specified task groups.
+			@param [cmc/foundation/ModelObject] objects The array of model objects associated with the specified task groups.
+		-->
+		<method args="objects" name="cancelTaskGroups">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "cancelTaskGroups(objects)", [objects]);
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+					TransactionProgressDialog.Singleton.openWindow();
+				});
+			}
+			else {
+				var hasUnsavedComment = false;
+				var hasUnsavedChanges = false;
+				var i = 0;
+				while (!hasUnsavedComment && !hasUnsavedChanges && i < objects.length) {
+					var o = objects[i];
+					if (o.hasUnsavedChanges()) {
+						hasUnsavedComment = true;
+					}
+					else if (o.getPropertyValue("taskGroupIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").value && ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+						hasUnsavedChanges = true;
+					}
+					i++;
+				}
+				if (hasUnsavedComment) {
+					require(["cmc/shell/ProcessTasksWithUnsavedChangesDialog"], function(ProcessTasksWithUnsavedChangesDialog) {
+						ProcessTasksWithUnsavedChangesDialog.Singleton.openWindow();
+					});
+				}
+				else if (hasUnsavedChanges) {
+					require(["cmc/shell/CancelTaskGroupsWithChangesDialog"], function(CancelTaskGroupsWithChangesDialog) {
+						CancelTaskGroupsWithChangesDialog.Singleton.openCancelTaskGroupsWithChangesDialog(objects);
+					});
+				}
+				else {
+					this.invokeCancelTaskGroupService(objects);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "cancelTaskGroups(objects)");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method invokes the complete task services, using the specified model objects that
+			contains all the required workspace data for the specified tasks.
+			@param [cmc/foundation/ModelObject] objects: The array of model objects associated with the specified tasks.
+		-->
+		<method args="objects" name="invokeCompleteTaskService">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeCompleteTaskService");
+			}
+			for (var i = 0; i < objects.length; i++) {
+				TaskCompleteService.Singleton.doRequest(objects[i]);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeCompleteTaskService");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method invokes the approve task group services, using the specified model objects
+			that contains all the required workspace data for the specified task groups.
+			@param [cmc/foundation/ModelObject] objects: The array of model objects associated with the specified task groups.
+		-->
+		<method args="objects" name="invokeApproveTaskGroupService">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeApproveTaskGroupService");
+			}
+			for (var i = 0; i < objects.length; i++) {
+				TaskGroupApproveService.Singleton.doRequest(objects[i]);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeApproveTaskGroupService");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method invokes the reject task group services, using the specified model objects
+			that contains all the required workspace data for the specified task groups.
+			@param [cmc/foundation/ModelObject] objects: The array of model objects associated with the specified task groups.
+		-->
+		<method args="objects" name="invokeRejectTaskGroupService">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeRejectTaskGroupService");
+			}
+			for (var i = 0; i < objects.length; i++) {
+				TaskGroupRejectService.Singleton.doRequest(objects[i]);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeRejectTaskGroupService");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method invokes the cancel task group services, using the specified model objects
+			that contains all the required workspace data for the specified task groups.
+			@param [cmc/foundation/ModelObject] objects: The array of model objects associated with the specified task groups.
+		-->
+		<method args="objects" name="invokeCancelTaskGroupService">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeCancelTaskGroupService");
+			}
+			for (var i = 0; i < objects.length; i++) {
+				TaskGroupCancelService.Singleton.doRequest(objects[i]);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/WorkspaceUtil", "invokeCancelTaskGroupService");
+			}
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

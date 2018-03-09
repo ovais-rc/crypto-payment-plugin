@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/BaseButton" focusable="false" stopDoubleClickPropagation="true">
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<variable name="normalImage" type="number" value="1"/>
+		<variable name="overImage" type="number" value="1"/>
+		<variable name="downImage" type="number" value="1"/>
+		<variable name="disabledImage" type="number" value="2"/>
+		<variable name="imageComponents" type="number" value="0"/>
+		<variable name="maxImages" type="number" value="${this.totalImages}"/>
+		<variable name="reference" value="${this}"/>
+		<variable name="_msdown" value="false" />
+		<variable name="_msin" value="false" />
+		<variable name="enabled" value="true" type="boolean"/>
+		<variable name="doesenter" value="false" type="boolean"/>
+		<variable name="isdefault" value="false" type="boolean"/>
+
+		<method name="destroy">
+			<![CDATA[
+			if (this.isdefault) {
+				FocusUtil.unregisterDefault(this);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method name="set_isdefault" args="value">
+			<![CDATA[
+			this.isdefault = value;
+			if (this.isdefault) {
+				FocusUtil.registerDefault(this);
+			}
+			else {
+				FocusUtil.unregisterDefault(this);
+			}
+			EventUtil.trigger(this, "onisdefault", value);
+			]]>
+		</method>
+
+		<method name="_callShow">
+			<![CDATA[
+			if (this._enabled && this._msdown && this._msin) {
+				this.showDown();
+			}
+			else if (this._enabled && this._msin) {
+				this.showOver();
+			}
+			else {
+				this.showUp();
+			}
+			]]>
+		</method>
+
+        <handler args="m" name="onmode" eventSource="ModalUtil">
+			<![CDATA[
+			if (m && (this._msdown || this._msin) && !ViewUtil.Singleton.containedInModalView(this)) {
+				this._msdown = false;
+				this._msin = false;
+				this._callShow();
+			}
+			]]> 
+		</handler>
+
+		<method name="set_imageComponents" args="value">
+			<![CDATA[
+			this.imageComponents = value;
+			if (this.imageComponents > 0 && this.childComponents.length > 0) {
+				this.setVariable("maxImages", this.childComponents[0].totalImages);
+			}
+			]]>
+		</method>
+
+		<method name="set_currentImage" args="value">
+			<![CDATA[
+			if (this.imageComponents > 0) {
+			    for (var i = 0 ; i < this.imageComponents; i++) {
+			        this.childComponents[i].setVariable("currentImage", value);
+			    }
+			}
+			else {
+			    this.inherited(arguments);
+			}
+			]]>
+		</method>
+
+		<method name="doSpaceDown" >
+			<![CDATA[
+			if (this._enabled) {
+				this.showDown();
+			}
+			]]>
+		</method>
+
+		<method name="doSpaceUp">
+			<![CDATA[
+			if (this._enabled) {
+				EventUtil.trigger(this, "onclick");
+				this.showUp();
+			}
+			]]>
+		</method>
+
+        <method name="doEnterDown" >
+			<![CDATA[        		
+			if (this._enabled) {
+				this.showDown();
+			}
+			]]>
+		</method>
+
+		<method name="doEnterUp">
+			<![CDATA[
+			if (this._enabled) {
+				EventUtil.trigger(this, "onclick");
+				this.showUp();
+			}
+			]]>
+		</method>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.imageComponents > 0 && this.childComponents.length > 0) {
+				this.setVariable("maxImages", this.childComponents[0].totalImages);
+			}
+			this._callShow();
+			]]>
+		</method>
+		
+		<handler name="onmouseover">
+			<![CDATA[
+			this.setVariable("_msin", true);
+			this._callShow();
+		    ]]>
+		</handler>
+		
+		<handler name="onmouseout">
+			<![CDATA[
+			this.setVariable("_msin", false);
+			this._callShow();
+		    ]]>
+		</handler>
+
+		<handler name="onmousedown">
+			<![CDATA[
+		    this.setVariable("_msdown", true);
+		    this._callShow();
+		    ]]>
+		</handler>
+		
+		<handler name="onmouseup">
+			<![CDATA[
+			this.setVariable("_msdown", false);
+			this._callShow();
+		    ]]>
+		</handler>
+		
+		<method name="_showEnabled">
+			<![CDATA[
+			if (this.reference) {
+				this.reference.setVariable("clickable", this._enabled);
+			}
+			showUp();
+			]]>
+		</method>
+
+		<method name="showDown">
+			<![CDATA[
+			this.setVariable("currentImage", this.downImage);
+			]]>
+		</method>
+
+		<method name="showUp">
+			<![CDATA[
+			if (!this._enabled && this.disabledImage) {
+				this.setVariable("currentImage", this.disabledImage);
+		    }
+			else {
+				this.setVariable("currentImage", this.normalImage);
+			}
+			]]>
+		</method>
+		
+		<method name="showOver">
+			<![CDATA[
+			this.setVariable("currentImage", this.overImage);
+			]]>
+		</method>
+		
+		<method name="set_reference" args="value">
+			<![CDATA[
+			this.reference = value;
+			if (value != this) this.setVariable("clickable", false);
+			if (this._initcomplete) {
+				this._showEnabled();
+			}
+			]]>
+		</method>
+		
+		<handler name="onnormalImage">
+			<![CDATA[
+			if (this._enabled) {
+				this._callShow();
+			}
+			]]>
+		</handler>
+		
+		<handler name="ondisabledImage">
+			<![CDATA[
+			if (!this._enabled) {
+				this._callShow();
+			}
+			]]>
+		</handler>
+	</FocusableComponent>
+	
+	<BaseButton classDefinition="true" definitionName="cmc/foundation/StateButton" clickable="true">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<variable name="statenum" type="number" value="0"/>
+		<variable name="statelength" type="number" value="0"/>
+		<variable name="maxstate" type="number" value="0"/>
+		<variable name="lastImage" type="number" value="1"/>
+		<variable name="currentImage" value="${this.lastImage + (this.statenum * this.statelength)}"/>
+		<method name="set_statenum" args="value">
+			<![CDATA[
+            if (value <= this.maxstate) {
+            	this.statenum = value;
+            	EventUtil.trigger(this, "onstatenum", value);
+            }
+			]]>
+		</method>
+		<method name="setStateNum" args="value">
+			<![CDATA[
+            this.setVariable("statenum", value);
+			]]>
+		</method>
+		<method name="set_statelength" args="value">
+			<![CDATA[
+			this.statelength = value;
+			if (this.statelength == 2) {
+				this.overImage = this.normalImage;
+				if (this.downImage == 3) {
+					this.downImage = 2;
+				}
+			}
+			else if (this.statelength == 1) {
+				this.overImage = 1;
+				this.downImage = 1;
+			}
+			EventUtil.trigger(this, "onstatelength", value);
+			]]>
+		</method>
+		<method name="showDown">
+			<![CDATA[
+			this.setVariable("lastImage", this.downImage);
+			]]>
+		</method>
+		<method name="showUp">
+			<![CDATA[
+			if (!this._enabled && this.disabledImage) {
+				this.setVariable("lastImage", this.disabledImage);
+		    }
+			else {
+				this.setVariable("lastImage", this.normalImage);
+			}
+			]]>
+		</method>
+		<method name="showOver">
+			<![CDATA[
+			this.setVariable("lastImage", this.overImage);
+			]]>
+		</method>
+	</BaseButton>
+	
+	<BaseButton classDefinition="true" definitionName="cmc/foundation/RepeaterButton">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<variable name="_lasttime" value="0" type="number"/>
+		<variable name="isMouseDown" value="false" type="boolean"/>
+
+		<event name="onmousestilldown"/>
+
+		<method name="stillDown">
+			<![CDATA[
+			var now = (new Date()).getTime();
+			var diff = now - this._lasttime;
+			this._lasttime = now;
+            if (this.isMouseDown) {
+				var next;
+				if (diff > 600) {
+				    next = 500;
+				}
+				else {
+				    next = 50;
+				    EventUtil.trigger(this, "onmousestilldown");
+				}
+				Timer.resetTimer(this.stillDownDel, next);
+			}
+			]]>
+		</method>
+
+		<handler name="onmousedown">
+			<![CDATA[
+			this._lasttime = (new Date()).getTime();
+			this.isMouseDown = true;
+			if (!this.stillDownDel) {
+				this.stillDownDel = new EventHandler.Class(this, "stillDown");
+			}
+			Timer.addTimer(this.stillDownDel, 500);
+			]]>
+		</handler>
+
+		<handler name="onmouseup">
+			<![CDATA[
+			this.isMouseDown = false;
+			Timer.removeTimer(this.stillDownDel);
+			]]>
+		</handler>
+	</BaseButton>
+</Definitions>

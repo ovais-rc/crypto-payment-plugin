@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","fi",{options:"Hymiövalinnat",title:"Hymiöt",toolbar:"Lisää hymiö"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("newpage","ca",{toolbar:"Pàgina nova"});

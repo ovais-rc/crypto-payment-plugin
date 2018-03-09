@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","tr",{clear:"Temizle",highlight:"Vurgula",options:"Renk Seçenekleri",selected:"Seçilen renk",title:"Renk Seç",ibm:{currentColor:"Geçerli renk"}});

@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+	-->
+	<PrimaryObjectDefinition browseFilterType="CURRENT" creatable="true" definitionName="cmc/workspace/TaskGroup" displayName="${workspaceResources.taskGroup}" displayNameProperty="taskGroupName" headerIcon="taskGroupHeaderIcon" helpLink="tasks/twocreatetg.htm" icon="taskGroupIcon" idProperty="taskGroupId" initializeObjectStoreId="false" newObjectMenuItemText="${workspaceResources.newTaskGroup}" objectType="TaskGroup" propertiesDefinition="cmc/workspace/TaskGroupProperties" refreshInterval="7" searchType="FindTaskGroups">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+		<!--- Refresh the object when its status is 'Commit in progress' or 'Publish in progress'. -->
+		<EnablementOrCondition conditionId="statusToRefresh" conditionType="refreshCondition">
+			<EnablementCondition conditionId="status1" conditionType="refreshCondition" enablementValue="8" propertyName="status"/>
+			<EnablementCondition conditionId="status2" conditionType="refreshCondition" enablementValue="11" propertyName="status"/>
+		</EnablementOrCondition>
+		<ParentReferenceObjectDefinition baseDefinition="cmc/workspace/ChildTaskObjectDefinition">
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="0" propertyName="status"/>
+				<EnablementCondition enablementValue="1" propertyName="status"/>
+				<EnablementCondition enablementValue="" propertyName="taskGroupId"/>
+			</EnablementOrCondition>
+		</ParentReferenceObjectDefinition>
+		<ChildObjectDefinition baseDefinition="cmc/workspace/TaskGroupComments">
+			<EnablementAndCondition>
+				<EnablementOrCondition>
+					<EnablementCondition enablementValue="1" propertyName="status"/>
+					<EnablementCondition enablementValue="2" propertyName="status"/>
+					<EnablementCondition enablementValue="3" propertyName="status"/>
+				</EnablementOrCondition>
+				<EnablementOrCondition>
+					<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+					<EnablementCondition contextName="workspaceContributor" enablementValue="true"/>
+					<EnablementAndCondition>
+						<EnablementCondition contextName="workspaceApprover" enablementValue="true"/>
+						<EnablementOrCondition>
+							<LogonIdEnablementCondition conditionId="approverIdCondition1" objectPath="ApproverAssociation/Approver" package="cmc/workspace" parentProperty="true" parentType="TaskGroup" propertyName="logonId"/>
+							<LogonIdEnablementCondition conditionId="approverIdCondition2" objectPath="ApproverAssociation/Approver" package="cmc/workspace" propertyName="logonId"/>
+						</EnablementOrCondition>
+					</EnablementAndCondition>
+				</EnablementOrCondition>
+			</EnablementAndCondition>
+		</ChildObjectDefinition>
+		<ChildObjectDefinition baseDefinition="cmc/workspace/TaskGroupHistory"/>
+		<ReferenceObjectDefinition allowDuplicates="false" derivedId="true" idProperty="associationId" objectType="ApproverAssociation" referencedTypes="Approver"/>
+		<NavigationListDefinition baseDefinition="cmc/workspace/TaskGridChildList" helpLink="tasks/twocreatetg.htm"/>
+		<!--- Retrieves the {@link cmc/workspace/WorkspacePrimaryObjectDefinition Workspace} object that refers to this object. -->
+		<GetReferencesService sendWorkspaceContext="false" url="/cmc/GetWorkspaceByTaskGroupId">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</GetReferencesService>
+		<!--- Retrieves the {@link cmc/workspace/TaskPrimaryObjectDefinition Task} objects that are children of this task group. -->
+		<GetChildrenService objectTypes="ChildTask" sendWorkspaceContext="false" url="/cmc/GetTasksByTaskGroupId">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+			<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+			<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+		</GetChildrenService>
+		<!--- Retrieves the {@link cmc/workspace/TaskGroupComments TaskGroupComment} child objects. -->
+		<GetChildrenService objectTypes="TaskGroupComment" sendWorkspaceContext="false" url="/cmc/GetTaskGroupComments">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</GetChildrenService>
+		<!--- Retrieves the Approvers for this task group. -->
+		<GetChildrenService objectTypes="ApproverAssociation" sendWorkspaceContext="false" url="/cmc/GetTaskGroupApprovers">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</GetChildrenService>
+		<RefreshService url="/cmc/GetTaskGroup">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+			<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+			<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+		</RefreshService>
+		<CreateService refreshChildren="true" sendMultiValues="true" url="/cmc/CreateTaskGroup">
+			<ServiceParam name="workspaceId" optional="false" parentProperty="true" parentType="Workspace" propertyName="workspaceId"/>
+			<ServiceParam name="approverId" objectPath="ApproverAssociation/Approver" optional="true" propertyName="memberId"/>
+		</CreateService>
+		<UpdateService sendMultiValues="true" url="/cmc/UpdateTaskGroup">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+			<ServiceParam name="approverId" objectPath="ApproverAssociation/Approver" optional="true" propertyName="memberId"/>
+		</UpdateService>
+		<DeleteService url="/cmc/DeleteTaskGroup">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</DeleteService>
+		<!--- Custom service defined to activate task group. -->
+		<CustomService displayName="${workspaceResources.activate}" refreshChildren="true" sendWorkspaceContext="false" url="/cmc/ActivateTaskGroup">
+			<EnablementAndCondition>
+				<EnablementCondition enablementValue="0" propertyName="status"/>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<EnablementCondition enablementValue="Active" parentProperty="true" parentType="Workspace" propertyName="workspaceStatus" resolvePrimaryParent="true"/>
+			</EnablementAndCondition>
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</CustomService>
+		<!--- Custom service defined to return task group to active. -->
+		<CustomService displayName="${workspaceResources.returnToActive}" refreshChildren="true" url="/cmc/ReturnToActiveTaskGroup">
+			<EnablementAndCondition>
+				<EnablementOrCondition>
+					<EnablementCondition enablementValue="2" propertyName="status"/>
+					<EnablementCondition enablementValue="3" propertyName="status"/>
+					<EnablementCondition enablementValue="4" propertyName="status"/>
+					<EnablementCondition enablementValue="7" propertyName="status"/>
+				</EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+			</EnablementAndCondition>
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</CustomService>
+		<!--- Retrieves the {@link cmc/workspace/TaskGroupHistory TaskGroupHistory} child objects. -->
+		<GetChildrenService objectTypes="TaskGroupHistory" sendWorkspaceContext="false" url="/cmc/GetTaskGroupHistory">
+			<ServiceParam name="taskGroupId" propertyName="taskGroupId"/>
+		</GetChildrenService>
+		<TaskGroupApproveClientAction package="cmc/workspace"/>
+		<TaskGroupRejectClientAction package="cmc/workspace"/>
+		<TaskGroupCancelClientAction package="cmc/workspace"/>
+		<PropertyDefinition displayName="${workspaceResources.taskGroupName}" maximumSize="254" propertyName="taskGroupName" required="true" trim="true"/>
+		<PropertyDefinition displayName="${workspaceResources.taskGroupDueDate}" propertyName="dueDate" type="datetime"/>
+		<PropertyDefinition displayName="${workspaceResources.taskGroupCommitDate}" propertyName="promotionDate" type="datetime"/>
+		<PropertyDefinition propertyName="isPromotionDateSet">
+			<PropertyValue isDefault="true" value="false"/>
+			<PropertyValue value="true"/>
+		</PropertyDefinition>
+		<RequiredParentValidator errorMessage="${workspaceResources.missingWorkspaceParent}" validatorId="parentExistsCheck" validatorType="requiredParentWorkspaceValidator"/>
+		<Xml name="template">
+			<status>0</status>
+		</Xml>
+		<PropertyDefinition copyProtected="true" displayName="${workspaceResources.status}" propertyName="status" send="false">
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusInactive}" icon="taskGroupInactiveIcon" value="0"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusWorking}" icon="taskGroupWorkingIcon" value="1"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusReadyForApproval}" icon="taskGroupReadyForApprovalIcon" value="2"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusApproved}" icon="taskGroupApprovedIcon" value="3"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusReadyToCommit}" icon="taskGroupReadyToCommitIcon" value="4"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusCompleted}" icon="taskGroupCompletedIcon" value="5"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusCanceled}" icon="taskGroupCanceledIcon" value="6"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusCommitFailed}" icon="taskGroupCommitFailedIcon" value="7"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusCommitInProgress}" icon="taskGroupCommitInProgressIcon" value="8"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusCommitted}" icon="taskGroupCommittedIcon" value="9"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusReadyToPublish}" icon="taskGroupReadyToPublishIcon" value="10"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusPublishInProgress}" icon="taskGroupPublishInProgressIcon" value="11"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusPublished}" icon="taskGroupPublishedIcon" value="12"/>
+			<PropertyValue displayName="${workspaceResources.taskGroupStatusPublishFailed}" icon="taskGroupPublishFailedIcon" value="13"/>
+		</PropertyDefinition>
+	</PrimaryObjectDefinition>
+
+
+	<!---
+		@keywords private
+		Client action definition that approves a task group in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/TaskGroupApproveClientAction" displayName="${workspaceResources.Singleton.approve.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+				WorkspaceUtil.Singleton.approveTaskGroups(objects);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<EnablementAndCondition>
+					<EnablementCondition contextName="workspaceApprover" enablementValue="true"/>
+					<EnablementCondition objectPath="ApproverAssociation/Approver" propertyName="logonId">
+						<!--- @keywords private -->
+						<method args="o" name="isEnabled">
+							<![CDATA[
+							var propertyValues = this.getValues(o);
+							for (var i = 0; i < propertyValues.length; i++) {
+								if (propertyValues[i] == ContextUtil.Singleton.findContextValue(null, "logonId").value) {
+									return true;
+								}
+							}
+							return false;
+							]]>
+						</method>
+					</EnablementCondition>
+				</EnablementAndCondition>
+			</EnablementOrCondition>
+			<EnablementCondition enablementValue="2" propertyName="status"/>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that rejects a task group in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/TaskGroupRejectClientAction" displayName="${workspaceResources.Singleton.reject.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+				WorkspaceUtil.Singleton.rejectTaskGroups(objects);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<EnablementAndCondition>
+					<EnablementCondition contextName="workspaceApprover" enablementValue="true"/>
+					<EnablementCondition objectPath="ApproverAssociation/Approver" propertyName="logonId">
+						<!--- @keywords private -->
+						<method args="o" name="isEnabled">
+							<![CDATA[
+							var propertyValues = this.getValues(o);
+							for (var i = 0; i < propertyValues.length; i++) {
+								if (propertyValues[i] == ContextUtil.Singleton.findContextValue(null, "logonId").value) {
+									return true;
+								}
+							}
+							return false;
+							]]>
+						</method>
+					</EnablementCondition>
+				</EnablementAndCondition>
+			</EnablementOrCondition>
+			<EnablementCondition enablementValue="2" propertyName="status"/>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that cancels a task group in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/TaskGroupCancelClientAction" displayName="${workspaceResources.Singleton.cancel.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+				WorkspaceUtil.Singleton.cancelTaskGroups(objects);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="0" propertyName="status"/>
+				<EnablementCondition enablementValue="1" propertyName="status"/>
+				<EnablementCondition enablementValue="2" propertyName="status"/>
+				<EnablementCondition enablementValue="7" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<Service definitionName="cmc/workspace/TaskGroupCancelService" sendSiblingRequestsInParallel="false" sendWorkspaceContext="false" singletonDefinition="true" transactionService="true" url="/cmc/CancelTaskGroup">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskGroupId" propertyName="taskGroupId"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var successMessage = foundationResources.Singleton.replaceValues("customServiceSuccessful", [workspaceResources.Singleton.cancel.string, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			MessageLogger.Singleton.logStatus(successMessage);
+			if (requestParent.getPropertyValue("taskGroupIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").value) {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.clearContext();
+				});
+			}
+			for (var refKey in requestParent.referenceMap) {
+				if (requestParent.referenceMap[refKey].objectType == "ChildTaskGroup") {
+					var parentWorkspace = requestParent.referenceMap[refKey].parentObject;
+					if (parentWorkspace.objectType == "Workspace") {
+						parentWorkspace.refreshing = true;
+						parentWorkspace.objectDefinition.refreshService.doRequest(parentWorkspace);
+					}
+				}
+			}
+			requestParent.refreshChildren();
+			for (var key in requestParent.model.objectMap) {
+				if (requestParent.model.objectMap[key].objectType == "ToDoTasksTop" || requestParent.model.objectMap[key].objectType == "CompletedTasksTop" || requestParent.model.objectMap[key].objectType == "ApprovedTasksTop" || requestParent.model.objectMap[key].objectType == "CanceledTasksTop") {
+					requestParent.model.objectMap[key].refreshChildren();
+				}
+			}
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		Open handler definition that opens a task group history object.
+	-->
+	<OpenHandler classDefinition="true" definitionName="cmc/workspace/TaskGroupHistoryOpenHandler">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+			@param boolean select: indicates that the opened object is to be selected
+		-->
+		<method args="o, select" name="open">
+			<![CDATA[
+			if (typeof(select) == "undefined") select = true;
+			this.triggerOpen(o, select, false, false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if this open handler is enabled.
+			
+			@param cmc/foundation/ModelObject o: the object to be opened
+			@param cmc/foundation/EventHandler del: optional delegate
+			@return boolean: true if the open action is enabled
+		-->
+		<method args="o, del" name="isEnabled">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var action = o.getPropertyValue("action");
+			return this.inherited(arguments) && action != null && action != "Delete" && this.getSearchType(o, del) != null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords abstract
+			Perform the logic required for the open object in compare view action.
+			@param cmc/foundation/ModelObject o: the object to be opened
+		-->
+		<method args="o" name="openInCompareView">
+			<![CDATA[
+			this.triggerOpen(o, false, true, false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords abstract
+			Perform the logic required for the open object in the approved
+			content context for compare view action.
+			@param cmc/foundation/ModelObject o: the object to be opened
+		-->
+		<method args="o" name="openApprovedContentInCompareView">
+			<![CDATA[
+			this.triggerOpen(o, false, true, true);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if this open handler is enabled for opening objects in the compare view.
+			
+			@param cmc/foundation/ModelObject o: the object to be opened
+			@param cmc/foundation/EventHandler del: optional delegate
+			@return boolean: true if the open action is enabled for open objects in the compare view
+		-->
+		<method args="o, del" name="isOpenInCompareViewEnabled">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			return this.isEnabled(o, del);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, select, openInCompareView, openApprovedContent" name="triggerOpen">
+			<![CDATA[
+			var searchType = this.getSearchType(o);
+			if (searchType) {
+				var searchOptions = this.getSearchOptions(o, openApprovedContent);
+				var storeId = o.getPropertyValue("objectStoreId");
+				var storeConfig = StoreUtil.Singleton.getStore(storeId);
+				var task = "T-1";
+				var taskGroup = "TG-1";
+				var workspaceName = o.parentObject.getParentPrimaryObject().getPropertyValue("workspaceIdentifier");
+				var context = ContextUtil.Singleton.findStoreContext(storeConfig, workspaceName, taskGroup, task, openApprovedContent);
+				require(["cmc/foundation/OpenObjectActionHandler"], function(OpenObjectActionHandler) {
+					OpenObjectActionHandler.Singleton.triggerAction(o.model, searchType, searchOptions, select, openInCompareView, context);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, del" name="getSearchType">
+			<![CDATA[
+			var searchType = null;
+			var objectType = o.getPropertyValue("objectType");
+			if (objectType == "SalesCatalogGroup" || objectType == "InheritedSalesCatalogGroup") {
+				searchType = "FindCategories";
+			}
+			else if (objectType == "TopCatalogGroupPage" || objectType == "InheritedTopCatalogGroupPage" || objectType == "CatalogGroupPage" || objectType == "InheritedCatalogGroupPage") {
+				searchType = "FindCategoryPage";
+			}
+			else if (objectType == "TopSalesCatalogGroupPage" || objectType == "InheritedTopSalesCatalogGroupPage" || objectType == "SalesCatalogGroupPage" || objectType == "InheritedSalesCatalogGroupPage") {
+				searchType = "FindSalesCategoryPage";
+			}
+			else if (objectType == "ProductPage" || objectType == "InheritedProductPage" || objectType == "ProductSKUPage" || objectType == "InheritedProductSKUPage" || objectType == "CatalogGroupSKUPage" || objectType == "InheritedCatalogGroupSKUPage" || objectType == "BundlePage" || objectType == "InheritedBundlePage" || objectType == "KitPage" || objectType == "InheritedKitPage" || objectType == "DynamicKitPage" || objectType == "InheritedDynamicKitPage" || objectType == "PredDynaKitPage" || objectType == "InheritedPredDynaKitPage") {
+				searchType = "FindCatalogEntryPage";
+			}
+			else {
+				var objectDefinition = o.model.getObjectDefinition(null, objectType, true, del);
+				if (objectDefinition) {
+					searchType = objectDefinition.searchType;
+				}
+			}
+			return searchType;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, openApprovedContent" name="getSearchOptions">
+			<![CDATA[
+			var objectCode = o.getPropertyValue("objectCode");
+			if (openApprovedContent) {
+				var oldObjectCode = o.getPropertyValue("xd_OldObjectCode");
+				if (oldObjectCode != null && oldObjectCode != "") {
+					objectCode = oldObjectCode;
+				}
+			}
+			var searchOptions = {};
+			searchOptions.searchText = objectCode;
+			searchOptions.searchUniqueId = o.getPropertyValue("objectUniqueId");
+			var objectType = o.getPropertyValue("objectType");
+			if (objectType == "SalesCatalogGroup" || objectType == "InheritedSalesCatalogGroup") {
+				searchOptions.salesCatalogId = o.getPropertyValue("xd_CatalogId");
+			}
+			return searchOptions;
+			]]>
+		</method>
+	</OpenHandler>
+
+	<!---
+		@keywords private
+		<p>This class defines a client action for opening a history object
+		and it's base object in compare view.</p>
+	-->
+	<ClientAction allowMultipleSelection="false" childListEditorIcon="compareToApprovedIcon" classDefinition="true" definitionName="cmc/workspace/TaskGroupCompareHistoryAction" displayName="${workspaceResources.Singleton.compareWithBase.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var o = objects[0];
+			var compareViewTreeNode = o.model.oEditor.navigationTree.compareViewTree;
+			compareViewTreeNode.setVariable("compareObject1Cache", null);
+			compareViewTreeNode.setVariable("compareObject2Cache", null);
+			o.objectDefinition.openHandler.openInCompareView(o);
+			o.objectDefinition.openHandler.openApprovedContentInCompareView(o);
+			if (!compareViewTreeNode.selected) {
+				compareViewTreeNode.changeFocus(null);
+				compareViewTreeNode.setVariable("selected", true);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if this compare handler is enabled.
+			
+			@param cmc/foundation/ModelObject o: the object to be opened
+			@return boolean: true if the open action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			return this.inherited(arguments) && o.objectDefinition.openHandler.isOpenInCompareViewEnabled(o);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the enablement condition changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerEnablementDelegate">
+			<![CDATA[
+			this.inherited(arguments);
+			o.objectDefinition.openHandler.isOpenInCompareViewEnabled(o, del);
+			]]>
+		</method>
+	</ClientAction>
+	
+</Definitions>

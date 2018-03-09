@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for a {@link cmc/promotion/MultipleItemsPercentDiscountPurchaseConditionObjectDefinition MultipleItemsPercentDiscountPurchaseConditionObjectDefinition} object. 
+		This ensures the following case: 
+		<ul>
+			<li>
+				For the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition MultipleItemsPromotionElementObjectDefinition} elements whose 
+				value of the property <code>MultipleItemsElementId</code> is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#mandatoryIds
+				mandatoryIds list}, verify Catalog Entry or Category child objects and quantity exists. 
+			</li>
+			<li>
+				When the specifyAdditionalItems flag is set to true, then for the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition
+				MultipleItemsPromotionElementObjectDefinition} elements whose value of the property <code>MultipleItemsElementId</code>
+				is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#specifyAdditionalItemsIds specifyAdditionalItemsIds list},
+				verify quantity exists if Catalog Entry or Category child objects exists. 
+			</li>
+			<li>
+				When the specifyAdditionalItems flag is set to false, then for the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition
+				MultipleItemsPromotionElementObjectDefinition} elements whose value of the property <code>MultipleItemsElementId</code>
+				is NOT in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#specifyAdditionalItemsIds specifyAdditionalItemsIds list},
+				delete the child objects for types defined in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#objectTypesToDelete
+				objectTypesToDelete list}. 
+			</li>
+		</ul>		
+	-->
+	<MultipleItemsPromotionElementValidator classDefinition="true" definitionName="cmc/promotion/MultipleItemsPurchaseConditionValidator" package="cmc/promotion">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!--- @keywords private -->		
+		<!--- Comma-separated list of MultipleItemsElementId values. -->
+		<variable name="mandatoryIds" type="string" value="1,2"/>
+		<!--- Comma-separated list of MultipleItemsElementId values contained in specifyAdditionalItems checkbox. -->
+		<variable name="specifyAdditionalItemsIds" type="string" value="3,4"/>
+		<!--- Comma-separated list of child object types of MultipleItemsPromotionElement to delete if the object is not in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#excludeIds excludeIds list}. -->
+		<variable name="objectTypesToDelete" type="string" value="Identifier_CatalogEntry,Identifier_InheritedCatalogEntry,Identifier_Category,Identifier_InheritedCategory,Identifier_ExcludeCatalogEntry,Identifier_InheritedExcludeCatalogEntry,CatalogEntryAttributeRule"/>
+		<!--- @keywords private -->		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			var mandatoryIdMap = {};
+			var specifyAdditionalItemsIDMap = {};
+			var mandatoryIdList = StringUtil.Singleton.splitAndTrim(this.mandatoryIds, ",");
+			for (var i = 0; i < mandatoryIdList.length; i++) {
+				mandatoryIdMap[mandatoryIdList[i]] = "true";
+				specifyAdditionalItemsIDMap[mandatoryIdList[i]] = "true";
+			}
+			var specifyAdditionalItemsIdList = StringUtil.Singleton.splitAndTrim(this.specifyAdditionalItemsIds, ",");
+			for (var i = 0; i < specifyAdditionalItemsIdList.length; i++) {
+				mandatoryIdMap[specifyAdditionalItemsIdList[i]] = "false";
+				specifyAdditionalItemsIDMap[specifyAdditionalItemsIdList[i]] = o.getPropertyValue("specifyAdditionalItems");
+			}
+			var elements = o.getObjects("MultipleItemsPromotionElement");
+			for (var i = 0; i < elements.length; i++) {
+				var elementId = elements[i].getPropertyValue("MultipleItemsElementId");
+				if (mandatoryIdMap[elementId] == "true") {
+					var selectCatalogEntryOrCategory = elements[i].getPropertyValue("selectCatalogEntryOrCategory");
+					if (selectCatalogEntryOrCategory == "category") {
+						this.validateCategories(elements[i]);
+					}
+					else if (selectCatalogEntryOrCategory == "catalogEntry") {
+						this.validateCatalogEntries(elements[i]);
+					}
+				}
+				if (mandatoryIdMap[elementId] == "false" && specifyAdditionalItemsIDMap[elementId] == "true") {
+					var selectCatalogEntryOrCategory = elements[i].getPropertyValue("selectCatalogEntryOrCategory");
+					if (selectCatalogEntryOrCategory == "category") {
+						this.validateQuantityOrMinAmount(elements[i], "Identifier_CategoryGroup");
+					}
+					else if (selectCatalogEntryOrCategory == "catalogEntry") {
+						this.validateQuantityOrMinAmount(elements[i], "Identifier_CatalogEntryGroup");
+					}
+				}
+				if ((!specifyAdditionalItemsIDMap[elementId]) || (specifyAdditionalItemsIDMap[elementId] == "false")) {
+					var objectTypes = StringUtil.Singleton.splitAndTrim(this.objectTypesToDelete, ",");
+					for (var k = 0; k < objectTypes.length; k++) {
+						var objectsToDelete = elements[i].getObjects(objectTypes[k]);
+						for (var m = 0; m < objectsToDelete.length; m++) {
+							objectsToDelete[m].deleteObject();
+						}
+					}
+					this.clearValidations(elements[i]);
+				}
+			}
+			]]>
+		</method>
+	</MultipleItemsPromotionElementValidator>
+	
+	<!---
+		Validator for a {@link cmc/promotion/MultipleItemsPercentDiscountPurchaseConditionObjectDefinition MultipleItemsPercentDiscountPurchaseConditionObjectDefinition} object. 
+		This ensures the following case: 
+		<ul>
+			<li>
+				For the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition MultipleItemsPromotionElementObjectDefinition} elements whose 
+				value of the property <code>MultipleItemsElementId</code> is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#mandatoryIds
+				mandatoryIds list}, verify Catalog Entry or Category child objects and quantity or amount exists. 
+			</li>
+			<li>
+				When the specifyAdditionalItemsForB flag is set to true, then for the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition
+				MultipleItemsPromotionElementObjectDefinition} elements whose value of the property <code>MultipleItemsElementId</code>
+				is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#specifyAdditionalItemsForBIds specifyAdditionalItemsForBIds list},
+				verify Catalog Entry or Category child objects and quantity or amount exists. 
+			</li>
+			<li>
+				When the specifyAdditionalItemsForC flag is set to true, then for the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition
+				MultipleItemsPromotionElementObjectDefinition} elements whose value of the property <code>MultipleItemsElementId</code>
+				is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#specifyAdditionalItemsForCIds specifyAdditionalItemsForCIds list},
+				verify Catalog Entry or Category child objects and quantity or amount exists. 
+			</li>
+			<li>
+				When the specifyAdditionalItemsForB flag is set to false, then for the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition
+				MultipleItemsPromotionElementObjectDefinition} elements whose value of the property <code>MultipleItemsElementId</code>
+				is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#specifyAdditionalItemsForBIds specifyAdditionalItemsForBIds list},
+				delete child objects for types defined in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#objectTypesToDelete objectTypesToDelete list}.  
+			</li>
+			<li>
+				When the specifyAdditionalItemsForC flag is set to false, then for the {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition
+				MultipleItemsPromotionElementObjectDefinition} elements whose value of the property <code>MultipleItemsElementId</code>
+				is in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#specifyAdditionalItemsForCIds specifyAdditionalItemsForCIds list},
+				delete child objects for types defined in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#objectTypesToDelete objectTypesToDelete list}.  
+			</li>
+		</ul>		
+	-->
+	<MultipleItemsPromotionElementValidator classDefinition="true" definitionName="cmc/promotion/MultipleItemsGetYPurchaseConditionValidator" package="cmc/promotion">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!--- Comma-separated list of MultipleItemsElementId values. -->
+		<variable name="mandatoryIds" type="string" value="1"/>
+		<!--- Comma-separated list of MultipleItemsElementId values contained in specifyAdditionalItemsForB checkbox. -->
+		<variable name="specifyAdditionalItemsForBIds" type="string" value="2"/>
+		<!--- Comma-separated list of MultipleItemsElementId values contained in specifyAdditionalItemsForC checkbox. -->
+		<variable name="specifyAdditionalItemsForCIds" type="string" value="3"/>
+		<!--- Comma-separated list of child object types of MultipleItemsPromotionElement to delete if the object is not in the {@link cmc/promotion/MultipleItemsPurchaseConditionValidator#excludeIds excludeIds list}. -->
+		<variable name="objectTypesToDelete" type="string" value="Identifier_CatalogEntry,Identifier_InheritedCatalogEntry,Identifier_Category,Identifier_InheritedCategory,Identifier_ExcludeCatalogEntry,Identifier_InheritedExcludeCatalogEntry,CatalogEntryAttributeRule"/>
+
+		<!--- @keywords private -->		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			var mandatoryIdMap = {};
+			var specifyAdditionalItemsIDMap = {};
+			var mandatoryIdList = StringUtil.Singleton.splitAndTrim(this.mandatoryIds, ",");
+			for (var i = 0; i < mandatoryIdList.length; i++) {
+				mandatoryIdMap[mandatoryIdList[i]] = "true";
+				specifyAdditionalItemsIDMap[mandatoryIdList[i]] = "true";
+			}
+			var specifyAdditionalItemsForBIdList = StringUtil.Singleton.splitAndTrim(this.specifyAdditionalItemsForBIds, ",");
+			for (var i = 0; i < specifyAdditionalItemsForBIdList.length; i++) {
+				mandatoryIdMap[specifyAdditionalItemsForBIdList[i]] = o.getPropertyValue("specifyAdditionalItemsForB");
+				specifyAdditionalItemsIDMap[specifyAdditionalItemsForBIdList[i]] = o.getPropertyValue("specifyAdditionalItemsForB");
+			}
+			var specifyAdditionalItemsForCIdList = StringUtil.Singleton.splitAndTrim(this.specifyAdditionalItemsForCIds, ",");
+			for (var i = 0; i < specifyAdditionalItemsForCIdList.length; i++) {
+				mandatoryIdMap[specifyAdditionalItemsForCIdList[i]] = o.getPropertyValue("specifyAdditionalItemsForC");
+				specifyAdditionalItemsIDMap[specifyAdditionalItemsForCIdList[i]] = o.getPropertyValue("specifyAdditionalItemsForC");
+			}
+			var elements = o.getObjects("MultipleItemsPromotionElement");
+			for (var i = 0; i < elements.length; i++) {
+				var elementId = elements[i].getPropertyValue("MultipleItemsElementId");
+				if (mandatoryIdMap[elementId] == "true") {
+					var selectCatalogEntryOrCategory = elements[i].getPropertyValue("selectCatalogEntryOrCategory");
+					if (selectCatalogEntryOrCategory == "category") {
+						this.validateCategories(elements[i]);
+					}
+					else if (selectCatalogEntryOrCategory == "catalogEntry") {
+						this.validateCatalogEntries(elements[i]);
+					}
+				}
+				if (!(specifyAdditionalItemsIDMap[elementId]) || (specifyAdditionalItemsIDMap[elementId] == "false")) {
+					var objectTypes = StringUtil.Singleton.splitAndTrim(this.objectTypesToDelete, ",");
+					for (var k = 0; k < objectTypes.length; k++) {
+						var objectsToDelete = elements[i].getObjects(objectTypes[k]);
+						for (var m = 0; m < objectsToDelete.length; m++) {
+							objectsToDelete[m].deleteObject();
+						}
+					}
+					this.clearValidations(elements[i]);
+				}
+			}
+			]]>
+		</method>
+	</MultipleItemsPromotionElementValidator>
+
+	<!---
+		Validator for a {@link cmc/promotion/MultipleItemsPromotionElementObjectDefinition MultipleItemsPromotionElementObjectDefinition} object. 
+		This ensures the following cases: 
+		<ul>
+			<li>
+				When the selectCatalogEntryOrCategory flag is set to catalogEntry, delete the child objects for types Identifier_Category, Identifier_InheritedCategory, Identifier_ExcludeCatalogEntry and 
+				Identifier_InheritedExcludeCatalogEntry. When the selectCatalogEntryOrCategory flag is set to category, delete the child objects for types Identifier_CatalogEntry and Identifier_InheritedCatalogEntry.
+			</li>
+		</ul>
+	-->	
+	<Validator classDefinition="true" definitionName="cmc/promotion/MultipleItemsPromotionElementValidator">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCatalogEntry" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneProduct.string}"/>
+		<!--- @keywords private -->	
+		<variable name="message_specifyCatalogEntryForA" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneProductForA.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCatalogEntryForB" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneProductForB.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCatalogEntryForC" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneProductForC.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCategory" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneCategory.string}"/>
+		<!--- @keywords private -->	
+		<variable name="message_specifyCategoryForA" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneCategoryForA.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCategoryForB" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneCategoryForB.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCategoryForC" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneCategoryForC.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAQuantity" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAQuantity.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAQuantityForA" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAQuantityForA.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAQuantityForB" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAQuantityForB.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAQuantityForC" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAQuantityForC.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAQuantityForD" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAQuantityForD.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAmount" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyMinimumAmount.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAmountForA" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyMinimumAmountForA.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAmountForB" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyMinimumAmountForB.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAmountForC" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyMinimumAmountForC.string}"/>
+		<!--- @keywords private -->		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			var selectCatalogEntryOrCategory = o.getPropertyValue("selectCatalogEntryOrCategory");
+			if (selectCatalogEntryOrCategory == "catalogEntry") {
+				var objectTypes = new Array('Identifier_Category', 'Identifier_InheritedCategory', 'Identifier_ExcludeCatalogEntry', 'Identifier_InheritedExcludeCatalogEntry');
+				for (var j = 0; j < objectTypes.length; j++) {
+					var objectsToDelete = o.getObjects(objectTypes[j]);
+					for (var k = 0; k < objectsToDelete.length; k++) {
+						objectsToDelete[k].deleteObject();
+					}
+				}
+			}
+			else if (selectCatalogEntryOrCategory == "category") {
+				var objectTypes = new Array('Identifier_CatalogEntry', 'Identifier_InheritedCatalogEntry');
+				for (var j = 0; j < objectTypes.length; j++) {
+					var objectsToDelete = o.getObjects(objectTypes[j]);
+					for (var k = 0; k < objectsToDelete.length; k++) {
+						objectsToDelete[k].deleteObject();
+					}
+				}
+			}
+			if (o.parentObject) {
+				o.parentObject.validate();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Validates that at least one catalog entry has been specified
+			@param cmc/foundation/ModelObject o The MultipleItemsPromotionElement object
+		-->
+		<method args="o" name="validateCatalogEntries">
+			<![CDATA[
+			if (o) {
+				var catalogEntries = o.getObjects("Identifier_CatalogEntryGroup");
+				var elementId = o.getPropertyValue("MultipleItemsElementId");
+				if (catalogEntries == null || catalogEntries.length <= 0) {
+					var errorMessage = this.message_specifyCatalogEntry;
+					if (elementId == '1') {
+						errorMessage = this.message_specifyCatalogEntryForA;
+					}
+					else if (elementId == '2') {
+						errorMessage = this.message_specifyCatalogEntryForB;
+					}
+					else if (elementId == '3') {
+						errorMessage = this.message_specifyCatalogEntryForC;
+					}
+					else if (elementId == '4') {
+						errorMessage = this.message_specifyCatalogEntryForD;
+					}
+					o.addValidationError(this, errorMessage);
+				}
+				else {
+					o.clearValidationError(this);
+					this.validateQuantityOrMinAmount(o, "Identifier_CatalogEntryGroup");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Validates that at least one category has been specified
+			@param cmc/foundation/ModelObject o The MultipleItemsPromotionElement object
+		-->
+		<method args="o" name="validateCategories">
+			<![CDATA[
+			if (o) {
+				var categories = o.getObjects('Identifier_CategoryGroup');
+				var elementId = o.getPropertyValue("MultipleItemsElementId");
+				if (categories == null || categories.length <= 0) {
+					var errorMessage = this.message_specifyCategory;
+					if (elementId == '1') {
+						errorMessage = this.message_specifyCategoryForA;
+					}
+					else if (elementId == '2') {
+						errorMessage = this.message_specifyCategoryForB;
+					}
+					else if (elementId == '3') {
+						errorMessage = this.message_specifyCategoryForC;
+					}
+					o.addValidationError(this, errorMessage);
+				}
+				else {
+					o.clearValidationError(this);
+					this.validateQuantityOrMinAmount(o, "Identifier_CategoryGroup");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Validates that the quantity or minimum amount values are greater than 0 when at least one instance of the given child object type exists
+			@param cmc/foundation/ModelObject o The MultipleItemsPromotionElement object
+			@param string types Comma-separated list of child object types that must exist before checking the quantity and amount values
+		-->
+		<method args="o, types" name="validateQuantityOrMinAmount">
+			<![CDATA[
+			if (o && types && types != "") {
+				var quantityProp = o.getProperty("Quantity");
+				var amountProp = o.getProperty("MinimumAmount");
+				quantityProp.clearValidationError(this);
+				amountProp.clearValidationError(this);
+				var elementId = o.getPropertyValue("MultipleItemsElementId");
+				var objectTypes = StringUtil.Singleton.splitAndTrim(types, ",");
+				for (var j = 0; j < objectTypes.length; j++) {
+					var objectsToCheck = o.getObjects(objectTypes[j]);
+					if (objectsToCheck.length > 0) {
+						if ((o.getPropertyValue("PurchaseType") == "Quantity") && ((o.getPropertyValue("Quantity") == "") || (o.getPropertyValue("Quantity") <= "0"))) {
+							var errorMessage = this.message_specifyAQuantity;
+							if (elementId == '1') {
+								errorMessage = this.message_specifyAQuantityForA;
+							}
+							else if (elementId == '2') {
+								errorMessage = this.message_specifyAQuantityForB;
+							}
+							else if (elementId == '3') {
+								errorMessage = this.message_specifyAQuantityForC;
+							}
+							else if (elementId == '4') {
+								errorMessage = this.message_specifyAQuantityForD;
+							}
+							quantityProp.addValidationError(this, errorMessage);
+							break;
+						}
+						else if ((o.getPropertyValue("PurchaseType") == "MinimumAmount") && ((o.getPropertyValue("MinimumAmount") == "") || (o.getPropertyValue("MinimumAmount") <= "0"))) {
+							var errorMessage = this.message_specifyAmount;
+							if (elementId == '1') {
+								errorMessage = this.message_specifyAmountForA;
+							}
+							else if (elementId == '2') {
+								errorMessage = this.message_specifyAmountForB;
+							}
+							else if (elementId == '3') {
+								errorMessage = this.message_specifyAmountForC;
+							}
+							amountProp.addValidationError(this, errorMessage);
+							break;
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Clears all validation errors generated by this validator
+			@param cmc/foundation/ModelObject o The MultipleItemsPromotionElement object
+		-->
+		<method args="o" name="clearValidations">
+			<![CDATA[
+			o.clearValidationError(this);
+			var quantityProp = o.getProperty("Quantity");
+			var amountProp = o.getProperty("MinimumAmount");
+			quantityProp.clearValidationError(this);
+			amountProp.clearValidationError(this);
+			]]>
+		</method>
+		
+	</Validator>
+		
+</Definitions>

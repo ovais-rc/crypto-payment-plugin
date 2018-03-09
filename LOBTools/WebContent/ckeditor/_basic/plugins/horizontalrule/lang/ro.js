@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("horizontalrule","ro",{toolbar:"Inserare linie orizontală"});

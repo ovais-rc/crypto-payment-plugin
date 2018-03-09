@@ -1,0 +1,530 @@
+<%--
+//********************************************************************
+//*-------------------------------------------------------------------
+//* Licensed Materials - Property of IBM
+//*
+//* WebSphere Commerce
+//*
+//* (c) Copyright IBM Corp. 2000, 2002
+//*
+//* US Government Users Restricted Rights - Use, duplication or
+//* disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+//*
+//*-------------------------------------------------------------------
+--%>
+var model;
+var pageArray;
+var insideMC;
+var DTDname = '';
+var errCode = null;
+
+// support for UBF
+var Xmodel = new Object();
+
+// support for XSD
+var xsdFileName = '';
+var xsdRootName = '';
+
+var firstPanel = null;
+var currPanel = null;
+var currGroup = null;
+var finishAlreadyClicked = false;
+var contentFrameLoaded = true;
+var finishClicked = false;
+var mylocale = "<%= UIProperties.getLocale() %>";
+var waitForPageToLoad = true;
+var helplinks = new Array();
+
+
+// If inside Merchant Center, get model and pageArray (panel attributes) from Merchant Center top frame
+// otherwise, define model as new object
+if (top.getModel) {
+	model = top.getModel();
+	pageArray  = top.getData("pageArray");
+	if (pageArray == null) {
+		pageArray = new Array();
+	}		
+	insideMC = true;
+}
+else {
+	model = new Object();
+	pageArray  = new Array();
+	insideMC = false;
+}
+
+function isInsideMC() {
+	return insideMC;
+}
+
+function warningOnClose() {
+	if (this.isDialog && needWarning.toUpperCase() != "TRUE") { //  dialog with no warning specified
+		return false;
+	}		
+
+	return true; // inside wizard/notebook or dialog which requires warning 
+}
+
+function visibleList(s) {
+    if (!this.CONTENTS || this.CONTENTS.document.readyState != "complete") {
+		return;
+	}
+	
+    if (this.CONTENTS.visibleList) {
+		this.CONTENTS.visibleList(s);
+		return;
+    }
+
+    if (this.CONTENTS.document.forms[0]) {
+		for (var i = 0; i < this.CONTENTS.document.forms[0].elements.length; i++) {
+			if (this.CONTENTS.document.forms[0].elements[i].type.substring(0,6) == "select") {
+				this.CONTENTS.document.forms[0].elements[i].style.visibility = s;
+			}
+       }
+	}       
+}
+
+/**
+ * setContentFrameLoaded(value)
+ * Sets the variable contentFrameLoaded to true or false
+ * If (value == true), then the user is allowed to switch to a different content panel
+ *                     else the user must wait until the panel has been loaded and set to true
+ * Developers of content panels should call setContentFrameLoaded(true) at the end of their onLoad function
+ * If the developer does not call this function, users will be stuck on the current content panel
+ */
+function setContentFrameLoaded(value) {
+	contentFrameLoaded = value;
+	
+	if (top.mccbanner && top.mccbanner.showProgressIndicator) {
+		if (value) {
+			top.mccbanner.showProgressIndicator(false);
+		}
+		else {
+			top.mccbanner.showProgressIndicator(true);
+		}
+	}					
+}
+
+/**
+ * isContentFrameLoaded()
+ * Returns the value of the contentFrameLoaded variable
+ */
+function isContentFrameLoaded() {
+	return contentFrameLoaded;
+}
+
+/**
+ * getNextPanelName(name)
+ * Accepts a panel Name and returns the name of the next panel in the list
+ * if panelName is passed as null the first panel's name is returned
+ */
+function getNextPanelName(name) {
+	if (name == null) {
+		return firstPanel;
+    }
+    else {
+    	return pageArray[name].next;
+    }
+}
+
+/**
+ * getPrevPanelName(name)
+ * Accepts a panel Name and returns the name of the previous panel in the list
+ * if panelName is passed as null the first panel's name is returned
+ */
+function getPrevPanelName(name) {
+	if (name == null) {
+		return firstPanel;
+    }
+	else {
+		return pageArray[name].prev;
+	}
+}
+
+/**
+ * setPanelAttribute(name,attribute,value)
+ * This function accepts a panel name and an attribute name
+ * if a panel with the selected name exists it sets the
+ * attribute field for that panel to the value
+ */
+function setPanelAttribute(name,attribute,value) {
+	if (pageArray[name] == null) {
+		return;
+	}		
+	pageArray[name][attribute] = value;
+}
+
+/**
+ * getPanelAttribute(name,attribute)
+ * This function accepts a panel name and an attribute name
+ * if a panel with the selected name exists it returns the
+ * attribute field value for that panel
+ */
+function getPanelAttribute(name,attribute) {
+	if (pageArray[name] == null) {
+		return null;
+	}		
+	return pageArray[name][attribute];
+}
+
+/**
+ * getCurrentPanelAttribute(attribute)
+ * This function returns the attribute field value for the current panel
+ */
+function getCurrentPanelAttribute(attribute) {
+	return pageArray[currPanel][attribute];
+}
+
+/**
+ * setCurrentPanelAttribute(attribute)
+ * This function set the attribute value for the current panel
+ */
+function setCurrentPanelAttribute(attribute,value) {
+	pageArray[currPanel][attribute] = value;
+}
+
+/**
+ * savePanelData()
+ * This function determines if the panel in the CONTENTS frame has
+ * a savePanelData function and executes it if it does.
+ * If the validateEntries was not found or was successfully executed
+ * it sets the validated field of the current panel to YES and returns true
+ * otherwise it returns false
+ */
+function savePanelData() {
+	if (this.CONTENTS.savePanelData) {
+		this.CONTENTS.savePanelData()
+		setContentFrameLoaded(true);
+	}
+}
+
+/**
+ * getErrorParams()
+ * This function will check whether or not an error parameter has been passed to a panel
+ * Return value: value of errorCode parameter if this parameter exists
+ *               null otherwise
+ */
+function getErrorParams() {
+	return errCode;
+}
+
+/**
+ * gotoPanel(name)
+ * If the current panel does not produce a validation error this
+ * function displays the selected panel
+ */ 
+function gotoPanel(name,errorCode) {
+	if (waitForPageToLoad == true && isContentFrameLoaded() == false) {
+		return;
+	}
+			
+	if (currPanel != null) {
+		savePanelData();
+	}
+
+	// requested by CSR team (d12652) to validate panel data in a Notebook
+	if (this.CONTENTS.validateNoteBookPanel && this.CONTENTS.validateNoteBookPanel(name) == false) {
+		return;
+	}
+	
+	if (this.TABS) {
+		this.TABS.focus();
+	}
+	else if (this.CONTENTS) {
+		this.CONTENTS.focus();
+	}
+	else {
+		this.NAVIGATION.focus();
+	}		
+
+	// setContentFrameLoaded(false);
+	displayPanel(pageArray[name],errorCode);
+}
+
+/**
+ * generateFullURL(urlString)
+ * Prefix url with webapp path (for example, /webapp/wcs/tools/servlet/) if needed
+ */
+function generateFullURL(urlString) {
+	if (top.getWebPath && urlString.indexOf("/") != 0) {
+		return top.getWebPath() + urlString;
+	}
+	else {
+		return urlString;
+	}
+}
+
+/**
+ * displaypanel(panel)
+ * This function accepts a panel object and displays the associated frames
+ */
+function displayPanel(panel,errorCode) {
+	var urlPara = new Object();
+
+	if (panel == null || panel.access == false) {
+		return;
+	}
+	
+	displayURL = generateFullURL(panel.url);
+
+	// if no parameters defined in XML file, or URL already contains parameters
+	// we use directly url replacement
+    if (panel.parms.length == 0 || displayURL.indexOf("?") >= 0) {
+		for (i=0; i < panel.parms.length; i++) {
+			paramSeparator = getParamSeparator(displayURL);
+			displayURL = displayURL + paramSeparator + panel.parms[i] + "=" + get(panel.parms[i],"");
+		}
+
+		if (errorCode != null) {
+			paramSeparator = getParamSeparator(displayURL);
+			displayURL = displayURL + paramSeparator + "errorCode" + "=" + errorCode;
+			errCode = errorCode;
+		}
+		else {
+			errCode = null;
+		}
+	}
+    else {
+    	// if parameters defined, they may contain NL characters, must use form submission
+		for (i=0; i < panel.parms.length; i++) {
+			urlPara[panel.parms[i]] = get(panel.parms[i],"");
+		}
+
+		if (errorCode != null) {
+			urlPara["errorCode"] = errorCode;
+			errCode = errorCode;
+		}
+		else {
+			errCode = null;
+		}
+	}
+
+	setContentFrameLoaded(false);
+
+	reloadFrames();
+
+	if (panel.parms.length == 0 || displayURL.indexOf("?") >= 0) {
+		this.CONTENTS.location.href = displayURL;
+	}
+    else {  // if parameters defined, they may contain NL characters, must use form submission
+		top.mccmain.submitForm(displayURL, urlPara, "CONTENTS");
+	}
+
+	if (typeof(panel["nlsName"]) != "undefined") {
+		this.CONTENTS.title = panel["nlsName"];
+	}
+
+	currPanel = panel.name;
+	currGroup = panel.group;
+}
+
+function getParamSeparator(url) {
+	var index = url.indexOf("?");
+
+	if (index == -1) {
+		return "?";
+	}
+	else {
+		return "&";
+	}
+}
+
+function getHelp() {
+	return getCurrentPanelAttribute("helpKey");
+}
+
+function getFinishConfirmation(){
+	return "<%= UIUtil.toJavaScript(UIProperties.getFinishConfirmation()) %>";
+}
+
+function cancel() {
+	if (finishClicked != true) {
+		if (confirmDialog("<%= UIUtil.toJavaScript(UIProperties.getCancelConfirmation()) %>")) {
+			if (this.submitCancelHandler) {
+				submitCancelHandler();
+			}
+		}
+	}
+}
+
+function getCancelNLS() {
+	return "<%= UIUtil.toJavaScript(UIProperties.getUIResourceString("cancel")) %>";
+}
+
+function getOkNLS() {
+	var retval = "<%= UIUtil.toJavaScript(UIProperties.getUIResourceString("ok")) %>";
+<%
+	String okText = null;
+	String oknls = null;
+	okText = UIProperties.getXMLValue("finishButtonName");
+
+	if ((okText != null) &&  ! (okText.equals(""))) {
+		oknls = UIProperties.getResourceString(okText);
+%>
+	retval = "<%= oknls %>";
+<%
+	}
+%>
+	return retval;
+}
+
+function getFinishNLS() {
+	var retval = "<%= UIUtil.toJavaScript(UIProperties.getUIResourceString("finish")) %>";
+<%
+	String finishText = null;
+	String finishnls = null;
+	finishText = UIProperties.getXMLValue("finishButtonName");
+
+	if ((finishText != null) &&  ! (finishText.equals(""))) {
+		finishnls = UIProperties.getResourceString(finishText);
+%>
+	retval = "<%= finishnls %>";
+<%
+	}
+%>
+	return retval;
+}
+
+function getNextNLS() {
+	return "<%= UIUtil.toJavaScript(UIProperties.getUIResourceString("next")) %>";
+}
+
+function getPreviousNLS() {
+	return "<%= UIUtil.toJavaScript(UIProperties.getUIResourceString("prev")) %>";
+}
+
+function getCancelMessage() {
+	return "<%= UIUtil.toJavaScript(UIProperties.getCancelConfirmation()) %>";
+}
+
+function getValidationIncorrectDataMessage() {
+	return "<%= UIUtil.toJavaScript(UIProperties.getValidationIncorrectData()) %>";
+}
+
+function getValidationMissingRequiredFieldMessage() {
+	return "<%= UIUtil.toJavaScript(UIProperties.getValidationMissingRequiredField()) %>";
+}
+
+/**
+ * modelToXML(rootName)
+ * Convert our model into an XML string
+ */
+function modelToXML(rootName) {
+	return convertToXML(model, rootName, "<%= ToolsConfiguration.getConfigString("charSetEncoding") %>");
+}
+
+/**
+ * XmodelToXML(rootName)
+ * Convert our Xmodel into an XML string
+ */
+function XmodelToXML(rootName) {
+	return convert2XML(Xmodel, rootName, DTDname, xsdRootName, xsdFileName, "<%= ToolsConfiguration.getConfigString("charSetEncoding") %>");
+}
+
+/**
+ * get(key, defaultValue)
+ * Return the value of the given key from our model
+ */
+function get(key, defaultValue) {
+	if (model[key] == null) {
+		return defaultValue;
+	}
+	return model[key];
+}
+
+/**
+ * remove(key)
+ * Remove the given key from our model
+ */
+function remove(key) {
+	model[key] = null;
+}
+
+/**
+ * put(key, value)
+ * Store the given (key,value) in our model
+ */
+function put(key, value) {
+	model[key] = value;
+}
+
+/**
+ * Xget(key, defaultValue)
+ * Return the value of the given key from Xmodel
+ */
+function Xget(key, defaultValue) {
+	if (Xmodel[key] == null) {
+		return defaultValue;
+	}
+	return Xmodel[key];
+}
+
+/**
+ * Xremove(key)
+ * Remove the given key from Xmodel
+ */
+function Xremove(key){
+	Xmodel[key] = null;
+}
+
+/**
+ * Xput(key, value)
+ * Store the given (key,value) in Xmodel
+ */
+function Xput(key, value) {
+	Xmodel[key] = value;
+}
+
+/**
+ * clearModel()
+ * Clear data in model except XMLFile
+ */
+function clearModel() {
+	var tmp_xmlfile = get("XMLFile","");
+	model = new Object();
+	put("XMLFile",tmp_xmlfile);
+}
+
+/**
+ * putDTDname(name)
+ * Save the dtd name
+ */
+function putDTDname(name) {
+	DTDname = name;
+}
+
+/**
+ * putXSDnames(rootName, fileName)
+ * Save the xsd name
+ */
+function putXSDnames(rootName, fileName) {
+	xsdFileName=fileName;
+	xsdRootName=rootName;
+}
+
+/**
+ * addURLParameter(pname, value)
+ * Add extra URL parameter in the submit form
+ */
+function addURLParameter(pname, value) {
+	if (NAVIGATION && NAVIGATION.addURLParameter) {
+		NAVIGATION.addURLParameter(pname, value);
+	}
+}
+
+/**
+ * removeURLParameter(pname)
+ * Remove URL parameter in the submit form
+ */
+function removeURLParameter(pname) {
+	if (NAVIGATION && NAVIGATION.removeURLParameter) {
+		NAVIGATION.removeURLParameter(pname);
+	}
+}
+
+/**
+ * reloadFrames()
+ * Reload frames (except the content panel)
+ */ 
+function reloadFrames() {
+	<% UIProperties.getJSFramesetDisplayCommands(out); %>
+}

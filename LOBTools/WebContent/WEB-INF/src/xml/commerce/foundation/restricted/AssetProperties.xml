@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+
+		Enablement condition to check the current store type with the list of supported store types for associated store name property in asset information.
+	-->
+	<EnablementOrCondition definitionName="cmc/foundation/AssetInfoStoreTypesCondition">
+		<EnablementCondition contextName="storeType" enablementValue="RHS"/>
+		<EnablementCondition contextName="storeType" enablementValue="BRH"/>
+		<EnablementCondition contextName="storeType" enablementValue="CHS"/>
+		<EnablementCondition contextName="storeType" enablementValue="SCP"/>
+		<EnablementCondition contextName="storeType" enablementValue="SHS"/>
+		<EnablementCondition contextName="storeType" enablementValue="MHS"/>
+		<EnablementCondition contextName="storeType" enablementValue="BMH"/>
+	</EnablementOrCondition>
+
+	<!---
+		@keywords private
+
+		Enablement condition for controlling the visibility of the associated store name property in asset information.
+	-->
+	<EnablementAndCondition definitionName="cmc/foundation/AssetInfoStoreNameDisplayCondition">
+		<EnablementCondition enablementValue="${null}" negate="true" propertyName="objectStoreId"/>
+		<EnablementOrCondition baseDefinition="cmc/foundation/AssetInfoStoreTypesCondition"/>
+	</EnablementAndCondition>
+
+	<!---
+		In addition to properties and attributes, a business object can contain other important information for the business
+		user, such as object ownership (a primary object in an extended site store can be owned by an asset store) and the
+		state of the object in a workspace. This definition groups all of this information under the "Object Properties" property
+		group within the properties view. Add this property group to the properties view so that it is displayed under the
+		first tab of any primary business object.
+
+		<p>The property group displays the following information:
+		<ul>
+		<li>Associated Store: The owner store of the primary business object. This information is only displayed if the
+		current store is an extended site store and the <code>objectStoreId</code> property exists in the primary business
+		object. The <code>objectStoreId</code> property contains the store id of the store that owns the primary business
+		object.
+		</li>
+		<li>Change Made In Workspace: The name of the workspace where the primary business object was edited.
+		This information is only displayed if a business user makes an unapproved change to the primary business object.
+		</li>
+		<li>Task Group: The name of the task group where the primary business object has undergone a change which has not
+		been approved. This information is displayed only if the business user cannot make changes to the primary business object.
+		</li>
+		<li>Task: The name of the task where the primary business object has undergone a change which has not been
+		approved. This information is displayed only if the business user cannot make changes to the primary business object.
+		</li>
+		</ul>
+
+		Sample usage of this widget:
+		@START_CODE
+		<ObjectProperties definitionName="myProductProperties">
+		<PropertyTabs name="tabs">
+		<PropertyTabPane name="myTab" text="tab1">
+		<PropertyPane baseDefinition="cmc/attachment/ManageAttachmentInformation">
+		<PropertyAssetInformationGroup />
+		<PropertyGroup groupTitle="General Product Information">
+		...
+		</PropertyGroup>
+		</PropertyPane>
+		</PropertyTabPane>
+		</PropertyTabs>
+		</ObjectProperties>
+		@END_CODE
+	-->
+	<PropertyGroup definitionName="cmc/foundation/PropertyAssetInformationGroup" groupTitle="${foundationResources.objectProperties_assetProperties_groupTitle}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<DisplayPropertyAssetInformationCondition/>
+		<PropertyGroup collapsable="false">
+			<EnablementAndCondition baseDefinition="cmc/foundation/AssetInfoStoreNameDisplayCondition"/>
+			<AssetPropertiesStore/>
+		</PropertyGroup>
+		<PropertyGroup collapsable="false">
+			<EnablementAndCondition>
+				<EnablementCondition enablementValue="false" propertyName="changeControlModifiable"/>
+				<ContextReadOnlyEnablementCondition negate="true"/>
+			</EnablementAndCondition>
+			<PropertyStaticText text="${foundationResources.objectProperties_assetProperties_lockedInWorkspacePrompt}"/>
+			<PropertyViewLongText promptText="${foundationResources.objectProperties_assetProperties_workspacePrompt}" propertyName="changeControlWorkspaceName"/>
+			<PropertyViewLongText promptText="${foundationResources.objectProperties_assetProperties_taskGroupPrompt}" propertyName="changeControlWorkspaceTaskGroup"/>
+			<PropertyViewLongText promptText="${foundationResources.objectProperties_assetProperties_taskPrompt}" propertyName="changeControlWorkspaceTask"/>
+		</PropertyGroup>
+		<PropertyGroup collapsable="false">
+			<EnablementAndCondition>
+				<EnablementCondition enablementValue="" negate="true" propertyName="basedOnVersionNumber"/>
+				<EnablementCondition enablementValue="" propertyName="objectVersionId"/>
+			</EnablementAndCondition>
+			<PropertyViewLongText promptText="${foundationResources.objectProperties_assetProperties_activeVersionIdentifierPrompt}" propertyName="basedOnVersionNumber"/>
+			<PropertyViewLongText promptText="${foundationResources.objectProperties_assetProperties_versionNamePrompt}" propertyName="basedOnVersionName"/>
+		</PropertyGroup>
+	</PropertyGroup>
+
+	
+	<!---
+		@keywords private
+		
+		This class overrides the <code>updateValue</code> method in the {@link cmc/foundation/TextViewer} class.
+	-->
+	<TextViewer classDefinition="true" definitionName="cmc/foundation/AssetPropertiesStoreName">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>  
+		<!---	
+			@keywords private
+		-->
+		<variable name="storeId" type="string" value=""/>
+		
+		<!--- 
+			Updates and refreshes the storeId with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var storeId = this.property.value;
+			if (storeId != this.storeId) {
+				this.storeId = storeId;
+				this.updateStoreName();
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			Updates and refreshes the text value by resolving the store name with a new storeId.
+		-->
+		<method args="e" name="updateStoreName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.updateStoreNameDel) == "undefined") {
+				this.updateStoreNameDel = new EventHandler.Class(this, "updateStoreName");
+			}
+			this.updateStoreNameDel.disconnectAll();
+			if (this.storeId == '') {
+				this.setVariable('text', '');
+			}
+			else {
+				var store = StoreUtil.Singleton.storeMap[this.storeId];
+				if (store != null) {
+					this.setVariable('text', store.displayName);
+				}
+				else {
+					this.updateStoreNameDel.connect(StoreUtil.Singleton, "storeLoaded");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this widget.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this widget
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.property == null) {
+				this.storeId = "";
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateStoreNameDel) {
+				this.updateStoreNameDel.disconnectAll();
+				delete this.updateStoreNameDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+	</TextViewer>
+	
+	<!---
+		@keywords final
+		@keywords private
+		
+		Instances of cmc/foundation/AssetPropertiesStore determine the name of a store for a given store ID. The store ID
+		is retrieved from the property <code>objectStoreId</code> in the current model object.
+		
+		<p>This class doesn't allow the property to be edited, it only displays the resolved value as read only text. 
+		Instances of this class may only be declared as children of {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.  
+		This class is final, to create a new properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		Sample usage of this widget:
+		@START_CODE
+			<PropertyGroup groupTitle="Store Information">
+				<AssetPropertiesStore/>		
+			</PropertyGroup>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/AssetPropertiesStore" promptText="${foundationResources.Singleton.objectProperties_assetProperties_associatedStorePrompt.string}" propertyName="objectStoreId" sizeToAvailableWidth="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="AssetPropertiesStoreName" moduleName="cmc/foundation/AssetPropertiesStoreName"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new AssetPropertiesStoreName.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords private
+		An enablement condition used by the asset information property group that checks the enablement conditions of the child property groups.
+		This enablement condition iterates through all the enablement conditions of the child property groups and if a enablement condition
+		returns true then this enablement condition returns true and false if all the enablement conditions return false.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/DisplayPropertyAssetInformationCondition">
+		<dependency localName="DividerLine" moduleName="cmc/foundation/DividerLine"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="PropertyGroup" moduleName="cmc/foundation/PropertyGroup"/>
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.enablementCondition = this;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getEnablementConditions">
+			<![CDATA[
+			var enablementConditions = [];
+			for (var i = 0; i < this.immediateParent.childNodes.length; i++) {
+				var subnode = this.immediateParent.childNodes[i];
+				if (subnode instanceof PropertyGroup.Class) {
+					subnode.forceInstantiation("force");
+					if (subnode.enablementCondition) {
+						enablementConditions.push(subnode.enablementCondition);
+					}
+					else {
+						enablementConditions = null;
+						break;
+					}
+				}
+				else if ((subnode instanceof Component.Class) && !(subnode instanceof DividerLine.Class)) {
+					enablementConditions = null;
+					break;
+				}
+			}
+			return enablementConditions;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enablementConditions = this.getEnablementConditions();
+			var enabled = enablementConditions == null;
+			if (!enabled) {
+				for (var i = 0; i < enablementConditions.length; i++) {
+					if (enablementConditions[i].isEnabled(o)) {
+						enabled = true;
+						break;
+					}
+				}
+			}
+			return enabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			var enablementConditions = this.getEnablementConditions();
+			if (enablementConditions != null) {
+				for (var i = 0; i < enablementConditions.length; i++) {
+					enablementConditions[i].registerDelegate(o, del);
+				}
+			}
+			]]>
+		</method>
+
+	</Node>
+	
+	<!---
+		@keywords private
+		This enablement condition will return true if the object context is read only.
+	-->
+	<EnablementCondition classDefinition="true" definitionName="cmc/foundation/ContextReadOnlyEnablementCondition">
+	
+		<!---
+		    @keywords private
+		    Check if the context is read only for the object.
+			@param cmc/foundation/ModelObject o the model object that is to be enabled/disabled.
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			if (this.negate) {
+				return !o.isContextReadOnly();
+			}
+			else {
+				return o.isContextReadOnly();
+			}
+			]]>
+		</method>
+	</EnablementCondition>
+</Definitions>

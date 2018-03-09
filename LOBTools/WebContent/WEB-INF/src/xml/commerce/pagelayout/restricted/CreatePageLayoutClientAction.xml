@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This client action creates a new PageLayout object and initializes the layout location with the selected page.
+	-->
+	<ClientAction addToListContextMenu="true" allowMultipleSelection="false" availableFromEmbeddedListView="false" availableFromMainListView="false" classDefinition="true" definitionName="cmc/pagelayout/CreateNewLayoutClientAction" newObjectAction="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			@keywords private
+			Currently selected page
+		 -->
+		<variable name="selectedPage" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.createdPrimaryObjectDel = new EventHandler.Class(this, "createdPrimaryObject");
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method adds a child object and references of the child object for the given newly created primary object. 
+			It is called by a delegate set up in
+			{@link cmc/pagelayout/CreateNewLayoutClientAction#performAction} when it finishes creating the new object.
+			@param cmc/foundation/ModelObject newObject The newly created object.
+		-->
+		<method args="newObject" name="createdPrimaryObject">
+			<![CDATA[
+			var referenceObjectDefs = newObject.objectDefinition.getReferenceObjectDefinitions();
+			for (var i = 0; i < referenceObjectDefs.length; i++) {
+				if (referenceObjectDefs[i].isReferencedDefinition(this.selectedPage.objectDefinition)) {
+					var newReferenceObject = newObject.model.createNewObject(referenceObjectDefs[i], newObject);
+					newReferenceObject.addChild(this.selectedPage);
+					break;
+				}
+			}
+			this.selectedPage = null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.createdPrimaryObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+	
+		<!---
+			@keywords private
+			Returns true if the context is not read only.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			var pageLayoutDef = null;
+			if (enabled) {
+				pageLayoutDef = o.model.getObjectDefinition(null, "PageLayout");
+				enabled = pageLayoutDef != null && pageLayoutDef.isCreatable();
+			}
+			if (enabled) {
+				var referenceObjectDefs = pageLayoutDef.getReferenceObjectDefinitions();
+				for (var i = 0; i < referenceObjectDefs.length; i++) {
+					if (referenceObjectDefs[i].isReferencedDefinition(o.objectDefinition)) {
+						enabled = referenceObjectDefs[i].isCreatable(null, o);
+						break;
+					}
+				}
+			}
+			return enabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the enablement condition changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerEnablementDelegate">
+			<![CDATA[
+			this.inherited(arguments);
+			var pageLayoutDef = o.model.getObjectDefinition(null, "PageLayout");
+			if (pageLayoutDef != null && pageLayoutDef.isCreatable(null, null, del)) {
+				var referenceObjectDefs = pageLayoutDef.getReferenceObjectDefinitions();
+				for (var i = 0; i < referenceObjectDefs.length; i++) {
+					if (referenceObjectDefs[i].isReferencedDefinition(o.objectDefinition)) {
+						referenceObjectDefs[i].isCreatable(null, o, del);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create the new PageLayout object.
+			@param cmc/foundation/ModelObject[] objects The array of selected model objects.
+		-->				
+		<method args="objects" name="performAction">
+			<![CDATA[
+			this.selectedPage = objects[0];
+			var pageLayoutDef = this.selectedPage.model.getObjectDefinition(null, "PageLayout");
+			pageLayoutDef.doCreate({
+				createCallbackDel: this.createdPrimaryObjectDel
+			});
+			]]>
+		</method>
+		
+	</ClientAction>
+</Definitions>

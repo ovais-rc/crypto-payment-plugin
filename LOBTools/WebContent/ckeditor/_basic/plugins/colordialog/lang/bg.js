@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","bg",{clear:"Изчистване",highlight:"Цветно маркиране",options:"Опции за цвят",selected:"Избран цвят",title:"Избор на цвят",ibm:{currentColor:"Текущ цвят"}});

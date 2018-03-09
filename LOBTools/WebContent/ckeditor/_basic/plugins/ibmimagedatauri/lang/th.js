@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","th",{error:"ขณะนี้การวางรูปภาพไม่สามารถใช้ได้ โปรดใช้อ็อพชันแถบเครื่องมือ 'Insert Image' แทน"});

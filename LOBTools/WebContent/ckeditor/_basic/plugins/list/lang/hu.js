@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","hu",{bulletedlist:"Felsorolásjeles lista",numberedlist:"Számozott lista",ibm:{numberedTitle:"Számozott lista",bulletedTitle:"Felsorolásjeles lista",description:"A beállítások az aktuális listaszintre lesznek alkalmazva",fontsize:"Betűméret:"}});

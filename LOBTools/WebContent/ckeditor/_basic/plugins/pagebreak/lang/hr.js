@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","hr",{alt:"Prekid stranice",toolbar:"Umetni prekid stranice"});

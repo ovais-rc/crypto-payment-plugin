@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("contextmenu","da",{options:"Tilpasning af kontekstmenu"});

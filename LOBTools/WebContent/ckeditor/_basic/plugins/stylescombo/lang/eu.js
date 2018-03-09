@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","eu",{label:"Estiloak",panelTitle:"Estiloak",panelTitle1:"Bloke estiloak",panelTitle2:"Barneko estiloak",panelTitle3:"Objektu estiloak"});

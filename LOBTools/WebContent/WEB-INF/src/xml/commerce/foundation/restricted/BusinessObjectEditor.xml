@@ -1,0 +1,2852 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		The cmc/foundation/BusinessObjectEditor class is the base class for all Management Center tools.
+		The business object editor includes support for the menu, toolbar, search widget, explorer view 
+		and utilities view. It is responsible for managing all user interactions that allow the user to
+		edit the business objects declared with this business object editor. Instances of this class should
+		not be instantiated directly. They must be registered by adding an instance of {@link cmc/foundation/ApplicationMenuItem}
+		to {@link cmc/foundation/ApplicationMenuItems}.
+		
+		<p>A single instance of {@link cmc/foundation/TopObjectDefinition} must be declared as a child of every business object editor.
+		When the business object editor is initialized, an instance of this top object will be instantiated.
+		If the top object definition includes a template dataset then the organizational objects declared in the dataset
+		will be instantiated as children of the top object. If the top object children declares one or more
+		{@link cmc/foundation/GetChildrenService} instances, then the get children services will be invoked to load the top
+		object's child objects. Child objects under the top object instance will be displayed in the explorer tree
+		below the "Active Work" node. The child objects under the top object instance will also be visible in the
+		utilities view browse tab.
+		
+		<p>At least one instance of {@link cmc/foundation/Filter} must be declared as a child of every business object editor.
+		This filter will be used to filter the objects displayed in the explorer view and utilities view browse tab.
+		If more than one filter is declared, then a filter selector drop-down will be visible in the explorer view
+		and in the utilities view browse tab. The filter selector will allow the user to change the set of objects
+		that are currently visible. When declaring a filter for a business object editor that allows the display of
+		{@link cmc/foundation/PrimaryObjectDefinition primary objects} as children of the top object, it is important to realize
+		that the objects displayed in the tree below these top level primary objects will all be
+		{@link cmc/foundation/ReferenceObjectDefinition reference objects} or {@link cmc/foundation/ParentReferenceObjectDefinition parent reference objects}.
+		The object types used in the declaration of a {@link cmc/foundation/ObjectTypeFilter} instance must include both the primary
+		object types and the reference object types or nothing below the top level primary objects will be visible.
+
+		<p>Multiple instances of {@link cmc/foundation/OrganizationalObjectDefinition} can be declared as children of a business 
+		object editor. The only way that organization objects can be instantiated is by declaring
+		them in the template dataset of the top object definition or of another organizational object definition.
+		
+		<p>At least one instance of {@link cmc/foundation/PrimaryObjectDefinition} must be declared as a child of every business
+		object editor. There must be a primary object definition for every type of business object that can be returned
+		through a search request or can be located by browsing for objects through the explorer view or utilities view.
+		If the business object editor allows the creation of new business objects, then the corresponding primary object
+		definitions must have their "creatable" attribute set to "true".
+		
+		<p>Multiple instances of {@link cmc/foundation/InitService} can be declared as children of a business object editor.
+		If new context values were declared, then at lease one initialization service must be declared to populate
+		the context values. Any declared initialization services will be invoked when the business object editor
+		is initialized or a new store is selected.
+		
+		<p>Multiple instances of {@link cmc/foundation/SearchDefinition} can be declared as children of a business object editor.
+		The search definitions will be used to populate the list of search types available from the search area and utilities
+		view search tab.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BusinessObjectEditor" height="${this.immediateParent.height}" width="${this.immediateParent.width}" visible="false" initstage="defer">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="NavigationObjectTree" moduleName="cmc/foundation/NavigationObjectTree"/>
+		<dependency localName="FindAndReplaceDialog" moduleName="cmc/foundation/FindAndReplaceDialog"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="ActiveViewContainer" moduleName="cmc/foundation/ActiveViewContainer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="BaseComboBox" moduleName="cmc/foundation/BaseComboBox"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="Panel" moduleName="cmc/foundation/Panel"/>
+		<dependency localName="ObjectDefinition" moduleName="cmc/foundation/ObjectDefinition"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="CompareView" moduleName="cmc/foundation/CompareView"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<dependency localName="ActionUtil" moduleName="cmc/foundation/ActionUtil"/>
+		<dependency localName="Toolbar" moduleName="cmc/foundation/Toolbar"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="SearchWidget" moduleName="cmc/foundation/SearchWidget"/>
+		<!---
+			@keywords private
+			
+			This attribute specifies if this editor requires a store selector.			
+		-->
+		<variable name="showStoreSelection" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			
+			This attribute specifies if this editor needs advance editing functions.				
+		-->
+		<variable name="showUtilitiesView" type="boolean" value="true"/>
+		<!---
+			This attribute specifies whether or not the store preview toolbar and menu action should be shown in the tool.
+			Default value is <code>true</code>.			
+		-->
+		<variable name="showStorePreview" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			
+			This attribute specifies if this editor needs compare view.				
+		-->
+		<variable name="showCompareView" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			
+			This attribute specifies if this editor needs to show the launch marketing center icon.				
+		-->
+		<variable name="showLaunchMarketingCenter" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			
+			This attribute specifies the name of the toolbar class to use. The default class is {@link cmc/foundation/Toolbar}.			
+		-->
+		<variable name="toolbarClass" type="module" value="${Toolbar}"/>
+		<!---
+			@keywords private
+			
+			This attribute holds a reference to the toolbar instance for this business object editor.			
+		-->
+		<variable name="toolbar" value="${null}"/>
+		<!---
+			@keywords private
+			
+			This attribute specifies the name of the navigation tree class to use. The default class is {@link cmc/foundation/NavigationObjectTree}.
+		-->
+		<variable name="navigationTreeClass" type="module" value="${NavigationObjectTree}"/>
+		<!---
+			@keywords private
+			
+			This attribute holds a reference to the navigation tree instance for this business object editor.
+		-->
+		<variable name="navigationTree" value="${null}"/>
+		<!---
+			@keywords private
+			
+			This attribute holds a reference to the instance of {@link cmc/foundation/SearchWidget} for this business object editor. 
+		-->
+		<variable name="searchWidget" value="${null}"/>
+		<!---
+			@keywords private
+			
+			This attribute holds a reference to the {@link cmc/foundation/ActiveViewContainer} that is the list view.
+		-->
+		<variable name="workAreaContainer" value="${null}"/>
+		<!---			
+			@keywords private
+			
+			This attribute holds a reference to the {@link cmc/foundation/ActiveViewContainer} that is the properties view.
+		-->
+		<variable name="workAreaDetailsContainer" value="${null}"/>
+		<!---			
+			@keywords private
+			
+			This attribute holds a reference to the first {@link cmc/foundation/ActiveViewContainer} in the compare view.
+		-->
+		<variable name="compareArea1Container" value="${null}"/>
+		<!---			
+			@keywords private
+			
+			This attribute holds a reference to the second {@link cmc/foundation/ActiveViewContainer} in the compare view.
+		-->
+		<variable name="compareArea2Container" value="${null}"/>
+		<!---
+			@keywords private
+			
+			An array of {@link cmc/foundation/Filter} instances for the business object editor's navigation list. This list is created from
+			the {@link cmc/foundation/Filter} that are declared as direct childre of this cmc/foundation/BusinessObjectEditor. 
+			
+			Filters that are declared as direct children of the cmc/foundation/BusinessObjectEditor will be applied to the navigation view. 
+			They will be used to filter the visibility of objects that are displayed in the navigation view. 
+			If multiple filters are declared, then they will be selectable through a dropdown at the top of the navigation pane.
+			
+			Filters can be enabled or disabled through the use of {@link cmc/foundation/EnablementCondition}.  If the filter is disabled 
+			based on the enablement condition, the filter will not be shown in the dropdown at the top of the navigation pane.
+		-->
+		<variable name="filters" value="${[]}"/>
+		
+		<!---
+			@keywords private
+
+			This attribute holds a reference to the instance of {@link cmc/foundation/Filter} that is the default for the navigation view.
+		-->
+		<variable name="defaultFilter" value="${null}"/>
+		<!---
+			@keywords private
+			
+			This attribute holds a reference to the instance of {@link cmc/foundation/Utilities} that is this business object editor's 
+			utilities view.
+		-->
+		<variable name="utilities" value="${null}"/>
+		<!---
+			@keywords private
+			Usage is a string identifier that is unique to the tool. 
+			
+			The "usage" attribute is used to filter the stores available to the current user for the  
+			business object editor. If there are no stores available to the user for a business object editor instance, 
+			then that tool will not appear in the application menu. Once the tool is opened, then the store selection 
+			drop-down will only be populated with stores that match the current user and usage. This is a required attribute.
+		-->
+		<variable name="usage" type="string"/>
+
+		<!---		
+			This attribute is a comma separated list of filter types. The specified filters will be used by the
+			browse tab of the utilities view. The filter types will be matched with the <code>filterType</code>
+			attribute of {@link cmc/foundation/Filter} instances declared as children of this business object editor instance.
+			If no value is specified for this attribute, then all of the declared filters will be used.
+		-->
+		<variable name="browseUtilityFilterTypes" type="string" value=""/>
+		
+		<!---
+			@keywords private
+			
+			An array used to hold a reference to {@link cmc/foundation/Filter} defined in the <code>browseUtilityFilterTypes</code>
+			attribute.
+		-->
+		<variable name="browseUtilityFilters" value="${null}"/>
+
+		<!---		
+			This attribute is a comma separated list of filter types. The specified filters will be used by the 
+			explorer view. The filter types will be matched with the <code>filterType</code> attribute of 
+			{@link cmc/foundation/Filter} instances declared as children of this business object editor instance. If no 
+			value is specified for this attribute, then all of the declared filters will be used.
+		-->
+		<variable name="explorerFilterTypes" type="string" value=""/>
+
+		<!---
+			@keywords private
+			
+			An array used to hold a reference to {@link cmc/foundation/Filter} defined in the <code>explorerFilterTypes</code>
+			attribute.
+		-->
+		<variable name="explorerFilters" value="${null}"/>
+
+		<!---
+			@keywords private
+			A boolean attribute that indicates if the navigation view is visible. The default value for this attribute is "true". 
+		-->
+		<variable name="navigationViewVisible" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			A boolean attribute that indicates if the utilities view is visible. The default value for this attribute is "false". 
+		-->
+		<variable name="utilitiesViewVisible" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			A boolean attribute that indicates if the compare view is visible. The default value for this attribute is "false". 
+		-->
+		<variable name="compareViewVisible" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates that the compare view is split vertically. If false, then the compare view is split horizontally.
+			The default value is "true". 
+		-->
+		<variable name="compareViewSplitVertically" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			A boolean attribute that indicates if the properties view is visible below the list view. 
+			The default value for this attribute is "false". 
+		-->
+		<variable name="workAreaDetailsBelowVisible" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			A boolean attribute that indicates if the properties view is visible beside the list view. 
+			The default value for this attribute is "false". 
+		-->
+		<variable name="workAreaDetailsBesideVisible" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			A boolean attribute that indicates that the properties view is enabled. When it is enabled, it is possible for 
+			the business user to trigger the main work area to show the properties view. 
+			
+			The default value of this attribute is "false". 
+		-->
+		<variable name="workAreaDetailsEnabled" type="boolean" value="false"/>
+		<!---
+			This attribute defines the relative URL that contains the main help file for this business editor tool.
+			This URL is launched when "Context Help" is selected from the "Help" menu.
+			There is no value provided by default for this attribute. 
+		-->
+		<variable name="helpLink" type="string" value=""/>
+		<!---
+			@keywords private
+			
+			This attribute defines if the back button is enabled for this business object editor. The default value for this attribute is
+			"false". 
+			If backEnabled is true, options to move back in the navigation history exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="backEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			
+			This attribute defines if the forward button is enabled for this business object editor. The default value for this attribute is
+			"false". 
+			
+			If forwardEnabled is true, options to move forward in the navigation history exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="forwardEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the open action is enabled. The default value for this attribute is "false". 
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If openEnabled is set to true, then options to open exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="openEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the open in compare view action is enabled. 
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If openInCompareViewEnabled is set to true, then options to open in compare view exist on the menu (as a {@link cmc/foundation/MenuItem}). 
+		-->
+		<variable name="openInCompareViewEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the close action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If closeEnabled is set to true, then options to open exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="closeEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the refresh action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If refreshEnabled is set to true, then options to refresh exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="refreshEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the edit column action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+		-->
+		<variable name="editColumnEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the find action is enabled. The default value for this attribute is "false".
+			This action is enabled if the active view supports find.
+		-->
+		<variable name="findEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the save action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If saveEnabled is set to true, then options to save exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="saveEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the delete action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If deleteEnabled is set to true, then options to delete exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="deleteEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the sequence up action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If sequenceUpEnabled is set to true, then options to do sequence up exist on the menu (as a {@link cmc/foundation/MenuItem}). 
+		-->
+		<variable name="sequenceUpEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the sequence down action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If sequenceDownEnabled is set to true, then options to do sequence down exist on the menu (as a {@link cmc/foundation/MenuItem}). 
+		-->
+		<variable name="sequenceDownEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the copy action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If copyEnabled is set to true, then options to copy exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="copyEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the copy to clipboard action is enabled. The default value for this attribute
+			is "false". This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects}
+			as the selected object changes.
+
+			If copyToClipboardEnabled is set to true, then options to copy to clipboard exist on the menu (as a {@link cmc/foundation/MenuItem}).
+		-->
+		<variable name="copyToClipboardEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the duplicate action is enabled. The default value for this attribute
+			is "false". This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects}
+			as the selected object changes.
+
+			If duplicateEnabled is set to true, then option to duplicate exists on the menu (as a {@link cmc/foundation/MenuItem}).
+		-->
+		<variable name="duplicateEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the paste action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If pasteEnabled is set to true, then options to paste exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="pasteEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the select all action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If selectAllEnabled is set to true, then options to select all exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="selectAllEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute defines whether the deselect all action is enabled. The default value for this attribute is "false".
+			This is an object scoped action and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			If deselectAllEnabled is set to true, then options to deselect all exist on the menu (as a {@link cmc/foundation/MenuItem})
+			and toolbar (as a {@link cmc/foundation/ToolBarButton}). 
+		-->
+		<variable name="deselectAllEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute is set to true when the Business Object Editor is opened, set to false when the tool is closed or
+			the user logs out of the tool.  This attribute is updated by {@link cmc/foundation/ToolPanes} calling "open" and "close".
+		-->
+		<variable name="isOpen" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			An array of the custom services that are currently enabled for this business object editor. This array is built from the 
+			{@link cmc/foundation/CustomService} instances that are defined as children of the active view and the array is updated as the active 
+			view changes. 
+			
+			This array is object scoped and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			These custom services will appear in the menu and toolbar. 
+		-->
+		<variable name="enabledCustomServices" value="${[]}"/>
+		<!---
+			@keywords private
+			An array of the client actions that are currently enabled for this business object editor. This array is built from the 
+			{@link cmc/foundation/ClientAction} instances that are defined as children of the active view and the array is updated as the active 
+			view changes. 
+			
+			This array is object scoped and is updated by {@link cmc/foundation/BusinessObjectEditor#checkSelectedObjects} as the selected object
+			changes.
+			
+			These client actions will appear in the menu and toolbar. 
+		-->
+		<variable name="enabledClientActions" value="${[]}"/>
+		<!---
+			@keywords private
+			Array of possible view options that are currently enabled. This attribute will hold the {@link cmc/foundation/ViewOption} for the
+			object currently selected in the properties view.
+		-->
+		<variable name="enabledViewOptions" value="${[]}"/>
+		<!---
+			@keywords private
+			
+			An array that contains the navigation history as instances of {@link cmc/foundation/NavigationHistoryEntry} objects. 
+		-->
+		<variable name="navigationHistoryEntries" value="${[]}"/>
+		<!---
+			@keywords private
+			
+			The current navigation history entry. This variable is an instance of {@link cmc/foundation/NavigationHistoryEntry}.
+		-->
+		<variable name="currentNavigationHistoryEntry" value="${null}"/>
+		<!---
+			@keywords private 
+			
+			This attribute indicates whether a store has been selected in the business object editor. The default value for this
+			attribute is false. 
+		-->		
+		<variable name="isStoreSelected" type="boolean" value="false"/>		
+		<!---
+			@keywords private
+			
+			This attribute contains a list of frames, or views, in the Business Object Editor. This attribute is used by the shortcut
+			key	command for frame navigation. 
+		-->		
+		<variable name="framesList" value="${(typeof (SingletonRegistry.bannerAreaWidget) != 'undefined') ? [SingletonRegistry.bannerAreaWidget] : []}"/>
+		<!---
+			@keywords private
+			
+			This attribute contains the index of the frame currently in focus in the {@link cmc/foundation/BusinessObjectEditor#framesList}. 
+		-->		
+		<variable name="frameOnFocusIndex" type="number" value="${-1}"/>
+		<!---
+			@keywords private
+			This attribute indicates if this instance of the business object editor is active. The default value of this attribute
+			is "true". This attribute is set to false when the editor is closed. 			
+		-->			
+		<variable name="active" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			
+			This attribute indicates if the shortcutKeys are registered. The default value for this attribute is "false". 
+		-->			
+		<variable name="keysRegistered" type="boolean" value="false"/>
+		<!---
+			This attribute indicates if multiple langauge support is enabled. The default value for this attribute is "true". 
+		-->
+		<variable name="multipleInputLanguages" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			This attribute contains the preferences key for this business object editor which is used to retrieve the business user's
+			preferences by {@link cmc/foundation/PreferenceManager}. Currently, the default value of this key
+			is {@link cmc/foundation/BusinessObjectEditor#name}. In Management Center by default, {@link cmc/foundation/ApplicationMenuItem#id} gets passed
+			to be the value of {@link cmc/foundation/BusinessObjectEditor#name}.  
+			 
+			If the key is null, then the configuration for the business object editor will not be saved.
+		-->
+		<variable name="preferenceKey" type="string" value="${this.name}"/>
+		<!---
+			Display name for this business object editor instance. This text will
+			be displayed on the tool tab when the tool is open. This is a required attribute.
+		-->
+		<variable name="displayName" type="string"/>
+		<!---
+			@keywords private
+			A boolean attribute that indicates if the Business Object Editor respects all the workspace related context set in
+			UserContext.xml. If this is true, then data in this editor is managed within the context of the selected workspace
+			when it is enabled; otherwise data in this editor will always be managed against the base schema.
+			The default value for this attribute is "true". 
+		-->
+		<variable name="respectWorkspaceContext" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			This attribute contains the name of the view class that is used to display information in the tool when no object is 
+			selected.  If the view is not defined, the "Select an object" page displays.
+		-->
+		<variable name="gettingStartedPageClass" type="module" value="${null}"/>
+
+		<!---
+			@keywords private
+			Flag that determines whether the tool is available or not when working on a workspace task. The default
+			value of this flag is true.
+		-->
+		<variable name="availableToWorkspaceTasks" type="boolean" value="true"/>
+
+		<!---
+			@keywords private
+			This attribute contains an instance of the context class that is used within the scope of this editor.
+		-->
+		<variable name="localContext" value="${null}"/>
+
+		<!---
+			@keywords private
+			A reference to the {@link cmc/foundation/Model} object instance for the business object editor
+		-->
+		<Model name="model"/>
+
+		<!--- @keywords private -->
+		<method name="completeInstantiation">
+			<![CDATA[
+			this.inherited(arguments);
+			DefinitionUtil.completeCreateDefinitionChildren(this);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			if (this.visible && !this._initialized) {
+				this.initialize();
+			}
+			]]>
+		</method>
+
+		<handler name="onvisible">
+			<![CDATA[
+			if (this.visible && !this.isOpen) {
+				this.open();
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="initialize">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "initialize");
+			}
+			if (typeof (this.displayName) == "undefined") {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "SEVERE", "cmc/foundation/BusinessObjectEditor", "initialize", "Tab name is undefined because the tool is missing required attribute 'displayName', it must be defined in class that extends cmc/foundation/BusinessObjectEditor.");
+			}
+			this._initialized = true;
+			this.model.initializeModel(this);
+			this.createViews();
+			this.checkSelectedObjectsDel = new EventHandler.Class(this, "checkSelectedObjects");
+			this.checkSelectedObjects();
+			this.doKeySaveDel = new EventHandler.Class(this, "doKeySave");
+			this.toggleUtilitiesViewDel = new EventHandler.Class(this, "toggleUtilitiesView");
+			this.focusOnFrameDel = new EventHandler.Class(this, "focusOnFrame");
+			this.openDefaultMenuDel = new EventHandler.Class(this, "openDefaultMenu");
+			this.updateShortcutKeys();
+			this.toggleNavigationArea();
+			this.framesList.push(SingletonRegistry.messageLink);
+			this.updateViewOptionsDel = new EventHandler.Class(this, "updateViewOptions");
+			this.updateViewOptionsDel.connect(this.workAreaContainer, "onactiveView");
+			this.updateViewOptionsDel.connect(this.workAreaDetailsContainer, "onactiveView");
+			this.updateViewOptionsDel.connect(this.workAreaDetailsContainer, "onclosed");
+			this.updateViewOptions();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "initialize");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->		
+		<method args="s, p, args" name="determinePlacement">
+			<![CDATA[
+			if (s instanceof ObjectDefinition.Class) {
+				return this.model;
+			}
+			else {
+				return this.inherited(arguments);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="checkFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkFilterDel.disconnectAll();
+			var enabledFilters = [];
+			var retrievedFilters = this.getExplorerTreeFilters();
+			for (var i = 0; i < retrievedFilters.length; i++) {
+				var currentFilter = retrievedFilters[i];
+				if (currentFilter.enablementCondition) {
+					currentFilter.enablementCondition.registerDelegate(this, this.checkFilterDel);
+				}
+				if (currentFilter.isEnabled(this)) {
+					enabledFilters.unshift(currentFilter);
+				}
+			}
+			if (enabledFilters.length == 0) {
+				this.content.navigationArea.filterSelector.setVariable("selectedValue", null);
+				this.content.navigationArea.filterSelector.setValues(null);
+				this.content.navigationArea.filterSelector.setVariable("visible", false);
+				this.content.navigationArea.padView.setVariable("visible", false);
+			}
+			else if (enabledFilters.length == 1) {
+				this.content.navigationArea.filterSelector.setVariable("selectedValue", enabledFilters[0]);
+				this.content.navigationArea.filterSelector.setValues(enabledFilters);
+				this.content.navigationArea.filterSelector.setVariable("visible", false);
+				this.content.navigationArea.padView.setVariable("visible", false);
+			}
+			else {
+				var selectedValue = null;
+				if (this.defaultFilter != null) {
+					for (var i = 0; i < enabledFilters.length; i++) {
+						if (enabledFilters[i].isDefault) {
+							selectedValue = enabledFilters[i];
+							break;
+						}
+					}
+				}
+				if (selectedValue == null) {
+					selectedValue = enabledFilters[0];
+				}
+				this.content.navigationArea.filterSelector.setVariable("selectedValue", selectedValue);
+				this.content.navigationArea.filterSelector.setValues(enabledFilters);
+				this.content.navigationArea.filterSelector.setVariable("visible", true);
+				this.content.navigationArea.padView.setVariable("visible", true);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "destroy");
+			}
+			this.checkFilterDel.disconnectAll();
+			delete this.checkFilterDel;
+			this.doKeySaveDel.disconnectAll();
+			delete this.doKeySaveDel;
+			this.toggleUtilitiesViewDel.disconnectAll();
+			delete this.toggleUtilitiesViewDel;
+			this.focusOnFrameDel.disconnectAll();
+			delete this.focusOnFrameDel;
+			this.openDefaultMenuDel.disconnectAll();
+			delete this.openDefaultMenuDel;
+			this.checkViewVisibilityDel.disconnectAll();
+			delete this.checkViewVisibilityDel;
+			this.checkSelectedObjectsDel.disconnectAll();
+			delete this.checkSelectedObjectsDel;
+			this.updateViewOptionsDel.disconnectAll();
+			delete this.updateViewOptionsDel;
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "destroy");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="getBrowseUtilityFilters">
+			<![CDATA[
+			if (this.browseUtilityFilters == null) {
+				if (this.browseUtilityFilterTypes == "") {
+					this.browseUtilityFilters = this.filters;
+				}
+				else {
+					this.browseUtilityFilters = [];
+					var filterTypes = StringUtil.Singleton.splitAndTrim(this.browseUtilityFilterTypes, ",");
+					for (var i = 0; i < this.filters.length; i++) {
+						if (filterTypes.indexOf(this.filters[i].filterType) != -1) {
+							this.browseUtilityFilters.unshift(this.filters[i]);
+						}
+					}
+				}
+			}
+			return this.browseUtilityFilters;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="getExplorerTreeFilters">
+			<![CDATA[
+			if (this.explorerFilters == null) {
+				if (this.explorerFilterTypes == "") {
+					this.explorerFilters = this.filters;
+				}
+				else {
+					this.explorerFilters = [];
+					var filterTypes = StringUtil.Singleton.splitAndTrim(this.explorerFilterTypes, ",");
+					for (var i = 0; i < this.filters.length; i++) {
+						if (filterTypes.indexOf(this.filters[i].filterType) != -1) {
+							this.explorerFilters.unshift(this.filters[i]);
+						}
+					}
+				}
+			}
+			return this.explorerFilters;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called in order to open this business object editor. It will load the user's preferences, 
+			refresh the shell's header, make the editor visible, ensure that the {@link cmc/foundation/BusinessObjectEditor#workAreaContainer}
+			displays the correct information, and reset the status of each action button on the object toolbar. 
+		-->
+		<method args="store" name="open">
+			<![CDATA[
+			if (typeof(store) == "undefined") store = null;
+			if (store != null || this.visible) {
+				if (!this._initialized) {
+					this.completeInstantiation();
+					this.initialize();
+				}
+				this.header.storeSelectionList.refresh(store);
+				if (!this.isOpen) {
+					this.setVariable("isOpen", true);
+					this.checkSelectedObjects();
+					this.toggleNavigationArea();
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when the business object editor is closed. It has the purpose of reseting the business object
+			editor for subsequent use by doing the following: 
+			<ul>
+				<li>clearing the navigation history</li>
+				<li>resetting the frame focus</li>
+				<li>resetting the subviews</li>
+				<li>marking the editor as inactive</li>
+				<li>resetting the store selection list</li>
+				<li>making the editor invisible</li>
+			</ul>
+		-->
+		<method name="close">
+			<![CDATA[
+			if (this.isOpen) {
+				this.setVariable("isOpen", false);
+				this.resetNavigationHistory();
+				this.setVariable("frameOnFocusIndex", -1);
+				this.resetViews();
+				this.setVariable("active", false);
+				if (this.isStoreSelected) {
+					this.header.storeSelectionList.changeStore(null, false);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method enables and disables the shortcut keys based on the {@link cmc/foundation/BusinessObjectEditor#active} attribute. It
+			is called by the {@link cmc/foundation/BusinessObjectEditor#onactive} handler.
+		 -->
+		<method name="updateShortcutKeys">
+			<![CDATA[
+			if (this.active) {
+				this.registerShortcutKeys();
+			}
+			else {
+				this.unregisterShortcutKeys();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler updates the business object editor when it's {@link cmc/foundation/BusinessObjectEditor#active} state changes.
+		-->
+		<handler name="onactive">
+			<![CDATA[
+			this.updateShortcutKeys();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This method registers the shortcut keys if {@link cmc/foundation/BusinessObjectEditor#keysRegistered} is false. It does nothing
+			otherwise.  
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.keysRegistered = true;
+				KeyUtil.callOnKeyCombo(this.focusOnFrameDel, ['f7']);
+				KeyUtil.callOnKeyCombo(this.toggleUtilitiesViewDel, ['f8']);
+				KeyUtil.callOnKeyCombo(this.doKeySaveDel, ['f9']);
+				KeyUtil.callOnKeyCombo(this.openDefaultMenuDel, ['Control', 'Shift', '2']);
+				KeyUtil.callOnKeyCombo(this.focusOnFrameDel, ['Control', 'Shift', '7']);
+				KeyUtil.callOnKeyCombo(this.toggleUtilitiesViewDel, ['Control', 'Shift', '8']);
+				KeyUtil.callOnKeyCombo(this.doKeySaveDel, ['Control', 'Shift', '9']);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method unregisters the shortcut keys if {@link cmc/foundation/BusinessObjectEditor#keysRegistered} is true. It does nothing
+			otherwise.  
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.keysRegistered = false;
+				KeyUtil.removeKeyComboCall(this.focusOnFrameDel, ['f7']);
+				KeyUtil.removeKeyComboCall(this.toggleUtilitiesViewDel, ['f8']);
+				KeyUtil.removeKeyComboCall(this.doKeySaveDel, ['f9']);
+				KeyUtil.removeKeyComboCall(this.openDefaultMenuDel, ['Control', 'Shift', '2']);
+				KeyUtil.removeKeyComboCall(this.focusOnFrameDel, ['Control', 'Shift', '7']);
+				KeyUtil.removeKeyComboCall(this.toggleUtilitiesViewDel, ['Control', 'Shift', '8']);
+				KeyUtil.removeKeyComboCall(this.doKeySaveDel, ['Control', 'Shift', '9']);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			This method creates the business object editor views.			
+		-->
+		<method name="createViews">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "createViews");
+			}
+			this.header.menubar.initializeMenu(this);
+			this.workAreaContainer = this.content.workAreaUtilitiesSplit.workAreaSplit.workArea;
+			this.workAreaDetailsContainer = this.content.workAreaUtilitiesSplit.workAreaSplit.details;
+			var searchDefinitionExists = false;
+			for (var i = 0; i < this.model.searchDefinitions.length; i++) {
+				var def = this.model.searchDefinitions[i];
+				if (def.listClass_moduleName != null) {
+					searchDefinitionExists = true;
+					break;
+				}
+			}
+			if (searchDefinitionExists) {
+				this.searchWidget = new SearchWidget.Class(this.header.search, {
+					oEditor: this
+				});
+			}
+			new Component.Class(this.content.navigationArea, {
+				name: "headerPadView",
+				placement: "title",
+				height: 5
+			});
+			var filter = new BaseComboBox.Class(this.content.navigationArea, {
+				name: "filterSelector",
+				placement: "title",
+				x: 20,
+				width: 180
+			});
+			new Component.Class(this.content.navigationArea, {
+				name: "padView",
+				placement: "title",
+				height: 13
+			});
+			if (this.navigationTreeClass != null) {
+				this.checkFilterDel = new EventHandler.Class(this, "checkFilter");
+				this.navigationTree = new this.navigationTreeClass.Class(this.content.navigationArea, {
+					oEditor: this
+				});
+				this.checkFilter();
+				this.navigationTree.setVariable("o", this.model.createNewObject(this.model.getObjectDefinition(null, "Top")));
+			}
+			if (this.toolbarClass != null) {
+				this.toolbar = new this.toolbarClass.Class(this.header.toolbar, {
+					oEditor: this
+				});
+			}
+			if (this.gettingStartedPageClass != null) {
+				new this.gettingStartedPageClass.Class(this.workAreaContainer, {
+					name: "gettingStartedPage",
+					placement: "infoArea"
+				});
+			}
+			this.checkViewVisibilityDel = new EventHandler.Class(this, "checkViewVisibility");
+			this.checkViewVisibilityDel.connect(this.content.navigationArea, "onclosed");
+			this.checkViewVisibilityDel.connect(this.workAreaDetailsContainer, "onclosed");
+			this.checkViewVisibilityDel.connect(this.content.workAreaUtilitiesSplit.workAreaSplit, "onaxis");
+			this.checkViewVisibilityDel.connect(this.workAreaContainer, "onactiveView");
+			this.checkViewVisibilityDel.connect(this, "onworkAreaDetailsEnabled");
+			this.checkViewVisibilityDel.connect(this.content, "onmaximizedPanel");
+			if (this.showCompareView) {
+				new CompareView.Class(this.workAreaContainer, {
+					name: "compareAreaSplit",
+					placement: "nonclippedContent"
+				});
+				this.compareArea1Container = this.workAreaContainer.compareAreaSplit.compareArea1;
+				this.compareArea2Container = this.workAreaContainer.compareAreaSplit.compareArea2;
+			}
+			this.checkViewVisibility();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "createViews");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			This method resets the subviews created by {@link cmc/foundation/BusinessObjectEditor#createViews}.
+		-->
+		<method name="resetViews">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "resetViews");
+			}
+			if (this.workAreaDetailsContainer !== null) {
+				this.workAreaDetailsContainer.close();
+			}
+			if (this.workAreaContainer !== null) {
+				this.workAreaContainer.reset();
+			}
+			if (this.searchWidget != null) {
+				this.searchWidget.reset();
+			}
+			this.content.navigationArea.close();
+			this.checkFilter();
+			var subtrees = this.navigationTree.children.childComponents;
+			for (var i = 0; i < subtrees.length; i++) {
+				if (subtrees[i].visible) {
+					subtrees[i].setVariable("open", false);
+					subtrees[i].setVariable("focused", false);
+					subtrees[i].setVariable("selected", false);
+				}
+			}
+			if (this.utilities) {
+				this.utilities.close();
+				this.utilities.reset();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "resetViews");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			This method checks the state of the navigation and utilities view visible.
+		-->
+		<method args="e" name="checkViewVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "checkViewVisibility");
+			}
+			var isVisible = this.content.maximizedPanel == null && !this.content.navigationArea.closed;
+			if (isVisible != this.navigationViewVisible) {
+				this.setVariable("navigationViewVisible", isVisible);
+			}
+			isVisible = this.content.maximizedPanel == null && !!this.utilities && !this.utilities.closed;
+			if (isVisible != this.utilitiesViewVisible) {
+				this.setVariable("utilitiesViewVisible", isVisible);
+			}
+			var currentAxis = this.content.workAreaUtilitiesSplit.workAreaSplit.axis;
+			isVisible = this.content.maximizedPanel == null && !this.workAreaDetailsContainer.closed && currentAxis == "y" && this.workAreaDetailsEnabled;
+			if (isVisible != this.workAreaDetailsBelowVisible) {
+				this.setVariable("workAreaDetailsBelowVisible", isVisible);
+			}
+			isVisible = this.content.maximizedPanel == null && !this.workAreaDetailsContainer.closed && currentAxis == "x" && this.workAreaDetailsEnabled;
+			if (isVisible != this.workAreaDetailsBesideVisible) {
+				this.setVariable("workAreaDetailsBesideVisible", isVisible);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "checkViewVisibility");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="doOpenInCompareView">
+			<![CDATA[
+			var activeView = this.model.activeSelectionView;
+			if (activeView != null) {
+				var selectedObjects = activeView.getSelectedObjects();
+				if (selectedObjects.length == 1 || selectedObjects.length == 2) {
+					var o1 = selectedObjects[0];
+					o1 = o1.getReferencedObject();
+					var o2 = null;
+					if (selectedObjects.length == 2) {
+						o2 = selectedObjects[1];
+						o2 = o2.getReferencedObject();
+					}
+					this.openObjectsInCompareView(o1, o2);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method sets the compare area split to horizontal or vertical.  
+		-->
+		<method args="splitVertically" name="splitCompareViewVertically">
+			<![CDATA[
+			this.workAreaContainer.compareAreaSplit.setVariable("axis", splitVertically ? "x" : "y");
+			this.setVariable("compareViewSplitVertically", splitVertically);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Open objects in the compare view.
+		-->
+		<method args="o1, o2" name="openObjectsInCompareView">
+			<![CDATA[
+			if (typeof(o2) == "undefined") o2 = null;
+			var compareViewTreeNode = this.navigationTree.compareViewTree;
+			if ((o2 != null) || (this.compareArea1Container.activeView != null && this.compareArea2Container.activeView != null)) {
+				compareViewTreeNode.setVariable("compareObject1Cache", null);
+				compareViewTreeNode.setVariable("compareObject2Cache", null);
+			}
+			o1.doOpenInCompareView();
+			if (o2 != null) {
+				o2.doOpenInCompareView();
+			}
+			if (!compareViewTreeNode.selected) {
+				compareViewTreeNode.changeFocus(null);
+				compareViewTreeNode.setVariable("selected", true);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method check the currently selected object and determine the enablement of object scoped actions. It will update
+			the instances attributes for these object scoped actions:
+			<ul>
+				<li>{@link cmc/foundation/BusinessObjectEditor#openEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#closeEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#refreshEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#saveEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#deleteEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#copyEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#sequenceUpEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#sequenceDownEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#copyToClipboardEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#duplicateEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#pasteEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#selectAllEnabled}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#deselectAllEnabled}</li>
+			</ul>
+																																						
+			It will also refresh the values of the object scoped arrays:
+			<ul>
+				<li>{@link cmc/foundation/BusinessObjectEditor#enabledCustomServices}</li>
+				<li>{@link cmc/foundation/BusinessObjectEditor#enabledClientActions}</li>
+			</ul>
+		-->
+		<method args="e" name="checkSelectedObjects">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "checkSelectedObjects");
+			}
+			this.checkSelectedObjectsDel.disconnectAll();
+			this.checkSelectedObjectsDel.connect(this.model, "onactiveSelectionView");
+			this.checkSelectedObjectsDel.connect(this.model, "onclipboardObjects");
+			var activeView = this.model.activeSelectionView;
+			if (activeView != null) {
+				this.checkSelectedObjectsDel.connect(activeView, "onselect");
+			}
+			var navigationTreeSelection = this.navigationTree.getSelection();
+			if (navigationTreeSelection != null && !navigationTreeSelection.selected) {
+				navigationTreeSelection = null;
+			}
+			if (navigationTreeSelection != null && navigationTreeSelection.o != undefined) {
+				this.checkSelectedObjectsDel.connect(navigationTreeSelection.o, "onreadOnly");
+				this.checkSelectedObjectsDel.connect(navigationTreeSelection.o, "onopenGroupDirty");
+				var referencedObject = navigationTreeSelection.o.getReferencedObject();
+				if (referencedObject != null && referencedObject.newObject) {
+					this.checkSelectedObjectsDel.connect(referencedObject, "onnewObject");
+				}
+			}
+			var objects = [];
+			if (activeView != null && activeView.getSelectedObjects) {
+				var selectedObjects = activeView.getSelectedObjects();
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var o = selectedObjects[i];
+					if (o.objectDefinition != null) {
+						objects.push(o);
+						this.checkSelectedObjectsDel.connect(o, "onreadOnly");
+					}
+				}
+			}
+			var actionEnabled = false;
+			if (objects.length > 0) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					if (!objects[i].isOpenEnabled(this.checkSelectedObjectsDel)) {
+						actionEnabled = false;
+						break;
+					}
+				}
+			}
+			if (actionEnabled && activeView == this.navigationTree) {
+				var s = activeView.getSelection();
+				if (s.parent == this.navigationTree.activeWorkTree) {
+					actionEnabled = false;
+				}
+			}
+			if (this.openEnabled != actionEnabled) {
+				this.setVariable("openEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (this.showCompareView && objects.length > 0 && objects.length < 3) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					var po = objects[i].getReferencedObject();
+					if (!objects[i].isOpenInCompareViewEnabled(this.checkSelectedObjectsDel)) {
+						actionEnabled = false;
+						break;
+					}
+				}
+			}
+			if (this.openInCompareViewEnabled != actionEnabled) {
+				this.setVariable("openInCompareViewEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (navigationTreeSelection != null && navigationTreeSelection.parent == this.navigationTree.activeWorkTree) {
+				actionEnabled = true;
+			}
+			if (this.closeEnabled != actionEnabled) {
+				this.setVariable("closeEnabled", actionEnabled);
+			}
+			actionEnabled = navigationTreeSelection != null && navigationTreeSelection != this.navigationTree.activeWorkTree && navigationTreeSelection.o != undefined;
+			if (actionEnabled) {
+				var oDef = navigationTreeSelection.o.objectDefinition;
+				if (oDef.primary || oDef.organizational || oDef.parentReference || oDef.collectionReference) {
+					var referencedObject = navigationTreeSelection.o.getReferencedObject();
+					actionEnabled = !referencedObject.newObject && (referencedObject.objectDefinition.primary || referencedObject.objectDefinition.organizational) && (navigationTreeSelection.parent != this.navigationTree.activeWorkTree || referencedObject.objectDefinition.refreshService != null || navigationTreeSelection.navigationListDefinition != null);
+				}
+				else {
+					actionEnabled = false;
+				}
+			}
+			if (this.refreshEnabled != actionEnabled) {
+				this.setVariable("refreshEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (navigationTreeSelection && navigationTreeSelection != this.navigationTree.activeWorkTree) {
+				actionEnabled = true;
+				if (navigationTreeSelection.o != undefined && navigationTreeSelection.o.readOnly) {
+					actionEnabled = false;
+				}
+			}
+			if (this.saveEnabled != actionEnabled) {
+				this.setVariable("saveEnabled", actionEnabled);
+			}
+			actionEnabled = objects.length > 0;
+			if (this.copyEnabled != actionEnabled) {
+				this.setVariable("copyEnabled", actionEnabled);
+			}
+			actionEnabled = objects.length > 0;
+			if (actionEnabled) {
+				if (!this.showUtilitiesView) {
+					actionEnabled = false;
+				}
+				else {
+					for (var i = 0; i < objects.length; i++) {
+						if (!objects[i].getReferencedObject().objectDefinition.primary) {
+							actionEnabled = false;
+							break;
+						}
+					}
+				}
+			}
+			if (this.copyToClipboardEnabled != actionEnabled) {
+				this.setVariable("copyToClipboardEnabled", actionEnabled);
+			}
+			actionEnabled = ActionUtil.Singleton.isDuplicateActionEnabled(objects);
+			if (this.duplicateEnabled != actionEnabled) {
+				this.setVariable("duplicateEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (activeView != null && activeView.isPasteEnabled) {
+				actionEnabled = activeView.isPasteEnabled();
+			}
+			if (this.pasteEnabled != actionEnabled) {
+				this.setVariable("pasteEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (activeView != null && activeView.isDeleteEnabled) {
+				actionEnabled = activeView.isDeleteEnabled();
+			}
+			if (this.deleteEnabled != actionEnabled) {
+				this.setVariable("deleteEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (activeView != null && activeView.isSequenceUpEnabled) {
+				actionEnabled = activeView.isSequenceUpEnabled();
+			}
+			if (this.sequenceUpEnabled != actionEnabled) {
+				this.setVariable("sequenceUpEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (activeView != null && activeView.isSequenceDownEnabled) {
+				actionEnabled = activeView.isSequenceDownEnabled();
+			}
+			if (this.sequenceDownEnabled != actionEnabled) {
+				this.setVariable("sequenceDownEnabled", actionEnabled);
+			}
+			actionEnabled = activeView != null && activeView.selectAll != undefined;
+			if (this.selectAllEnabled != actionEnabled) {
+				this.setVariable("selectAllEnabled", actionEnabled);
+			}
+			actionEnabled = activeView != null && activeView.deselectAll != undefined && objects.length > 0;
+			if (this.deselectAllEnabled != actionEnabled) {
+				this.setVariable("deselectAllEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (activeView && activeView.isEditColumnEnabled) {
+				actionEnabled = activeView.isEditColumnEnabled(this.checkSelectedObjectsDel);
+			}
+			if (this.editColumnEnabled != actionEnabled) {
+				this.setVariable("editColumnEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (activeView && activeView.isFindEnabled) {
+				actionEnabled = activeView.isFindEnabled(this.checkSelectedObjectsDel);
+			}
+			if (this.findEnabled != actionEnabled) {
+				this.setVariable("findEnabled", actionEnabled);
+			}
+			var enabledActions = [];
+			var customServices = null;
+			if (activeView != null && activeView.getCustomServices && objects.length > 0) {
+				customServices = activeView.getCustomServices();
+				if (customServices != null && customServices.length > 0) {
+					for (var i = 0; i < customServices.length; i++) {
+						var customService = customServices[i];
+						if (customService.allowMultipleSelection || objects.length == 1) {
+							var serviceEnabled = true;
+							for (var j = 0; j < objects.length; j++) {
+								var po = objects[j].getReferencedObject();
+								if (!po.objectDefinition.isCustomServiceDefined(customService) || !customService.isEnabled(po)) {
+									serviceEnabled = false;
+								}
+								if (po.objectDefinition.isCustomServiceDefined(customService)) {
+									customService.registerEnablementDelegate(po, this.checkSelectedObjectsDel);
+								}
+							}
+							if (serviceEnabled) {
+								enabledActions.push(customService);
+							}
+						}
+					}
+				}
+			}
+			if (enabledActions.length == 0 && this.navigationTree.getSelection() && this.navigationTree.getSelection().parent == this.navigationTree.activeWorkTree && this.navigationTree.getSelection().navigationListDefinition == null) {
+				var po = this.navigationTree.getSelection().o.getReferencedObject();
+				customServices = po.objectDefinition.customServices;
+				if (customServices != null && customServices.length > 0) {
+					for (var i = 0; i < customServices.length; i++) {
+						var customService = customServices[i];
+						if (customService.isEnabled(po)) {
+							enabledActions.push(customService);
+						}
+						customService.registerEnablementDelegate(po, this.checkSelectedObjectsDel);
+					}
+				}
+			}
+			if (!LangUtil.Singleton.isIdentical(enabledActions, this.enabledCustomServices)) {
+				this.setVariable("enabledCustomServices", enabledActions);
+			}
+			var enabledActions = [];
+			var clientActions = null;
+			if (activeView != null && activeView.getClientActions && objects.length > 0) {
+				clientActions = activeView.getClientActions();
+				if (clientActions != null && clientActions.length > 0) {
+					for (var i = 0; i < clientActions.length; i++) {
+						var clientAction = clientActions[i];
+						if (clientAction.allowMultipleSelection || objects.length == 1) {
+							var clientActionEnabled = true;
+							for (var j = 0; j < objects.length; j++) {
+								var o = objects[j];
+								var po = objects[j].getReferencedObject();
+								if (!(o.objectDefinition.isClientActionDefined(clientAction) && clientAction.isEnabled(o)) && !(po.objectDefinition.isClientActionDefined(clientAction) && clientAction.isEnabled(po))) {
+									clientActionEnabled = false;
+								}
+								if (o.objectDefinition.isClientActionDefined(clientAction)) {
+									clientAction.registerEnablementDelegate(o, this.checkSelectedObjectsDel);
+								}
+								if (po.objectDefinition.isClientActionDefined(clientAction)) {
+									clientAction.registerEnablementDelegate(po, this.checkSelectedObjectsDel);
+								}
+							}
+							if (clientActionEnabled) {
+								enabledActions.push(clientAction);
+							}
+						}
+					}
+				}
+			}
+			if (enabledActions.length == 0 && this.navigationTree.getSelection() && this.navigationTree.getSelection().parent == this.navigationTree.activeWorkTree && this.navigationTree.getSelection().navigationListDefinition == null) {
+				var po = this.navigationTree.getSelection().o.getReferencedObject();
+				clientActions = po.objectDefinition.clientActions;
+				if (clientActions != null && clientActions.length > 0) {
+					for (var i = 0; i < clientActions.length; i++) {
+						var clientAction = clientActions[i];
+						if (clientAction.availableFromExplorerView) {
+							if (clientAction.isEnabled(po)) {
+								enabledActions.push(clientAction);
+							}
+							clientAction.registerEnablementDelegate(po, this.checkSelectedObjectsDel);
+						}
+					}
+				}
+			}
+			if (!LangUtil.Singleton.isIdentical(enabledActions, this.enabledClientActions)) {
+				this.setVariable("enabledClientActions", enabledActions);
+			}
+			actionEnabled = false;
+			this.checkSelectedObjectsDel.connect(this.model, "oncompareViewVisible");
+			if (!this.compareViewVisible) {
+				this.checkSelectedObjectsDel.connect(this.model, "onworkAreaActiveSelectionView");
+				var workAreaActiveView = this.model.workAreaActiveSelectionView;
+				var workAreaObjects = [];
+				if (workAreaActiveView != null && workAreaActiveView.getSelectedObjects) {
+					this.checkSelectedObjectsDel.connect(workAreaActiveView, "onselect");
+					workAreaObjects = workAreaActiveView.getSelectedObjects();
+				}
+				if (workAreaObjects.length == 1) {
+					var o = workAreaObjects[0];
+					if (o.getReferencedObject().objectDefinition.propertiesClass_moduleName != null) {
+						actionEnabled = true;
+					}
+				}
+			}
+			if (actionEnabled || this.workAreaDetailsEnabled != actionEnabled) {
+				this.setVariable("workAreaDetailsEnabled", actionEnabled);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "checkSelectedObjects");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the list of navigationListDefinitions for the selected object
+		-->
+		<method args="del" name="getNavigationListDefinitions">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var navigationListDefinitions = [];
+			if (this.navigationTree != null) {
+				var navigationTreeSelection = this.navigationTree.getSelection();
+				if (navigationTreeSelection != null && navigationTreeSelection.o) {
+					var oDef = navigationTreeSelection.o.objectDefinition;
+					if (oDef.primary || oDef.organizational || oDef.parentReference || oDef.collectionReference) {
+						var o = navigationTreeSelection.o.getReferencedObject();
+						var definitions = o.objectDefinition.navigationListDefinitions;
+						for (var i = 0; i < definitions.length; i++) {
+							var def = definitions[i];
+							if (def.isEnabled(o)) {
+								navigationListDefinitions.push(def);
+							}
+							if (del) {
+								def.registerEnablementDelegate(o, del);
+							}
+						}
+					}
+				}
+			}
+			return navigationListDefinitions;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns true if the selected object has an objectPropertiesClass and list of navigationListDefinitions is > 0
+		-->
+		<method name="isShowPropertiesEnabled">
+			<![CDATA[
+			var showPropertiesEnabled = false;
+			if (this.navigationTree != null) {
+				var navigationTreeSelection = this.navigationTree.getSelection();
+				showPropertiesEnabled = navigationTreeSelection != null && this.navigationTree.activeWorkTree == navigationTreeSelection.parent && navigationTreeSelection.o.objectDefinition.navigationListDefinitions.length > 0 && navigationTreeSelection.o.objectDefinition.propertiesClass_moduleName != null;
+			}
+			return showPropertiesEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method takes an input that is a frame's index in {@link cmc/foundation/BusinessObjectEditor#framesList}, and moves the focus to
+			the next frame in the {@link cmc/foundation/BusinessObjectEditor#framesList}.
+			
+			@param number frameIndex The index of the current frame that is in focus in the {@link cmc/foundation/BusinessObjectEditor#framesList}.
+		-->
+		<method args="frameIndex" name="focusOnFrame">
+			<![CDATA[
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				if (typeof (frameIndex) == "number") {
+					var frame = this.framesList[frameIndex];
+					if (!frame.visible || ((frame instanceof Panel.Class) && this.content.maximizedPanel != null && this.content.maximizedPanel != frame)) {
+						var nextFrameIndex = (frameIndex + 1) % this.framesList.length;
+						this.focusOnFrame(nextFrameIndex);
+					}
+					else {
+						this.setVariable("frameOnFocusIndex", frameIndex);
+						FocusUtil.setFocus(frame, true);
+					}
+				}
+				else if (typeof (SingletonRegistry.toolTabsWidget) == 'undefined' || SingletonRegistry.toolTabsWidget.getCurrentTab() == this.name) {
+					var nextFrameIndex = (this.frameOnFocusIndex + 1) % this.framesList.length;
+					this.focusOnFrame(nextFrameIndex);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method calls {@link cmc/foundation/Model#setClipboardObjects} to copy the currently selected objects to the clipboard.
+			If {@link cmc/foundation/BusinessObjectEditor#copyEnabled} is false, this method will do nothing.  
+		-->
+		<method name="doCopy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doCopy");
+			}
+			if (this.copyEnabled) {
+				var activeView = this.model.activeSelectionView;
+				if (activeView != null) {
+					var objects = activeView.getSelectedObjects();
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doCopy" + " #objects=" + objects.length);
+					this.model.setClipboardObjects(objects);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doCopy");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method calls {@link cmc/foundation/Model#setClipboardObjects} and {@link cmc/foundation/UtilitiesClipboard#doPaste} to copy and
+			paste the currently selected objects to the clipboard.
+			If {@link cmc/foundation/BusinessObjectEditor#copyToClipboardEnabled} is false, this method will do nothing.
+		-->
+		<method name="doCopyToClipboard">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doCopyToClipboard");
+			}
+			if (this.copyToClipboardEnabled) {
+				var activeView = this.model.activeSelectionView;
+				if (activeView != null) {
+					var objects = activeView.getSelectedObjects();
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doCopyToClipboard" + " #objects=" + objects.length);
+					this.model.setClipboardObjects(objects);
+					var caller = this;
+					require(["cmc/foundation/UtilitiesSplitView"], function(UtilitiesSplitView) {
+						if (!caller.utilities) {
+							new UtilitiesSplitView.Class(caller.content.workAreaUtilitiesSplit, {
+								name: "utilitiesSplit",
+								oEditor: caller
+							});
+						}
+						if (!caller.utilitiesViewVisible) {
+							caller.utilities.open();
+						}
+						caller.utilities.setVariable("activePane", caller.utilities.panes.clipboardPane);
+						caller.utilities.panes.clipboardPane.doPaste();
+					});
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doCopyToClipboard");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method triggers the duplicate action to copy the currently selected objects.
+		-->
+		<method name="doDuplicate">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doDuplicate");
+			}
+			if (this.duplicateEnabled) {
+				var activeView = this.model.activeSelectionView;
+				if (activeView != null) {
+					var objects = activeView.getSelectedObjects();
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doDuplicate" + " #objects=" + objects.length);
+					ActionUtil.Singleton.triggerDuplicate(objects);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doDuplicate");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method gets the {@link cmc/foundation/Model#activeSelectionView} and calls its doPaste method.
+			If {@link cmc/foundation/BusinessObjectEditor#pasteEnabled} is false, this method will do nothing.  
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doPaste");
+			}
+			if (this.pasteEnabled) {
+				var activeView = this.model.activeSelectionView;
+				if (activeView != null && activeView.doPaste != undefined) {
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doPaste");
+					activeView.doPaste();
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doPaste");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method takes a custom service as a parameter, and calls {@link cmc/foundation/CustomService#doRequest} on each selected
+			object in the {@link cmc/foundation/Model#activeSelectionView}. This method ensures changes to the selected objects have been saved
+			prior to invoking the custom service. 
+			
+			@param cmc/foundation/CustomService customService An instance of {@link cmc/foundation/CustomService} to perform. 
+		-->
+		<method args="customService" name="doCustomService">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doCustomService");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doCustomService: " + customService.displayName);
+			var activeView = this.model.activeSelectionView;
+			var objects = [];
+			if (activeView != null && activeView.getSelectedObjects) {
+				var selectedObjects = activeView.getSelectedObjects();
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var po = selectedObjects[i].getReferencedObject();
+					if (!po.objectDefinition.isCustomServiceDefined(customService) || !customService.isEnabled(po)) {
+						objects = [];
+						break;
+					}
+					objects.push(po);
+				}
+			}
+			if (objects.length == 0 && this.navigationTree.getSelection() && this.navigationTree.getSelection().parent == this.navigationTree.activeWorkTree && this.navigationTree.getSelection().navigationListDefinition == null) {
+				var po = this.navigationTree.getSelection().o.getReferencedObject();
+				if (po.objectDefinition.isCustomServiceDefined(customService) && customService.isEnabled(po)) {
+					objects.push(po);
+				}
+			}
+			var unSaved = false;
+			for (var i = 0; i < objects.length; i++) {
+				if (objects[i].isOpenGroupDirty(true)) {
+					unSaved = true;
+				}
+			}
+			if (unSaved) {
+				require(["cmc/foundation/CustomServiceUnsavedDialog"], function(CustomServiceUnsavedDialog) {
+					CustomServiceUnsavedDialog.Singleton.openCustomServiceUnsavedDialog(customService);
+				});
+			}
+			else {
+				for (var i = 0; i < objects.length; i++) {
+					var o = objects[i];
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg(o.objectDisplayName);
+					customService.doRequest(o);
+				}
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doCustomService");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method takes a client action as a parameter, and calls {@link cmc/foundation/ClientAction#performAction} with the selected
+			objects in the {@link cmc/foundation/Model#activeSelectionView}.
+			
+			@param cmc/foundation/ClientAction clientAction An instance of {@link cmc/foundation/ClientAction} to perform. 
+		-->
+		<method args="clientAction" name="doClientAction">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doClientAction");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doClientAction " + clientAction);
+			var activeView = this.model.activeSelectionView;
+			var objects = [];
+			if (activeView != null) {
+				var selectedObjects = activeView.getSelectedObjects();
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var o = selectedObjects[i];
+					var po = selectedObjects[i].getReferencedObject();
+					if (o.objectDefinition.isClientActionDefined(clientAction) && clientAction.isEnabled(o)) {
+						objects.push(o);
+					}
+					else if (po.objectDefinition.isClientActionDefined(clientAction) && clientAction.isEnabled(po)) {
+						objects.push(po);
+					}
+					else {
+						objects = [];
+						break;
+					}
+				}
+			}
+			if (objects.length == 0 && this.navigationTree.getSelection() && this.navigationTree.getSelection().parent == this.navigationTree.activeWorkTree && this.navigationTree.getSelection().navigationListDefinition == null) {
+				var po = this.navigationTree.getSelection().o.getReferencedObject();
+				if (po.objectDefinition.isClientActionDefined(clientAction) && clientAction.isEnabled(po)) {
+					objects.push(po);
+				}
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg("#objects=" + objects.length);
+			clientAction.performAction(objects);
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doClientAction");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method retrieves the {@link cmc/foundation/Model#activeSelectionView} and invokes its deselectAll method.
+			If there is no deselectAll method defined for {@link cmc/foundation/Model#activeSelectionView}, this method does nothing.
+		-->
+		<method name="doDeselectAll">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doDeselectAll");
+			}
+			var activeView = this.model.activeSelectionView;
+			if (activeView.deselectAll != undefined) {
+				activeView.deselectAll();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doDeselectAll");
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method retrieves the {@link cmc/foundation/Model#activeSelectionView} and invokes its selectAll method.
+			If there is no selectAll method defined for {@link cmc/foundation/Model#activeSelectionView}, this method does nothing.
+		-->		
+		<method name="doSelectAll">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSelectAll");
+			}
+			var activeView = this.model.activeSelectionView;
+			if (activeView.selectAll != undefined) {
+				activeView.selectAll();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSelectAll");
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method gets the {@link cmc/foundation/Model#activeSelectionView} and invokes its doDelete method.
+			If there is no doDelete method defined for {@link cmc/foundation/Model#activeSelectionView}, or if there is no
+			{@link cmc/foundation/Model#activeSelectionView}, this method does nothing.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doDelete");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doDelete");
+			var activeView = this.model.activeSelectionView;
+			if (activeView != null && activeView.doDelete != undefined) {
+				activeView.doDelete();
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doDelete");
+			}
+			]]>
+		</method>
+		
+		
+		<!---
+			@keywords private
+			This method gets the {@link cmc/foundation/Model#activeSelectionView} and invokes its doSequenceUp method.
+			If there is no doSequenceUp method defined for {@link cmc/foundation/Model#activeSelectionView}, or if there is no
+			{@link cmc/foundation/Model#activeSelectionView}, this method does nothing.
+		-->
+		<method name="doSequenceUp">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSequenceUp");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doSequenceUp");
+			var activeView = this.model.activeSelectionView;
+			var actionEnabled = false;
+			if (activeView != null && activeView.doSequenceUp != undefined) {
+				activeView.doSequenceUp();
+				actionEnabled = activeView.isSequenceUpEnabled();
+			}
+			if (this.sequenceUpEnabled != actionEnabled) {
+				this.setVariable("sequenceUpEnabled", actionEnabled);
+			}
+			actionEnabled = activeView.isSequenceDownEnabled();
+			if (this.sequenceDownEnabled != actionEnabled) {
+				this.setVariable("sequenceDownEnabled", actionEnabled);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSequenceUp");
+			}
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			This method gets the {@link cmc/foundation/Model#activeSelectionView} and invokes its doSequenceDown method.
+			If there is no doSequenceDown method defined for {@link cmc/foundation/Model#activeSelectionView}, or if there is no
+			{@link cmc/foundation/Model#activeSelectionView}, this method does nothing.
+		-->
+		<method name="doSequenceDown">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSequenceDown");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doSequenceDown");
+			var activeView = this.model.activeSelectionView;
+			var actionEnabled = false;
+			if (activeView != null && activeView.doSequenceDown != undefined) {
+				activeView.doSequenceDown();
+				actionEnabled = activeView.isSequenceDownEnabled();
+			}
+			if (this.sequenceDownEnabled != actionEnabled) {
+				this.setVariable("sequenceDownEnabled", actionEnabled);
+			}
+			actionEnabled = activeView.isSequenceUpEnabled();
+			if (this.sequenceUpEnabled != actionEnabled) {
+				this.setVariable("sequenceUpEnabled", actionEnabled);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSequenceDown");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method launches the edit column dialog.
+		-->
+		<method name="doEditColumn">
+			<![CDATA[
+			var activeView = this.model.activeSelectionView;
+			if (activeView != null) {
+				require(["cmc/foundation/EditColumnDialog"], function(EditColumnDialog) {
+					EditColumnDialog.Singleton.openEditColumnDialog(activeView);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method launches the find and replace dialog.
+		-->
+		<method name="doFindAndReplace">
+			<![CDATA[
+			if (this.findEnabled) {
+				if (FindAndReplaceDialog.Singleton.isOpen) {
+					FindAndReplaceDialog.Singleton.setInitialFocus();
+				}
+				else {
+					FindAndReplaceDialog.Singleton.openFindDialog(this.model, this);
+				}
+			}
+			]]>
+		</method>
+		
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="doKeySave">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				this.doSave(e);
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method saves the currently selected objects. It will attempt to retrieve the 
+			{@link cmc/foundation/NavigationObjectTree#o object} that this tree has selected. If the object exists and is a child of the 
+			{@link cmc/foundation/NavigationObjectTree#activeWorkTree} delegates the save to {@link cmc/foundation/ModelObject#save}.
+			
+			Otherwise, this method delegates the save to {@link cmc/foundation/BusinessObjectEditor#doSaveAll}.			 
+		-->
+		<method args="e" name="doSave">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSave");
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doSave");
+			var navigationTree = this.navigationTree;
+			var s = navigationTree.getSelection();
+			if (s && s.parent == navigationTree.activeWorkTree && s.navigationListDefinition == null) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg(s.o.objectDisplayName);
+				s.o.saveObject();
+			}
+			else {
+				this.doSaveAll();
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doSave");
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method closes the currently selected object. 
+			
+			If {@link cmc/foundation/BusinessObjectEditor#closeEnabled} is false, this method will do nothing.  
+		-->
+		<method name="doClose">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doClose");
+			}
+			if (this.closeEnabled) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doClose");
+				var navigationTree = this.navigationTree;
+				var s = navigationTree.getSelection();
+				if (s && s.parent == navigationTree.activeWorkTree) {
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg(s.o.objectDisplayName);
+					s.o.closeObject(true);
+				}
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doClose");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method opens the currently selected objects and adds them to the {@link cmc/foundation/NavigationObjectTree#activeWorkTree} of
+			{@link cmc/foundation/BusinessObjectEditor#navigationTree}. 
+			
+			If {@link cmc/foundation/BusinessObjectEditor#openEnabled} is false, this method will do nothing.  
+		-->
+		<method name="doOpen">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doOpen");
+			}
+			if (this.openEnabled) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doOpen");
+				var model = this.model;
+				if (model.activeSelectionView != null) {
+					var objects = model.activeSelectionView.getSelectedObjects();
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg("#objects=" + objects.length);
+					for (var i = 0; i < objects.length; i++) {
+						objects[i].doOpen(i == objects.length - 1);
+					}
+				}
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doOpen");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method will refresh the currently selected object. 
+		
+			If {@link cmc/foundation/BusinessObjectEditor#refreshEnabled} is false, this method will do nothing.  
+		-->
+		<method name="doRefresh">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doRefresh");
+			}
+			if (this.refreshEnabled) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doRefresh");
+				var navigationTree = this.navigationTree;
+				var s = navigationTree.getSelection();
+				if (s) {
+					if (EventTimer.Singleton.enabled && s.o) EventTimer.Singleton.appendMsg(s.o.objectDisplayName);
+					if (s.navigationListDefinition == null) {
+						s.o.refreshObject(true);
+					}
+					else if (s.o) {
+						this.model.refreshDescendants(s.o.getReferencedObject(), true);
+					}
+				}
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doRefresh");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method toggles the visibility of the explorer view. If {@link cmc/foundation/BusinessObjectEditor#navigationViewVisible} is 
+			true, this method will close the explorer view and otherwise it will open the explorer view. 
+		-->
+		<method name="toggleNavigationView">
+			<![CDATA[
+			if (this.isStoreSelected || !this.showStoreSelection) {
+				if (this.navigationViewVisible) {
+					if (ViewUtil.Singleton.containsView(this.content.navigationArea, FocusUtil.getFocus())) {
+						FocusUtil.setFocus(this.header.menubar, false);
+					}
+					this.content.navigationArea.close();
+				}
+				else {
+					this.content.navigationArea.open();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method toggles the visibility of the utilities view. If {@link cmc/foundation/BusinessObjectEditor#utilitiesViewVisible} is 
+			true, this method will close the utilities view and otherwise it will open the utilities view. 
+		-->
+		<method args="e" name="toggleUtilitiesView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this) && (this.isStoreSelected || !this.showStoreSelection) && this.showUtilitiesView) {
+				if (this.utilitiesViewVisible) {
+					this.utilities.close();
+				}
+				else {
+					var caller = this;
+					require(["cmc/foundation/UtilitiesSplitView"], function(UtilitiesSplitView) {
+						if (!caller.utilities) {
+							new UtilitiesSplitView.Class(caller.content.workAreaUtilitiesSplit, {
+								name: "utilitiesSplit",
+								oEditor: caller
+							});
+						}
+						caller.utilities.open();
+						caller.restoreFocus();
+					});
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method toggles the visibility of the properties view below the list view.
+			If {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsBelowVisible} is 
+			true, this method will close the {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsContainer}.
+			Otherwise it will split the main work area horizontally, and open the {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsContainer}
+			below the list view. 
+			
+			If {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsEnabled} is false, this method will do nothing.  
+		-->
+		<method name="toggleWorkAreaDetailsBelow">
+			<![CDATA[
+			if (this.workAreaDetailsEnabled) {
+				if (this.workAreaDetailsBelowVisible) {
+					this.workAreaDetailsContainer.close();
+				}
+				else {
+					this.content.workAreaUtilitiesSplit.workAreaSplit.setVariable("axis", "y");
+					this.workAreaDetailsContainer.open();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method toggles the visibility of the properties view beside the list view.
+			If {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsBesideVisible} is 
+			true, this method will close the {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsContainer}.
+			Otherwise it will split the main work area vertically, and open the {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsContainer}
+			beside the list view. 
+			
+			If {@link cmc/foundation/BusinessObjectEditor#workAreaDetailsEnabled} is false, this method will do nothing.  
+		-->
+		<method name="toggleWorkAreaDetailsBeside">
+			<![CDATA[
+			if (this.workAreaDetailsEnabled) {
+				if (this.workAreaDetailsBesideVisible) {
+					this.workAreaDetailsContainer.close();
+				}
+				else {
+					this.content.workAreaUtilitiesSplit.workAreaSplit.setVariable("axis", "x");
+					this.workAreaDetailsContainer.open();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method shows the specified navigation list for the selected object in the {@link cmc/foundation/BusinessObjectEditor#navigationTree}.
+			@param cmc/foundation/NavigationListDefinition navigationListDefinition The NavigationListDefinition to display for the 
+			selected object.
+		-->
+		<method args="navigationListDefinition" name="showNavigationList">
+			<![CDATA[
+			var s = this.navigationTree.getSelection();
+			if (s && s.o) {
+				s.setVariable("navigationListDefinition", navigationListDefinition);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will display the properties view for the selected object.
+		-->
+		<method name="showProperties">
+			<![CDATA[
+			var s = this.navigationTree.getSelection();
+			if (s && s.o && s.parent == this.navigationTree.activeWorkTree) {
+				s.setVariable("navigationListDefinition", null);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method will get a {@link cmc/foundation/ModelObject} instance for what is selected in the 
+			{@link cmc/foundation/BusinessObjectEditor#navigationTree}. 
+			
+			@return cmc/foundation/ModelObject The instance for the currently selected object in the {@link cmc/foundation/BusinessObjectEditor#navigationTree}. If nothing is selected
+			then this method will return null. 
+		-->
+		<method name="getSelectedObject">
+			<![CDATA[
+			var s = this.navigationTree.getSelection();
+			var selectedObject = null;
+			if (s && s.o) {
+				selectedObject = s.o;
+			}
+			return selectedObject;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method saves the open objects in this business object editor. It delegates this work to {@link cmc/foundation/Model#save}. 
+		-->
+		<method name="doSaveAll">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doSaveAll");
+			this.model.save(true);
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called in order to open an object in the business object editor. 
+			It will select this object and add it to the {@link cmc/foundation/ActiveWorkTree} of this business object editor's 
+			{@link cmc/foundation/BusinessObjectEditor#navigationTree}. 
+			
+			@param cmc/foundation/ModelObject o The object to open in the business object editor. 
+			@param cmc/foundation/NavigationListDefinition navigationListDefinition The navigationListDefinition to use for opening this object. If it is null
+			then the properties view will be shown. 
+		-->
+		<method args="o, navigationListDefinition" name="selectOpenObject">
+			<![CDATA[
+			if (typeof(navigationListDefinition) == "undefined") navigationListDefinition = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "selectOpenObject(o)", [o]);
+			}
+			var activeWorkTree = this.navigationTree.activeWorkTree;
+			activeWorkTree.setVariable("open", true);
+			this.model.updateOpenObjects(true);
+			activeWorkTree.oList.showObjectInView(o);
+			var views = activeWorkTree.children.childComponents;
+			for (var i = 0; i < views.length; i++) {
+				var v = views[i];
+				if (v.o == o) {
+					v.changeFocus(null);
+					v.setVariable("selected", true);
+					v.setVariable("navigationListDefinition", navigationListDefinition);
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "selectOpenObject(o)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			This method adds the specified {@link cmc/foundation/NavigationHistoryEntry} to the navigation history represented by
+			{@link cmc/foundation/BusinessObjectEditor#navigationHistoryEntries}. It will ensure that 
+			{@link cmc/foundation/BusinessObjectEditor#navigationHistoryEntries} does not contain duplicates. 
+			
+			@param cmc/foundation/NavigationHistoryEntry entry The new navigation history entry. 
+		-->
+		<method args="entry" name="addNavigationHistoryEntry">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "addNavigationHistoryEntry(entry)", [entry]);
+			}
+			if (this.currentNavigationHistoryEntry != null) {
+				var index = this.navigationHistoryEntries.indexOf(this.currentNavigationHistoryEntry);
+				if (index != -1) {
+					var toDelete = this.navigationHistoryEntries.length - (index + 1);
+					for (var j = 0; j < toDelete; j++) {
+						this.navigationHistoryEntries.pop().release();
+					}
+				}
+			}
+			this.navigationHistoryEntries.push(entry);
+			if (this.navigationHistoryEntries.length > 10) {
+				this.navigationHistoryEntries.shift().release();
+			}
+			this.currentNavigationHistoryEntry = entry;
+			this.checkNavigationHistory();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "addNavigationHistoryEntry(entry)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			This method resets the navigation history of this business object editor.
+		-->
+		<method name="resetNavigationHistory">
+			<![CDATA[
+			this.setVariable("currentNavigationHistoryEntry", null);
+			for (var i = 0; i < this.navigationHistoryEntries.length; i++) {
+				this.navigationHistoryEntries[i].release();
+			}
+			this.setVariable("navigationHistoryEntries", []);
+			this.checkNavigationHistory();
+			]]>
+		</method>		
+		<!---
+			@keywords private
+			
+			This method navigates back one entry in the current navigation history.
+			
+			If {@link cmc/foundation/BusinessObjectEditor#backEnabled} is false then this method will do nothing. 
+		-->
+		<method name="doBack">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doBack");
+			}
+			if (this.backEnabled) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doBack");
+				var index = this.navigationHistoryEntries.length - 1;
+				if (this.currentNavigationHistoryEntry != null) {
+					index = this.navigationHistoryEntries.indexOf(this.currentNavigationHistoryEntry) - 1;
+				}
+				if (index >= 0) {
+					this.navigationHistoryEntries[index].show();
+				}
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doBack");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			This method navigates forward one entry in the current navigation history.
+			
+			If {@link cmc/foundation/BusinessObjectEditor#forwardEnabled} is false then this method will do nothing. 
+		-->
+		<method name="doForward">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doForward");
+			}
+			if (this.forwardEnabled) {
+				if (this.currentNavigationHistoryEntry != null) {
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("doForward");
+					var index = this.navigationHistoryEntries.indexOf(this.currentNavigationHistoryEntry);
+					if (index != -1 && (index + 1) < this.navigationHistoryEntries.length) {
+						this.currentNavigationHistoryEntry = this.navigationHistoryEntries[index + 1];
+						this.currentNavigationHistoryEntry.show();
+					}
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "doForward");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private 
+			
+			This method checks the enablement of the navigation history actions based on the contents of 
+			{@link cmc/foundation/BusinessObjectEditor#navigationHistoryEntries} and {@link cmc/foundation/BusinessObjectEditor#currentNavigationHistoryEntry}. 
+			
+			If {@link cmc/foundation/BusinessObjectEditor#currentNavigationHistoryEntry} is the first entry of {@link cmc/foundation/BusinessObjectEditor#navigationHistoryEntries}
+			then {@link cmc/foundation/BusinessObjectEditor#backEnabled} will be set to false. {@link cmc/foundation/BusinessObjectEditor#backEnabled} will be set to true otherwise.
+			
+			If {@link cmc/foundation/BusinessObjectEditor#currentNavigationHistoryEntry} is the last entry of {@link cmc/foundation/BusinessObjectEditor#navigationHistoryEntries}
+			then {@link cmc/foundation/BusinessObjectEditor#forwardEnabled} will be false. {@link cmc/foundation/BusinessObjectEditor#forwardEnabled} will be set to true otherwise.		
+		-->
+		<method name="checkNavigationHistory">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "checkNavigationHistory");
+			}
+			var numberOfEntries = this.navigationHistoryEntries.length;
+			var index = -1;
+			if (this.currentNavigationHistoryEntry != null) {
+				var s = this.navigationTree.getSelection();
+				if (!this.currentNavigationHistoryEntry.matchesTreeNode(s)) {
+					this.currentNavigationHistoryEntry = null;
+				}
+				else {
+					index = this.navigationHistoryEntries.indexOf(this.currentNavigationHistoryEntry);
+				}
+			}
+			var backEnabled = numberOfEntries > 0 && index != 0;
+			if (backEnabled != this.backEnabled) {
+				this.setVariable("backEnabled", backEnabled);
+			}
+			var forwardEnabled = index != -1 && (index + 1) < numberOfEntries;
+			if (forwardEnabled != this.forwardEnabled) {
+				this.setVariable("forwardEnabled", forwardEnabled);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "checkNavigationHistory");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="toggleNavigationArea">
+			<![CDATA[
+			if (this.isStoreSelected || !this.showStoreSelection) {
+				this.content.navigationArea.open();
+			}
+			else {
+				this.content.navigationArea.close();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onisStoreSelected">
+			<![CDATA[
+			this.toggleNavigationArea();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onshowStoreSelection">
+			<![CDATA[
+			this.toggleNavigationArea();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Open the first menu from the menu list
+		-->
+		<method args="e" name="openDefaultMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				this.header.menubar.openDefaultMenu();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Open the store preview dialog. The method accepts an optional map of context parameters that will be passed 
+			to {@link cmc/foundation/BaseStorePreviewCustomOption#initializeOption}.
+			@param Object contextParam: a map of name value pair context parameters.
+		-->
+		<method args="contextParams" name="openStorePreviewDialog">
+			<![CDATA[
+			if (typeof(contextParams) == "undefined") contextParams = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "openStorePreviewDialog");
+			}
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				if (!this.openStorePreviewDialogDel) {
+					this.openStorePreviewDialogDel = new EventHandler.Class(this, "openStorePreviewDialog");
+				}
+				var caller = this;
+				require(["cmc/foundation/WaitForTransactionsHandler"], function(WaitForTransactionsHandler) {
+					WaitForTransactionsHandler.Singleton.triggerAction(caller.model, caller.openStorePreviewDialogDel, contextParams);
+				});
+			}
+			else {
+				var unsavedObjects = [];
+				if (typeof (ToolsController.Singleton) != 'undefined') {
+					for (var i = 0; i < ToolsController.Singleton.toolList.length; i++) {
+						var tool = SingletonRegistry.toolPanesWidget.childComponents[SingletonRegistry.toolPanesWidget.findPane(ToolsController.Singleton.toolList[i])];
+						if (tool.model) {
+							var toolUnsavedObjects = tool.model.getUnsavedOpenObjects();
+							for (var j = 0; j < toolUnsavedObjects.length; j++) {
+								unsavedObjects.push(toolUnsavedObjects[j]);
+							}
+						}
+					}
+				}
+				else {
+					unsavedObjects = this.model.getUnsavedOpenObjects();
+				}
+				if (unsavedObjects.length > 0) {
+					var caller = this;
+					require(["cmc/foundation/StorePreviewConfirmationDialog"], function(StorePreviewConfirmationDialog) {
+						StorePreviewConfirmationDialog.Singleton.openStorePreviewConfirmationDialog(caller, unsavedObjects, contextParams);
+					});
+				}
+				else {
+					var caller = this;
+					require(["cmc/foundation/StorePreviewDialog"], function(StorePreviewDialog) {
+						StorePreviewDialog.Singleton.openStorePreviewDialog(caller, contextParams);
+					});
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BusinessObjectEditor", "openStorePreviewDialog");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Launches the Coremetrics Analytics Commerce dashboard.
+			@param string clientId Coremetrics client identifier
+			@param string username Username to sign into Coremetrics
+			@param number timestamp Current timestamp in seconds after January 1, 1970 UTC
+			@param string token Single sign-on token
+		-->
+		<method args="clientId, username, timestamp, token" name="launchReport">
+			<![CDATA[
+			var mainCoremetricsURL = "https://welcome.coremetrics.com/analyticswebapp/analytics.jsp";
+			if (this.localContext != null && this.localContext.storeConfig != null && this.localContext.storeConfig.analytics != null && this.localContext.storeConfig.analytics.url != null && this.localContext.storeConfig.analytics.url != "") {
+				mainCoremetricsURL = this.localContext.storeConfig.analytics.url;
+			}
+			var reportUri = "dashboard:/dashboards/commerce.xml";
+			var urlParamValueMap = new Object();
+			urlParamValueMap.uri = reportUri;
+			urlParamValueMap.locale = ContextUtil.Singleton.findContextValue(null, "locale").value;
+			if (clientId && clientId != "" && username && username != "" && timestamp && timestamp != "" && token && token != "") {
+				urlParamValueMap.clientId = clientId;
+				urlParamValueMap.username = username;
+				urlParamValueMap.timestamp = timestamp;
+				urlParamValueMap.token = token;
+				urlParamValueMap.authsrc = "wc";
+			}
+			var newWindowObj = new Object();
+			newWindowObj.URL = "";
+			newWindowObj.windowName = "Coremetrics_Window";
+			newWindowObj.windowFeatures = "scrollbars=yes,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+			newWindowObj.windowWidth = 1014;
+			newWindowObj.windowHeight = 710;
+			newWindowObj.content = "<html><body><form action=\"" + mainCoremetricsURL + "\" method=\"GET\">";
+			for (var key in urlParamValueMap) {
+				newWindowObj.content += "<input type=\"hidden\" name=\"" + key + "\" value=\"" + urlParamValueMap[key] + "\">";
+			}
+			newWindowObj.content += "</form></body></html>";
+			newWindowObj.submitForm = true;
+			openNewCenteredWindow(newWindowObj);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Launches the Marketing Center campaign performance dashboard.
+			@param string clientId marketing center client identifier
+			@param string username Username to sign into marketing center
+			@param number timestamp Current timestamp in seconds after January 1, 1970 UTC
+			@param string token Single sign-on token
+		-->
+		<method args="clientId, username, timestamp, token" name="launchMC">
+			<![CDATA[
+			var mainMarketingCenterURL = "https://mc.coremetrics.com/mcwebapp/welcome.do";
+			if (this.localContext != null && this.localContext.storeConfig != null && this.localContext.storeConfig.analytics != null && this.localContext.storeConfig.analytics.marketingCenterUrl != null && this.localContext.storeConfig.analytics.marketingCenterUrl != "") {
+				mainMarketingCenterURL = this.localContext.storeConfig.analytics.marketingCenterUrl;
+			}
+			var uri = "dashboard:/dashboards/mccampaignperformance.xml";
+			var urlParamValueMap = new Object();
+			urlParamValueMap.uri = uri;
+			urlParamValueMap.locale = ContextUtil.Singleton.findContextValue(null, "locale").value;
+			if (clientId && clientId != "" && username && username != "" && timestamp && timestamp != "" && token && token != "") {
+				urlParamValueMap.clientId = clientId;
+				urlParamValueMap.username = username;
+				urlParamValueMap.timestamp = timestamp;
+				urlParamValueMap.token = token;
+				urlParamValueMap.authsrc = "wc";
+			}
+			var newWindowObj = new Object();
+			newWindowObj.URL = "";
+			newWindowObj.windowName = "MarketingCenter_Window";
+			newWindowObj.windowFeatures = "scrollbars=yes,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+			newWindowObj.windowWidth = 1014;
+			newWindowObj.windowHeight = 710;
+			newWindowObj.content = "<html><body><form action=\"" + mainMarketingCenterURL + "\" method=\"GET\">";
+			for (var key in urlParamValueMap) {
+				newWindowObj.content += "<input type=\"hidden\" name=\"" + key + "\" value=\"" + urlParamValueMap[key] + "\">";
+			}
+			newWindowObj.content += "</form></body></html>";
+			newWindowObj.submitForm = true;
+			openNewCenteredWindow(newWindowObj);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Restore the focus to active selection view if it is defined currently, or to navigation area if it is visible, or else to the menu bar.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			var activeView = this.model.activeSelectionView;
+			if (activeView != null) {
+				FocusUtil.setFocus(activeView, false);
+			}
+			else if (this.content.navigationArea.visible) {
+				FocusUtil.setFocus(this.navigationTree, false);
+			}
+			else {
+				FocusUtil.setFocus(this.header.menubar, false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the details view of the currently selected tree node. If it can't find the details view, it returns null.
+			@return cmc/foundation/ObjectProperties The details view if it can be found, null otherwise.
+		-->
+		<method name="getDetailsView" args="del">
+			<![CDATA[
+			var detailsView = null;
+			if (this.navigationTree != null) {
+				var selectedNode = this.navigationTree.getSelection();
+				if (selectedNode && selectedNode.getDetailsView) {
+					detailsView = selectedNode.getDetailsView(del);
+				}
+			}
+			return detailsView;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method updates the view options that are available in the View menu when a primary object's properties view
+			is visible.
+		-->
+		<method args="e" name="updateViewOptions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var enabledOptions = [];
+			var updatedOptions = false;
+			if (this.workAreaContainer.activeView != null && this.navigationTree) {
+				var navigationTreeSelection = this.navigationTree.getSelection();
+				if (navigationTreeSelection != null && navigationTreeSelection.o != undefined && navigationTreeSelection.parent == this.navigationTree.activeWorkTree && navigationTreeSelection.navigationListDefinition == null) {
+					enabledOptions = navigationTreeSelection.o.objectDefinition.viewOptions;
+					updatedOptions = true;
+				}
+			}
+			if (!updatedOptions && !this.workAreaDetailsContainer.closed && this.workAreaDetailsContainer.activeView != null && this.workAreaDetailsContainer.activeView.o != undefined) {
+				enabledOptions = this.workAreaDetailsContainer.activeView.o.objectDefinition.viewOptions;
+			}
+			if (!LangUtil.Singleton.isIdentical(enabledOptions, this.enabledViewOptions)) {
+				this.setVariable("enabledViewOptions", enabledOptions);
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="y"/>
+		<Component name="header" width="${this.parent.width}">
+			<MenuBar clip="true" name="menubar" width="${this.parent.width - this.x - this.parent.search.width - 4}">
+				<handler name="oninit">
+					<![CDATA[
+					this.classroot.framesList.push(this);
+					]]>
+				</handler>
+			</MenuBar>
+			<StoreSelectionWidget align="right" name="storeSelectionList" oEditor="${this.classroot}" visible="${this.classroot.showStoreSelection}" xoffset="18" y="6"/>
+			<Component bgcolor="#4178be" width="${this.parent.width}" height="42" y="44"/>
+			<Component clip="true" name="toolbar" width="${this.parent.width}" x="12" y="53">
+				<handler name="oninit">
+					<![CDATA[
+					this.classroot.framesList.push(this);
+					]]>
+				</handler>
+			</Component>
+			<Component align="right" clip="true" name="search" xoffset="20" y="51"/>
+		</Component>
+
+		<SplitView axis="x" height="${this.immediateParent.height - this.immediateParent.header.height - 16}" name="content" width="${this.immediateParent.width - 16}" xoffset="${-8}" yoffset="${-8}">
+
+			<Panel addRightSpacing="false" closed="true" maximizable="false" name="navigationArea" useCompactPadding="true">
+				<handler name="oninit">
+					<![CDATA[
+					this.classroot.framesList.push(this);
+					]]>
+				</handler> 
+				 
+				<method name="open">
+					<![CDATA[
+					if (this.classroot.content.maximizedPanel != null) {
+						this.classroot.content.maximizedPanel.setVariable("maximized", false);
+					}
+					this.inherited(arguments);
+					if (ModalUtil.getModalComponent() == null) {
+						FocusUtil.setFocus(this.classroot.navigationTree, false);
+					}
+					]]>
+				</method>
+				
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.model.setVariable('activeSelectionView', null);
+					]]>
+				</handler>
+				
+			</Panel>
+
+			<SplitView axis="x" name="workAreaUtilitiesSplit" reverseSplit="true" xSplitSize="300">
+				<SplitView axis="x" name="workAreaSplit">
+					<handler name="onwidth">
+						<![CDATA[
+						this.setVariable("xSplitSize", this.width / 2);
+						if (this.axis == "x") {
+							this.splitViewLayout.update();
+						}
+						]]>
+					</handler>
+			
+					<handler name="onheight">
+						<![CDATA[
+						this.setVariable("ySplitSize", this.height / 2);
+						if (this.axis == "y") {
+							this.splitViewLayout.update();
+						}
+						]]>
+					</handler> 
+         
+					<ActiveViewContainer addRightSpacing="false" closable="false" name="workArea">
+						<variable name="details" value="${this.parent.details}"/>
+				
+						<!--- 
+							@keywords private 
+							A list of help pages that are defined in the object definitions 
+						-->
+						<variable name="helpPages" value="${[]}"/>
+						
+						<method name="init">
+							<![CDATA[
+							this.inherited(arguments);
+							this.updateTitleDel = new EventHandler.Class(this, "updateTitle");
+							this.updateTitleDel.connect(this.classroot, "onisStoreSelected");
+							this.updateTitleDel.connect(this.classroot, "onshowStoreSelection");
+							this.updateTitleDel.connect(this, "onactiveView");
+							this.updateTitleDel.connect(foundationResources.Singleton.selectStoreTitle, "onstring");
+							this.updateTitleDel.connect(foundationResources.Singleton.selectStoreMessage, "onstring");
+							this.updateTitleDel.connect(foundationResources.Singleton.selectObjectTitle, "onstring");
+							this.updateTitle();
+							this.classroot.framesList.push(this);
+							]]>
+						</method>
+
+						<method name="destroy">
+							<![CDATA[
+							this.updateTitleDel.disconnectAll();
+							delete this.updateTitleDel;
+							this.inherited(arguments);
+							]]>
+						</method>
+						
+						<!--- @keywords private -->
+						<method name="showGettingStartedPage">
+							<![CDATA[
+							if (this.gettingStartedPage) {
+								this.gettingStartedPage.setVariable("visible", true);
+							}
+							else {
+								this.setVariable("defaultTitle", foundationResources.Singleton.selectObjectTitle.string);
+							}
+							]]>
+						</method>
+						
+						<!--- @keywords private -->
+						<method name="hideGettingStartedPage">
+							<![CDATA[
+							if (this.gettingStartedPage) {
+								this.gettingStartedPage.setVariable("visible", false);
+							}
+							]]>
+						</method>
+						
+						<!--- @keywords private -->
+						<method args="helpPageClass" name="addHelpPage">
+							<![CDATA[
+							if (typeof (helpPageClass) == "undefined" || helpPageClass == null) {
+								return null;
+							}
+							var helpPage = null;
+							var contained = false;
+							for (var i = 0; i < this.helpPages.length; i++) {
+								if (this.helpPages[i] instanceof helpPageClass.Class) {
+									contained = true;
+									helpPage = this.helpPages[i];
+									break;
+								}
+							}
+							if (helpPage == null) {
+								helpPage = new helpPageClass.Class(this, {
+									name: "helpPage" + this.helpPages.length,
+									placement: "infoArea"
+								});
+								this.helpPages.push(helpPage);
+							}
+							return helpPage;
+							]]>
+						</method>
+						
+						<method args="e" name="updateTitle">
+							<![CDATA[
+							if (typeof(e) == "undefined") e = null;
+							if (this.activeView == null) {
+								if (this.classroot.isStoreSelected || !this.classroot.showStoreSelection) {
+									this.setVariable("defaultTitle", "");
+									this.setVariable("defaultTitleMessage", "");
+									this.showGettingStartedPage();
+								}
+								else {
+									this.hideGettingStartedPage();
+									this.setVariable("defaultTitle", foundationResources.Singleton.selectStoreTitle.string);
+									this.setVariable("defaultTitleMessage", foundationResources.Singleton.selectStoreMessage.string);
+								}
+							}
+							else {
+								this.hideGettingStartedPage();
+							}
+							]]>
+						</method>
+
+						<!--- Reset this work area. Called when the business object editor is closed. -->
+						<method name="reset">
+							<![CDATA[
+							this.setActiveView(null, true);
+							this.setVariable("splittable", false);
+							]]>
+						</method>
+
+						<!---
+							Set the active view.
+							@param cmc/foundation/Component v: the active view
+							@param boolean immediate: if true set the active view call back immediately
+						-->
+						<method args="v, immediate" name="setActiveView">
+							<![CDATA[
+							if (typeof(immediate) == "undefined") immediate = false;
+							this.inherited(arguments);
+							if (!this.splittable) {
+								this.parent.details.setActiveView(null, immediate);
+							}
+							this.parent.setVariable("xSplitSize", this.parent.xSplitSize);
+							]]>
+						</method>
+					</ActiveViewContainer>
+
+					<ActiveViewContainer closed="true" defaultTitle="${foundationResources.Singleton.selectObjectTitle.string}" name="details">
+						<variable name="showingDetails" type="boolean" value="false"/>
+						<method name="init">
+							<![CDATA[
+							this.inherited(arguments);
+							this.classroot.framesList.push(this);
+							this.openDetailsDel = new EventHandler.Class(this, "openDetails");
+							this.openDetails();
+							]]>
+						</method>
+
+						<method name="open">
+							<![CDATA[
+							this.setVariable("showingDetails", true);
+							if (this.classroot.content.maximizedPanel != null) {
+								this.classroot.content.maximizedPanel.setVariable("maximized", false);
+							}
+							this.inherited(arguments);
+							]]>
+						</method>
+						
+						<method name="close">
+							<![CDATA[
+							this.setVariable("showingDetails", false);
+							this.inherited(arguments);
+							]]>
+						</method>
+						
+						<!---
+							Open the details view for the currently selected object. This method
+							will be called when the selection changes.
+						-->
+						<method args="e" name="openDetails">
+							<![CDATA[
+							if (typeof(e) == "undefined") e = null;
+							this.openDetailsDel.disconnectAll();
+							this.openDetailsDel.connect(this, "onshowingDetails");
+							this.openDetailsDel.connect(this.classroot, "onworkAreaDetailsEnabled");
+							var v = null;
+							if (this.showingDetails && this.classroot.workAreaDetailsEnabled) {
+								if (this.classroot.model.workAreaActiveSelectionView != null) {
+									var selectedObjects = this.classroot.model.workAreaActiveSelectionView.getSelectedObjects();
+									if (selectedObjects.length == 1) {
+										var o = selectedObjects[0].getReferencedObject();
+										v = o.objectDefinition.getPropertiesView(this, o, true, this.openDetailsDel);
+									}
+								}
+							}
+							if (v != null) {
+								if (this.closed) {
+									ActiveViewContainer.Class.prototype.open.call(this);
+								}
+							}
+							else if (!this.closed) {
+								ActiveViewContainer.Class.prototype.close.call(this);
+							}
+							this.setActiveView(v);
+							]]>
+						</method>
+					</ActiveViewContainer>
+				</SplitView>
+			</SplitView>
+		</SplitView>
+
+	</Component>
+	
+</Definitions>

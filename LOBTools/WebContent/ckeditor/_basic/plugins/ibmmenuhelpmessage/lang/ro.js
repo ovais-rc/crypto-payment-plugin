@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","ro",{keystrokeForContextMenu:"Ctrl + clic dreapta pentru mai multe opţiuni",keystrokeForContextMenuMac:"Cmd + clic dreapta pentru mai multe opţiuni"});

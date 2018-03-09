@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This class provides a cell descriptor that uses a new editor {@link cmc/marketing/GridComboBoxEditor}
+		which will set the objects data type property when a different property type
+		is selected.
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/marketing/GridComboBoxPropertyCellDescriptor">
+		<dependency localName="GridComboBoxViewer" moduleName="cmc/foundation/GridComboBoxViewer"/>
+		<dependency localName="mktGridComboBoxEditor" moduleName="cmc/marketing/GridComboBoxEditor"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridComboBoxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridComboBoxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridComboBoxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${mktGridComboBoxEditor}"/>
+	</GridCellDescriptor>
+	
+	<!---
+		@keywords private		
+		This combo box editor will also set the objects data type when the property is
+		changed.
+	-->
+	<ComboBox classDefinition="true" definitionName="cmc/marketing/GridComboBoxEditor" width="${this.immediateParent.availableWidth}">
+	
+		<!---
+			Set the  cmc/foundation/ModelProperty to represent the  cmc/foundation/ComboBox value. This method is called when the combo box
+			"filterName" value is changed It will also sets the "filterDataType" property value and
+			reset the "filterOperator" value.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this.property) {
+				var newValue = this.selectedValue ? this.selectedValue.value : "";
+				var newType = this.selectedValue ? this.selectedValue.dataType : "STRING";
+				var parent = this.property.o;
+				if (parent.newObject) {
+					var filterDataType = parent.getProperty("filterDataType");
+					if (newType != this.property.dataType) {
+						this.property.setVariable("dataType", newType);
+						filterDataType.change(newType);
+					}
+				}
+				this.property.change(newValue);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update and refresh the  cmc/foundation/ComboBox value with a new  cmc/foundation/ModelProperty value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = this.property.value;
+			var dataType = this.property.dataType;
+			var parent = this.property.o;
+			var filterDataType = parent.getProperty("filterDataType");
+			if (this.selectedValue == null || value != this.selectedValue.value) {
+				if (value != null && value != "") {
+					this.selectItem(value);
+					if (this.selectedValue == null) {
+						this.selectValue({
+							value: value,
+							displayName: value,
+							dataType: dataType
+						});
+						filterDataType.change(dataType);
+					}
+				}
+				else {
+					this.clearSelection();
+				}
+			}
+			]]>
+		</method>
+	</ComboBox>
+	
+	<!---
+		@keywords private
+		This class loads the property values and also adds a dataType
+		attribute to the values.
+	-->
+	<PropertyValueService classDefinition="true" definitionName="cmc/marketing/PropertyValueTypeService">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+
+		<!---
+			@keywords private
+			This method is called when an element named "values" is found in the service response XML.
+			It is assumed that there are child "value" tags with a displayName attribute. These will
+			be used to generate  cmc/foundation/PropertyValue objects.
+			
+			Any existing previous service-requested  cmc/foundation/PropertyValue objects for the parent  cmc/foundation/PropertyDefinition
+			will be cleared for each data request.
+			
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			var valuesKey = this.getValuesKey(requestParent);
+			if (valuesKey != null) {
+				this.parent.releasePropertyValues(valuesKey);
+				var nodes = e.childNodes;
+				for (var i = 0; i < nodes.length; i++) {
+					var node = nodes[i];
+					if (node.nodeName == "value") {
+						var displayName = "";
+						var dataType = "";
+						var isDefault = (node.getAttribute("isDefault") == "true") ? true : false;
+						var value = XMLUtil.getNodeValue(node);
+						displayName = node.getAttribute("displayName");
+						dataType = node.getAttribute("dataType");
+						if ((value != "") && (displayName != "")) {
+							this.parent.createPropertyValue({
+								value: value,
+								displayName: displayName,
+								dataType: dataType,
+								fromService: true,
+								valuesKey: valuesKey,
+								isDefault: isDefault
+							});
+						}
+					}
+				}
+				EventUtil.trigger(this.parent, "onvalueServiceComplete");
+			}
+			]]>
+		</method>
+	</PropertyValueService>
+</Definitions>

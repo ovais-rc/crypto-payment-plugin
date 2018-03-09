@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("bidi","hu",{ltr:"Szövegirány balról jobbra",rtl:"Szövegirány jobbról balra"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","cs",{error:"Vkládání obrázků není nyní podporováno. Použijte místo toho volbu panelu nástrojů 'Vložit obrázek'."});

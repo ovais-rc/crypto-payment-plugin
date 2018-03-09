@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		This class defines a page layout viewer for use within a grid view.
+	-->
+	<GridColumn alignment="center" classDefinition="true" definitionName="cmc/pagelayout/GridPageLayout" editable="false" width="80">
+		<dependency localName="GridPageLayoutViewer" moduleName="cmc/pagelayout/GridPageLayoutViewer"/>
+		<!---
+			@keywords private
+			Use "cmc/pagelayout/BasePageLayoutEditor" to create instance of column viewer.
+		-->
+		<variable name="cellViewerClass" value="${GridPageLayoutViewer}"/>
+	</GridColumn>
+	
+	<!---
+		@keywords private
+		The grid page layout viewer class used by cmc/pagelayout/GridPageLayout to display a layout thumbnail in a grid.
+	-->
+	<BasePageLayoutViewer classDefinition="true" definitionName="cmc/pagelayout/GridPageLayoutViewer" package="cmc/pagelayout" width="50"/>
+
+	<!---
+		@keywords private
+		Base page layout viewer class. Use this class to render wireframe representation of a page layout that displays
+		the relative locations of the available slots.
+	-->
+	<Component bgcolor="#959595" classDefinition="true" defaultplacement="slotContainer" definitionName="cmc/pagelayout/BasePageLayoutViewer" height="${this.content.height == 0 ? 0 : this.content.height + 2}">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="PageLayoutSlot" moduleName="cmc/pagelayout/PageLayoutSlot"/>
+		<!---
+			@keywords private
+			Page layout object.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			@keywords private
+			Set to true to display the slot text.
+		-->
+		<variable name="showText" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Set to true to highlight all of the slots that have widgets assigned.
+		-->
+		<variable name="showPopulatedSlots" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Set to true to indicate that you can select the current slot.
+		-->
+		<variable name="allowSelection" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The hover over slot object.
+		-->
+		<variable name="hoverSlotObject" value="${null}"/>
+		<!---
+			@keywords private
+			The selected slot object.
+		-->
+		<variable name="selectedSlotObject" value="${null}"/>
+		<!---
+			@keywords private
+			Zoom multiplier.
+		-->
+		<variable name="zoomFactor" type="number" value="1"/>
+		<!---
+			@keywords private
+			Default slot background color.
+		-->
+		<variable name="defaultSlotBackgroundColor" type="string" value="#777677"/>
+		<!---
+			@keywords private
+			Default slot text color.
+		-->
+		<variable name="defaultSlotTextColor" type="string" value="#ffffff"/>
+		<!---
+			@keywords private
+			Hover slot background color.
+		-->
+		<variable name="hoverSlotBackgroundColor" type="string" value="#5a5a5a"/>
+		<!---
+			@keywords private
+			Highlighted slot background color.
+		-->
+		<variable name="hilitedSlotBackgroundColor" type="string" value="#4178be"/>
+		<!---
+			@keywords private
+			Highlighted slot hover background color.
+		-->
+		<variable name="hilitedSlotHoverBackgroundColor" type="string" value="#325c80"/>
+		<!---
+			@keywords private
+			Selected slot background color.
+		-->
+		<variable name="selectedSlotBackgroundColor" type="string" value="#4178be"/>
+		<!---
+			@keywords private
+			Disabled slot background color.
+		-->
+		<variable name="disabledSlotBackgroundColor" type="string" value="#cbcbcb"/>
+		<!---
+			@keywords private
+			The list of slot views.
+		-->
+		<variable name="slotViews" value="${[]}"/>
+		<!---
+			@keywords private
+			List of available slot views.
+		-->
+		<variable name="availableSlotViews" value="${[]}"/>
+		<!---
+			@keywords private
+			The tooltip to display over enabled slots.
+		-->
+		<variable name="slotTooltipText" type="string" value=""/>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateSlotsDel = new EventHandler.Class(this, "updateSlots");
+			this.updateSlots();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateSlotsDel.disconnectAll();
+			delete this.updateSlotsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Update the slots.
+		-->
+		<method args="e" name="updateSlots">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateSlotsDel.disconnectAll();
+			while (this.slotViews.length > 0) {
+				var slotView = this.slotViews.pop();
+				slotView.setVariable("visible", false);
+				slotView.setVariable("o", null);
+				this.availableSlotViews.unshift(slotView);
+			}
+			this.content.dottedLine.clear();
+			this.updateSlotsDel.connect(this, "ono");
+			this.updateSlotsDel.connect(this, "onwidth");
+			if (this.o != null && this.width > 3) {
+				var slots = this.o.getObjects("LayoutContainerWidget/LayoutSlot", this.updateSlotsDel);
+				var layoutWidth = 0;
+				for (var i = 0; i < slots.length; i++) {
+					var slotX = Number(slots[i].getPropertyValue("xSlotPosition_xLocation"));
+					var slotWidth = Number(slots[i].getPropertyValue("xSlotPosition_width"));
+					if (slotX + slotWidth > layoutWidth) {
+						layoutWidth = slotX + slotWidth;
+					}
+				}
+				this.setVariable("zoomFactor", layoutWidth > 0 ? ((this.width - 3) / layoutWidth) : 1);
+				for (var i = 0; i < slots.length; i++) {
+					var slotView = null;
+					if (this.availableSlotViews.length > 0) {
+						slotView = this.availableSlotViews.shift();
+						slotView.setVariable("o", slots[i]);
+						slotView.setVariable("visible", true);
+						slotView.updateSlot();
+					}
+					else {
+						slotView = new PageLayoutSlot.Class(this, {
+							o: slots[i]
+						});
+					}
+					this.slotViews.push(slotView);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method is called when the user selects a slot. Override this method to provide
+			the slot selection behaviour.
+		-->
+		<method args="slotObject" name="slotSelected">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<Component bgcolor="white" height="${this.slotContainer.height == 0 ? 0 : this.slotContainer.height + 1}" name="content" width="${Math.max(this.parent.width - 2, 0)}" x="1" y="1">
+			<DrawComponent height="${this.parent.slotContainer.height}" name="dottedLine" width="${this.parent.slotContainer.width}" x="1" y="1"/>
+			<Component name="slotContainer" width="${Math.max(this.parent.width - 1, 0)}" x="1" y="1"/>
+		</Component>
+	</Component>
+
+	<!---
+		@keywords private
+		This class renders a page layout slot.
+	-->
+	<Component classDefinition="true" clickable="false" definitionName="cmc/pagelayout/PageLayoutSlot" height="0" width="0">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Slot object.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Tooltip for this slot.
+		-->
+		<Tooltip enabled="${this.classroot.clickable}" name="tooltip" text="${this.classroot.parent.slotTooltipText}"/>
+	
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateSlotDel = new EventHandler.Class(this, "updateSlot");
+			this.updateSlot();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateSlotDel.disconnectAll();
+			delete this.updateSlotDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the slot.
+		-->
+		<method args="e" name="updateSlot">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateSlotDel.disconnectAll();
+			var slotClickable = false;
+			if (this.o != null) {
+				slotClickable = this.parent.allowSelection;
+				this.updateSlotDel.connect(this.parent, "onallowSelection");
+				this.updateSlotDel.connect(this.parent, "onselectedSlotObject");
+				this.updateSlotDel.connect(this.parent, "onhoverSlotObject");
+				this.updateSlotDel.connect(this.parent, "onshowText");
+				this.updateSlotDel.connect(this.o, "propertyChanged");
+				this.setVariable("x", Number(this.o.getPropertyValue("xSlotPosition_xLocation")) * this.parent.zoomFactor);
+				this.setVariable("y", Number(this.o.getPropertyValue("xSlotPosition_yLocation")) * this.parent.zoomFactor);
+				this.setVariable("width", Number(this.o.getPropertyValue("xSlotPosition_width")) * this.parent.zoomFactor - 1);
+				this.setVariable("height", Number(this.o.getPropertyValue("xSlotPosition_height")) * this.parent.zoomFactor - 1);
+				this.displayText.setVariable("text", this.o.getPropertyValue("slotName"));
+				var slotTextVisible = this.parent.showText;
+				var slotTextColor = this.parent.defaultSlotTextColor;
+				var slotBackgroundColor = this.parent.defaultSlotBackgroundColor;
+				if (this.o.getPropertyValue("xSlotPosition_state") == "disabled") {
+					slotClickable = false;
+					slotTextVisible = false;
+					slotBackgroundColor = this.parent.disabledSlotBackgroundColor;
+				}
+				else if (this.o == this.parent.selectedSlotObject) {
+					slotBackgroundColor = this.parent.selectedSlotBackgroundColor;
+				}
+				else if (this.o == this.parent.hoverSlotObject) {
+					slotBackgroundColor = this.parent.hoverSlotBackgroundColor;
+				}
+				if (this.parent.showPopulatedSlots) {
+					var populated = false;
+					var slotIdentifier = this.o.getPropertyValue("slotIdentifier");
+					var layoutWidgets = this.parent.o.getObjects("LayoutWidgetAlias", this.updateSlotDel);
+					this.parent.o.loadChildren();
+					for (var i = 0; i < layoutWidgets.length; i++) {
+						var slotIdentifierProperty = layoutWidgets[i].getProperty("slotIdentifier");
+						this.updateSlotDel.connect(slotIdentifierProperty, "onvalue");
+						if (slotIdentifier == slotIdentifierProperty.value) {
+							populated = true;
+							break;
+						}
+					}
+					if (populated) {
+						slotBackgroundColor = this.parent.hilitedSlotBackgroundColor;
+						if (this.o == this.parent.hoverSlotObject) {
+							slotBackgroundColor = this.parent.hilitedSlotHoverBackgroundColor;
+						}
+					}
+				}
+				this.displayText.setVariable("visible", slotTextVisible);
+				this.displayText.setVariable("fgcolor", slotTextColor);
+				this.setVariable("bgcolor", slotBackgroundColor);
+				this.border.clear();
+				var dottedRightBorder = this.o.getPropertyValue("xSlotPosition_dottedRightBorder");
+				if (dottedRightBorder && dottedRightBorder == "true") {
+					var strokeSpacing = 3;
+					var strokeLength = 2;
+					var yPos = strokeSpacing;
+					this.parent.content.dottedLine.beginPath();
+					while (yPos <= this.height - strokeLength) {
+						this.parent.content.dottedLine.moveTo(this.x + this.width + 1 / 2, this.y + yPos);
+						this.parent.content.dottedLine.lineTo(this.x + this.width + 1 / 2, this.y + yPos + strokeLength);
+						yPos += strokeLength + strokeSpacing;
+					}
+					this.parent.content.dottedLine.strokeStyle = this.parent.defaultSlotBackgroundColor;
+					this.parent.content.dottedLine.lineWidth = 1;
+					this.parent.content.dottedLine.stroke();
+				}
+			}
+			this.setVariable("clickable", slotClickable);
+			]]>
+		</method>
+
+		<handler name="onmouseover">
+			<![CDATA[
+			if (this.clickable) {
+				this.parent.setVariable("hoverSlotObject", this.o);
+			}
+			]]>
+		</handler>	
+		
+		<handler name="onmouseout">
+			<![CDATA[
+			if (this.parent.hoverSlotObject == this.o) {
+				this.parent.setVariable("hoverSlotObject", null);
+			}
+			]]>
+		</handler>
+
+		<handler name="onclick">
+			<![CDATA[
+			if (this.o != null && this.o.getPropertyValue("xSlotPosition_state") != "disabled") {
+				this.parent.slotSelected(this.o);
+			}
+			]]>
+		</handler>
+		<DrawComponent height="${this.parent.height}" name="border" width="${this.parent.width}"/>
+		<TextComponent fgcolor="${this.parent.textColor}" fontsize="10" name="displayText" x="2" y="${-1}"/>
+	</Component>
+	
+	<!---
+		Use this class to add a slot selector widget to a grid.
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/pagelayout/GridSlotSelector">
+		<dependency localName="GridSlotSelectorEditor" moduleName="cmc/pagelayout/GridSlotSelectorEditor"/>
+		<dependency localName="GridTextViewer" moduleName="cmc/foundation/GridTextViewer"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="cellViewerClass" value="${GridTextViewer}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="cellEditorClass" value="${GridSlotSelectorEditor}"/>
+	</GridColumn>
+	
+	<!---
+		@keywords private
+		Slot selector widget used by cmc/pagelayout/GridSlotSelector.
+	-->
+	<ComboBox classDefinition="true" definitionName="cmc/pagelayout/GridSlotSelectorEditor" width="${this.immediateParent.availableWidth}" useCompactPadding="true">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="WidgetGroupUtil" moduleName="cmc/pagelayout/WidgetGroupUtil"/>
+		<!---
+			Create the list of available slots.
+		-->
+		<method args="e" name="createComboBox">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.propValueDel) {
+				this.propValueDel = new EventHandler.Class(this, "createComboBox");
+			}
+			else {
+				this.propValueDel.disconnectAll();
+			}
+			if (this.property != null && this.property.o != null && this.property.o.parentObject != null) {
+				var widgetRestrictionGroups = this.property.o.getPropertyValue("widgetRestrictionGroups");
+				if (typeof widgetRestrictionGroups == 'string') {
+					widgetRestrictionGroups = StringUtil.Singleton.splitAndTrim(widgetRestrictionGroups, ",");
+				}
+				var slots = this.property.o.parentObject.getObjects("LayoutContainerWidget/LayoutSlot", this.propValueDel);
+				var values = [];
+				for (var i = 0; i < slots.length; i++) {
+					if (slots[i].getPropertyValue("xSlotPosition_state") != "disabled") {
+						var allowedWidgetGroups = StringUtil.Singleton.splitAndTrim(slots[i].getPropertyValue("xSlotPosition_allowedWidgetGroups"), ",");
+						if (WidgetGroupUtil.Singleton.widgetAllowed(widgetRestrictionGroups, allowedWidgetGroups)) {
+							var slotIdentifier = slots[i].getPropertyValue("slotIdentifier");
+							var slotDisplayName = slots[i].getPropertyValue("slotName");
+							values.push({
+								displayName: slotDisplayName,
+								value: slotIdentifier
+							});
+						}
+					}
+				}
+				this._initializingComboBox = true;
+				this.setValues(values);
+				this.selectItem(this.property.value);
+				if (this.selectedValue == null && this.property.value != null && this.property.value != "") {
+					this.selectValue({
+						value: this.property.value,
+						displayName: this.property.value
+					});
+				}
+				else {
+					this.updateSelectedValue();
+				}
+				this._initializingComboBox = false;
+			}
+			]]>
+		</method>
+	</ComboBox>
+
+</Definitions>

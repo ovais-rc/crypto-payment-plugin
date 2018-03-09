@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<PropertyChildListEditor classDefinition="true" definitionName="cmc/foundation/PropertyPathListEditor">
+		<dependency localName="BasePathListEditor" moduleName="cmc/foundation/BasePathListEditor"/>
+		<!---
+			@keywords private
+			This method creates the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new BasePathListEditor.Class(parentComponent, {
+				name: "editor",
+				model: parentComponent.model,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				objectTypes: this.objectTypes,
+				listClass: this.listClass,
+				listDefinition: this.listDefinition,
+				embedded: true,
+				singleChild: this.singleChild,
+				newButtonResource: this.newButtonResource
+			});
+			]]>
+		</method>
+	</PropertyChildListEditor>
+
+	<!--- @keywords private -->
+	<BaseChildListEditor classDefinition="true" definitionName="cmc/foundation/BasePathListEditor">
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<dependency localName="CopyAction" moduleName="cmc/foundation/CopyAction"/>
+		<!--- @keywords private -->
+		<method args="actionDef" name="createChild">
+			<![CDATA[
+			if (actionDef) {
+				var def = actionDef.objectSelector.objectDefinition;
+				var currentPaths = FlowUtils.Singleton.getSortedElements(this.o);
+				if (currentPaths.length > 0) {
+					var lastPath = currentPaths[currentPaths.length - 1];
+					var elements = FlowUtils.Singleton.getSortedElements(lastPath);
+					var insertSequence = FlowUtils.Singleton.getNextSequenceNumber(this.o);
+					var pathObj = this.o.model.createNewObject(def, this.o);
+					pathObj.setPropertyValue("sequence", null, insertSequence);
+					if (elements.length > 0) {
+						for (var i = 0; i < elements.length; i++) {
+							insertSequence = FlowUtils.Singleton.getNextSequenceNumber(pathObj);
+							var cloneObj = pathObj.model.createNewObject(null, pathObj, true, elements[i]);
+							cloneObj.setPropertyValue("sequence", null, insertSequence);
+						}
+					}
+					if (this.o.lockCount == 0) {
+						this.o.updateChildObjects(true);
+						this.list.showObjectInView(pathObj, true);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if delete is enabled.
+		-->
+		<method args="delegate" name="isDeleteEnabled">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			var enableDelete = this.inherited(arguments);
+			if (enableDelete && this.o) {
+				var children = this.o.getObjects("FlowElement");
+				var selectedObjects = this.list.getSelectedObjects();
+				enableDelete = (children.length > 2) && (selectedObjects.length <= children.length - 2);
+			}
+			return enableDelete;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Perform the add action for the specified list of objects.
+		-->
+		<method args="action, objects" name="doAddAction">
+			<![CDATA[
+			if (action == CopyAction.Singleton) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/BasePathListEditor " + (action.displayName ? action.displayName : "doAddAction") + ": " + this.o.objectDisplayName + " #objects=" + objects.length);
+				if (this.singleChild) {
+					this.doDeleteAll();
+				}
+				this.triggerCopy(objects);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Trigger a copy action for each of the specified objects. Overriding default behaviour to handle
+			branching and to resequence automatically.
+			@param array objects: array of cmc/foundation/ModelObject instances to be copied.
+		-->
+		<method args="objects" name="triggerCopy">
+			<![CDATA[
+			for (var i = 0; i < objects.length; i++) {
+				var sourceObject = objects[i].getReferencedObject();
+				for (var j = 0; j < this.objectSelectors.length; j++) {
+					var def = this.objectSelectors[j].objectDefinition;
+					var insertSequence = FlowUtils.Singleton.getNextSequenceNumber(this.o);
+					var pathObj = this.o.model.createNewObject(def, this.o, false, sourceObject);
+					pathObj.setPropertyValue("sequence", null, insertSequence);
+					if (this.o.lockCount == 0) {
+						this.o.updateChildObjects(true);
+						this.list.showObjectInView(pathObj, true);
+					}
+				}
+			}
+			]]>
+		</method>
+	</BaseChildListEditor>
+
+</Definitions>

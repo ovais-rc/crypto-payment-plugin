@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","sv",{options:"Alternativ för specialtecken",title:"Specialtecken",toolbar:"Infoga specialtecken"});

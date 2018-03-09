@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","ru",{border:"Показать рамку фрейма",noUrl:"Введите URL iframe",scrolling:"Включить полосы прокрутки",title:"Свойства IFrame",toolbar:"Вставить IFrame",ibm:{title:"IFrame"}});

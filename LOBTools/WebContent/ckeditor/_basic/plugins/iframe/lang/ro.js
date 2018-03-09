@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","ro",{border:"Afişare bordură cadru",noUrl:"Vă rugăm să tastaţi URL-ul iframe",scrolling:"Activare bare de derulare",title:"Proprietăţi IFrame",toolbar:"Inserare IFrame",ibm:{title:"IFrame"}});

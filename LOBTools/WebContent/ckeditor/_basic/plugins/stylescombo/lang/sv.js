@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","sv",{label:"Format",panelTitle:"Format",panelTitle1:"Blockformat",panelTitle2:"Textformat",panelTitle3:"Objektformat"});

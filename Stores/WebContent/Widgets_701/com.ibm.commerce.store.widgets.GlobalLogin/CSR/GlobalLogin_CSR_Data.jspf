@@ -1,0 +1,153 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- BEGIN GlobalLogin_CSR_Data.jspf -->
+<wcf:rest var="buyerInfo" url="store/{storeId}/person/@self" >
+	<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+</wcf:rest>
+
+<c:set var="widgetId"><wcf:out value="${param.widgetId}" escapeFormat="xml"/></c:set>
+<c:if test="${empty widgetId}">
+  <c:set var="widgetId"><wcf:out value="${WCParam.widgetId}" escapeFormat="xml"/></c:set>
+</c:if>
+
+<wcf:url var="Logon_LogoutURLOriginal" value="Logoff">	    
+  <wcf:param name="langId" value="${WCParam.langId}" />
+  <wcf:param name="storeId" value="${WCParam.storeId}" />
+  <wcf:param name="catalogId" value="${WCParam.catalogId}" />
+  <wcf:param name="myAcctMain" value="1" />		  		 
+  <wcf:param name="deleteCartCookie" value="true" />
+  <wcf:param name="URL" value="${env_TopCategoriesDisplayURL}" />	
+</wcf:url>
+	
+<c:set var="Logon_LogoutURL" value="javascript:GlobalLoginJS.deleteUserLogonIdCookie();logout('${Logon_LogoutURLOriginal}');"/>
+
+<c:if test="${empty userDisplayName}">
+	<c:set var="memberId" value="${CommandContext.userId}"/>
+	<wcf:rest var="memberDetails" url="store/{storeId}/person/{memberId}" scope="request">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:var name="memberId" value="${memberId}" encode="true"/>
+		<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="profileName" value="IBM_User_Registration_Details"/>
+	</wcf:rest>
+	<c:choose>
+		<c:when test="${locale eq 'ja_JP' || locale eq 'ko_KR' || locale eq 'zh_CN' || locale eq 'zh_TW'}">			
+			<c:set var="userDisplayName" value="${memberDetails.address.lastName} ${memberDetails.address.firstName}"/>
+		</c:when>
+		<c:otherwise>			
+			<c:set var="userDisplayName" value="${memberDetails.address.firstName} ${memberDetails.address.lastName}"/>
+		</c:otherwise>
+	</c:choose>	
+</c:if>
+
+<%-- TODO - Do we need these variables --%>
+<c:set var="shopForSelfPanelId" value="${widgetId}_WC_B2B_ShopForSelf"/>
+<c:if test="${!empty param.shopForSelfPanelId}">
+ <c:set var="shopForSelfPanelId" value="${param.shopForSelfPanelId}"/>
+</c:if>
+
+<c:set var="shopOnBehalfPanelId" value="${widgetId}_WC_B2B_ShopOnBehalf"/>
+<c:if test="${!empty param.shopOnBehalfPanelId}">
+ <c:set var="shopOnBehalfPanelId" value="${param.shopOnBehalfPanelId}"/>
+</c:if>
+
+<c:set var="showOnBehalfPanel" value="false"/>
+<c:if test="${!empty param.showOnBehalfPanel}">
+ <c:set var="showOnBehalfPanel" value="${param.showOnBehalfPanel}"/>
+</c:if>
+
+<wcf:url var="CustomerServiceURL" value="CustomerServiceLandingPageView">
+  <wcf:param name="langId" value="${param.langId}" />
+  <wcf:param name="storeId" value="${param.storeId}" />
+  <wcf:param name="catalogId" value="${param.catalogId}" />
+</wcf:url>
+
+
+<c:if test="${empty WCParam.RegisterURL}">
+	<wcf:url var="RegisterURL" value="UserRegistrationForm">
+		<wcf:param name="langId" value="${WCParam.langId}" />
+		<wcf:param name="storeId" value="${WCParam.storeId}" />
+		<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+		<wcf:param name="myAcctMain" value="1" />
+		<wcf:param name="new" value="Y" />
+		<wcf:param name="registerNew" value="Y" />
+		<c:if test="${!empty WCParam.nextUrl}">
+			<wcf:param name="nextUrl" value="${WCParam.nextUrl}" />
+		</c:if>    
+		<c:if test="${!empty WCParam.URL}">
+			<wcf:param name="postRegisterURL" value="${WCParam.URL}" />
+		</c:if>                                                
+	</wcf:url>
+</c:if>
+
+<c:if test="${env_shopOnBehalfSessionEstablished eq 'true'}">
+	<c:set var="buyOnBehalfCookieName" value="WC_BuyOnBehalf_${WCParam.storeId}"/>
+	<c:choose>
+		<c:when test="${userType eq 'G'}">
+			<%-- On-behalf session for guest user. Set buyOnBehalfUserFullName == Guest --%>
+			<wcst:message var="buyOnBehalfUserFullName" key="GUEST" bundle="${widgetText}"/>
+			<%-- Also modify RegisterURL to append the userId to be used while registering the guest --%>
+			<c:set var="RegisterURL" value="${RegisterURL}&guestUserId=${fn:escapeXml(buyerInfo.userId)}"/>
+		</c:when>
+		<c:when test="${not empty cookie[buyOnBehalfCookieName].value }">
+			<c:set var="buyOnBehalfUserFullName" value="${cookie[buyOnBehalfCookieName].value}" />
+			 <%
+				  String decoded = java.net.URLDecoder.decode((String)pageContext.getAttribute("buyOnBehalfUserFullName"), "UTF-8");
+				  if(decoded != null){
+					pageContext.setAttribute("buyOnBehalfUserFullName", decoded);
+				  } 
+				%>
+		</c:when>
+		<c:otherwise>
+			<c:choose>
+				<c:when test="${locale eq 'ja_JP' || locale eq 'ko_KR' || locale eq 'zh_CN' || locale eq 'zh_TW'}">
+					<c:set var="buyOnBehalfUserFullName" value="${fn:escapeXml(buyerInfo.lastName)} ${fn:escapeXml(buyerInfo.firstName)}"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="buyOnBehalfUserFullName" value="${fn:escapeXml(buyerInfo.firstName)} ${fn:escapeXml(buyerInfo.lastName)}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:otherwise>
+	</c:choose>
+	<c:set var="Logon_LogoutURL" value="javascript:GlobalLoginJS.deleteUserLogonIdCookie(); GlobalLoginShopOnBehalfJS.deleteBuyerUserNameCookie(); GlobalLoginShopOnBehalfJS.clearUserSetInSessionAndLogoff('${Logon_LogoutURLOriginal}');"/>
+	<c:set var="CSR_SESSION_ESTABLISHED_FOR_USER_TYPE" value = "${userType}"/>
+</c:if>
+
+<c:if test="${env_b2bStore eq 'true'}">
+	<wcf:rest var="entitledContracts" url="store/{storeId}/contract" scope="request">
+		<wcf:var name="storeId" value="${WCParam.storeId}"/>
+		<wcf:param name="responseFormat" value="json"/>
+		<wcf:param name="q" value="eligible"/>
+	</wcf:rest>   
+
+	<wcf:useBean var="entitledOrgList" classname="java.util.ArrayList"/>
+	<c:forEach items="${entitledOrgs.entitledOrganizations}" var="entitledOrg">
+		<wcf:useBean var="org" classname="java.util.HashMap"/>
+		<wcf:set key="orgEntityId" value="${entitledOrg.organizationId}" target="${org}" />
+		<wcf:set key="name" value="${entitledOrg.organizationName}" target="${org}" />
+		<wcf:set value="${org}" target="${entitledOrgList}" />	
+		<c:remove var="org"/>
+	</c:forEach>
+
+	<wcf:useBean var="entitledContractList" classname="java.util.ArrayList"/>
+	<c:forEach items="${entitledContracts.contracts}" var="entitledContract">
+		<wcf:useBean var="contract" classname="java.util.HashMap"/>
+		<wcf:set key="contractId" value="${entitledContract.key}" target="${contract}" />
+		<wcf:set key="name" value="${entitledContract.value}" target="${contract}" />
+		<wcf:set value="${contract}" target="${entitledContractList}" />
+		<c:remove var="contract"/>
+	</c:forEach>
+	<c:set var="numEntitledContracts" value="${fn:length(entitledContracts.contracts)}"/>
+	<c:set var="activeContractIds" value="${CommandContext.currentTradingAgreementIdsAsString}"/>
+</c:if>
+<!-- END GlobalLogin_CSR_Data.jspf -->

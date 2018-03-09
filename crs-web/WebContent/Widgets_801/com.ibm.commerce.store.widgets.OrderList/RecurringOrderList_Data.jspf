@@ -1,0 +1,528 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN RecurringOrderList_Data.jspf -->
+
+<%-- These variables are used to store the frequency values for a recurring order.--%>
+<c:set var="RecurringOrderFrequency1" value="1"/>
+<c:set var="RecurringOrderFrequency2" value="1"/>
+<c:set var="RecurringOrderFrequency3" value="1"/>
+<c:set var="RecurringOrderFrequency4" value="2"/>
+<c:set var="RecurringOrderFrequency5" value="3"/>
+<c:set var="RecurringOrderFrequency6" value="4"/>
+
+<%-- These variables are used to store the UOM of recurring order frequencies. The possible values are: DAY, HUR, MON, WEE, ANN--%>
+<c:set var="RecurringOrderFrequencyUOM1" value="DAY"/>
+<c:set var="RecurringOrderFrequencyUOM2" value="DAY"/>
+<c:set var="RecurringOrderFrequencyUOM3" value="WEE"/>
+<c:set var="RecurringOrderFrequencyUOM4" value="WEE"/>
+<c:set var="RecurringOrderFrequencyUOM5" value="WEE"/>
+<c:set var="RecurringOrderFrequencyUOM6" value="WEE"/>
+<c:set var="RecurringOrderFrequencyDayUOM" value="DAY"/>
+<c:set var="RecurringOrderFrequencyWeekUOM" value="WEE"/>
+<c:set var="RecurringOrderFrequencyMonthUOM" value="MON"/>
+
+<%-- These variables are used to store the frequency display texts for recurring orders. --%>
+<wcst:message bundle="${widgetText}" var="RecurringOrderFrequencyText1" key="SCHEDULE_ORDER_INTERVAL_1" />
+<wcst:message bundle="${widgetText}" var="RecurringOrderFrequencyText2" key="EVERY_DAY" />
+<wcst:message bundle="${widgetText}" var="RecurringOrderFrequencyText3" key="EVERY_WEEK" />
+<wcst:message bundle="${widgetText}" var="RecurringOrderFrequencyText4" key="EVERY_X_WEEKS" >
+    <wcst:param value="${RecurringOrderFrequency4}"></wcst:param>
+</wcst:message>
+<wcst:message bundle="${widgetText}" var="RecurringOrderFrequencyText5" key="EVERY_X_WEEKS" >
+    <wcst:param value="${RecurringOrderFrequency5}"></wcst:param>
+</wcst:message>
+<wcst:message bundle="${widgetText}" var="RecurringOrderFrequencyText6" key="EVERY_X_WEEKS" >
+    <wcst:param value="${RecurringOrderFrequency6}"></wcst:param>
+</wcst:message>
+
+<%-- This variable is used to store the notice period for cancelling a recurring order in seconds. --%>
+<c:set var="cancelRecurringOrderNoticePeriod" value="43200"/>
+
+<%-- This variable is used to store the notice period for cancelling a subscription in seconds. --%>
+<c:set var="cancelSubscriptionNoticePeriod" value="43200"/>
+
+<c:if test="${param.isRecurringOrder eq true}">
+    <c:set var="action" value="recurring_order"/>
+</c:if>
+<c:if test="${param.isSubscription eq true}">
+    <c:set var="action" value="subscription"/>
+</c:if>
+
+<%-- Retrieve a list of recurring orders / subscriptions. --%>
+<c:choose>
+    <c:when test="${param.isRecurringOrder eq true}">
+        <wcf:rest var="orders" url="/store/{storeId}/subscription">
+            <wcf:var name="storeId" value="${storeId}" />
+            <wcf:param name="q" value="byBuyerIdAndSubscriptionType"/>
+            <wcf:param name="profileName" value="IBM_Store_Summary"/>
+            <wcf:param name="buyerId" value="${CommandContext.userId}"/>
+            <wcf:param name="subscriptionTypeCode" value="RecurringOrder"/>
+        </wcf:rest>
+        <c:set var="allOrdersInThisCategory" value="${orders.resultList}"/>
+    </c:when>
+    <c:when test="${param.isSubscription eq true}">
+        <wcf:rest var="orders" url="/store/{storeId}/subscription">
+            <wcf:var name="storeId" value="${storeId}" />
+            <wcf:param name="q" value="byBuyerIdAndSubscriptionType"/>
+            <wcf:param name="profileName" value="IBM_Store_Summary"/>
+            <wcf:param name="buyerId" value="${CommandContext.userId}"/>
+            <wcf:param name="subscriptionTypeCode" value="All"/>
+        </wcf:rest>
+        <c:set var="allOrdersInThisCategory" value="${orders.resultList}"/>
+    </c:when>
+</c:choose>
+
+<%-- Pagination --%>
+<fmt:parseNumber var="totalCount" value="${orders.recordSetTotal}" integerOnly="true"/>
+<c:if test="${empty totalCount}">
+    <fmt:parseNumber var="totalCount" value="0" integerOnly="true"/>
+</c:if>
+<fmt:formatNumber var="totalPages" value="${(totalCount / pageSize)}"/>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+<c:if test="${totalCount - (totalPages * pageSize) > 0}" >
+    <c:set var="totalPages" value="${totalPages + 1}" />
+</c:if>
+
+<c:choose>
+    <c:when test="${beginIndex + pageSize >= totalCount}">
+        <c:set var="endIndex" value="${totalCount}" />
+    </c:when>
+    <c:otherwise>
+        <c:set var="endIndex" value="${beginIndex + pageSize}" />
+    </c:otherwise>
+</c:choose>
+
+<c:choose>
+    <c:when test="${totalCount == 0}">
+        <c:set var="hideTable" value="true" scope="request"/>
+    </c:when>
+    <c:otherwise>
+        <c:if test="${allOrdersInThisCategory != null}">
+            <wcf:useBean var="orderListMappingList" classname="java.util.ArrayList" />
+
+            <c:forEach var="order" items="${allOrdersInThisCategory}" varStatus="status">
+                <c:choose>
+                    <c:when test="${order.purchaseDetails.parentOrderIdentifier.externalOrderID != null}">
+                        <c:set var="objectId" value="${order.purchaseDetails.parentOrderIdentifier.externalOrderID}"/>
+                        <c:set var="objectIdParam" value="externalOrderId"/>
+                    </c:when>
+                    <c:otherwise>
+                        <c:set var="objectId" value="${order.purchaseDetails.parentOrderIdentifier.parentOrderId}"/>
+                        <c:set var="objectIdParam" value="orderId"/>
+                    </c:otherwise>
+                </c:choose>
+
+                <%-- Need to reset currencyFormatterDB as initialized in JSTLEnvironmentSetup.jspf, as the currency code used there is from commandContext. We want to display with currency used when the order was placed. --%>
+                <c:set var="currencyDecimal" value="${currencyFormatterDB.decimalPlaces}"/>
+
+                <%-- Total price for Recurring Orders and Subscriptions --%>
+                <c:if test ="${order.subscriptionInfo.paymentInfo.totalCost.value != null}">
+                    <c:set var="totalCostCurrency" value="${order.subscriptionInfo.paymentInfo.totalCost.currency}"/>
+                </c:if>
+
+                <c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${totalCostCurrency}+-1+${langId}"/>
+                <c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+                <c:if test="${empty currencyFormatterDB}">
+                    <wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+                        <wcf:var name="storeId" value="${storeId}" />
+                        <wcf:param name="q" value="byCurrency" />
+                        <wcf:param name="currency" value="${totalCostCurrency}" />
+                        <wcf:param name="numberUsage" value="-1" />
+                        <wcf:param name="langId" value="${langId}" />
+                    </wcf:rest>
+                    <c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+                    <wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+                </c:if>
+
+                <c:if test="${totalCostCurrency == 'KRW'}">
+                    <c:set property="currencySymbol" value="&#8361;" target="${currencyFormatterDB}"/>
+                </c:if>
+                <c:if test="${totalCostCurrency == 'PLN'}">
+                    <c:set property="currencySymbol" value="z&#322;" target="${currencyFormatterDB}"/>
+                </c:if>
+                <c:if test="${totalCostCurrency == 'ILS' && locale == 'iw_IL'}">
+                    <c:set property="currencySymbol" value="&#1513;&#1524;&#1495;" target="${currencyFormatterDB}"/>
+                </c:if>
+
+                <%-- These variables are used to hold the currency symbol --%>
+                <c:choose>
+                    <c:when test="${locale == 'ar_EG' && totalCostCurrency == 'EGP'}">
+                        <c:set var="CurrencySymbolToFormat" value=""/>
+                        <c:set var="CurrencySymbol" value="${currencyFormatterDB.currencySymbol}"/>
+                    </c:when>
+                    <c:otherwise>
+                        <c:set var="CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}"/>
+                        <c:set var="CurrencySymbol" value=""/>
+                    </c:otherwise>
+                </c:choose>
+
+                <wcf:useBean var="orderListMap" classname="java.util.HashMap"/>
+
+                <%-- Prepare order status for Recurring Orders and Subscriptions --%>
+                <c:choose>
+                    <c:when test="${!empty order.state}">
+                        <c:choose>
+                            <c:when test="${order.state eq 'InActive'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="INACTIVE_STATE" />
+                            </c:when>
+                            <c:when test="${order.state eq 'Active'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="ACTIVE_STATE" />
+                            </c:when>
+                            <c:when test="${order.state eq 'Expired'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="EXPIRED_STATE" />
+                            </c:when>
+                            <c:when test="${order.state eq 'Cancelled'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="CANCELLED_STATE" />
+                            </c:when>
+                            <c:when test="${order.state eq 'Completed'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="COMPLETED_STATE" />
+                            </c:when>
+                            <c:when test="${order.state eq 'Suspended'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="SUSPENDED_STATE" />
+                            </c:when>
+                            <c:when test="${order.state eq 'PendingCancel'}" >
+                                <wcst:message var="ordStatus" bundle="${widgetText}" key="PENDING_CANCEL_STATE" />
+                            </c:when>
+                        </c:choose>
+                    </c:when>
+                    <c:otherwise>
+                        <wcst:message var="ordStatus" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                    </c:otherwise>
+                </c:choose>
+                <wcf:set target="${orderListMap}" key="status" value="${ordStatus}"/>
+
+                <c:set var="rowCount" value="${(status.count-pageSize*(currentPage-1))}"/>
+
+                <c:if test="${param.isRecurringOrder eq true}">
+                    <%-- Prepare order detail URL for recurring orders --%>
+                    <wcf:useBean var="orderListNumberandDetailList" classname="java.util.ArrayList" />
+
+                    <wcf:url var="OrderDetailUrl" value="OrderDetail">
+                        <wcf:param name="${objectIdParam}" value="${objectId}"/>
+                        <wcf:param name="orderStatusCode" value="${order.orderStatus}"/>
+                        <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                        <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                        <wcf:param name="langId" value="${WCParam.langId}"/>
+                        <wcf:param name="currentSelection" value="RecurringOrderDetailSlct"/>
+                    </wcf:url>
+
+                    <wcf:set target="${orderListNumberandDetailList}" value="${OrderDetailUrl}"/>
+                    <wcf:set target="${orderListNumberandDetailList}" value="${objectId}"/>
+                    <wcf:set target="${orderListMap}" key="order" value="${orderListNumberandDetailList}"/>
+
+                    <%-- Prepare scheduled rules for recurring orders --%>
+                    <c:choose>
+                        <c:when test="${!empty order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.frequency.value}">
+                            <c:if test="${!empty order.subscriptionInfo.fulfillmentSchedule.endInfo.duration.value}">
+                                <fmt:parseNumber var="timePeriod" value="${order.subscriptionInfo.fulfillmentSchedule.endInfo.duration.value}" integerOnly="true"/>
+                            </c:if>
+                            <fmt:parseNumber var="orderInterval" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.frequency.value}" integerOnly="true"/>
+                            <c:set var="intervalUOM" value="${fn:trim(order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.frequency.uom)}"/>
+                            <c:choose>
+                                <c:when test="${!empty order.subscriptionInfo.fulfillmentSchedule.endInfo.duration.value && timePeriod == 1}">
+                                    <wcf:set target="${orderListMap}" key="scheduled" value="${RecurringOrderFrequencyText1}"/>
+                                </c:when>
+                                <c:when test="${orderInterval == RecurringOrderFrequency2 && intervalUOM == RecurringOrderFrequencyUOM2}">
+                                    <wcf:set target="${orderListMap}" key="scheduled" value="${RecurringOrderFrequencyText2}"/>
+                                </c:when>
+                                <c:when test="${orderInterval == RecurringOrderFrequency3 && intervalUOM == RecurringOrderFrequencyUOM3}">
+                                    <wcf:set target="${orderListMap}" key="scheduled" value="${RecurringOrderFrequencyText3}"/>
+                                </c:when>
+                                <c:when test="${orderInterval == RecurringOrderFrequency4 && intervalUOM == RecurringOrderFrequencyUOM4}">
+                                    <wcf:set target="${orderListMap}" key="scheduled" value="${RecurringOrderFrequencyText4}"/>
+                                </c:when>
+                                <c:when test="${orderInterval == RecurringOrderFrequency5 && intervalUOM == RecurringOrderFrequencyUOM5}">
+                                    <wcf:set target="${orderListMap}" key="scheduled" value="${RecurringOrderFrequencyText5}"/>
+                                </c:when>
+                                <c:when test="${orderInterval == RecurringOrderFrequency6 && intervalUOM == RecurringOrderFrequencyUOM6}">
+                                    <wcf:set target="${orderListMap}" key="scheduled" value="${RecurringOrderFrequencyText6}"/>
+                                </c:when>
+                            </c:choose>
+                        </c:when>
+                        <c:otherwise>
+                            <wcst:message var="not_available" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                            <wcf:set target="${orderListMap}" key="scheduled" value="${not_available}"/>
+                        </c:otherwise>
+                    </c:choose>
+
+                    <%-- Prepare next order date for recurring orders --%>
+                    <c:choose>
+                        <c:when test="${order.state eq 'Active' || order.state eq 'PendingCancel' || order.state eq 'InActive'}">
+                            <c:catch>
+                                <fmt:parseDate parseLocale="${dateLocale}" var="nextTime" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.nextOccurence}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+                            </c:catch>
+
+                            <c:if test="${empty nextTime}">
+                                <c:catch>
+                                    <fmt:parseDate parseLocale="${dateLocale}" var="nextTime" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.nextOccurence}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                                </c:catch>
+                            </c:if>
+                            <c:set var="indexTime" value="${nextTime}" />
+                            <fmt:formatDate var="formattedNextOrderDate" value="${nextTime}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+                            <wcf:set target="${orderListMap}" key="next_order" value="${formattedNextOrderDate}"/>
+                        </c:when>
+                        <c:otherwise>
+                            <wcf:set target="${orderListMap}" key="next_order" value="-"/>
+                        </c:otherwise>
+                    </c:choose>
+
+                    <%-- Prepare actions for recurring orders --%>
+                    <fmt:parseNumber var="timeDifference" value="${(indexTime.time - now.time)/1000}" parseLocale="${dateLocale}" integerOnly="true"/>
+                    <fmt:parseNumber var="cancelRecurringOrderNoticePeriod1" value="${cancelRecurringOrderNoticePeriod}" integerOnly="true"/>
+                    <c:choose>
+                        <c:when test="${timeDifference > 0 && timeDifference >= cancelRecurringOrderNoticePeriod1}">
+                            <wcst:message bundle="${widgetText}" key="SCHEDULE_ORDER_CANCEL_PER" var="cancelMessage"/>
+                        </c:when>
+                        <c:otherwise>
+                            <wcst:message bundle="${widgetText}" key="CANCEL_NOTICE_PERIOD_MSG" var="cancelMessage"> 
+                                <wcst:param><c:out value="${formattedNextOrderDate}" escapeXml="false"/></wcst:param>
+                            </wcst:message>
+                        </c:otherwise>
+                    </c:choose>
+                    <wcf:set target="${orderListMap}" key="cancelMessage" value="${cancelMessage}"/>
+
+                    <wcf:url value="AjaxRESTOrderCopy" var="OrderCopyUrl_Sub" type="Ajax">
+                        <wcf:param name="fromOrderId_1" value="${objectId}"/>
+                        <wcf:param name="toOrderId" value=".**."/>
+                        <wcf:param name="copyOrderItemId_1" value="*"/>
+                        <wcf:param name="URL" value="AjaxOrderItemDisplayView"/>
+                        <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                        <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                        <wcf:param name="langId" value="${WCParam.langId}"/>
+                    </wcf:url>
+                    <c:if test="${order.state eq 'Active'}" >
+                        <flow:ifEnabled feature="AllowReOrder">
+                            <c:if test="${param.isQuote != true}">
+                                <wcf:set target="${orderListMap}" key="reorder" value="setCurrentId('RecurringOrderDetailsDisplayExt_option_button_3b_${rowCount}'); OrderListJS.prepareOrderCopy('${OrderCopyUrl_Sub}');"/>
+                            </c:if>
+                        </flow:ifEnabled>
+                        <wcf:set target="${orderListMap}" key="cancel_recurring" value="setCurrentId('RecurringOrder_CancelButton_Ajax_${rowCount}'); OrderListJS.showPopup('recurring_order',${order.subscriptionIdentifier.subscriptionId},${rowCount},'${widgetPrefix}cancelMessage_${rowCount}');"/>
+                    </c:if>
+                    <c:if test="${order.state ne 'Active'}" >
+                        <flow:ifEnabled feature="AllowReOrder">
+                            <c:if test="${param.isQuote != true}">
+                                <wcf:set target="${orderListMap}" key="reorder" value="setCurrentId('RecurringOrderDetailsDisplayExt_option_button_link_1_${rowCount}'); OrderListJS.prepareOrderCopy('${OrderCopyUrl_Sub}');"/>
+                            </c:if>
+                        </flow:ifEnabled>
+                    </c:if>
+                </c:if>
+
+                <c:if test="${param.isSubscription eq true}">
+                    <%-- Prepare order detail URL for subscriptions --%>
+                    <wcst:message bundle="${widgetText}" var="openingBrace" key="OPENING_BRACE" />
+                    <c:catch var="searchServerException">
+                        <wcf:rest var="catEntry" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${order.purchaseDetails.subscribedItem.subscribedItemId}" >
+                            <wcf:param name="langId" value="${langId}" />
+                            <wcf:param name="currency" value="${env_currencyCode}" />
+                            <wcf:param name="responseFormat" value="json" />
+                            <wcf:param name="catalogId" value="${sdb.masterCatalog.catalogId}" />
+                            <wcf:param name="profileName" value="IBM_findProductByIds_Summary" />
+                        </wcf:rest>
+                        <c:set var="catEntryName" value="${catEntry.catalogEntryView[0].name}" />
+                    </c:catch>
+                    <c:choose>
+                        <c:when test="${fn:contains(catEntryName,openingBrace)}">
+                            <c:set var="subscriptionName" value="${fn:substringBefore(catEntryName,openingBrace)}"/>
+                        </c:when>
+                        <c:otherwise>
+                            <c:set var="subscriptionName" value="${catEntryName}"/>
+                        </c:otherwise>
+                    </c:choose>
+
+                    <wcf:url value="OrderDetail" var="SubscriptionDetailUrl1">
+                        <wcf:param name="${objectIdParam}" value="${objectId}"/>
+                        <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                        <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                        <wcf:param name="langId" value="${WCParam.langId}"/>
+                        <wcf:param name="currentSelection" value="SubscriptionDetailSlct"/>
+                        <wcf:param name="subscriptionId" value="${order.subscriptionIdentifier.subscriptionId}"/>
+                        <wcf:param name="orderItemId" value="${order.purchaseDetails.parentOrderItemIdentifier.parentOrderItemId}"/>
+                        <wcf:param name="subscriptionName" value="${subscriptionName}"/>
+                        <wcf:param name="subscriptionCatalogEntryId" value="${order.purchaseDetails.subscribedItem.subscribedItemId}"/>
+                    </wcf:url>
+
+                    <wcf:useBean var="orderListNameandDetailList" classname="java.util.ArrayList" />
+                    <wcf:set target="${orderListNameandDetailList}" value="${SubscriptionDetailUrl1}"/>
+
+                    <c:if test="${empty objectId}">
+                        <wcst:message var="subscriptionName" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                    </c:if>
+                    <c:if test="${fn:contains(catEntryName,openingBrace)}">
+                        <c:set var="subscriptionName" value="${subscriptionName}${openingBrace}${fn:substringAfter(catEntryName,openingBrace)}"/>
+                    </c:if>
+                    <wcf:set target="${orderListNameandDetailList}" value="${subscriptionName}"/>
+                    <wcf:set target="${orderListMap}" key="subscription" value="${orderListNameandDetailList}"/>
+
+                    <%-- Prepare next order date for subscriptions --%>
+                    <c:choose>
+                        <c:when test="${order.state eq 'Active' || order.state eq 'PendingCancel' || order.state eq 'InActive'}">
+                            <c:catch>
+                                <fmt:parseDate parseLocale="${dateLocale}" var="nextShipment" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.nextOccurence}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+                            </c:catch>
+
+                            <c:if test="${empty nextShipment}">
+                                <c:catch>
+                                    <fmt:parseDate parseLocale="${dateLocale}" var="nextShipment" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.nextOccurence}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                                </c:catch>
+                            </c:if>
+
+                            <fmt:formatDate var="formattedNextShipmentDate" value="${nextShipment}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+                            <wcf:set target="${orderListMap}" key="next_order" value="${formattedNextShipmentDate}"/>
+                        </c:when>
+                        <c:otherwise>
+                            <wcf:set target="${orderListMap}" key="next_order" value="-"/>
+                        </c:otherwise>
+                    </c:choose>
+
+                    <%-- Prepare expiry date for subscriptions --%>
+                    <c:catch>
+                        <fmt:parseDate parseLocale="${dateLocale}" var="expiryTime" value="${order.subscriptionInfo.fulfillmentSchedule.endInfo.endDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+                    </c:catch>
+
+                    <c:if test="${empty nextTime}">
+                        <c:catch>
+                            <fmt:parseDate parseLocale="${dateLocale}" var="expiryTime" value="${order.subscriptionInfo.fulfillmentSchedule.endInfo.endDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                        </c:catch>
+                    </c:if>
+
+                    <fmt:parseNumber var="timeDifference1" value="${(expiryTime.time - now.time)/1000}" integerOnly="true"/>
+
+                    <c:choose>
+                        <c:when test="${timeDifference1 > 0 && order.state ne 'Cancelled'}">
+                            <c:set var="renewTime" value="${order.subscriptionInfo.fulfillmentSchedule.endInfo.endDate}" />
+                        </c:when>
+                        <c:otherwise>
+                            <fmt:parseNumber var="now_year" value="${now.year + 1900}" integerOnly="true"/>
+                            <fmt:parseNumber var="now_month" value="${now.month + 1}" integerOnly="true"/>
+                            <fmt:parseNumber var="now_date" value="${now.date}" integerOnly="true"/>
+                            <fmt:parseNumber var="now_hours" value="${now.hours}" integerOnly="true"/>
+                            <fmt:parseNumber var="now_minutes" value="${now.minutes}" integerOnly="true"/>
+                            <fmt:parseNumber var="now_seconds" value="${now.seconds}" integerOnly="true"/>
+
+                            <c:if test="${now_month < 10}">
+                                <c:set var="now_month" value="0${now_month}"/>
+                            </c:if>
+                            <c:if test="${now_date < 10}">
+                                <c:set var="now_date" value="0${now_date}"/>
+                            </c:if>
+                            <c:if test="${now_hours < 10}">
+                                <c:set var="now_hours" value="0${now_hours}"/>
+                            </c:if>
+                            <c:if test="${now_minutes < 10}">
+                                <c:set var="now_minutes" value="0${now_minutes}"/>
+                            </c:if>
+                            <c:if test="${now_seconds < 10}">
+                                <c:set var="now_seconds" value="0${now_seconds}"/>
+                            </c:if>
+
+                            <c:set var="renewTime" value="${now_year}-${now_month}-${now_date}T${now_hours}:${now_minutes}:${now_seconds}.000Z"/>
+                        </c:otherwise>
+                    </c:choose>
+
+                    <fmt:formatDate var="formattedExpiryDate" value="${expiryTime}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+                    <wcf:set target="${orderListMap}" key="expiry_date" value="${formattedExpiryDate}"/>
+
+                    <%-- Prepare actions for subscriptions --%>
+                    <c:catch>
+                        <fmt:parseDate parseLocale="${dateLocale}" var="nextTime" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.nextOccurence}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+                    </c:catch>
+
+                    <c:if test="${empty nextTime}">
+                        <c:catch>
+                            <fmt:parseDate parseLocale="${dateLocale}" var="nextTime" value="${order.subscriptionInfo.fulfillmentSchedule.frequencyInfo.nextOccurence}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+                        </c:catch>
+                    </c:if>
+                    <c:set var="indexTime" value="${nextTime}" />
+                    <fmt:formatDate var="formattedNextOrderDate" value="${nextTime}" dateStyle="long" timeZone="${formattedTimeZone}"/>
+                    <fmt:parseNumber var="timeDifference" value="${(indexTime.time - now.time)/1000}" parseLocale="${dateLocale}" integerOnly="true"/>
+                    <fmt:parseNumber var="cancelSubscriptionNoticePeriod1" value="${cancelSubscriptionNoticePeriod}" integerOnly="true"/>
+                    <c:choose>
+                        <c:when test="${timeDifference >= cancelSubscriptionNoticePeriod1}">
+                            <wcst:message bundle="${widgetText}" key="SUBSCRIPTION_CANCEL_PER" var="cancelMessage"/>
+                        </c:when>
+                        <c:otherwise>
+                            <wcst:message bundle="${widgetText}" key="SUBSCRIPTION_CANCEL_NOTICE_PERIOD_MSG" var="cancelMessage"> 
+                                <wcst:param><c:out value="${formattedNextOrderDate}" escapeXml="false"/></wcst:param>
+                            </wcst:message>
+                        </c:otherwise>
+                    </c:choose>
+                    <wcf:set target="${orderListMap}" key="cancelMessage" value="${cancelMessage}"/>
+
+                    <wcf:url value="AjaxRESTOrderCopy" var="SubscriptionCopyUrl" type="Ajax">
+                        <wcf:param name="fromOrderId_1" value="${objectId}"/>
+                        <wcf:param name="toOrderId" value=".**."/>
+                        <wcf:param name="copyOrderItemId_1" value="${order.purchaseDetails.parentOrderItemIdentifier.parentOrderItemId}"/>
+                        <wcf:param name="URL" value="AjaxOrderItemDisplayView"/>
+                        <wcf:param name="storeId" value="${WCParam.storeId}"/>
+                        <wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+                        <wcf:param name="langId" value="${WCParam.langId}"/>
+                    </wcf:url>
+                    <c:if test="${order.state eq 'Active'}" >
+                        <c:if test="${param.isQuote != true}">
+                            <wcf:set target="${orderListMap}" key="renew" value="setCurrentId('SubscriptionDetailsDisplayExt_option_button_3b_${rowCount}'); OrderListJS.setSubscriptionDate('${renewTime}'); OrderListJS.prepareSubscriptionRenew('${SubscriptionCopyUrl}');"/>
+                        </c:if>
+                        <wcf:set target="${orderListMap}" key="cancel_subscription" value="setCurrentId('Subscription_CancelButton_Ajax_${rowCount}'); OrderListJS.showPopup('subscription',${order.subscriptionIdentifier.subscriptionId},${rowCount},'${widgetPrefix}cancelMessage_${rowCount}');"/>
+                    </c:if>
+                    <c:if test="${order.state ne 'Active'}" >
+                        <c:if test="${param.isQuote != true}">
+                            <wcf:set target="${orderListMap}" key="renew" value="setCurrentId('SubscriptionDetailsDisplayExt_option_button_link_1_${rowCount}'); OrderListJS.setSubscriptionDate('${renewTime}'); OrderListJS.prepareSubscriptionRenew('${SubscriptionCopyUrl}');"/>
+                        </c:if>
+                    </c:if>
+                </c:if>
+
+                <%-- Total price for Recurring Orders and Subscriptions --%>
+                <c:choose>
+                    <c:when test="${order.subscriptionInfo.paymentInfo.totalCost.value != null && !empty order.subscriptionInfo.paymentInfo.totalCost.value}">
+                        <fmt:formatNumber var="total_price" value="${order.subscriptionInfo.paymentInfo.totalCost.value}" type="currency" maxFractionDigits="${currencyDecimal}" currencySymbol="${CurrencySymbolToFormat}"/>
+                    </c:when>
+                    <c:otherwise>
+                        <wcst:message var="total_price" bundle="${widgetText}" key="MO_NOT_AVAILABLE" />
+                    </c:otherwise>
+                </c:choose>
+                <c:if test="${param.isRecurringOrder eq true}">
+                    <wcf:set target="${orderListMap}" key="total_price" value="${total_price}"/>
+                </c:if>
+                <c:if test="${param.isSubscription eq true}">
+                    <wcf:set target="${orderListMap}" key="price" value="${total_price}"/>
+                </c:if>
+
+                <c:if test="${(status.count - 1) >= beginIndex && (status.count - 1 ) < endIndex}">
+                    <wcf:set target="${orderListMappingList}" value="${orderListMap}"/>
+                </c:if>
+
+                <c:remove var="orderListMap"/>
+                <c:remove var="orderListNumberandDetailList"/>
+                <c:remove var="orderListNameandDetailList"/>
+            </c:forEach>
+        </c:if>
+    </c:otherwise>
+</c:choose>
+
+<%-- The following data is passed to List Table UI --%>
+<c:set var="tableValueMapping" value="${orderListMappingList}"/>
+<c:choose>
+    <c:when test="${param.isRecurringOrder eq true}">
+        <c:set var="tableHeading" value="order;scheduled;next_order;status;total_price;actions"/>
+        <c:set var="tableAction" value="reorder;cancel_recurring"/>
+        <wcst:message var="viewAllMessage" bundle="${widgetText}" key="MA_VIEWALL_SCHEDULEDORDERS" />
+    </c:when>
+    <c:when test="${param.isSubscription eq true}">
+        <c:set var="tableHeading" value="subscription;next_order;expiry_date;status;price;actions"/>
+        <c:set var="tableAction" value="renew;cancel_subscription"/>
+        <wcst:message var="viewAllMessage" bundle="${widgetText}" key="MA_VIEWALL_SUBSCRIPTIONS" />
+    </c:when>
+</c:choose>
+
+<!-- END RecurringOrderList_Data.jspf -->

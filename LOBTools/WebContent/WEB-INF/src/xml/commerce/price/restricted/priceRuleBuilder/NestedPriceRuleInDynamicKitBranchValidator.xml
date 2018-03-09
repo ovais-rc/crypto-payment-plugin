@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for specifying price rule as nested rule in the path of dynamic kit branch. 
+		This validator ensures that user can only specify independent price rule as nested rule in the Non-Dynamic Kit Price Rule path
+		and specify dependent price rules as nested rule in Dynamic Kit Price Rule path.
+	-->
+	<Validator classDefinition="true" definitionName="cmc/price/NestedPriceRuleInDynamicKitBranchValidator">
+		<dependency localName="priceResources" moduleName="cmc/price/PriceResources"/>
+
+		<!--- @keywords private -->		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (this.isEnabled(o)) {
+				var childObjects = o.getObjects("RefPriceRuleGroup");
+				if (o.parentObject != null && o.parentObject.parentObject != null && o.parentObject.parentObject.objectType == "dynamicKitBranch" && childObjects != null && childObjects[0] != null) {
+					var pathObjs = o.parentObject.parentObject.getObjects("path");
+					if (pathObjs.length == 2) {
+						var dKPathObj = null;
+						if (Number(pathObjs[0].getPropertyValue("sequence")) < Number(pathObjs[1].getPropertyValue("sequence"))) {
+							dKPathObj = pathObjs[1];
+						}
+						else {
+							dKPathObj = pathObjs[0];
+						}
+						var isDKPath = dKPathObj == o.parentObject ? true : false;
+						var dependent = childObjects[0].getReferencedObject().getPropertyValue("dependent");
+						if (!isDKPath && dependent == "true") {
+							o.addValidationError(this, priceResources.Singleton.errorMsg_dependentInNonDKPriceRulePath.string);
+							return;
+						}
+					}
+				}
+			}
+			o.clearValidationError(this);
+			]]>
+		</method>
+	</Validator>
+</Definitions>

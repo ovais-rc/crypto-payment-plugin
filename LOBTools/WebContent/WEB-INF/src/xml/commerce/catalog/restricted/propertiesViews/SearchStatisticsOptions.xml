@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	<!---
+		The class that represents the apply button for the statistics report. 
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/catalog/ReportOptionsPropertyButton">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<!---
+			@keywords private
+			Get the search statistics report. 
+		-->
+		<method name="getReport">
+			<![CDATA[
+			if (this.o) {
+				this.o.setPropertyValue("getReport", null, "true");
+				var childObjectDefinitions = this.o.objectDefinition.objectDefinitions;
+				var oDefs = [];
+				for (var i = 0; i < childObjectDefinitions.length; i++) {
+					var childDef = childObjectDefinitions[i].objectDefinition;
+					childDef.initializeDefinition(this.o.model);
+					oDefs.push(childDef);
+				}
+				this.o.refreshChildren(oDefs);
+			}
+			]]>
+		</method>
+		
+		<Button text="${catalogResources.Singleton.topSearchReportOptionAppyButton.string}" x="${this.parent.promptWidth + this.parent.xspacing}">	
+			<handler name="onclick">
+				<![CDATA[
+				if (EventTimer.Singleton.enabled) {
+					EventTimer.Singleton.start("catReportOptionsApplyButon onclick: " + "Get Search Statistics Report");
+				}
+				this.classroot.getReport();
+				if (EventTimer.Singleton.enabled) {
+					EventTimer.Singleton.end();
+				}
+				]]>
+			</handler>
+		</Button>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/catalog/ReportRangePicker">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			This attribute specifies the {@link cmc/foundation/ModelProperty property} of the reporting range. This is a required attribute.
+		-->
+		<variable name="property"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} of the reporting range. This is a required attribute.
+		-->
+		<variable name="propertyName" type="string"/>	
+		
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property}  of the start date. This is a required attribute.
+		-->
+		<variable name="startDatePropertyName" type="string"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} of the end date. This is a required attribute.
+		-->
+		<variable name="endDatePropertyName" type="string"/>
+		
+		<method args="newProperty" name="set_property">
+			<![CDATA[
+			if (newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				else {
+					this.updateValueDel.disconnectAll();
+				}
+				this.property = newProperty;
+				if (this.property != null) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					if (this.property.value != "4") {
+						this.updateValue();
+					}
+				}
+				EventUtil.trigger(this, "onproperty");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---  
+			@keywords private
+			The datestart and dateend property values of the reporting option object will be updated 
+			if the user selects the reportRange of the reporting option.   
+		 -->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property) {
+				var newStartDate = null;
+				var newEndDate = null;
+				if (this.property.value == "1" || this.property.value == "2" || this.property.value == "3") {
+					newStartDate = new Date();
+					newEndDate = new Date();
+					if (this.property.value == "3") {
+						newStartDate = new Date(newStartDate.getFullYear(), newStartDate.getMonth() - 1, 1);
+						newEndDate = new Date(newEndDate.getFullYear(), newEndDate.getMonth(), 1);
+						DateUtil.Singleton.adddays(newEndDate, -1);
+					}
+					else {
+						var dayOfThisWeek = newStartDate.getDay() - DateUtil.Singleton.getFirstDayOffSet();
+						if (dayOfThisWeek < 0) {
+							dayOfThisWeek = dayOfThisWeek + 7;
+						}
+						if (this.property.value == "1") {
+							DateUtil.Singleton.adddays(newStartDate, -7 - dayOfThisWeek);
+						}
+						else {
+							DateUtil.Singleton.adddays(newStartDate, -14 - dayOfThisWeek);
+						}
+						DateUtil.Singleton.adddays(newEndDate, -1 - dayOfThisWeek);
+					}
+				}
+				var startDateProperty = this.property.o.getProperty("datestart");
+				var formattedStartDate = DateUtil.Singleton.format(newStartDate, DateUtil.Singleton.DATE_FORMAT);
+				if (formattedStartDate != startDateProperty.value) {
+					startDateProperty.setVariable("value", formattedStartDate);
+				}
+				var endDateProperty = this.property.o.getProperty("dateend");
+				var formattedEndDate = DateUtil.Singleton.format(newEndDate, DateUtil.Singleton.DATE_FORMAT_END);
+				if (formattedEndDate != endDateProperty.value) {
+					endDateProperty.setVariable("value", formattedEndDate);
+				}
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="5"/>
+		<ComboBox enabled="${this.classroot.enabled}" name="reportRangeOption" property="${this.classroot.property}"/>
+		<Component name="paddingView"/>
+		<TextComponent text="${catalogResources.Singleton.topSearchReportOption_ReportingPeriod_From.string}"/>
+		<PropertyDatePicker name="startDateOption" promptWidth="0" propertyName="${this.classroot.startDatePropertyName}">
+			<EnablementCondition conditionId="customReportingPeriodCondition" enablementValue="4" propertyName="${this.classroot.propertyName}"/>
+		</PropertyDatePicker>
+		<TextComponent text="${catalogResources.Singleton.topSearchReportOption_ReportingPeriod_to.string}"/>
+		<PropertyDatePicker endOfDay="true" name="endDateOption" promptWidth="0" propertyName="${this.classroot.endDatePropertyName}">
+			<EnablementCondition conditionId="customReportingPeriodCondition" enablementValue="4" propertyName="${this.classroot.propertyName}"/>
+		</PropertyDatePicker>
+	</FocusableComponent>
+	
+	<!---
+		The class that represents the reporting range for the statistics report. 
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/catalog/ReportRangePropertyEditor">
+		<dependency localName="ReportRangePicker" moduleName="cmc/catalog/ReportRangePicker"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property}  of the start date. This is a required attribute.
+		-->
+		<variable name="startDatePropertyName" type="string"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} of the end date. This is a required attribute.
+		-->
+		<variable name="endDatePropertyName" type="string"/>
+		
+		<!---	
+			@keywords private
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the reporting range selection and date pickers.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new ReportRangePicker.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				propertyName: this.propertyName,
+				startDatePropertyName: this.startDatePropertyName,
+				endDatePropertyName: this.endDatePropertyName,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords private
+	-->
+	<TextViewer classDefinition="true" definitionName="cmc/catalog/SearchTotalText">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<!---
+			Gets the display value from the properties value and sets it as the text to be displayed in the viewer.
+			@param cmc/foundation/EventHandler del An optional delegate to call when a change in property value is caused by the value service.
+			@returns string: display value
+		-->
+		<method args="del" name="getDisplayValue">
+			<![CDATA[
+			del.connect(catalogResources.Singleton.topSearchHitsTotalSearchSessions, "onstring");
+			return catalogResources.Singleton.replaceValues("topSearchHitsTotalSearchSessions", [this.property.value]);
+			]]>
+		</method>
+	</TextViewer>
+	
+	<!---
+		The class that represents search total for the statistics report. 
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/catalog/SearchTotalPropertyViewLongText" sizeToAvailableWidth="true">
+		<dependency localName="SearchTotalText" moduleName="cmc/catalog/SearchTotalText"/>
+		<!---	
+			@keywords private
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the search total text viewer.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new SearchTotalText.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+</Definitions>

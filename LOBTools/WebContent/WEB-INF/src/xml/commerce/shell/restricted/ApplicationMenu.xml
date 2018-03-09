@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		Get online stores service. This is used to get online stores which the user
+		has access to.
+	--> 
+	<Service definitionName="cmc/shell/GetOnlineStoreUsages" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetOnlineStoreUsages">
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+
+		<!---
+			Parse the response values from the get online store service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			var workOnBase = true;
+			var accessibleToolsCount = 0;
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var usage = node.nodeName;
+				var value = XMLUtil.getNodeValue(node);
+				if (value == "true") {
+					var menuItems = requestParent.applicationMenuItems.menuItems;
+					for (var j = 0; j < menuItems.length; j++) {
+						if (menuItems[j].usage == usage) {
+							accessibleToolsCount++;
+							menuItems[j].doShowMenuItem();
+							if (menuItems[j].id == "workspaceManagement") {
+								workOnBase = false;
+								if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true" && !ToolsController.Singleton.isToolOpen("workspaceManagement")) {
+									if (menuItems[j].objectClass == null) {
+										menuItems[j].loadDeferredVariable("objectClass");
+									}
+									menuItems[j].logonAction = true;
+								}
+							}
+						}
+					}
+				}
+			}
+			if (workOnBase && ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+				});
+			}
+			requestParent.setVariable("numberOfAccessibleTools", accessibleToolsCount);
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		This class implements the Management Center menu drop-down list.  Individual items
+		in the menu are defined as children of this class and are instances of
+		{@link cmc/shell/ApplicationMenuItem} objects.
+	-->
+	<FloatingList classDefinition="true" definitionName="cmc/shell/BaseApplicationMenuItems" doesenter="true" bordersize="0" bgcolor="#464646">
+		<!---
+			@keywords private
+			Array of application menu items.
+		-->
+		<variable name="menuItems" value="${[]}"/>
+		
+		<!---
+			@keywords private
+			Method to set the width of the application menu based on maximum width
+			of the menu items.
+		-->	
+		<method args="minWidth" name="setMenuWidth">
+			<![CDATA[
+			if (typeof(minWidth) == "undefined") minWidth = 0;
+			var maxWidth = 0;
+			for (var i = 0; i < this.menuItems.length; i++) {
+				maxWidth = Math.max(maxWidth, this.menuItems[i].getMenuItemWidth());
+			}
+			this.setVariable('width', maxWidth > minWidth ? maxWidth : minWidth);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="item" name="select">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("doesenter", true);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 37 || k == 38) {
+				var nextHiliteItemIndex = -1;
+				for (var i = 0; i < this.menuItems.length; i++) {
+					if (this.menuItems[i].hilited && !this.menuItems[i].visible) {
+						for (var j = i - 1; j >= 0; j--) {
+							if (this.menuItems[j].visible) {
+								nextHiliteItemIndex = j;
+								break;
+							}
+						}
+						if (nextHiliteItemIndex == -1) {
+							for (var j = i + 1; j < this.menuItems.length; j++) {
+								if (this.menuItems[j].visible) {
+									nextHiliteItemIndex = j;
+									break;
+								}
+							}
+						}
+						if (nextHiliteItemIndex == -1) {
+							this.setHilite(null);
+						}
+						else {
+							this.setHilite(this.menuItems[nextHiliteItemIndex]);
+						}
+					}
+				}
+			}
+			else if (k == 39 || k == 40) {
+				var nextHiliteItemIndex = -1;
+				for (var i = 0; i < this.menuItems.length; i++) {
+					if (this.menuItems[i].hilited && !this.menuItems[i].visible) {
+						for (var j = i + 1; j < this.menuItems.length; j++) {
+							if (this.menuItems[j].visible) {
+								nextHiliteItemIndex = j;
+								break;
+							}
+						}
+						if (nextHiliteItemIndex == -1) {
+							for (var j = i - 1; j >= 0; j--) {
+								if (this.menuItems[j].visible) {
+									nextHiliteItemIndex = j;
+									break;
+								}
+							}
+						}
+						if (nextHiliteItemIndex == -1) {
+							this.setHilite(null);
+						}
+						else {
+							this.setHilite(this.menuItems[nextHiliteItemIndex]);
+						}
+					}
+				}
+			}
+			else if (k == 27) {
+				this.applicationMenu.closeApplicationMenu();
+			}
+			else {
+				var startIndex = 0;
+				for (var i = 0; i < this.menuItems.length; i++) {
+					var item = this.menuItems[i];
+					if (item.hilited == true && String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+						startIndex = i + 1;
+						break;
+					}
+				}
+				for (var i = 0; i < this.menuItems.length; i++) {
+					if (startIndex >= this.menuItems.length) {
+						startIndex = 0;
+					}
+					var item = this.menuItems[startIndex];
+					if (String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+						this.setHilite(item);
+						this.setVariable("doesenter", true);
+						break;
+					}
+					startIndex++;
+				}
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="getNextSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+		<!--- @keywords private -->
+        <method name="getPrevSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+        
+	</FloatingList>
+
+	<!---
+		This class implements the Management Center menu and consists of a title bar and a drop-down
+		menu. The drop-down menu provides access to the available tools and is implemented by the
+		{@link cmc/shell/ApplicationMenuItems} class.  Individual items in the menu are defined by instances
+		of {@link cmc/shell/ApplicationMenuItem} objects.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/ApplicationMenu" doesenter="true">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="ApplicationMenuItems" moduleName="cmc/shell/ApplicationMenuItems"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="GetOnlineStoreUsages" moduleName="cmc/shell/GetOnlineStoreUsages"/>
+		<!--- @keywords private -->
+		<variable name="numberOfAccessibleTools" type="number" value="0"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			DefinitionUtil.createDefinitionInstance(ApplicationMenuItems, this, {
+				name: "applicationMenuItems",
+				attach: "bottom",
+				visible: false,
+				applicationMenu: this
+			});
+			if (!Logger.Singleton.display) {
+				if (typeof (SingletonRegistry.logTrace) != "undefined") {
+					SingletonRegistry.logTrace.destroy();
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenu", "oninit", "Removing trace option from application menus");
+					}
+				}
+			}
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			this.openApplicationMenuDel = new EventHandler.Class(this, "openApplicationMenu");
+			KeyUtil.callOnKeyCombo(this.openApplicationMenuDel, ['control', 'shift', '1']);
+			this.immediateParent.bringToFront();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="initializeMenu">
+			<![CDATA[
+			ContextUtil.Singleton.findContextValue(null, "accessibleTools").value = "";
+			var usages = "";
+			for (var i = 0; i < this.applicationMenuItems.menuItems.length; i++) {
+				var menuItem = this.applicationMenuItems.menuItems[i];
+				if (menuItem.id == "workspaceManagement" && ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value != "true") {
+					menuItem.doHideMenuItem();
+				}
+				else if (menuItem.usage != "") {
+					if (usages == "") {
+						usages = menuItem.usage;
+					}
+					else {
+						usages += "," + menuItem.usage;
+					}
+					menuItem.doHideMenuItem();
+				}
+				else {
+					menuItem.doShowMenuItem();
+				}
+			}
+			GetOnlineStoreUsages.Singleton.doRequest(this, {
+				usages: usages
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method checks the current mouse position and determines whether to close the main
+			application menu or not.  This method is called on onmousedown event.
+		-->
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.applicationMenuItems.containsPt(this.applicationMenuItems.getMouse("x"), this.applicationMenuItems.getMouse("y"))) {
+				this.closeApplicationMenu();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method handles the onmouseover event on the main application menu.  If the menu is currently hidden,
+			then it will be displayed; otherwise it will do nothing.
+		-->
+		<method name="doOpenMenu">
+			<![CDATA[
+			if (!this.applicationMenuItems.visible) {
+				this.openApplicationMenu();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method opens the main application menu in Management Center.
+		-->
+		<method args="e" name="openApplicationMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.applicationMenuItems.menuItems.length; i++) {
+				this.applicationMenuItems.menuItems[i].setHilite(false);
+			}
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				this.applicationMenuItems.setMenuWidth(this.width);
+				this.applicationMenuItems.clearSelection();
+				this.applicationMenuItems.setVariable("visible", true);
+				this.applicationMenuItems.bringToFront();
+				FocusUtil.setFocus(this.applicationMenuItems);
+				this.checkMouseDel.connect(MouseUtil, "onmousedown");
+				ModalUtil.makeModal(this.applicationMenuItems);
+				this.menuIcon.setVariable("bgcolor", "#4178be");
+			}
+			this.applicationMenuItems.menuItems[0].setHilite(true);
+			this.applicationMenuItems.hilitedItem = this.applicationMenuItems.menuItems[0];
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method closes the main application menu in Management Center.
+		-->
+		<method name="closeApplicationMenu">
+			<![CDATA[
+			this.menuIcon.setVariable("bgcolor", null);
+			ModalUtil.release(this.applicationMenuItems);
+			this.applicationMenuItems.setVariable("visible", false);
+			FocusUtil.setFocus(SingletonRegistry.applicationMenu, false);
+			this.checkMouseDel.disconnectAll();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="onclick">
+			<![CDATA[
+			this.doOpenMenu();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="doSpaceUp">
+			<![CDATA[
+			EventUtil.trigger(this, "onclick");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+        <method name="doEnterUp" >
+			<![CDATA[        		
+			EventUtil.trigger(this, "onclick");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.applicationMenuViewIndicator) {
+				new FocusIndicator.Class(this, {
+					name: "applicationMenuViewIndicator",
+					focusableView: this,
+					indicatorView: this,
+					focusIndicatorColor: "#ffffff"
+				});
+			}
+			]]>
+		</handler>
+        
+		<AxisLayout axis="x" spacing="15"/>
+		<Component name="menuIcon" width="${this.icon.width + 30}" height="${this.parent.height}">
+			<Component name="icon" x="15" imageSet="applicationLogo" valign="middle"/>
+		</Component>
+		<TextComponent fgcolor="#ffffff" fontsize="16" text="${shellResources.Singleton.applicationMenuLabel.string}" valign="middle"/>
+		<Component width="35"/>
+	</FocusableComponent>
+</Definitions>

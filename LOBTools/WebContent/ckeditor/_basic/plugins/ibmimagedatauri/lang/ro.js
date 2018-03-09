@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","ro",{error:"Lipirea imaginilor nu este suportată momentan. Vă rugăm folosiţi în schimb opţiunea de bară de unelte 'Inserare imagine'."});

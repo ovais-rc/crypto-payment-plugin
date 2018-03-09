@@ -1,0 +1,204 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%@taglib uri="http://commerce.ibm.com/coremetrics" prefix="cm"%>
+
+<flow:ifEnabled feature="Analytics">
+    <wcst:alias name="BIConfigRegistry" var="BIConfigRegistry" />
+    <wcst:mapper source="BIConfigRegistry" method="useHostedLibraries" var="BIConfigRegistryUseHostLibraries" />
+    <c:set var="hostedVar" value="${BIConfigRegistryUseHostLibraries[CommandContext.storeId]}" />
+
+    <script>
+    $(document).ready(function() {
+        analyticsJS.storeId = "${storeId}";
+        analyticsJS.catalogId = "${catalogId}";
+        analyticsJS.loadShopCartHandler();
+        analyticsJS.loadPagingHandler();
+        analyticsJS.loadProductQuickInfoHandler();
+        analyticsJS.loadStoreLocatorPageViews();
+        analyticsJS.loadWishlistHandler();
+        CoremetricsEventListener.load(${hostedVar});
+    });
+    </script>
+</flow:ifEnabled>
+<script>var isGuest = ${userType == 'G'};</script>
+
+<script>
+    // Convert the WCParam object which contains request properties into javascript object for CSR
+    var CSRWCParamJS = {
+        "env_shopOnBehalfSessionEstablished" : '${env_shopOnBehalfSessionEstablished}',
+        "env_shopOnBehalfEnabled_CSR" : '${env_shopOnBehalfEnabled_CSR}'
+    };
+</script>
+
+<c:set var="signInOutAttributes" value="href='${fn:escapeXml(Logon_LogoutURL)}'" />
+<c:if test="${env_OnBehalfOf}">
+    <c:set var="signInOutAttributes" value="class='nohover default_cursor disabled' aria-disabled='true' " />
+</c:if>
+
+<div id="header" role="banner">
+    <div id="headerRow1">
+        <div id="logo">
+            <%out.flush();%>
+            <%-- Note: for any e-Marketing Spots included on the header page, then the parameter --%>
+            <%--       cacheWithParent should be set to true if the header is dynacached         --%>
+            <wcpgl:widgetImport useIBMContextInSeparatedEnv="${isStoreServer}" url="${env_siteWidgetsDir}com.ibm.commerce.store.widgets.ContentRecommendation/ContentRecommendation.jsp">
+                <wcpgl:param name="storeId" value="${storeId}"/>
+                <wcpgl:param name="catalogId" value="${catalogId}"/>
+                <wcpgl:param name="emsName" value="HeaderStoreLogo_Content"/>
+                <wcpgl:param name="contentClickUrl" value="${env_TopCategoriesDisplayURL}"/>
+                <wcpgl:param name="marketingSpotBehavior" value="0"/>
+                <wcpgl:param name="cacheWithParent" value="true"/>
+            </wcpgl:widgetImport>
+            <%out.flush();%>
+        </div>
+        <ul id="quickLinksBar">
+            <c:if test="${!env_globalLoginViewDisabled eq true}">
+                <li>
+                <%out.flush();%>
+                    <wcpgl:widgetImport useIBMContextInSeparatedEnv="${isStoreServer}" url="${env_siteWidgetsDir}com.ibm.commerce.store.widgets.GlobalLogin/GlobalLogin.jsp">
+                        <wcpgl:param name="langId" value="${langId}"/>
+                        <wcpgl:param name="cmdName" value="${lastCmdName}"/>
+                        <wcpgl:param name="widgetId" value="Header_GlobalLogin"/>
+                    </wcpgl:widgetImport>
+                <%out.flush();%>
+                </li>
+            </c:if>
+            <li class="separator-false">
+            <a id="quickLinksButton" href="#" class="panelLinkSelected" role="button" aria-haspopup="true" data-toggle="quickLinksMenu" aria-label="<fmt:message bundle="${storeText}" key="HEADER_QUICK_LINKS"/>">
+                <div class="arrow_button_icon"></div>
+                <fmt:message bundle="${storeText}" key="HEADER_QUICK_LINKS"/>
+            </a>
+            <div id="quickLinksMenu" class="basicMenu" role="menu" data-parent="header" aria-label="<fmt:message bundle="${storeText}" key="HEADER_QUICK_LINKS"/>" tabindex="0">
+                <h3><fmt:message bundle="${storeText}" key="HEADER_QUICK_LINKS"/></h3><a href="#" class="closeButton" role="button" data-toggle="quickLinksMenu"><span role="presentation"></span></a>
+                <ul role="group"><c:if test="${userType != 'G'}"><li>
+                    <a id="myAccountQuickLink" href="${fn:escapeXml(MyAccountURL)}"><fmt:message bundle="${storeText}" key="HEADER_MY_ACCOUNT"/></a>
+                </li></c:if>
+                    <c:choose>
+                        <c:when test="${!env_globalLoginViewDisabled eq true}">
+                            <li id="globalLoginWidget">
+                            <%out.flush();%>
+                                <wcpgl:widgetImport useIBMContextInSeparatedEnv="${isStoreServer}" url="${env_siteWidgetsDir}com.ibm.commerce.store.widgets.GlobalLogin/GlobalLogin.jsp">
+                                    <wcpgl:param name="langId" value="${langId}"/>
+                                    <wcpgl:param name="cmdName" value="${lastCmdName}"/>
+                                    <wcpgl:param name="widgetId" value="QuickLinks_GlobalLogin"/>
+                                    <wcpgl:param name="userDisplayName" value="${userDisplayName}"/>
+                                </wcpgl:widgetImport>
+                            <%out.flush();%>
+                        </c:when>
+                        <c:otherwise>
+                            <li><a ${signInOutAttributes} id="signInOutQuickLink" >${SIGN_IN_OUT}</a>
+                        </c:otherwise>
+                    </c:choose>
+                </li>
+                    <li>
+                    <%out.flush();%><c:import url="${env_jspStoreDir}Widgets/LanguageCurrency/LanguageCurrency.jsp"/><%out.flush();%>
+                </li><flow:ifEnabled feature="StoreLocator"><li>
+                    <a id="storeLocatorQuickLink" href="${fn:escapeXml(StoreLocatorView)}"><fmt:message bundle="${storeText}" key="HEADER_STORE_LOCATOR"/></a>
+                </li></flow:ifEnabled><flow:ifEnabled feature="SOAWishlist"><c:if test="${!(userType == 'G' && env_shopOnBehalfSessionEstablished eq 'true')}"><li>
+                    <a id="wishListQuickLink" href="${fn:escapeXml(WishListDisplayURL)}"><fmt:message bundle="${storeText}" key="HEADER_SHOPPING_LIST"/></a>
+                </li></c:if></flow:ifEnabled>
+                <flow:ifEnabled feature="MultipleActiveOrders"><li>
+                    <a id="multipleActiveOrdersLink" href="${fn:escapeXml(SavedOrderListDisplayURL)}"><fmt:message bundle="${storeText}" key="HEADER_SAVED_ORDERS"/></a>
+                </li></flow:ifEnabled>
+                <c:if test="${env_shopOnBehalfEnabled_CSR eq 'true'}">
+                    <%@ include file="../../Common/ConfirmationPopup.jspf"%>
+                    <li><a onclick="javaScript:onBehalfUtilitiesJS.startCustomerService(this)" id="customerServiceLink" href="#" data-customer-service-url="${fn:escapeXml(CustomerServiceURL)}"><fmt:message bundle="${storeText}" key="CUSTOMER_SERVICE"/></a></c:if>
+                <li>
+                    <span id="contactQuickLink"><c:out value="${storeInfoContactTelephone}"/></span>
+                </li><flow:ifEnabled feature="FacebookIntegration"><li id="facebookQuickLinkItem">
+                    <%out.flush();%><c:import url="${env_jspStoreDir}Widgets/FacebookConnect/FacebookConnect.jsp"/><%out.flush();%>
+                </li></flow:ifEnabled></ul>
+            </div>
+        </li><c:if test="${_worklightHybridApp}"><li class="separator-false">
+            <fmt:message bundle="${storeText}" key="HYBRID_BARCODE_SCAN" var="HYBRID_BARCODE_SCAN"/>
+            <a id="barcodeScanButton" href="#" role="button" onclick="javascript:BarcodeScanJS.launch();"><span id="barcodeScanButton_ACCE_Label" class="spanacce"><fmt:message bundle="${storeText}" key="HYBRID_BARCODE_SCAN"/></span></a>
+        </li></c:if><li class="separator-false">
+            <%out.flush();%>
+                <c:choose>
+                    <c:when test="${changePasswordPage == true}">
+                        <c:import url="${env_jspStoreDir}Widgets/MiniShopCartDisplay/MiniShopCartDisplayRefresh.jsp">
+                            <c:param name="miniCartContent" value="true" />
+                            <c:param name="enableToLoad" value="false" />
+                        </c:import>
+                    </c:when>
+                    <c:otherwise>
+                        <c:import url="${env_jspStoreDir}Widgets/MiniShopCartDisplay/MiniShopCartDisplayRefresh.jsp"/>
+                    </c:otherwise>
+                </c:choose>
+            <%out.flush();%>
+        </li></ul>
+    </div>
+
+    <div id="headerRow2">
+        <a id="departmentsButton" href="#" class="basicButton" role="button" aria-haspopup="true" data-toggle="departmentsMenu">
+            <span><fmt:message bundle="${storeText}" key="DEPARTMENTS"/></span>
+            <div class="arrow_button_icon"></div>
+        </a>
+
+        <%-- Start Refresh Area --%>
+        <div wcType="RefreshArea" id="drop_down_${department.uniqueID}" refreshurl="${deptDropDownURL}" declareFunction="declareDeptDropdownRefreshArea('drop_down_${department.uniqueID}')" widgetId="drop_down_${department.uniqueID}" aria-labelledby="departmentsButton">
+        <ul id="departmentsMenu" role="menu" data-parent="header" aria-labelledby="departmentsButton"><c:forEach var="department" items="${categoryHierarchy.catalogGroupView}"><li class="hidden">
+            <a id="departmentButton_${department.uniqueID}" href="#" class="departmentButton" role="menuitem" aria-haspopup="true" data-toggle="departmentMenu_${department.uniqueID}">
+                <span><c:out value="${department.name}"/></span>
+                <div class="arrow_button_icon"></div>
+            </a>
+            <div id="departmentMenu_${department.uniqueID}" class="departmentMenu" ${!empty department.catalogGroupView ? 'role="menu"' : ''} data-parent="departmentsMenu" data-id="${department.uniqueID}" aria-label="${department.name}">
+                <div class="header">
+                    <a id="departmentLink_${department.uniqueID}" href="${fn:escapeXml(categoryURLMap[department.uniqueID])}" class="link menuLink" role="menuitem" tabindex="-1"><c:out value="${department.name}"/></a>
+                    <a id="departmentToggle_${department.uniqueID}" href="#" class="toggle" role="button" data-toggle="departmentMenu_${department.uniqueID}" aria-labelledby="departmentLink_${department.uniqueID}"><span role="presentation"></span></a>
+                </div>
+                <c:if test="${!empty department.catalogGroupView}">
+                    <ul class="categoryList"><c:forEach var="category" items="${department.catalogGroupView}" end="${subcategoryLimit - 1}"><li>
+                        <c:set var="key" value="${department.uniqueID}_${category.uniqueID}"/>
+                        <a id="categoryLink_${key}" href="${fn:escapeXml(categoryURLMap[key])}" class="menuLink" role="menuitem" tabindex="-1"><c:out value="${category.name}"/></a>
+                        <c:if test="${!empty category.catalogGroupView}">
+                            <ul class="subcategoryList"><c:forEach var="subcategory" items="${category.catalogGroupView}" end="${subcategoryLimit - 1}"><li>
+                                <c:set var="key" value="${department.uniqueID}_${category.uniqueID}_${subcategory.uniqueID}"/>
+                                <a id="subcategoryLink_${key}" href="${fn:escapeXml(categoryURLMap[key])}" class="menuLink" role="menuitem" tabindex="-1"><c:out value="${subcategory.name}"/></a>
+                            </li></c:forEach><c:if test="${fn:length(category.catalogGroupView) > subcategoryLimit}"><li class="more">
+                                <c:set var="key" value="${department.uniqueID}_${category.uniqueID}"/>
+                                <a id="moreLink_${key}" href="${fn:escapeXml(categoryURLMap[key])}" class="menuLink" role="menuitem" tabindex="-1"><fmt:message bundle="${storeText}" key="MORE_CATEGORY"/></a>
+                            </li></c:if></ul>
+                        </c:if>
+                    </li></c:forEach><c:if test="${fn:length(department.catalogGroupView) > subcategoryLimit}"><li class="more">
+                        <a id="moreLink_${department.uniqueID}" href="${fn:escapeXml(categoryURLMap[department.uniqueID])}" class="menuLink" role="menuitem" tabindex="-1"><fmt:message bundle="${storeText}" key="MORE_CATEGORY"/></a>
+                    </li></c:if></ul>
+                </c:if>
+            </div>
+        </li></c:forEach><li class="active">
+            <a id="allDepartmentsButton" href="#" class="departmentButton" role="button" aria-haspopup="true" data-toggle="allDepartmentsMenu">
+                <span><fmt:message bundle="${storeText}" key="SEARCH_ALL_DEPARTMENTS"/></span>
+                <div class="arrow_button_icon"></div>
+            </a>
+            <ul id="allDepartmentsMenu" class="departmentMenu" role="menu" data-parent="departmentsMenu" aria-labelledby="allDepartmentsButton"><c:forEach var="department" items="${categoryHierarchy.catalogGroupView}"><li>
+                <a id="departmentLink_${department.uniqueID}_alt" href="${fn:escapeXml(categoryURLMap[department.uniqueID])}" class="menuLink"  role="menuitem" tabindex="-1"><c:out value="${department.name}"/></a>
+            </li></c:forEach></ul>
+        </li></ul></div><%-- End Refresh Area --%>
+        <%out.flush();%><c:import url="${env_jspStoreDir}Widgets/Search/Search.jsp"/><%out.flush();%>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    setAjaxRefresh("${lazyLoad}"); // Default value in header.js is empty/false.
+    var passwordForm = document.getElementById("WC_PasswordUpdateForm_div_1");
+    var changePasswordPage = "<c:out value='${changePasswordPage}'/>";
+    if (changePasswordPage == "true" || changePasswordPage == true || passwordForm != null){
+        $('#drop_down_${department.uniqueID}').attr("refreshurl",getAbsoluteURL()+"DepartmentDropdownViewRWD?storeId=<c:out value='${storeId}'/>&catalogId=<c:out value='${catalogId}'/>&langId=<c:out value='${langId}'/>&changePasswordPage=true");
+    }else{
+        $('#drop_down_${department.uniqueID}').attr("refreshurl",getAbsoluteURL()+"DepartmentDropdownViewRWD?storeId=<c:out value='${storeId}'/>&catalogId=<c:out value='${catalogId}'/>&langId=<c:out value='${langId}'/>");
+    }
+});
+</script>

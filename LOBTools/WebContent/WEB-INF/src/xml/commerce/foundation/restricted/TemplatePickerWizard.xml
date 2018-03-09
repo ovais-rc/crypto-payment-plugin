@@ -1,0 +1,920 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Template picker grid view. This base template wizard grid view only displays the object icon and display name.
+	-->
+	<BaseTemplateWizardGrid definitionName="cmc/foundation/TemplateWizardGrid">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<GridIconTypeImage name="typeIcon" text="${foundationResources.utilitiesGrid_type}" width="75"/>
+		<GridDisplayName name="template" text="${foundationResources.utilitiesGrid_name}" width="275"/>
+	</BaseTemplateWizardGrid>
+
+	<!---
+		This class provides the template selector wizard that is used when a business user creates a new {@link cmc/foundation/PrimaryObjectDefinition object} in the Management Center.
+		This wizard displays a list of {@link cmc/foundation/Filter filters} and a grid that contains the template objects for the store. The filters control which templates are visible in the grid.
+		
+		<p>The following example demonstrates a template picker for promotion templates.
+		Sample usage:
+			@START_CODE
+			<TemplatePickerWizard definitionName="tstTestObjectTemplatePicker" title="${foundationResources.promotionTestTitle}" objectTypes="TestObjectTemplate,TestObjectTemplate2" descriptionPropertyName="templateDescription">
+				<GetTemplatesService url="/jsp/commerce/test/GetTestObjectsTemplate.jsp"/>
+				<PropertyValuesFilter displayName="Percentage off promotion" propertyName="templateId" values="1,2,3,4,5,6,7,8,9,10,11" />
+				<PropertyValuesFilter displayName="Fixed cost promotion" propertyName="templateId" values="12,13,14,15,16,17,18,19,20" />
+				<PropertyValuesFilter displayName="Amount off promotion" propertyName="templateId" values="21,22,23,24,25,26,27,28,29,30" />
+				<PropertyValuesFilter displayName="Free gift promotion" propertyName="templateId" values="31,32,33,34,35,36" />
+				<PropertyValuesFilter displayName="User created promotion" propertyName="templateId" negate="true"
+						values="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36" />
+				<PropertyValuesFilter displayName="Show all promotion" propertyName="templateId" values="" />
+				<PropertyValuesFilter displayName="B2BDirect Folder" propertyName="templateId" values="1,2,3" >
+					<EnablementCondition contextName="storeId" enablementValue="10051"/>
+				</PropertyValuesFilter>
+			</TemplatePickerWizard>
+			@END_CODE
+						
+			<p>Specify the new definition name as the {@link cmc/foundation/PrimaryObjectDefinition#createWizardDefinitionName create wizard definition name} for the object definition that describes
+			the object that will be created by the wizard.
+			@START_CODE
+			<PrimaryObjectDefinition definitionName="TestObject"
+					objectType="TestObject"
+					baseType="BaseTestObject"
+					creatable="true"
+					icon="TestObjectIcon"
+					headerIcon="TestObjectHeaderIcon"
+					createWizardDefinitionName="tstTestObjectTemplatePicker" />
+			@END_CODE
+	-->
+	<BaseCreateWizard classDefinition="true" definitionName="cmc/foundation/TemplatePickerWizard">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="TemplatePickerListMenu" moduleName="cmc/foundation/TemplatePickerListMenu"/>
+		<dependency localName="TemplatePickerSearchResultsBackgroundMenu" moduleName="cmc/foundation/TemplatePickerSearchResultsBackgroundMenu"/>
+		<dependency localName="TemplatePickerSearchResultsMenu" moduleName="cmc/foundation/TemplatePickerSearchResultsMenu"/>
+		<dependency localName="TemplatePickerListBackgroundMenu" moduleName="cmc/foundation/TemplatePickerListBackgroundMenu"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="ModelObjectList" moduleName="cmc/foundation/ModelObjectList"/>
+		<dependency localName="TemplateWizardGrid" moduleName="cmc/foundation/TemplateWizardGrid"/>
+		<!---
+			A comma separated list of  template {@link cmc/foundation/ObjectDefinition#objectType object types}.
+		-->
+		<variable name="objectTypes" type="string" value=""/>
+		<!---
+			The name of the template object {@link cmc/foundation/ModelProperty property} that will be displayed in the description area when the template object
+			is selected.
+		-->
+		<variable name="descriptionPropertyName" type="string" value=""/>
+		<!---
+			A boolean that controls the visibility of the type column in the template object grid. The default is false.
+			@deprecated Use <code>gridDefinitionClass</code> property for a more generic usage of the template grid view.
+		-->
+		<variable name="displayTypeColumn" type="boolean" value="false"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="templateObjects" value="${[]}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="filters" value="${[]}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="modelObjectList" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="getTemplateService" value="${null}"/>
+		
+		<!---
+			@keywords private
+			The start index of the current page of search results.
+		-->
+		<variable name="startIndex" type="number" value="0"/>
+		<!---
+			@keywords private
+			The total number of records from the search result.
+		-->
+		<variable name="totalRecords" type="number" value="0"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="currPageNum" type="number" value="0"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="lastPageNum" type="number" value="0"/>
+		<!---
+			@keywords private
+			The instance implemented doLoadPage which can be called by the page control.
+		-->
+		<variable initialValue="${this}" name="pageController"/>
+		
+		<!---
+			@keywords private
+		-->
+		<variable name="selectedTemplate" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="selectedTemplateDescription" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="searchResults" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="statusMessage" type="string" value=" "/>
+
+		<!---
+			@keywords private
+			Indicates that the description text should interpreted as HTML.
+		-->
+		<variable name="htmlDescription" type="boolean" value="false"/>
+		
+		<!---
+			This attribute specifies the name of the grid definition class that will be used when the template grid view is instantiated. 
+			This class must extend {@link cmc/foundation/BaseTemplateWizardGrid}.
+			The default value is {@link cmc/foundation/TemplateWizardGrid}.
+		-->
+		<variable name="gridDefinitionClass" type="module" value="${TemplateWizardGrid}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.modelObjectList = new ModelObjectList.Class(this, {
+				v: this.templateDetailView.templateGridView.templateGrid,
+				modelObjects: this.templateObjects,
+				statusObject: this
+			});
+			this.removeObjectDel = new EventHandler.Class(this, "removeObject");
+			this.updateResultsMessageDel = new EventHandler.Class(this, "updateResultsMessage");
+			this.updateSearchDefinitionsDel = new EventHandler.Class(this, "updateSearchDefinitions");
+			this.updateSearchDefinitions();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="updateSearchDefinitions">
+			<![CDATA[
+			this.updateSearchDefinitionsDel.disconnectAll();
+			var objectTypeArray = this.objectTypes ? StringUtil.Singleton.splitAndTrim(this.objectTypes, ",") : null;
+			var searchDefs = [];
+			for (var i = 0; i < objectTypeArray.length; i++) {
+				var def = this.model.getObjectDefinition(null, objectTypeArray[i], false, this.updateSearchDefinitionsDel);
+				if (def != null) {
+					var searchDef = def.getSearchDefinition(this.updateSearchDefinitionsDel);
+					if (searchDef) {
+						var found = false;
+						for (var t = 0; t < searchDefs.length; t++) {
+							if (searchDefs[t] == searchDef) {
+								found = true;
+								break;
+							}
+						}
+						if (!found) searchDefs.push(searchDef);
+					}
+				}
+			}
+			if (searchDefs.length > 0) {
+				this.templateNavigationView.searchWidget.searchButton.setVariable("actionDefinitions", searchDefs);
+				this.templateNavigationView.searchWidget.setVariable("currentDefinition", searchDefs[0]);
+				this.templateNavigationView.templateWizardList.populateFilters(this.filters);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private	-->
+		<method name="destroy">
+			<![CDATA[
+			this.removeObjectDel.disconnectAll();
+			delete this.removeObjectDel;
+			this.updateResultsMessageDel.disconnectAll();
+			delete this.updateResultsMessageDel;
+			this.updateSearchDefinitionsDel.disconnectAll();
+			delete this.updateSearchDefinitionsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the selected template.
+		-->
+		<method args="o" name="updateSelectedTemplate">
+			<![CDATA[
+			this.setVariable("selectedTemplate", o);
+			var newDescription = this.selectedTemplate == null ? "" : this.selectedTemplate.getPropertyValue(this.descriptionPropertyName);
+			if (!this.htmlDescription) {
+				newDescription = StringUtil.Singleton.escapeText(newDescription);
+			}
+			this.setVariable("selectedTemplateDescription", newDescription);
+			]]>
+		</method>
+		
+		<!--- @keywords private	-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.templateNavigationView.templateWizardList.templateContainerList, false);
+			]]>
+		</method>
+					
+		<!--- @keywords private -->
+		<method name="openWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.templateObjects = [];
+			this.templateNavigationView.templateWizardList.populateFilters(this.filters);
+			if (this.getTemplateService != null) {
+				this.getTemplateService.doRequest(this);
+			}
+			if (this.searchResults != null) {
+				this.searchResults.releaseView(this.templateDetailView.templateGridView.searchGrid);
+				this.templateNavigationView.searchWidget.searchTextArea.searchText.setVariable('text', "");
+			}
+			this.setVariable('statusMessage', " ");
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Load the page.
+		-->
+		<method args="args" name="doLoadPage">
+			<![CDATA[
+			this.loadByPageNum(args.pageNum);
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Load the page of search result by page number. The current set of search results is discarded.
+		-->
+		<method args="pageNum" name="loadByPageNum">
+			<![CDATA[
+			var maxRecordSetTotal = this.getTemplateService.getMaxRecordSetTotal();
+			var startIndex;
+			if (this.currPageNum < pageNum) {
+				var maxItems = this.getTemplateService.getMaxItems();
+				startIndex = this.startIndex + (maxRecordSetTotal * (pageNum - this.currPageNum));
+			}
+			else {
+				startIndex = maxRecordSetTotal * (pageNum - 1);
+			}
+			this.setVariable("statusMessage", " ");
+			this.setVariable("startIndex", 0);
+			this.setVariable("currPageNum", 0);
+			this.setVariable("lastPageNum", 0);
+			this.setVariable("totalRecords", 0);
+			this.templateObjects = [];
+			this.updateTemplateObjects();
+			this.getTemplateService.doRequest(this, null, {
+				startIndex: startIndex
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Remove the specified object from the template wizard. This method is
+			registered to the "beingDestroyed" event for all the objects
+			in the wizard.
+		-->
+		<method args="o" name="removeObject">
+			<![CDATA[
+			var index = this.templateObjects.indexOf(o);
+			if (index != -1) {
+				this.templateObjects.splice(index, 1);
+			}
+			this.updateTemplateObjects();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Refresh the template grid view.
+		-->
+		<method name="updateTemplateObjects">
+			<![CDATA[
+			this.removeObjectDel.disconnectAll();
+			for (var i = 0; i < this.templateObjects.length; i++) {
+				this.removeObjectDel.connect(this.templateObjects[i], "beingDestroyed");
+			}
+			this.modelObjectList.setVariable("modelObjects", this.templateObjects);
+			this.modelObjectList.setVariable("statusObject", this);
+			]]>
+		</method>		
+		
+		<!---
+			@keywords private
+		-->
+		<method args="searchType" name="bindSearchResults">
+			<![CDATA[
+			this.updateResultsMessageDel.disconnectAll();
+			if (this.searchResults != null) {
+				this.searchResults.releaseView(this.templateDetailView.templateGridView.searchGrid);
+			}
+			this.searchResults = this.model.findSearchResults(searchType);
+			if (this.searchResults != null) {
+				this.searchResults.bindView(this.templateDetailView.templateGridView.searchGrid);
+				this.updateResultsMessageDel.connect(this.searchResults, "onstatusMessage");
+			}
+			this.templateNavigationView.templateWizardList.selectItemAt(0);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the search result message area with an informational statement about the search results.
+		-->
+		<method args="e" name="updateResultsMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.searchResults == null || this.searchResults.statusMessage == "") {
+				this.setVariable("statusMessage", " ");
+			}
+			else {
+				this.setVariable("statusMessage", this.searchResults.statusMessage);
+			}
+			]]>
+		</method>		
+		
+		<AxisLayout axis="x" spacing="20"/>
+		<TextComponent ignoreLayout="true" multiline="true" name="msgArea" text="${this.parent.statusMessage}" width="${this.parent.content.width}" ignoreSize="true"/>
+		<Component name="templateNavigationView" y="${this.parent.msgArea.height}">
+			<AxisLayout axis="y" spacing="10"/>
+			<TemplatePickerSearchWidget name="searchWidget" templatePicker="${this.classroot}" visible="${this.currentDefinition != null}" width="${this.parent.templateWizardList.width}"/>
+			<TemplateWizardList height="${355 - (this.parent.searchWidget.visible ? this.parent.searchWidget.height + 10 : 0)}" name="templateWizardList" templatePicker="${this.classroot}"/>
+		</Component>
+		<Component name="templateDetailView" y="${this.parent.msgArea.height}">
+			<variable name="availableHeight" type="number" value="${335 - this.templateDescriptionView.height - 1}"/>
+			<variable name="availableWidth" value="350"/>
+			<AxisLayout axis="y" spacing="20"/>
+			<BorderedView borderBottomSize="1" borderRightSize="1" borderColor="#d9d9d9" name="templateGridView">
+				<!--- @keywords private -->
+				<method name="init">
+					<![CDATA[
+					this.inherited(arguments);
+					DefinitionUtil.createDefinitionInstance(this.classroot.gridDefinitionClass, this, {
+						name: "searchGrid",
+						visible: true,
+						templatePicker: this.classroot,
+						rowMenuClass: TemplatePickerSearchResultsMenu,
+						menuClass: TemplatePickerSearchResultsBackgroundMenu,
+						listBorderSize: 1
+					});
+					DefinitionUtil.createDefinitionInstance(this.classroot.gridDefinitionClass, this, {
+						name: "templateGrid",
+						visible: false,
+						templatePicker: this.classroot,
+						rowMenuClass: TemplatePickerListMenu,
+						menuClass: TemplatePickerListBackgroundMenu,
+						listBorderSize: 1
+					});
+					]]>
+				</method>
+			</BorderedView>
+			<BorderedView borderSize="1" borderColor="#959595" clickable="true" focusable="true" height="100" name="templateDescriptionView" width="${this.parent.availableWidth + 1}">
+				<variable name="vScrollWidth" type="number" value="${(this.vScroll.visible ? this.vScroll.width : 0)}"/>
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this,
+							offset: 1
+						});
+					}
+					]]>
+				</handler>
+				<!--- @keywords private	-->
+				<handler args="code" name="onkeydown">
+					<![CDATA[
+					if (this.vScroll.visible) {
+						if (code == 33) {
+							this.vScroll.page(-1);
+						}
+						else if (code == 34) {
+							this.vScroll.page(1);
+						}
+						else if (code == 38) {
+							this.vScroll.page(-.25);
+						}
+						else if (code == 40) {
+							this.vScroll.page(.25);
+						}
+					}
+					]]>
+				</handler>
+				<Component clip="true" height="${this.parent.height - 12}" x="6" y="6" name="clippedContent" width="${this.parent.width - this.parent.vScrollWidth - 12}">
+					<TextComponent multiline="true" name="templateDescription" text="${this.classroot.selectedTemplateDescription}" width="${this.parent.width}"/>
+				</Component>
+				<VerticalScrollbar height="${this.parent.height - 2}" name="vScroll" scrolltarget="${this.parent.clippedContent.templateDescription}" visible="${this.scrollable}" align="right"/>
+			</BorderedView>
+		</Component>
+		<Component name="buttonView" placement="footer">
+			<AxisLayout axis="x" spacing="10"/>
+			<Button text="${foundationResources.Singleton.simpleDialogCancel.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.cancel();
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.classroot.selectedTemplate != null}" name="okButton" text="${foundationResources.Singleton.simpleDialogOK.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.complete(this.classroot.selectedTemplate);
+					]]>
+				</handler>
+			</Button>
+		</Component>
+	</BaseCreateWizard>
+	
+	<!---
+		@keywords private
+		Template picker grid view. 
+		<p>Multiple instances of {@link cmc/foundation/GridColumn} must be declared as children of the cmc/foundation/BaseTemplateWizardGrid definition. </p>
+		The following example shows how to define a template wizard grid view that displays the object icon and display name:
+		@START_CODE	
+			<BaseTemplateWizardGrid definitionName="cmc/foundation/TemplateWizardGrid">
+				<GridIconTypeImage name="typeIcon" text="${foundationResources.utilitiesGrid_type}" width="75" propertyName="null" />
+				<GridDisplayName name="template" text="${foundationResources.utilitiesGrid_name}" width="275" />
+			</BaseTemplateWizardGrid>
+		@END_CODE
+	-->
+	<ObjectGrid classDefinition="true" definitionName="cmc/foundation/BaseTemplateWizardGrid" dragEnabled="false" editable="false" isConfigurable="false" listBorderSize="1" multiSelect="false" padding="0">
+		<!--- @keywords private -->
+		<variable name="templatePicker" value="${null}"/>
+		<handler name="onselect">
+			<![CDATA[
+			if (this.visible && this.templatePicker) {
+				this.templatePicker.updateSelectedTemplate(this.getSelectedObject());
+			}
+			]]>
+		</handler>
+		<handler name="onvisible">
+			<![CDATA[
+			if (this.visible && this.templatePicker) {
+				this.templatePicker.updateSelectedTemplate(this.getSelectedObject());
+			}
+			]]>
+		</handler>
+		<!---
+			@keywords private
+			Handles ondblclick action from the row.  This method will select the object and close the template picker.
+			@param modelObject o: The object to activate.
+		-->
+		<method args="o" name="activateObject">
+			<![CDATA[
+			if (this.visible && this.templatePicker) {
+				this.templatePicker.complete(o);
+			}
+			]]>
+		</method>
+	</ObjectGrid>
+	
+	<!---
+		@keywords private
+		Template picker list view that displays the template folder icons and display names.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/TemplateWizardList">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="ListItem" moduleName="cmc/foundation/ListItem"/>
+		<!---
+			@keywords private
+			This is a required attribute.
+		-->
+		<variable name="templatePicker" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="listItems" value="${[]}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="availableItems" value="${[]}"/>
+		
+		<!--- @keywords private -->
+		<method args="filters" name="populateFilters">
+			<![CDATA[
+			var item;
+			while (this.listItems.length > 0) {
+				item = this.listItems.pop();
+				item.setVariable("visible", false);
+				item.setVariable("value", null);
+				item.setVariable("icon", null);
+				item.setVariable("displayName", "");
+				this.availableItems.unshift(item);
+			}
+			var listWidth = 250;
+			if (this.templatePicker.templateNavigationView.searchWidget.currentDefinition) {
+				if (this.availableItems.length > 0) {
+					item = this.availableItems.shift();
+					item.setVariable("visible", true);
+					item.setVariable("displayName", foundationResources.Singleton.searchResultsTree.string);
+					item.setVariable("icon", "searchResultsTreeIcon");
+				}
+				else {
+					item = new ListItem.Class(this.templateContainerList, {
+						displayName: foundationResources.Singleton.searchResultsTree.string,
+						icon: "searchResultsTreeIcon"
+					});
+				}
+				this.listItems.push(item);
+				if (listWidth < item.title.width + 10) {
+					listWidth = item.title.width + 10;
+				}
+			}
+			for (var i = 0; i < filters.length; i++) {
+				var filter = filters[i];
+				if (filter.isEnabled(this.templatePicker.model.oEditor)) {
+					if (this.availableItems.length > 0) {
+						item = this.availableItems.shift();
+						item.setVariable("visible", true);
+						item.setVariable("value", filter);
+						item.setVariable("displayName", filter.displayName);
+						item.setVariable("icon", filter.icon ? filter.icon : "treeFolderResource");
+					}
+					else {
+						item = new ListItem.Class(this.templateContainerList, {
+							value: filter,
+							displayName: filter.displayName,
+							icon: filter.icon ? filter.icon : "treeFolderResource"
+						});
+					}
+					this.listItems.push(item);
+					if (listWidth < item.title.width + 10) {
+						listWidth = item.title.width + 10;
+					}
+				}
+			}
+			this.templateContainerList.setVariable("width", listWidth);
+			if (this.listItems.length > 1 && this.templatePicker.templateNavigationView.searchWidget.currentDefinition) {
+				this.selectItemAt(1);
+			}
+			else {
+				this.selectItemAt(0);
+			}
+			]]>
+		</method>
+				
+		<!--- @keywords private -->
+		<method args="position" name="selectItemAt">
+			<![CDATA[
+			this.templateContainerList.selectItemAt(position);
+			]]>
+		</method>
+		
+		<BaseList name="templateContainerList" toggleselected="false" width="${this.parent.width}" height="${this.parent.height}">
+			<handler args="listItem" name="onselect">
+				<![CDATA[
+				if (listItem != null) {
+					this.currentListItem = listItem;
+					var searchVisible = listItem.value == null;
+					if (!searchVisible) {
+						this.parent.templatePicker.templateDetailView.templateGridView.templateGrid.setVariable("visible", true);
+						this.parent.templatePicker.templateDetailView.templateGridView.templateGrid.deselectAll();
+						this.parent.templatePicker.templateDetailView.templateGridView.templateGrid.top();
+						this.parent.templatePicker.modelObjectList.setVariable("baseFilter", listItem.value);
+					}
+					else {
+						this.parent.templatePicker.templateDetailView.templateGridView.templateGrid.setVariable("visible", false);
+					}
+					this.parent.templatePicker.templateDetailView.templateGridView.searchGrid.setVariable("visible", searchVisible);
+				}
+				]]>
+			</handler>
+		</BaseList>
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.templateContainerList" name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this.templateContainerList,
+					indicatorView: this,
+					offset: 1
+				});
+			}
+			]]>
+		</handler>	
+	</Component>
+	
+	<!---
+		A service that will return a list of {@link cmc/foundation/PrimaryObjectDefinition template objects}. The service must appear as a child of
+		a {@link cmc/foundation/TemplatePickerWizard}.
+		This service returns a list of {@link cmc/foundation/PrimaryObjectDefinition template objects}.  Template objects are used to create new objects with predefined properties.
+		A cmc/foundation/GetTemplatesService must be declared as a child of a {@link cmc/foundation/TemplatePickerWizard}.
+		
+		<p>The cmc/foundation/GetTemplatesService must be prepared to accept the following implicit parameters:
+		<ul>
+			<li>maxItems: This is an integer value that indicates the desired page size for the result set.</li>
+			<li>recordSetStartNumber: This is an integer value that is sent if the result set is broken up
+			into multiple pages. The second and subsequent page requests will include this parameter.</li>
+			<li>dataLanguageIds: This is the default language ID. If the cmc/foundation/GetTemplatesService returns translated data,
+			it must respect this parameter and only return the translated data that matches the specified language ID.</li>
+		</ul>
+						
+		<p>Additional service parameters can be defined by declaring instances of
+		{@link cmc/foundation/ServiceParam} as children of the cmc/foundation/GetTemplatesService instance.
+		
+		<p>The following example demonstrates the declaration of a cmc/foundation/GetTemplatesService that returns the template objects.
+		It declares two additional service parameters (storeId and masterCatalogId) that are resolved from context values.
+		
+		@START_CODE
+		<GetTemplatesService url="/cmc/GetTestObjectTemplates">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="masterCatalogId"/>
+		</GetTemplatesService>
+		@END_CODE
+		
+		<p>The successful response from a cmc/foundation/GetTemplatesService must be an XML document that has a root element named
+		"objects". Each of the child elements of the "objects" element must be named "object" and identify their object
+		type by specifying the "objectType" attribute. The "objects" element must include the following attributes:
+		<ul>
+			<li>recordSetCompleteIndicator - this value is true if the response is the last page of the result set</li>
+			<li>recordSetStartNumber - the starting index into the result set for the current page</li>
+			<li>recordSetCount - the number of objects returned by this page</li>
+			<li>recordSetTotal - the total number of objects in the complete result set</li>
+		</ul>
+		The "objects" element can optionally include an attribute called "recordSetReferenceId" that will be sent back
+		as a parameter on the request for the next page of the results. This can be used to optimize the get service.
+		
+		<p>The following sample demonstrates a response that returns three template objects. Notice that template objects have
+		a unique template Id, an Identifier that is used as a display name, and a description.
+		
+		@START_CODE
+		<objects recordSetCompleteIndicator="true"
+				recordSetReferenceId="ac97a350-df32-11dc-83e5-829b47bb4a4f:3"
+				recordSetStartNumber="0" recordSetCount="3" recordSetTotal="3">
+			<object objectType="TestObjectTemplate">
+				<templateId>1</templateId>
+				<templateIdentifier>Order Level Percent Discount</templateIdentifier>
+				<templateDescription>Price break modifier to apply percent discount based on the order</templateDescription>
+			</object>
+			<object objectType="TestObjectTemplate">
+				<templateId>2</templateId>
+				<templateIdentifier>Order Level Percent Off Shipping Discount</templateIdentifier>
+				<templateDescription>Price break modifier to apply percent discount off shipping based on the order</templateDescription>
+			</object>
+			<object objectType="TestObjectTemplate">
+				<templateId>3</templateId>
+				<templateIdentifier>Category Level Percent Off Discount</templateIdentifier>
+				<templateDescription>Price break modifier to apply percent discount based on the category</templateDescription>
+			</object>
+		</objects>
+		@END_CODE
+		
+		<p>
+		If an exception occurs while processing this cmc/foundation/GetTemplatesService, the response must be an XML document that has a
+		root element named "errors". The "errors" element must include one child element named "exception".
+		The "exception" element includes a message suitable for display to the user. The following example demonstrates a valid error
+		response for the cmc/foundation/GetTemplatesService.
+		
+		@START_CODE
+		<errors>
+			<exception>You do not have the required access rights to perform this get template service.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service abortResultsOverLimit="false" classDefinition="true" definitionName="cmc/foundation/GetTemplatesService" retryOnError="true" sendDefaultLanguageId="true" sendMaxItems="true" stoppable="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			@keywords private
+			Initialize the service
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.getTemplateService = this;
+			this.doParseCompleteDel = new EventHandler.Class(this, "doParseComplete");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			delete this.doParseCompleteDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the "objects" element returned from a successful request.
+			@param cmc/foundation/TemplatePickerWizard t: template picker dialog
+			@param XML e: the objects data element
+			@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+			@param string reqIdentifier: the request identifier associated with the dataset that returned this data
+			@param number startIndex: the start index for this request
+		-->
+		<method args="t, e, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			t.model.doDeferredParseObjects(e, null, this.doParseCompleteDel, {
+				e: e,
+				t: t,
+				reqIdentifier: reqIdentifier,
+				hasMoreRecordsFlag: hasMoreRecordsFlag,
+				startIndex: startIndex
+			}, this.stoppable);
+			]]>
+		</method>
+	
+		<!--- @keywords private -->
+		<method args="args" name="doParseComplete">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/GetTemplatesService", "doParseComplete", "Start update UI for " + args.objects.length + " Objects returned");
+			}
+			var objects = args.objects;
+			var t = args.t;
+			var e = args.e;
+			var reqIdentifier = args.reqIdentifier;
+			if (!args.hasMoreRecordsFlag) {
+				var maxRecordSetTotal = this.getMaxRecordSetTotal();
+				var startIndex = args.startIndex;
+				var totalRecords = Number(e.getAttribute("recordSetTotal"));
+				if (isNaN(totalRecords)) {
+					totalRecords = 0;
+				}
+				var currPageNum = Math.ceil((startIndex + maxRecordSetTotal) / maxRecordSetTotal);
+				var lastPageNum = currPageNum;
+				if (startIndex + maxRecordSetTotal < totalRecords) {
+					lastPageNum += Math.ceil((totalRecords - startIndex - maxRecordSetTotal) / maxRecordSetTotal);
+				}
+				t.setVariable("startIndex", args.startIndex);
+				t.setVariable("totalRecords", totalRecords);
+				t.setVariable("currPageNum", currPageNum);
+				t.setVariable("lastPageNum", lastPageNum);
+				var recordSetComplete = e.getAttribute("recordSetCompleteIndicator") != "false";
+				if (!recordSetComplete || t.currPageNum > 1) {
+					t.setVariable("statusMessage", foundationResources.Singleton.replaceValues("serviceOverLimitMsg", [t.currPageNum, t.totalRecords]));
+				}
+			}
+			for (var i = 0; i < objects.length; i++) {
+				t.templateObjects.push(objects[i]);
+			}
+			t.updateTemplateObjects();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "CONFIG", "cmc/foundation/GetTemplatesService", "doParseComplete", "requestIdentifier=" + reqIdentifier + " " + this.url);
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/GetTemplatesService", "doParseComplete", "End update UI for for " + args.objects.length + " Objects returned");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Parse the specified data element and apply the properties to the
+			specified object. This method is called when an element named "object"
+			is found in the service response XML.
+			@param cmc/foundation/ModelObject o: the model object
+			@param XML e: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="o, e, reqIdentifier" name="parseObject">
+			<![CDATA[
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/GetTemplatesService", "onerror", "Unexpected <object> tag returned by get template service: " + this.url + ". Get template services must return <objects> tag.");
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		Template pickers search widget.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/TemplatePickerSearchWidget" height="31">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="currentDefinition" value="${null}"/>
+		<!---
+			@keywords private
+			This is a required attribute.
+		-->
+		<variable name="templatePicker" value="${null}"/>
+		<!---
+			@keywords private
+			Current search options for this search widget.
+		-->
+		<variable name="searchOptions" value="${{}}"/>
+		
+		<!---
+			@keywords private
+			
+			Invoke search.
+			@param cmc/foundation/SearchDefinition definition: search definition
+			@param object options: search options
+		-->
+		<method args="definition, options" name="doSearch">
+			<![CDATA[
+			if (typeof(definition) == "undefined") definition = null;
+			if (typeof(options) == "undefined") options = null;
+			if (options == null) {
+				var searchText = this.searchTextArea.searchText.getText();
+				this.searchOptions = {};
+				this.searchOptions.searchText = searchText;
+			}
+			else {
+				this.searchOptions = options;
+			}
+			if (definition == null) {
+				definition = this.currentDefinition;
+			}
+			MessageLogger.Singleton.clearStatusMessage();
+			this.templatePicker.bindSearchResults(definition.searchType);
+			this.templatePicker.model.doSearch(definition.searchType, this.searchOptions);
+			]]>
+		</method>
+
+		<Component height="${this.parent.height}" width="1" bgcolor="#959595" />
+		<Component height="${this.parent.height}" width="1" bgcolor="#959595" x="${this.parent.width - 1}"/>
+		<Component height="1" width="${this.parent.width}" bgcolor="#959595"/>
+		<Component height="1" width="${this.parent.width}" bgcolor="#959595" y="${this.parent.height - 1}"/>		
+		<Component name="searchTextArea" height="${this.parent.height}" width="${this.parent.searchButton.x}">
+			<InputTextComponent name="searchText" width="${this.parent.width - this.x - 10}" x="10" valign="middle">
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<!---
+					Handle keys.
+					@param number kc: key code
+				-->
+				<handler args="kc" name="onkeydown">
+					<![CDATA[
+					if (kc == 13) {
+						this.classroot.doSearch();
+					}
+					]]>
+				</handler>
+			</InputTextComponent>
+		</Component>
+		<Component height="${this.parent.height}" width="1" bgcolor="#959595" x="${this.parent.searchButton.x - 9}"/>
+		<Component height="${this.parent.height}" width="1" bgcolor="#959595" x="${this.parent.searchButton.x + 31}"  visible="${this.parent.searchButton.actionDefinitions != null &amp;&amp; this.parent.searchButton.actionDefinitions.length > 1}"/>
+		<ActionListButton name="searchButton" x="${this.parent.width - this.width - (this.actionDropdown.visible ? 11 : 9)}" valign="middle">
+			<variable name="buttonResource" value="searchButtonResource"/>
+			<variable name="dropdownResource" value="searchDropdownResource"/>
+			<variable name="dropdownOffset" value="20"/>
+			<variable name="displaySelectedIndicator" value="true"/>
+			<variable name="defaultActionDefinition" value="${this.classroot.currentDefinition}"/>
+			<Tooltip text="${foundationResources.Singleton.searchButtonTip.string}"/>
+			<method args="definition" name="doAction">
+				<![CDATA[
+				if (typeof (definition) == "undefined" || !definition) {
+					definition = this.classroot.currentDefinition;
+				}
+				else {
+					this.classroot.setVariable('currentDefinition', definition);
+				}
+				this.classroot.doSearch(definition);
+				]]>
+			</method>
+		</ActionListButton>
+	</Component>
+</Definitions>

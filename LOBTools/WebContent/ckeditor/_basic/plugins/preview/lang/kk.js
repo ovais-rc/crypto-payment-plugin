@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("preview","kk",{preview:"Алдын ара қарау:"});

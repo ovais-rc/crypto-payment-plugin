@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","iw",{toolbar:"מקור",title:"מקור"});

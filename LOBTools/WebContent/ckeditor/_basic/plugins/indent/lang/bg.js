@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","bg",{indent:"Увеличаване на отстъп",outdent:"Намаляване на отстъп"});

@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>The default flow connector class for use in {@link cmc/foundation/FlowBuilder flow builders}. Within a flow builder,
+		a connector joins two elements together visually, and when elements are dropped onto a connector, the elements
+		are inserted between the two, previously joined elements.</p>
+		
+		<p>If the connector is enabled (as determined by {@link cmc/foundation/BaseFlowConnector#isEnabled}, the connector appears
+		on the flow diagram as views and object start to be dragged. If it is not enabled based on the dragged objects,
+		the connector does not appear.</p>
+		
+		<p>New classes that extend from this base class must implement the 
+		<code>handleDroppedElements</code> method. The method should perform the 
+		logic required to handle dropped elements.</p>
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseFlowConnector" width="40">
+		<dependency localName="FlowPath" moduleName="cmc/foundation/FlowPath"/>
+		<dependency localName="FlowElement" moduleName="cmc/foundation/FlowElement"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<!--- @keywords private -->
+		<variable name="parentFlow" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="parentFlowPath" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="parentFlowElement" value="${null}"/>
+
+		<!--- Indicates whether this flow connector is enabled. -->
+		<variable name="enabled" type="boolean" value="true"/>
+		<!--- @keywords private -->
+		<variable name="editableFlow" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.parentFlow = FlowUtils.Singleton.getParentFlow(this);
+			if (this.parentFlow != null) {
+				this.updateEditableFlow();
+				this.updateEditableFlowDel = new EventHandler.Class(this, "updateEditableFlow");
+				this.updateEditableFlowDel.connect(this.parentFlow, "oneditableFlow");
+			}
+			this.parentFlowPath = FlowUtils.Singleton.getParentFlowPath(this.parent);
+			this.parentFlowElement = this.getFlowElement();
+			this.updateConnectorSize();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateEditableFlowDel) {
+				this.updateEditableFlowDel.disconnectAll();
+				delete this.updateEditableFlowDel;
+			}
+			if (this.updateConnectorSizeDel) {
+				this.updateConnectorSizeDel.disconnectAll();
+				delete this.updateConnectorSizeDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateEditableFlow">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("editableFlow", this.parentFlow.editableFlow);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateConnectorSize">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateConnectorSizeDel) {
+				this.updateConnectorSizeDel.disconnectAll();
+			}
+			else {
+				this.updateConnectorSizeDel = new EventHandler.Class(this, "updateConnectorSize");
+			}
+			if (this.parentFlowPath != null) {
+				if (this.parentFlowPath.oList) {
+					this.updateConnectorSizeDel.connect(this.parentFlowPath.oList, "objectViewsUpdated");
+					var previousElement = null;
+					var elementCount = this.parentFlowPath.oList.getViewsLength();
+					for (var i = 0; i < elementCount; i++) {
+						var element = this.parentFlowPath.oList.getView(i);
+						if (this.parentFlowElement == element) {
+							break;
+						}
+						previousElement = element;
+					}
+					var leftExpansionSize = 0;
+					var rightExpansionSize = 0;
+					if (previousElement != null) {
+						leftExpansionSize = previousElement.getConnectorLeftExpansionSize(this.updateConnectorSizeDel);
+					}
+					else {
+						leftExpansionSize = this.parentFlowPath.getConnectorLeftExpansionSize(this.updateConnectorSizeDel);
+					}
+					if (this.parentFlowElement == null) {
+						rightExpansionSize = this.parentFlowPath.getConnectorRightExpansionSize(this.updateConnectorSizeDel);
+					}
+					if (this.connectorView.x != -leftExpansionSize) {
+						this.connectorView.setVariable("x", -leftExpansionSize);
+					}
+					if (this.connectorView.width != 40 + leftExpansionSize + rightExpansionSize) {
+						this.connectorView.setVariable("width", 40 + leftExpansionSize + rightExpansionSize);
+					}
+				}
+				else {
+					this.updateConnectorSizeDel.connect(this.parentFlowPath, "onoList");
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getFlowElement">
+			<![CDATA[
+			var ancestor = this.parent;
+			while (ancestor != null && !(ancestor instanceof FlowPath.Class)) {
+				if (ancestor instanceof FlowElement.Class) {
+					return ancestor;
+				}
+				ancestor = ancestor.parent;
+			}
+			return null;
+			]]>
+		</method>
+
+		<!---
+			Checks to see whether or not this connector is enabled. If enabled, the views being dragged will be
+			allowed to be dropped onto this connector.
+			@param cmc/foundation/Components[] dragSources list of objects currently being dragged. See {@link cmc/foundation/DragSource} for more information.
+			@return boolean <code>true</code> if {@link cmc/foundation/BaseFlowConnector#enabled} is <code>true</code> and the parent
+					flow is not read-only.
+		-->
+		<method args="dragSources" name="isEnabled">
+			<![CDATA[
+			var enabled = this.enabled && this.editableFlow && dragSources && dragSources.length > 0;
+			if (enabled) {
+				var parentPath = FlowUtils.Singleton.getParentFlowPath(this);
+				if (parentPath) {
+					var isBranch = false;
+					var dragFromObject = null;
+					if (dragSources[0].flowElement) {
+						var dragObjectParentFlow = FlowUtils.Singleton.getParentFlow(dragSources[0].flowElement);
+						dragFromObject = dragObjectParentFlow == null ? null : dragObjectParentFlow.o;
+						if (dragSources[0].flowElement.o && dragSources[0].flowElement.o.objectDefinition.elemTemplateType == "Branch") {
+							isBranch = true;
+						}
+					}
+					else {
+						dragFromObject = dragSources[0].dragObject.oView.o;
+						var parentPathObj = parentPath.o;
+						if (parentPathObj && dragSources[0].dragObject.objectType) {
+							var objectType = dragSources[0].dragObject.objectType;
+							var objectDef = parentPathObj.model.getObjectDefinition(parentPathObj, objectType);
+							if (objectDef && objectDef.elemTemplateType == "Branch") {
+								isBranch = true;
+							}
+						}
+					}
+					if (dragFromObject && dragFromObject != this.parentFlow.o) {
+						enabled = false;
+					}
+					else if (isBranch && FlowUtils.Singleton.getElementDepth(this) >= this.parentFlow.flowBuilder.maxBranchDepth) {
+						enabled = false;
+					}
+				}
+			}
+			return enabled;
+			]]>
+		</method>
+
+		<!--- 
+			Must be overwritten in children classes with the different logic of 
+			handling dropped elements.
+			@param cmc/foundation/Components[] sources list of objects currently being dragged. See {@link cmc/foundation/DragSource} for more information.
+			@keywords private 
+		-->
+		<method args="sources" name="handleDroppedElements">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<Component height="32" name="connectorView" width="40">
+			<Component imageSet="wcfFlowConnector" name="connector" stretches="width" visible="false" width="${this.parent.width}"/>
+			<DropTarget dragAndDropManager="${DndManager.Singleton}" dropMouseOverBGColor="${&quot;#EEEEEE&quot;}" targetKey="${'flowelement'}">
+				<method args="currentDragSource" name="isEnabled">
+					<![CDATA[
+					return this.classroot.isEnabled(currentDragSource);
+					]]>
+				</method>
+		    	
+				<method name="registerDropTarget">
+					<![CDATA[
+					if (this.isEnabled(this.dragAndDropManager.currentDragSource.getDragSources())) {
+						this.inherited(arguments);
+						this.classroot.connectorView.connector.setVariable("visible", true);
+					}
+					]]>
+				</method>
+				
+				<method name="unregisterDropTarget">
+					<![CDATA[
+					this.inherited(arguments);
+					this.classroot.connectorView.connector.setVariable("visible", false);
+					]]>
+				</method>
+			
+				<handler args="sources" name="ondroppedintarget">
+					<![CDATA[
+					this.classroot.handleDroppedElements(sources);
+					]]>
+				</handler>
+			</DropTarget>
+		</Component>
+	</Component>
+
+</Definitions>

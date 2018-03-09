@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","iw",{options:"אפשרויות תווים מיוחדים",title:"תו מיוחד",toolbar:"הוספת תו מיוחד"});

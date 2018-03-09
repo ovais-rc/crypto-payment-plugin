@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("about","cs",{copy:"Copyright &copy; $1. Všechna práva vyhrazena.",dlgTitle:"O programu CKEditor",help:"Nápověda: $1.",moreInfo:"Informace o licenci naleznete na našem webu:",title:"O programu CKEditor",userGuide:"Uživatelská příručka CKEditor"});

@@ -1,0 +1,78 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN BuyerApprovalDetail_Data.jsp -->
+<wcf:rest var="approvalRecords" url="store/{storeId}/approval_status" scope="page">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="q" value="buyerApprovals"/>
+	<wcf:param name="approvalStatusId" value="${WCParam.approvalId}" />
+</wcf:rest>
+
+<c:forEach var="approval" items="${approvalRecords.resultList}"> 
+	<c:if test="${approval.approvalStatusId eq WCParam.approvalId}">
+		<c:set var="approvalRecord" value="${approval}"/>
+	</c:if>
+</c:forEach>
+
+<wcf:rest var="buyer" url="store/{storeId}/person/{userId}">
+	<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+	<wcf:var name="userId" value="${approvalRecord.entityId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="profileName" value="IBM_User_Registration_Details"/>
+</wcf:rest>
+
+<wcf:rest var="buyerOrg" url="store/{storeId}/organization/{organizationId}" scope="page">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:var name="organizationId" value="${buyer.organizationId}" encode="true"/>
+	<wcf:param name="profileName" value="IBM_Organization_Short_Summary"/>
+</wcf:rest>
+
+<c:set var="key1" value="store/${storeId}/configuration/com.ibm.commerce.foundation.supportedLanguages+${langId}"/>
+<c:set var="queryCurrentStoreLanguagesResult" value="${cachedOnlineStoreMap[key1]}"/>
+<c:if test="${empty queryCurrentStoreLanguagesResult}">
+	<wcf:rest var="queryCurrentStoreLanguagesResult" url="store/{storeId}/configuration/{uniqueId}" cached="true">
+		<wcf:var name="storeId" value="${storeId}"/>
+		<wcf:var name="uniqueId" value="com.ibm.commerce.foundation.supportedLanguages"/>
+		<wcf:param name="langId" value="${langId}"/>
+	</wcf:rest>
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${queryCurrentStoreLanguagesResult}"/>
+</c:if>
+
+<c:remove var="userPreferredLanguage"/>
+<c:forEach var="supportedLanguage" items="${queryCurrentStoreLanguagesResult.resultList[0].configurationAttribute}">
+	<c:forEach var="languageAdditionalValue" items="${supportedLanguage.additionalValue}">
+		<c:if test="${languageAdditionalValue.name == 'languageId'}">
+			<c:if test="${languageAdditionalValue.value == buyer.preferredLanguage}">
+				<c:set var="userPreferredLanguage" value="${supportedLanguage}"/>
+			</c:if>
+		</c:if>
+	</c:forEach>
+</c:forEach>
+
+<%-- format the address to be used by AddressDisplay.jspf --%>
+<wcf:useBean var="contact" classname="java.util.HashMap"/>
+	<wcf:set key="firstName" value="${buyer.address.firstName}" target="${contact}" />
+	<wcf:set key="middleName" value="${buyer.address.middleName}" target="${contact}" />
+	<wcf:set key="lastName" value="${buyer.address.lastName}" target="${contact}" />
+	<wcf:set key="address1" value="${buyer.address.address1}" target="${contact}" />
+	<wcf:set key="address2" value="${buyer.address.address2}" target="${contact}" />
+	<wcf:set key="address3" value="${buyer.address.address3}" target="${contact}" />
+	<wcf:set key="city" value="${buyer.address.city}" target="${contact}" />
+	<wcf:set key="stateOrProvinceName" value="${buyer.address.state}" target="${contact}" />
+	<wcf:set key="zipCode" value="${buyer.address.postalCode}" target="${contact}" />
+	<wcf:set key="country" value="${buyer.address.country}" target="${contact}" />
+
+<!-- END BuyerApprovalDetail_Data.jsp -->

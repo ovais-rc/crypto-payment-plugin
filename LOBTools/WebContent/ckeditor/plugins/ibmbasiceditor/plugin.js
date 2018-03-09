@@ -1,0 +1,1 @@
+﻿/* Copyright IBM Corp. 2009-2015  All Rights Reserved. */CKEDITOR.plugins.add("ibmbasiceditor",{init:function(b){b.on("doubleclick",function(a){"undefined"!==typeof a.data.dialog&&""!==a.data.dialog&&(a.data.dialog="")},null,null,900);CKEDITOR.env.ie&&8<CKEDITOR.env.version&&document&&document.execCommand("AutoUrlDetect",!1,!1)}});

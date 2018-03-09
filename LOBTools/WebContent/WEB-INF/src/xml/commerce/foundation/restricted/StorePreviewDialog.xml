@@ -1,0 +1,1677 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Store preview store search dialog class.
+		@keywords private
+	-->
+	<StoreSearchDialogBase classDefinition="true" definitionName="cmc/foundation/StoreSearchDialogForPreviewClass">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StorePreviewDialog" moduleName="cmc/foundation/StorePreviewDialog"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="StoreSearchUrlResultDisplayDialog" moduleName="cmc/foundation/StoreSearchUrlResultDisplayDialog"/>
+		<!---
+			Indicates that the currently selected store is mobile enabled.
+		-->
+		<variable name="mobileEnabled" type="boolean" value="false"/>
+		
+		<!---
+		@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkMobileEnabledDel = new EventHandler.Class(this, "checkMobileEnabled");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.checkMobileEnabledDel.disconnectAll();
+			delete this.checkMobileEnabledDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Check the OK button enablement
+		-->
+		<method name="checkOkEnabled">
+			<![CDATA[
+			this.setVariable("okEnabled", this.selectedStore != null && this.selectedStore.configurationLoaded);
+			]]>
+		</method>
+
+		<!---
+			Check the mobile radio button enablement.
+		-->
+		<method args="e" name="checkMobileEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkMobileEnabledDel.disconnectAll();
+			var mobileEnabled = false;
+			var store = this.selectedStore;
+			if (store != null) {
+				if (store.configurationLoaded) {
+					mobileEnabled = store.staticContent.storeLevel.indexOf("MOBILE") != -1 && store.storeFlowOptions.UseCommerceComposer != "true";
+					if (!mobileEnabled && this.mobileStoreSelector.mobileStore.selected) {
+						this.mobileStoreSelector.select(this.mobileStoreSelector.regularStore);
+					}
+				}
+				else {
+					this.checkMobileEnabledDel.connect(store, "onconfigurationLoaded");
+					store.loadConfiguration();
+				}
+			}
+			this.setVariable("mobileEnabled", mobileEnabled);
+			]]>
+		</method>
+
+		<!---
+			Handle store selected event.
+		-->
+		<handler name="onselectedStore">
+			<![CDATA[
+			this.checkMobileEnabled();
+			]]>
+		</handler>
+				
+		<!---
+			Reset the values in the dialog for things that should not be persisted when the dialog is closed.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.mobileStoreSelector.select(this.mobileStoreSelector.regularStore);
+			this.inherited(arguments);
+			this.checkMobileEnabledDel.disconnectAll();
+			]]>
+		</method>
+
+		<!---
+			Handle OK.
+		-->
+		<method name="handleOk">
+			<![CDATA[
+			if (this.okEnabled) {
+				var contextPreviewURLServiceTriggered = false;
+				var o = null;
+				var activeView = StorePreviewDialog.Singleton.oEditor.model.activeSelectionView;
+				if (activeView == null) {
+					activeView = StorePreviewDialog.Singleton.oEditor.navigationTree;
+				}
+				var objects = activeView.getSelectedObjects();
+				if (objects.length == 1) {
+					o = objects[0].getReferencedObject();
+					if (o.objectDefinition.getPreviewURLService != null && !o.newObject) {
+						contextPreviewURLServiceTriggered = true;
+					}
+				}
+				if (!contextPreviewURLServiceTriggered || this.mobileStoreSelector.mobileStore.selected) {
+					this.setStoreDelegate.execute({
+						store: this.selectedStore,
+						mobile: this.mobileStoreSelector.mobileStore.selected
+					});
+					this.closeWindow();
+				}
+				else {
+					var selectedStore = this.selectedStore;
+					this.closeWindow();
+					StoreSearchUrlResultDisplayDialog.Singleton.openStoreSearchUrlResultDisplayDialog(o, selectedStore);
+				}
+			}
+			]]>
+		</method>
+
+		<Component height="10" placement="searchView"/>
+		<BaseRadioGroup name="mobileStoreSelector" placement="searchView">
+			<BaseRadioButton name="regularStore" selected="true" text="${foundationResources.Singleton.storePreviewPreviewRegularStore.string}" value="${'regular'}"/>
+			<BaseRadioButton enabled="${this.classroot.mobileEnabled}" name="mobileStore" text="${foundationResources.Singleton.storePreviewPreviewMobileStore.string}" value="${'mobile'}"/>
+		</BaseRadioGroup>
+		
+	</StoreSearchDialogBase>
+	<StoreSearchDialogForPreviewClass definitionName="cmc/foundation/StoreSearchDialogForPreview" singletonDefinition="true"/>
+	
+	<!---
+		Display store URL results dialog class.
+		@keywords private
+	-->	
+	<Dialog classDefinition="true" definitionName="cmc/foundation/StoreSearchUrlResultDisplayDialogBase" title="${foundationResources.Singleton.storeUrlDisplayDialog_title.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StorePreviewDialog" moduleName="cmc/foundation/StorePreviewDialog"/>
+		<dependency localName="StoreSearchUrlListItem" moduleName="cmc/foundation/StoreSearchUrlListItem"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="StoreSearchUrlResultDisplayDialog" moduleName="cmc/foundation/StoreSearchUrlResultDisplayDialog"/>
+		<dependency localName="VerticalScrollbar" moduleName="cmc/foundation/VerticalScrollbar"/>
+		
+		<!---
+			Indicates that the OK action is currently enabled.
+		-->
+		<variable name="okEnabled" type="boolean" value="false"/>
+		
+		<!---
+			Array of list items.
+		-->
+		<variable name="listItems" value="${[]}"/>
+		
+		<!---
+			Array of items that are already created that can be used from the list.
+		-->
+		<variable name="listItemsPool" value="${[]}"/>
+		
+		<!---
+			The currently selected URL.
+		-->
+		<variable name="selectedURL" value="${null}"/>
+		
+		<!---
+			@keywords private
+		-->
+		<variable name="storeUrlDisplayDialogActive" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			store object.
+		-->
+		<variable name="store" value="${null}"/>
+	
+		<!---
+			Handle store URL selected event.
+		-->
+		<handler name="onselectedURL">
+			<![CDATA[
+			this.checkOkEnabled();
+			]]>
+		</handler>
+		
+		
+		<!---
+			Check the OK button enablement.
+		-->
+		<method name="checkOkEnabled">
+			<![CDATA[
+			this.setVariable("okEnabled", this.selectedURL != null);
+			]]>
+		</method>
+		
+		<!---
+			Handle OK.
+		-->
+		<method name="handleOk">
+			<![CDATA[
+			if (this.okEnabled) {
+				var url = this.selectedURL.text;
+				var alias = this.selectedURL.alias;
+				this.closeWindow();
+				StorePreviewDialog.Singleton.addressView.inputTextValueSelector.inputTextArea.inputText.setText(url);
+				StorePreviewDialog.Singleton.aliasView.aliasText.setText(alias);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Add the specified URLs to the Store URL list
+			@param array objectURLList: array of object instances containing alias and url values
+		-->
+		<method args="objectURLList" name="addUrl">
+			<![CDATA[
+			for (var i = 0; i < objectURLList.length; i++) {
+				var objectUrl = objectURLList[i];
+				var item = null;
+				if (this.listItemsPool.length > 0) {
+					item = this.listItemsPool.shift();
+					item.setVariable("value", objectUrl);
+					item.setVariable("text", objectUrl.text);
+					item.setVariable("visible", true);
+				}
+				else {
+					item = new StoreSearchUrlListItem.Class(this.urlDisplayView.storeUrlList, {
+						value: objectUrl,
+						text: objectUrl.text,
+						parentDialog: this
+					});
+				}
+				this.listItems.push(item);
+			}
+			if (this.store != null) {
+				var storeUrl = StorePreviewDialog.Singleton.getStoreURL(this.store.storeId, "StoreView");
+				var objectUrl = {};
+				objectUrl.alias = this.store.storeName;
+				objectUrl.text = storeUrl;
+				var item = null;
+				if (this.listItemsPool.length > 0) {
+					item = this.listItemsPool.shift();
+					item.setVariable("value", objectUrl);
+					item.setVariable("text", objectUrl.text);
+					item.setVariable("visible", true);
+				}
+				else {
+					item = new StoreSearchUrlListItem.Class(this.urlDisplayView.storeUrlList, {
+						value: objectUrl,
+						text: objectUrl.text,
+						parentDialog: this
+					});
+				}
+				this.listItems.push(item);
+			}
+			if (this.listItems.length >= 1) {
+				this.urlDisplayView.storeUrlList.selectItemAt(0);
+				FocusUtil.setFocus(this.urlDisplayView.storeUrlList, false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Clear the list of URLs
+		-->
+		<method name="clearUrlList">
+			<![CDATA[
+			this.urlDisplayView.storeUrlList.clearSelection();
+			this.setVariable("selectedUrl", null);
+			this.checkOkEnabled();
+			while (this.listItems.length > 0) {
+				var curItem = this.listItems.shift();
+				curItem.setVariable("visible", false);
+				curItem.setVariable("value", null);
+				this.listItemsPool.push(curItem);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Use this method to open the Store Search URL Result Dialog.
+			@param Object o: The object currently selected in the active view
+			@param Object store: The store object selected from the Store Search dialog
+		 -->
+		<method args="o, store" name="openStoreSearchUrlResultDisplayDialog">
+			<![CDATA[
+			this.openWindow();
+			this.clearUrlList();
+			StoreSearchUrlResultDisplayDialog.Singleton.setVariable("storeUrlDisplayDialogActive", true);
+			this.setVariable("store", store);
+			o.objectDefinition.getPreviewURLService.doRequest(o, {
+				storeId: store.storeId
+			});
+			]]>
+		</method>
+		
+		<!---
+			Reset the values in the dialog for things that should not be persisted when the dialog is closed.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("selectedURL", null);
+			this.setVariable("okEnabled", false);
+			this.setVariable("storeUrlDisplayDialogActive", false);
+			StoreSearchUrlResultDisplayDialog.Singleton.aliasView.aliasText.setText(foundationResources.Singleton.storePreviewAliasNone.string);
+			]]>
+		</method>
+		
+		<Component name="urlDisplayView">
+			<Component height="5"/>			
+			<TextComponent text="${foundationResources.Singleton.storeUrlDisplayDialog_selectURLLabel.string}"/>
+			
+			<BaseList height="100" name="storeUrlList" scrollBarClass="${VerticalScrollbar}" shownitems="10" width="${StorePreviewDialog.Singleton.contentWidth}">
+				<handler name="onselect">
+					<![CDATA[
+					var s = this.getSelection();
+					if (s) {
+						this.parent.parent.setVariable("selectedURL", s.value);
+						StoreSearchUrlResultDisplayDialog.Singleton.aliasView.aliasText.setText(s.value.alias);
+					}
+					else {
+						this.parent.parent.setVariable("selectedURL", null);
+						StoreSearchUrlResultDisplayDialog.Singleton.aliasView.aliasText.setText(foundationResources.Singleton.storePreviewAliasNone.string);
+					}
+					this.setVariable("doesenter", true);
+					]]>
+				</handler>
+				
+				<!--- @keywords private 
+					  This list does not have a hilite - only a select.
+				-->
+		        <method args="kc" name="_dokeydown">
+					<![CDATA[
+					if (kc == 32 && this.hilitedItem && this.hilitedItem.enabled) {
+						this.hilitedItem.setVariable('selected', true);
+						return;
+					}
+					else if (kc >= 37 && kc <= 40) {
+						if (kc == 39 || kc == 40) {
+							this.selectNext();
+						}
+						if (kc == 37 || kc == 38) {
+							this.selectPrev();
+						}
+					}
+					else if (kc == 35 || kc == 36) {
+						var visibleItems = this.getVisibleItems();
+						if (kc == 35 && visibleItems.length > 0) {
+							this.select(visibleItems[visibleItems.length - 1]);
+						}
+						if (kc == 36 && visibleItems.length > 0) {
+							this.select(visibleItems[0]);
+						}
+					}
+					else {
+						var key = String.fromCharCode(kc).toUpperCase();
+						var startIndex = 0;
+						var numItems = this.getNumItems();
+						for (var i = 0; i < numItems; i++) {
+							var item = this.getItemAt(i);
+							if (item.selected == true && item.text.toUpperCase().indexOf(key) == 0) {
+								startIndex = i + 1;
+								break;
+							}
+						}
+						for (var i = 0; i < numItems; i++) {
+							if (startIndex >= numItems) {
+								startIndex = 0;
+							}
+							var item = this.getItemAt(startIndex);
+							if (item.text.toUpperCase().indexOf(key) == 0 && item.visible) {
+								this.select(item);
+								break;
+							}
+							startIndex++;
+						}
+					}
+					]]>
+				</method>
+		        <!---
+		        	@keywords private		       
+					Move the selection to the next or previous view.
+					@param Number dir: -1 to move up or 1 to move down
+				-->
+				<method args="dir" name="moveSelection">
+					<![CDATA[
+					if (!dir) {
+						dir = 1;
+					}
+					var next = null;
+					var visibleItems = this.getVisibleItems();
+					if (visibleItems.length > 0) {
+						next = this.getSelection();
+						if (next == null) {
+							next = visibleItems[0];
+						}
+						else {
+							for (var i = 0; i < visibleItems.length; i++) {
+								if (next == visibleItems[i]) {
+									if (dir < 0) {
+										if (i > 0) {
+											next = visibleItems[i - 1];
+										}
+									}
+									else {
+										if (i < visibleItems.length - 1) {
+											next = visibleItems[i + 1];
+										}
+									}
+									break;
+								}
+							}
+						}
+					}
+					this.select(next);
+					]]>
+				</method>
+				<!--- 
+					@keywords private 
+				-->
+				<method name="doEnterDown">
+					<![CDATA[
+					this.parent.parent.handleOk();
+					]]>
+				</method>
+				<!--- 
+					@keywords private 
+					returns array of visible items in list
+				-->
+				<method name="getVisibleItems">
+					<![CDATA[
+					var visibleItems = [];
+					var items = this._selector.immediateparent.subviews;
+					for (var i = 0; i < items.length; i++) {
+						var item = items[i];
+						if (item.visible) visibleItems.push(item);
+					}
+					return visibleItems;
+					]]>
+				</method>
+				
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this,
+							offset: 1,
+							placement: "list"
+						});
+					}
+					]]>
+				</handler>
+				
+			</BaseList>
+			
+			<AxisLayout axis="y" spacing="2"/>
+		</Component>
+		
+		<Component height="10"/>
+		<Component name="aliasView">
+			<TextComponent fgcolor="${StorePreviewDialog.Singleton.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storeUrlDisplayDialog_urlAliasLabel.string}" width="${StorePreviewDialog.Singleton.contentWidth}"/>
+			<InputText enabled="false" initialText="${foundationResources.Singleton.storePreviewAliasNone.string}" name="aliasText" width="${StorePreviewDialog.Singleton.contentWidth}"/>
+			<AxisLayout axis="y"/>
+		</Component>
+		
+		<Component name="buttonSection" placement="footer">
+			<Button name="storeUrlDisplayCancelButton" text="${foundationResources.Singleton.storeUrlDisplayDialog_cancelBtnName.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.parent.parent.okEnabled}" name="storeUrlDisplayOkButton" text="${foundationResources.Singleton.storeUrlDisplayDialog_addBtnName.string}">				
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.handleOk();
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+		<AxisLayout axis="y" spacing="10"/>
+	</Dialog>
+	
+	<!---
+		Store URL display dialog.
+	-->
+	<StoreSearchUrlResultDisplayDialogBase definitionName="cmc/foundation/StoreSearchUrlResultDisplayDialog" singletonDefinition="true"/>
+	
+	<!---
+		@keywords private
+		
+		Store search URL list item.
+	-->
+	<BaseListItem classDefinition="true" definitionName="cmc/foundation/StoreSearchUrlListItem" height="28">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>		
+		<!---
+			The text that will be displayed.
+		-->
+		<variable name="text" type="string" value=""/>
+		<!---
+			Available width for the value text. If the value is too long the text will be truncated.
+		-->
+		<variable name="itemValueWidth" type="number" value="${this.width * 0.95}"/>
+		
+		<!---
+			Handle double click event.
+		-->
+		<handler name="ondblclick">
+			<![CDATA[
+			this.parentDialog.setVariable("selectedURL", this.value);
+			this.parentDialog.handleOk();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="s" name="_applystyle">
+			<![CDATA[
+			if (this.style != null) {
+				this.inherited(arguments);
+				if (this._enabled) {
+					if (this.selected) {
+						this.setVariable("fgcolor", "#ffffff");
+					}
+					else if (this.hilited) {
+						this.setVariable("fgcolor", this.style.texthilitecolor);
+					}
+					else {
+						this.setVariable("fgcolor", this.style.textcolor);
+					}
+				}
+				else {
+					if (this.hilited) {
+						this.setVariable("fgcolor", "#9d9d9d");
+					}
+					else {
+						this.setVariable("fgcolor", this.style.textdisabledcolor);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<Component name="itemTextView" valign="middle" width="${this.parent.width}" x="1">
+			<TextComponent name="itemText" resize="false" text="${this.classroot.text}" valign="middle" width="${this.parent.width}" x="4">
+				<!--- @keywords private -->
+				<handler name="oninit">
+					<![CDATA[
+					this.refreshWidthDel = new EventHandler.Class(this, "refreshWidth");
+					this.refreshWidthDel.connect(this, "ontext");
+					this.refreshWidth();
+					]]>
+				</handler>
+				<!--- @keywords private -->
+				<method name="destroy">
+					<![CDATA[
+					this.refreshWidthDel.disconnectAll();
+					delete this.refreshWidthDel;
+					this.inherited(arguments);
+					]]>
+				</method>
+				<!--- 
+					@keywords private 
+					updates the width and sets the truncation dots to visible.
+				-->
+				<method args="e" name="refreshWidth">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					if (this.getTextWidth() > this.classroot.itemValueWidth) {
+						this.setVariable("width", this.classroot.itemValueWidth);
+						this.parent.valueDots.setVariable("visible", true);
+					}
+					else {
+						this.parent.valueDots.setVariable("visible", false);
+					}
+					]]>
+				</method>
+				<Tooltip enabled="${this.parent.parent.valueDots.visible}" name="tip" text="${this.parent.text}"/>
+			</TextComponent>
+			<TextComponent name="valueDots" text="${foundationResources.Singleton.gridTruncationText.string}" valign="middle" x="${this.parent.itemText.width + this.parent.itemText.x}"/>
+		</Component>	
+	</BaseListItem>
+	
+	<!---
+		@keywords private
+		This is the store preview dialog.  It is opened when the user selects store preview from the Management Center toolbar.  This class contains:
+		<ul>
+		<li>the store preview option widgets
+		<li>the Launch Preview button which will launch the preview
+		<li>the Cancel button which will cancel and close the dialog
+		</ul>
+	-->
+	<Dialog definitionName="cmc/foundation/StorePreviewDialog" singletonDefinition="true" title="${foundationResources.Singleton.storePreviewDialogTitle.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="StorePreviewUtil" moduleName="cmc/foundation/StorePreviewUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="ErrorIndicator" moduleName="cmc/foundation/ErrorIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="SearchListItem" moduleName="cmc/foundation/SearchListItem"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			@keywords private
+			The business object editor.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			@keywords private
+			Controls the opening and closing of the options view on the dialog
+		-->
+		<variable name="optionsOpen" type="boolean" value="false"/>
+		<!---
+			List of cmc/foundation/Store objects that are returned by the get all stores service. The list only includes
+			customer facing stores.
+		-->
+		<variable name="storeList" value="${[]}"/>
+		<!---
+			Maximum number of URL that the current address selector can list.
+		-->
+		<variable name="maxURLsToList" value="${ConfigProperties.Singleton.maximumStoresInList}"/>
+		<!---
+			The URI to use for constructing store URLs.
+		-->
+		<variable name="storesWebPath" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="contentWidth" type="number" value="550"/>
+		<!---
+			@keywords private
+			A map containing values that will be restored when the dialog is canceled.
+		-->
+		<variable name="resetValues" value="${null}"/>		
+		<!---
+			@keywords private
+		-->
+		<variable name="populatedCount" type="number" value="0"/>
+		<!---
+			@keywords private
+			A list of custom store preview options.
+		-->
+		<variable name="customOptions" value="${[]}"/>
+		<!---
+			@keywords private
+			The names of the customers segments to which the customer should belong in the store.
+		-->
+		<variable name="customerSegmentsIncludedNames" type="string" value=""/>
+		<!---
+			@keywords private
+			The IDs of the customer segments to which the customer should belong in the store.
+		-->
+		<variable name="customerSegmentsIncludedIds" type="string" value=""/>				
+		<!---
+			@keywords private
+			Whether or not there is currently a store preview dialog active
+		-->
+		<variable name="storePreviewDialogActive" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Error message.
+		-->		
+		<variable name="errorMessage" type="string" value=""/>	
+					
+		<Component name="errorMessageView" visible="${this.classroot.errorMessage != ''}">
+			<AxisLayout axis="x" spacing="2"/>
+			<Component imageSet="helpInfoIcon" y="2"/>
+			<TextComponent multiline="true" name="message" text="${this.classroot.errorMessage}" width="${this.classroot.contentWidth - 50}"/>
+		</Component>
+		<Component height="10" visible="${this.classroot.errorMessageView.visible}"/>
+		<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewURLInstructions.string}" width="${this.classroot.contentWidth}"/>
+		<Component height="10"/>
+		<Component name="addressView">
+			<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewURLLabel.string}" width="${this.classroot.contentWidth}"/>
+		  	<InputTextValueSelector name="inputTextValueSelector" width="${this.classroot.contentWidth}">
+				<!---
+					@keywords private
+					This handler updates the alias text field
+				-->
+				<handler name="ontext">
+					<![CDATA[
+					var foundDisplayName = false;
+					for (var i = 0; i < this.items.length; i++) {
+						if (this.items[i].selectable && this.text == this.items[i].value.text) {
+							var alias = this.items[i].alias;
+							if (this.items[i].aliasQualifier != "") {
+								alias += " - " + this.items[i].aliasQualifier;
+							}
+							this.classroot.aliasView.aliasText.setText(alias);
+							foundDisplayName = true;
+						}
+					}
+					if (!foundDisplayName) {
+						this.classroot.aliasView.aliasText.setText(foundationResources.Singleton.storePreviewAliasNone.string);
+					}
+					]]>
+				</handler>
+				
+				<!---
+					@keywords private
+					This method is called when a value is selected from the list. This implementation sets the input field's
+					text to match the value's display name.
+					@param Object v: the selected value object
+				-->
+				<method args="v" name="handleSelect">
+					<![CDATA[
+					if (v == SearchListItem.Singleton) {
+						var applyStoreDel = this.classroot.applyStoreDel;
+						require(["cmc/foundation/StoreSearchDialogForPreview"], function(StoreSearchDialogForPreview) {
+							StoreSearchDialogForPreview.Singleton.openStoreSearchDialog(applyStoreDel, "", "IBM_CustomerFacingStore");
+						});
+					}
+					else {
+						this.inherited(arguments);
+					}
+					]]>
+				</method>
+			</InputTextValueSelector>
+			<AxisLayout axis="y"/>
+		</Component>
+		<Component height="10"/>
+		<Component name="aliasView">
+			<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewAliasLabel.string}" width="${this.classroot.contentWidth}"/>
+			<InputText enabled="false" name="aliasText" width="${this.classroot.contentWidth}"/>
+			<AxisLayout axis="y"/>
+		</Component>
+		<Component height="10" visible="${this.classroot.customerSegmentsIncludedNames != ''}"/>
+		<Component name="customerSegmentView" visible="${this.classroot.customerSegmentsIncludedNames != ''}">
+			<ExtendedHelpIcon extendedHelpText="${foundationResources.Singleton.storePreviewCustomerSegmentsExtendedHelp.string}" helpText="${foundationResources.Singleton.storePreviewCustomerSegmentsTip.string}" name="storePreviewCustomerSegmentsHelpIcon"/>
+			<Component name="customerSegmentLabelView">
+				<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewCustomerSegmentsLabel.string}" width="${this.classroot.contentWidth - this.parent.parent.storePreviewCustomerSegmentsHelpIcon.width}"/>
+				<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${this.classroot.customerSegmentsIncludedNames}" width="${this.classroot.contentWidth - this.parent.parent.storePreviewCustomerSegmentsHelpIcon.width}"/>
+				<AxisLayout axis="y"/>				
+			</Component>
+			<AxisLayout axis="x" spacing="2"/>
+		</Component>
+		<Component height="15"/>
+		<Component focusable="true" height="20" name="headertext" width="${this.classroot.contentWidth}">
+			<AxisLayout axis="x" spacing="8"/>
+			<BaseButton imageSet="propertyDrawerResource" name="headbutton" y="2">
+				<method name="init">
+					<![CDATA[
+					this.inherited(arguments);
+					this.updateResourceNumbers();
+					]]>
+				</method>
+				<handler eventSource="this.classroot" name="onoptionsOpen">
+					<![CDATA[
+					this.updateResourceNumbers();
+					]]>
+				</handler>
+				<method name="updateResourceNumbers">
+					<![CDATA[
+					if (this.classroot.optionsOpen) {
+						this.normalImage = 2;
+						this.overImage = 2;
+						this.downImage = 2;
+					}
+					else {
+						this.normalImage = 1;
+						this.overImage = 1;
+						this.downImage = 1;
+					}
+					this._callShow();
+					]]>
+				</method>
+				<handler name="onclick">
+					<![CDATA[
+					EventUtil.trigger(this.parent, "onclick");
+					]]>
+				</handler>
+			</BaseButton>
+			<TextComponent fontstyle="bold" text="${foundationResources.Singleton.storePreviewOptionsLabel.string}"/>
+			<handler args="code" name="onkeydown">
+				<![CDATA[
+				if (code == 32) {
+					EventUtil.trigger(this, "onclick");
+				}
+				]]>
+			</handler>
+			<handler name="onclick">
+				<![CDATA[
+				this.classroot.setVariable("optionsOpen", !this.classroot.optionsOpen);
+				]]>
+			</handler>
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this.headbutton
+					});
+				}
+				]]>
+			</handler>
+		</Component>
+		<Component height="10"/>
+		<Component name="storePreviewOptions" visible="${this.classroot.optionsOpen}">
+			<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewDateTimeLabel.string}" width="${this.classroot.contentWidth}"/>	
+			<BaseRadioGroup name="dateTimeRadio">
+			   	<BaseRadioButton multiline="true" selected="true" text="${foundationResources.Singleton.storePreviewDateTimeCurrent.string}" value="false" width="${this.classroot.contentWidth}"/>
+			   	<BaseRadioButton multiline="true" text="${foundationResources.Singleton.storePreviewDateTimeElapsed.string}" value="true" width="${this.classroot.contentWidth}"/>
+			</BaseRadioGroup>
+			<BaseDateTimePicker enabled="${this.parent.dateTimeRadio.value}" name="dateTimePicker" x="1">
+				<variable name="hasError" type="boolean" value="false"/>
+		  		<variable name="errorIndicator"/>
+		  		
+		  		<handler name="onhasError">
+					<![CDATA[
+					if (this.hasError && !this.errorIndicator) {
+						this.errorIndicator = new ErrorIndicator.Class(this.parent, {
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<!---
+					@keywords private
+					Gets the formated date and time value for use in the {@Link cmc/foundation/StorePreviewOptions}
+				-->
+				<method name="getDateValue">
+					<![CDATA[
+					var newDateTime = this.getDateTime();
+					if (newDateTime == null || !this.enabled) {
+						return null;
+					}
+					return DateUtil.Singleton.format(newDateTime, "yyyy/MM/dd HH:mm:ss");
+					]]>
+				</method>
+			</BaseDateTimePicker>
+			<Component height="1" bgcolor="#d0d0d0" width="${this.classroot.contentWidth}"/>
+			<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewElapseLabel.string}" width="${this.classroot.contentWidth}"/>
+			<BaseRadioGroup name="timeElapse">
+			   	<BaseRadioButton multiline="true" selected="true" text="${foundationResources.Singleton.storePreviewElapseNotChange.string}" value="true" width="${this.classroot.contentWidth}"/>
+			   	<BaseRadioButton multiline="true" text="${foundationResources.Singleton.storePreviewElapseChange.string}" value="false" width="${this.classroot.contentWidth}"/>
+			</BaseRadioGroup>
+			
+			<Component height="1" bgcolor="#d0d0d0" width="${this.classroot.contentWidth}"/>
+			<Component name="productRecommendationView">
+				<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.storePreviewProductLabel.string}" width="${this.classroot.contentWidth}"/>
+				<BaseComboBox name="productRecommendation" visible="true" width="${this.classroot.contentWidth}">
+					<PreviewListItem selected="true" textKey="${foundationResources.Singleton.storePreviewProductDefault}" value="0"/>
+					<PreviewListItem textKey="${foundationResources.Singleton.storePreviewProductAll}" value="1"/>
+					<PreviewListItem textKey="${foundationResources.Singleton.storePreviewProductNone}" value="-1"/>
+				</BaseComboBox>
+				<AxisLayout axis="y"/>
+			</Component>
+			<Component name="customOptionsView" visible="false">
+				<Component height="1" bgcolor="#d0d0d0" width="${this.classroot.contentWidth}"/>
+				<StorePreviewCustomOptions/>
+				<AxisLayout axis="y" spacing="10"/>
+			</Component>
+			<AxisLayout axis="y" spacing="10"/>
+		</Component>
+		<Component name="buttonSection" placement="footer">
+			<Button name="storePreviewCancelButton" text="${foundationResources.Singleton.storePreviewCancelButton.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.classroot.errorMessage == ''}" isdefault="true" name="storePreviewOkButton" text="${foundationResources.Singleton.storePreviewOkButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.launchStorePreview();
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+		<AxisLayout axis="y"/>
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.populateStoreListDel = new EventHandler.Class(this, "populateStoreList");
+			this.applyStoreDel = new EventHandler.Class(this, "applyStore");
+			this.determineWebPathDel = new EventHandler.Class(this, "determineWebPath");
+			this.validateDel = new EventHandler.Class(this, "validate");
+			this.changeStoreDel = new EventHandler.Class(this, "changeStore");
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="resetStoreList">
+			<![CDATA[
+			this.populatedCount = 0;
+			this.storeList = [];
+			this.addressView.inputTextValueSelector.setListValues(null);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.populateStoreListDel.disconnectAll();
+			delete this.populateStoreListDel;
+			this.applyStoreDel.disconnectAll();
+			delete this.applyStoreDel;
+			this.determineWebPathDel.disconnectAll();
+			delete this.determineWebPathDel;
+			this.validateDel.disconnectAll();
+			delete this.validateDel;
+			this.changeStoreDel.disconnectAll();
+			delete this.changeStoreDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+			
+		<!---
+			@keywords private
+			Method to open the store preview dialog when user clicks 'Store Preview' option.
+			@param Object contextParam: a map of name value pair context parameters. 
+		-->
+		<method args="oEditor, contextParams" name="openStorePreviewDialog">
+			<![CDATA[
+			if (this.inited) {
+				this.resetStoreList();
+			}
+			var contextPreviewURLServiceTriggered = false;
+			var activeView = oEditor.model.activeSelectionView;
+			if (activeView == null) {
+				activeView = oEditor.navigationTree;
+			}
+			var objects = activeView.getSelectedObjects();
+			if (objects.length == 1) {
+				var o = objects[0].getReferencedObject();
+				if (o.objectDefinition.getPreviewURLService != null && !o.newObject) {
+					o.objectDefinition.getPreviewURLService.doRequest(o, {
+						storeId: oEditor.localContext.storeConfig.storeId
+					});
+					contextPreviewURLServiceTriggered = true;
+				}
+			}
+			if (!contextPreviewURLServiceTriggered) {
+				activeView = oEditor.navigationTree;
+				if (activeView != null) {
+					objects = activeView.getSelectedObjects();
+					if (objects.length == 1) {
+						var o = objects[0].getReferencedObject();
+						if (o.objectDefinition.getPreviewURLService != null && !o.newObject && o.objectDefinition.getPreviewURLService.isEnabled(o)) {
+							o.objectDefinition.getPreviewURLService.doRequest(o, {
+								storeId: oEditor.localContext.storeConfig.storeId
+							});
+							contextPreviewURLServiceTriggered = true;
+						}
+					}
+				}
+			}
+			this.openWindow();
+			this.setVariable("storePreviewDialogActive", true);
+			this.setVariable("oEditor", oEditor);
+			this.applyStore(null);
+			if (!contextPreviewURLServiceTriggered) {
+				var caller = this;
+				require(["cmc/foundation/StorePreviewGetStoreListService"], function(StorePreviewGetStoreListService) {
+					StorePreviewGetStoreListService.Singleton.doRequest(caller);
+				});
+				this.selectDefault();
+			}
+			this.resetValues = {
+				optionsOpen: this.optionsOpen,
+				dateTimeRadioSelection: this.storePreviewOptions.dateTimeRadio.getSelection(),
+				dateTimePickerSelectedDateTime: this.storePreviewOptions.dateTimePicker.getDateTime(),
+				timeElapseSelection: this.storePreviewOptions.timeElapse.getSelection(),
+				productRecommendationSelectedValue: this.storePreviewOptions.productRecommendationView.productRecommendation.selectedValue
+			};
+			if (contextParams && contextParams.memberGroupsIncluded) {
+				var mbrGrpIncludedNames = contextParams.memberGroupsIncluded.Names;
+				var mbrGrpIncludedIds = contextParams.memberGroupsIncluded.Ids;
+				this.setVariable("customerSegmentsIncludedNames", mbrGrpIncludedNames);
+				this.setVariable("customerSegmentsIncludedIds", mbrGrpIncludedIds);
+			}
+			else {
+				this.setVariable("customerSegmentsIncludedNames", "");
+				this.setVariable("customerSegmentsIncludedIds", "");
+			}
+			var customOptionsVisible = false;
+			for (var i = 0; i < this.customOptions.length; i++) {
+				this.customOptions[i].initializeOption(contextParams);
+				if (this.customOptions[i].visible) {
+					customOptionsVisible = true;
+				}
+			}
+			if (this.storePreviewOptions.customOptionsView.visible != customOptionsVisible) {
+				this.storePreviewOptions.customOptionsView.setVariable("visible", customOptionsVisible);
+			}
+			this.validate();
+			]]>
+		</method>
+		
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Method to close the store preview dialog and resets oEditor
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.resetValues != null) {
+				this.setVariable("optionsOpen", this.resetValues.optionsOpen);
+				if (this.resetValues.dateTimeRadioSelection == null) {
+					this.storePreviewOptions.dateTimeRadio.clearSelection();
+				}
+				else {
+					this.storePreviewOptions.dateTimeRadio.select(this.resetValues.dateTimeRadioSelection);
+				}
+				this.storePreviewOptions.dateTimePicker.setDateTime(this.resetValues.dateTimePickerSelectedDateTime);
+				if (this.resetValues.timeElapseSelection == null) {
+					this.storePreviewOptions.timeElapse.clearSelection();
+				}
+				else {
+					this.storePreviewOptions.timeElapse.select(this.resetValues.timeElapseSelection);
+				}
+				this.storePreviewOptions.productRecommendationView.productRecommendation.setVariable("selectedValue", this.resetValues.productRecommendationSelectedValue);
+			}
+			this.resetValues = null;
+			this.setVariable("oEditor", null);
+			this.setVariable("storePreviewDialogActive", false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the 'Launch Store Preview' button is clicked by user.
+			It calls the CMWSPreviewSetup command which will setup the preview context and redirect to the preview URL.
+		-->
+		<method name="launchStorePreview">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/StorePreviewDialog", "launchStorePreview()");
+			}
+			StorePreviewUtil.Singleton.launchStorePreview(this.addressView.inputTextValueSelector.text, this.oEditor.localContext, {
+				start: this.storePreviewOptions.dateTimePicker.getDateValue(),
+				status: this.storePreviewOptions.timeElapse.value,
+				invstatus: this.storePreviewOptions.productRecommendationView.productRecommendation.selectedValue.value,
+				includedMemberGroupIds: this.customerSegmentsIncludedIds,
+				customOptions: this.getCustomOptions()
+			});
+			this.resetValues = null;
+			this.closeWindow();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/StorePreviewDialog", "launchStorePreview()");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Creates the list of store addresse URL's
+		-->
+		<method args="customURLList" name="populateCustomURLList">
+			<![CDATA[
+			var inputSelector = this.addressView.inputTextValueSelector;
+			for (var i = 0; i < customURLList.length; i++) {
+				if (inputSelector.items.length >= this.maxURLsToList) {
+					break;
+				}
+				inputSelector.addListValue(customURLList[i]);
+			}
+			this.getStores();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Populate the object's URL in the store addresses list
+		-->
+		<method args="objectURLList" name="populateObjectURLList">
+			<![CDATA[
+			var inputSelector = this.addressView.inputTextValueSelector;
+			for (var i = 0; i < objectURLList.length; i++) {
+				if (inputSelector.items.length >= this.maxURLsToList) {
+					break;
+				}
+				var currentInputSelectorListLength = inputSelector.items.length;
+				inputSelector.addListValue(objectURLList[i]);
+				if (currentInputSelectorListLength == (inputSelector.items.length + 1)) {
+					this.populatedCount++;
+				}
+			}
+			if (objectURLList.length > 0) {
+				inputSelector.inputTextArea.inputText.setText(objectURLList[0].text);
+			}
+			var caller = this;
+			require(["cmc/foundation/StorePreviewGetStoreListService"], function(StorePreviewGetStoreListService) {
+				StorePreviewGetStoreListService.Singleton.doRequest(caller);
+			});
+			this.selectDefault();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Creates the list of store addresse URL's
+		-->
+		<method args="e" name="populateStoreList">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.populateStoreListDel.disconnectAll();
+			var inputSelector = this.addressView.inputTextValueSelector;
+			for (var i = this.populatedCount; i < this.storeList.length; i++) {
+				if (inputSelector.items.length >= this.maxURLsToList) {
+					break;
+				}
+				var newStore = this.storeList[i];
+				if (!newStore.configurationLoaded) {
+					this.populateStoreListDel.connect(newStore, "onconfigurationLoaded");
+					newStore.loadConfiguration();
+					break;
+				}
+				var storeURL = this.getStoreURL(newStore.storeId, "StoreView");
+				var storeName = newStore.storeName;
+				var currentInputSelectorListLength = inputSelector.items.length;
+				inputSelector.addListValue({
+					"alias": storeName,
+					"text": storeURL
+				});
+				if (currentInputSelectorListLength == (inputSelector.items.length + 1)) {
+					this.populatedCount++;
+				}
+				if (inputSelector.items.length < this.maxURLsToList) {
+					if (newStore.staticContent.storeLevel && newStore.staticContent.storeLevel.indexOf("MOBILE") != -1 && newStore.storeFlowOptions.UseCommerceComposer != "true") {
+						storeURL = this.getStoreURL(newStore.storeId, "m20StoreView");
+						storeName = newStore.storeName;
+						inputSelector.addListValue({
+							"alias": storeName,
+							"aliasQualifierKey": foundationResources.Singleton.storePreviewMobileStore,
+							"text": storeURL
+						});
+					}
+				}
+			}
+			if (inputSelector.items.length >= this.maxURLsToList || this.populatedCount == this.storeList.length) {
+				inputSelector.addListValue(SearchListItem.Singleton);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args" name="applyStore">
+			<![CDATA[
+			if (args != null && args.store != null) {
+				var storeview;
+				var storename;
+				if (args.mobile) {
+					storeview = "m20StoreView";
+					storename = args.store.storeName + " - " + foundationResources.Singleton.storePreviewMobileStore.string;
+				}
+				else {
+					storeview = "StoreView";
+					storename = args.store.storeName;
+				}
+				this.addressView.inputTextValueSelector.inputTextArea.inputText.setText(this.getStoreURL(args.store.storeId, storeview));
+				this.aliasView.aliasText.setText(storename);
+			}
+			else {
+				this.addressView.inputTextValueSelector.inputTextArea.inputText.setText("");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method will call the get all customer facing stores service.
+		-->
+		<method name="getStores">
+			<![CDATA[
+			var caller = this;
+			require(["cmc/foundation/StoreSelectionGetStoreListService"], function(StoreSelectionGetStoreListService) {
+				StoreSelectionGetStoreListService.Singleton.doRequest(caller, {
+					usage: "IBM_CustomerFacingStore"
+				});
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method will get called after the cmc/foundation/StoreSelectionGetStoreListService is completed.
+			Set the storeList with the stores returned by the service.
+		-->
+		<method args="stores" name="setValues">
+			<![CDATA[
+			for (var i = 0; i < stores.length; i++) {
+				this.storeList.push(stores[i]);
+			}
+			this.determineWebPath();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Determine the store's web path to be used for constructing the store home page URL.
+		-->
+		<method args="e" name="determineWebPath">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.storesWebPath == "") {
+				for (var storeId in StoreUtil.Singleton.storeMap) {
+					if (StoreUtil.Singleton.storeMap[storeId].configurationLoaded) {
+						this.storesWebPath = StoreUtil.Singleton.storeMap[storeId].staticContent.contextPath + StoreUtil.Singleton.storeMap[storeId].staticContent.urlMappingPath;
+						this.selectDefault();
+						break;
+					}
+				}
+				if (this.storesWebPath == "" && this.storeList.length > 0) {
+					this.determineWebPathDel.disconnectAll();
+					this.determineWebPathDel.connect(this.storeList[0], "onconfigurationLoaded");
+					this.storeList[0].loadConfiguration();
+				}
+			}
+			if (this.storesWebPath != "" && this.storeList.length > 0) {
+				this.determineWebPathDel.disconnectAll();
+				this.populateStoreList();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the store's home page URL based on a specified store ID.
+		-->
+		<method args="storeId, action" name="getStoreURL">
+			<![CDATA[
+			var currentURL = window.location;
+			var urlPrefix = "";
+			var isRemote = "true";
+			var storeConfig = StoreUtil.Singleton.storeMap[storeId];
+			
+			
+			if (storeConfig.isRemoteStore!= null && storeConfig.isRemoteStore.isRemote !=null ){
+			    isRemote=storeConfig.isRemoteStore.isRemote;
+			}
+			urlPrefix = "http://" + currentURL.hostname + this.storesWebPath + "/" + action + "?storeId=";
+			if (storeConfig.remoteStoreServerConfig != null && storeConfig.remoteStoreServerConfig.remoteWebServerHostName != "" && isRemote == "true") {	
+				urlPrefix = "http://" 
+						+ storeConfig.remoteStoreServerConfig.remoteWebServerHostName;
+						
+				var storePortName = storeConfig.remoteStoreServerConfig.remoteWebServerPort;
+				if(storePortName == "80"){
+					storePortName = "";
+				}else{
+					storePortName = ":" + storePortName;
+				}
+				urlPrefix = urlPrefix + storePortName
+						+ storeConfig.remoteStoreServerConfig.remoteWebServerContextPath 
+						+ storeConfig.staticContent.urlMappingPath 
+						+ "/" + action  + "?storeId=";
+			}
+			
+			return urlPrefix + storeId;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Selects the default address list that we want to show up when the dialog opens
+		-->
+		<method name="selectDefault">
+			<![CDATA[
+			if (this.storesWebPath != "" && this.addressView.inputTextValueSelector.text == "") {
+				if (this.oEditor.localContext && this.oEditor.localContext.storeConfig.storeName != "") {
+					var caller = this;
+					require(["cmc/foundation/StoreSelectionGetDefaultStoreService"], function(StoreSelectionGetDefaultStoreService) {
+						StoreSelectionGetDefaultStoreService.Singleton.doRequest(caller, {
+							storeName: caller.oEditor.localContext.storeConfig.storeName,
+							usage: "IBM_CustomerFacingStore"
+						});
+					});
+				}
+				else if (PreferenceManager.Singleton.getPreference("CMCDefaultStore") != "") {
+					var caller = this;
+					require(["cmc/foundation/StoreSelectionGetDefaultStoreService"], function(StoreSelectionGetDefaultStoreService) {
+						StoreSelectionGetDefaultStoreService.Singleton.doRequest(caller, {
+							storeName: PreferenceManager.Singleton.getPreference("CMCDefaultStore"),
+							usage: "IBM_CustomerFacingStore"
+						});
+					});
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Method that is called when cmc/foundation/StoreSelectionGetDefaultStoreService returns the user preference store object
+		-->
+		<method args="store" name="changeStore">
+			<![CDATA[
+			this.changeStoreDel.disconnectAll();
+			if (!store.configurationLoaded) {
+				this.changeStoreDel.connect(store, "onconfigurationLoaded");
+			}
+			else {
+				this.applyStore({
+					store: store,
+					mobile: false
+				});
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the focus in a deferred callback registered in cmc/foundation/Window.
+		-->
+		<method name="setFocusToModalComponent">
+			<![CDATA[
+			FocusUtil.setFocus(this.addressView.inputTextValueSelector.inputTextArea.inputText);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method args="newOption" name="addCustomOption">
+			<![CDATA[
+			this.customOptions.push(newOption);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="getCustomOptions">
+			<![CDATA[
+			var options = "";
+			if (this.customOptions.length > 0) {
+				for (var i = 0; i < this.customOptions.length; i++) {
+					options += "&" + this.customOptions[i].optionName + "=" + encodeURIComponent(this.customOptions[i].getValue());
+				}
+			}
+			return options;
+			]]>
+		</method>
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="validate">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.validateDel.disconnectAll();
+			var newMessage = "";
+			var dateTimeError = false;
+			this.validateDel.connect(this.addressView.inputTextValueSelector, "ontext");
+			if (StringUtil.Singleton.trim(this.addressView.inputTextValueSelector.text) == "") {
+				newMessage = foundationResources.Singleton.storePreviewEmptyURL.string;
+				this.validateDel.connect(foundationResources.Singleton.storePreviewEmptyURL, "onstring");
+			}
+			else {
+				this.validateDel.connect(this.storePreviewOptions.dateTimePicker, "ondateTime");
+				this.validateDel.connect(this.storePreviewOptions.dateTimePicker, "onenabled");
+				if (this.storePreviewOptions.dateTimePicker.enabled && this.storePreviewOptions.dateTimePicker.getDateTime() == null) {
+					dateTimeError = true;
+					newMessage = foundationResources.Singleton.storePreviewInvalidDate.string;
+					this.validateDel.connect(foundationResources.Singleton.storePreviewInvalidDate, "onstring");
+				}
+			}
+			this.setVariable("errorMessage", newMessage);
+			this.storePreviewOptions.dateTimePicker.setVariable("hasError", dateTimeError);
+			if (dateTimeError) {
+				this.setVariable("optionsOpen", true);
+			}
+			]]>
+		</method>
+		
+	</Dialog>
+			
+	<!--- Store selection widget search service. -->
+	<Service definitionName="cmc/foundation/StorePreviewGetStoreListService" retryOnError="true" sendIdentity="false" sendLocale="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/xml/StorePreviewAlias.xml">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			Parse the store objects.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			var customURLList = [];
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var e = dataElement.childNodes[i];
+				if (e.nodeName == "storeAlias") {
+					var textNode = e.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4) && e.getAttribute("name")) {
+						customURLList.push({
+							alias: e.getAttribute("name"),
+							text: StringUtil.Singleton.trim(textNode.nodeValue, StringUtil.Singleton.trimWhiteSpaceAndLineFeed)
+						});
+					}
+				}
+			}
+			requestParent.populateCustomURLList(customURLList);
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		List item used for drop down lists inside {@Link cmc/foundation/StorePreviewDialog}
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/PreviewListItem">
+		<!---
+			@keywords private
+			Text of item that will be displayed in the list
+		-->
+		<variable name="text" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			value of the list item
+		-->
+		<variable name="value" type="string"/>
+		<!---
+			@keywords private
+			Text key when setting the text from a resource value
+		-->
+		<variable name="textKey" value="${null}"/>
+		<!---
+			@keywords private
+			Tracks if this item is currently selected
+		-->
+		<variable name="selected" type="boolean" value="false"/>
+
+		<handler name="oninit">
+			<![CDATA[
+			this.parent.addItem(this.text, this.value, this.textKey);
+			if (this.selected) {
+				this.parent.selectItem(this.value);
+			}
+			]]>
+		</handler>
+	</Node>
+		
+	<!---
+		@keywords private
+		List item that acts as a button to launch the store find dialog in store preview url list
+	-->
+	<Node definitionName="cmc/foundation/SearchListItem" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			@keywords private
+			List item text that will be displayed inside the drop down
+		-->
+		<variable name="text" value="${null}"/>
+		<!---
+			@keywords private
+			Key for list item text that will be displayed inside the drop down
+		-->
+		<variable name="textKey" value="${foundationResources.Singleton.searchButton}"/>
+		
+		<!---
+			@keywords private
+			Puts a seperator before the displayed text
+		-->
+		<variable name="addSeparatorBefore" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Icon to be displayed infront of the text
+		-->
+		<variable name="icon" type="string" value=""/>
+			<!---
+			@keywords private
+			If item is selectable then the checkmark will display when the user selects it
+		-->
+		<variable name="selectable" type="boolean" value="false"/>
+	</Node>
+	
+	<!---
+		@keywords private
+
+		This utility provides methods for launching store preview.
+	-->
+	<Node definitionName="cmc/foundation/StorePreviewUtil" singletonDefinition="true">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			@keywords private
+			Returns the preview path. Preview path is in the form of "/webapp/wcs/preview/".
+		-->				
+		<method name="getPreviewPath">
+			<![CDATA[
+			return (cmcConfig.previewWebPath ? cmcConfig.previewWebPath : "/webapp/wcs/preview/servlet");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Encode a set of keywords in UTF-8 format. This will leave the separation character and protocol intact.
+	 		@param url The URL to encode.
+	 		@return The URL with all keywords encoded
+		-->				
+		<method args="url" name="encodeURL">
+			<![CDATA[
+			var encodedURL = "";
+			var protocol = "";
+			var trailingSlash = false;
+			if (url.charAt(url.length - 1) == '/') {
+				trailingSlash = true;
+			}
+			if (url.indexOf("://") != -1) {
+				protocol = url.split("://")[0];
+				url = url.split("://")[1];
+			}
+			var keywords = url.split("/");
+			var newURL = "";
+			for (var i = 0; i < keywords.length; i++) {
+				var encodedKeyword = encodeURIComponent(keywords[i]);
+				newURL += encodedKeyword;
+				if (i < keywords.length - 1 || trailingSlash) {
+					newURL += "/";
+				}
+			}
+			if (protocol != "") {
+				encodedURL = protocol + "://";
+			}
+			encodedURL += newURL;
+			return encodedURL;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the preview URL. Preview URL is in the form of "<previewProtocol>://<hostname>:<previewPort>/webapp/wcs/tools/servlet/PreviewStore".
+		-->				
+		<method name="getStorePreviewerUrl">
+			<![CDATA[
+			if (!this.storePreviewerUrl) {
+				var url = window.location;
+				var previewProtocol = (cmcConfig.previewProtocol ? cmcConfig.previewProtocol : url.protocol.substring(0, url.protocol.length - 1));
+				var previewPort = (cmcConfig.previewPort ? cmcConfig.previewPort : url.port);
+				var previewWebPath = this.getPreviewPath();
+				if (cmcConfig.previewPort && !cmcConfig.previewProtocol) {
+					previewProtocol = "https";
+				}
+				this.storePreviewerUrl = previewProtocol + "://" + url.hostname + ((previewPort != null && previewPort != "") ? (":" + previewPort) : "") + previewWebPath + "/PreviewStore" + "?newPreviewSession=true&cmcPath=" + url.protocol.substring(0, url.protocol.length - 1) + "://" + url.hostname + ((url.port != null && url.port != "") ? (":" + url.port) : "") + (cmcConfig.serviceContextRoot ? cmcConfig.serviceContextRoot : "/lobtools") + "&cmcWindow=" + RootComponent.Singleton.getWindowName();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "FINER", "cmc/foundation/StorePreviewUtil", "getStorePreviewerUrl()", "URL=" + this.storePreviewerUrl);
+			}
+			return this.storePreviewerUrl;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is launches store preview. It calls the CMWSPreviewSetup command which will setup the preview context and redirect to the preview URL.
+		-->
+		<method args="storeURL, localContext, previewOptions" name="launchStorePreview">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/StorePreviewUtil", "launchStorePreview()");
+			}
+			var previewUrl = (cmcConfig.serviceContextRoot ? cmcConfig.serviceContextRoot : "/lobtools") + "/cmc/CMWSPreviewSetup";
+			previewUrl += "?redirecturl=" + this.getStorePreviewerUrl();
+			var redirectstoreurl = StringUtil.Singleton.trim(storeURL);
+			if (redirectstoreurl.indexOf("?") == -1) {
+				redirectstoreurl = this.encodeURL(redirectstoreurl);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "FINER", "cmc/foundation/StorePreviewUtil", "launchStorePreview()", "store URL=" + redirectstoreurl);
+			}
+			if (redirectstoreurl.indexOf("?") != -1) {
+				while (redirectstoreurl.indexOf("&") != -1) {
+					var index = redirectstoreurl.indexOf("&");
+					redirectstoreurl = redirectstoreurl.substring(0, index) + "~~amp~~" + redirectstoreurl.substring(index + 1);
+				}
+			}
+			previewUrl += "&redirectstoreurl=" + redirectstoreurl;
+			var previewRestURI = "/wcs/previewresources";
+			if (localContext != null && localContext.storeConfig && localContext.storeConfig.remoteWidgets != null && localContext.storeConfig.remoteWidgets.restPreviewContextPath != "") {
+				previewRestURI = localContext.storeConfig.remoteWidgets.restPreviewContextPath;
+			}
+			previewUrl += "&previewRestURI=" + previewRestURI;
+			previewUrl += "&previewPath=" + this.getPreviewPath();
+			if (previewOptions != null && previewOptions.start != null) {
+				previewUrl += "&start=" + previewOptions.start;
+			}
+			previewUrl += "&status=" + ((previewOptions != null && previewOptions.status != null) ? previewOptions.status : "false");
+			previewUrl += "&invstatus=" + ((previewOptions != null && previewOptions.invstatus != null) ? previewOptions.invstatus : "0");
+			previewUrl += "&timeZoneId=" + ContextUtil.Singleton.findContextValue(null, "timeZoneId").value;
+			previewUrl += "&dateFormat=" + DateUtil.Singleton.getDatePreferenceFormat();
+			previewUrl += "&timeFormat=" + DateUtil.Singleton.getTimePreferenceFormat();
+			var includedMemberGroupIds = (previewOptions != null && previewOptions.includedMemberGroupIds != null) ? previewOptions.includedMemberGroupIds : null;
+			if (includedMemberGroupIds == null) {
+				includedMemberGroupIds = "";
+			}
+			previewUrl += "&includedMemberGroupIds=" + includedMemberGroupIds;
+			if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+				previewUrl += "&workspaceId=" + ContextUtil.Singleton.findContextValue(null, "workspaceId").value;
+				previewUrl += "&taskGroupId=" + ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroupId").value;
+				previewUrl += "&taskId=" + ContextUtil.Singleton.findContextValue(null, "workspaceTaskId").value;
+			}
+			var identityId = ContextUtil.Singleton.findContextValue(null, "identityId");
+			if (identityId) {
+				previewUrl += "&identityId=" + encodeURIComponent(identityId.value);
+			}
+			var locale = ContextUtil.Singleton.findContextValue(null, "locale");
+			if (locale) {
+				previewUrl += "&locale=" + locale.value;
+			}
+			var userId = ContextUtil.Singleton.findContextValue(null, "userId");
+			if (userId && userId.value) {
+				previewUrl += "&userId=" + userId.value;
+			}
+			if (previewOptions != null && previewOptions.customOptions != null) {
+				previewUrl += previewOptions.customOptions;
+			}
+			var identitySignature = ContextUtil.Singleton.findContextValue(null, "identitySignature");
+			var WCToken = ContextUtil.Singleton.findContextValue(null, "WCToken");
+			var WCTrustedToken = ContextUtil.Singleton.findContextValue(null, "WCTrustedToken");
+			var newWindowObj = new Object();
+			newWindowObj.URL = "";
+			newWindowObj.windowName = "Preview_Window";
+			newWindowObj.windowFeatures = "scrollbars=yes,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+			newWindowObj.windowWidth = 1014;
+			newWindowObj.windowHeight = 710;
+			newWindowObj.content = "<html><body><form action=\"" + previewUrl + "\" method=\"POST\">";
+			if (identitySignature) {
+				newWindowObj.content += "<input type=\"hidden\" name=\"identitySignature\" value=\"" + identitySignature.value + "\">";
+			}
+			if (WCToken && WCToken.value) {
+				newWindowObj.content += "<input type=\"hidden\" name=\"WCToken\" value=\"" + WCToken.value + "\">";
+			}
+			if (WCTrustedToken && WCTrustedToken.value) {
+				newWindowObj.content += "<input type=\"hidden\" name=\"WCTrustedToken\" value=\"" + WCTrustedToken.value + "\">";
+			}
+			newWindowObj.content += "</form></body></html>";
+			newWindowObj.submitForm = true;
+			openNewCenteredWindow(newWindowObj);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/StorePreviewUtil", "launchStorePreview()");
+			}
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

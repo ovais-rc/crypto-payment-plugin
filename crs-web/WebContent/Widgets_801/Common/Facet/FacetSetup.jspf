@@ -1,0 +1,128 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN FacetSetup.jspf-->
+
+<c:if test="${empty includedCategoryNavigationSetupJSPF}">
+	<c:set var="includedCategoryNavigationSetupJSPF" value="includedCategoryNavigationSetupJSPF" scope="request"/> <%-- For singleton feature --%>
+
+	<c:set var="categoryId" value="${WCParam.categoryId}"/>
+	<c:if test = "${empty categoryId}">
+		<c:set var="categoryId" value="${param.categoryId}"/>
+	</c:if>
+
+	<c:set var="searchType" value="${WCParam.searchType}" scope="request"/>
+	
+	<%-- Do not need to get category facets separately in case of expanded category navigation. --%>
+	<c:set var="fetchFacetsSeparately" value="false"/>
+	
+	<flow:ifDisabled feature="ExpandedCategoryNavigation">
+		<c:set var="fetchFacetsSeparately" value="true"/>
+	</flow:ifDisabled>
+	
+	<c:if test="${!empty WCParam.fetchFacets || WCParam.loadProductsList != 'true'}">
+		<c:set var="fetchFacetsSeparately" value="true"/>
+	</c:if>
+	
+	<c:if test="${fetchFacetsSeparately eq 'true'}">
+		<%-- Use a deep search with no filters in order to populate the complete child category list with product counts.  Since the category search will return only the category facet belonging to the resulting products, we must use this for now to obtain the complete view.  --%>
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byCategory/${WCParam.categoryId}" >
+				<wcf:param name="searchType" value="${searchType}" />
+				<wcf:param name= "profileName" value="IBM_ComposeFacetListByCategoryId" />
+				<wcf:param name="searchSource" value="${WCParam.searchSource}" />
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name = "buyable" value ="1" />
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<c:forEach var="contractId" items="${env_activeContractIds}">
+					<wcf:param name="contractId" value="${contractId}"/>
+				</c:forEach>
+			</wcf:rest>
+			<c:set var="globalcategories" value="${catalogNavigationView.facetView}" scope="request"/>
+		</c:catch>
+	</c:if>
+
+	<%-- Category navigation.  Only display products and facets belonging to the current category with a shallow search --%>
+
+ 	
+	<c:if test="${empty pageSize}" >
+		<c:set var="pageSize" value="${param.resultsPerPage}"/>
+		<c:if test="${empty pageSize}">
+			<c:set var="pageSize" value="12"/>
+		</c:if>
+	</c:if>
+	<c:if test="${empty pageNum}" >
+		<c:set var="pageNum" value = "0"/>
+	</c:if>
+	<c:if test="${empty WCParam.fetchFacets || WCParam.loadProductsList == 'true' }">
+	<c:catch var="searchServerException">
+		<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byCategory/${WCParam.categoryId}" >
+			<wcf:param name="pageSize" value="${pageSize}" />
+			<wcf:param name="pageNumber" value="${pageNum + 1}" />
+			<wcf:param name="searchProfile" value="${searchProfile}" />
+			<wcf:param name="searchTerm" value="${newSearchTerm}" />
+			<wcf:param name="intentSearchTerm" value="${intentSearchTerm}" />
+			<wcf:param name="searchType" value="${searchType}" />
+			<wcf:param name="searchSource" value="${WCParam.searchSource}" />
+			<wcf:param name="metaData" value="${WCParam.metaData}" />
+			<wcf:param name="orderBy" value="${WCParam.orderBy}" />
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="currency" value="${env_currencyCode}"/>
+			<wcf:param name="responseFormat" value="json"/>		
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<c:forEach var="entry" items="${WCParam}">
+				<c:choose>
+					<c:when test="${fn:startsWith(entry.key, 'facet_') && !empty WCParam[entry.key]}">
+						<wcf:param name="facet" value="${WCParam[entry.key]}" />
+					</c:when>
+					<c:when test="${fn:startsWith(entry.key, 'facetLimit_') && !empty WCParam[entry.key]}">
+						<wcf:param name="facetLimit" value="${WCParam[entry.key]}" />
+					</c:when>
+				</c:choose>
+			</c:forEach>
+			<wcf:param name="advancedFacetList" value="${newAdvancedFacetList}"/>
+			<wcf:param name="categoryId" value="${currentCategoryId}" />
+			<wcf:param name="filterTerm" value="${newFilterTerm}" />
+			<wcf:param name="filterType" value="${WCParam.filterType}" />
+			<wcf:param name="filterFacet" value="${WCParam.filterFacet}" />
+			<wcf:param name="manufacturer" value="${newManufacturer}" />
+			<wcf:param name="minPrice" value="${WCParam.minPrice}" />
+			<wcf:param name="maxPrice" value="${WCParam.maxPrice}" />
+			<wcf:param name="physicalStoreIds" value="${cookieVal}" />
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+	</c:catch>
+	</c:if>
+	<c:if test="${fetchFacetsSeparately eq 'false'}">
+		<c:set var="globalcategories" value="${catalogNavigationView.facetView}" scope="request"/>
+	</c:if>
+
+	<fmt:parseNumber var="recordSetTotal" value="${catalogNavigationView.recordSetTotal}" integerOnly="true"/> 
+
+	<c:set var="globalfacets" value="${catalogNavigationView.facetView}" scope="request"/>
+	<c:set var="globalresults" value="${catalogNavigationView.catalogEntryView}" scope="request"/>
+	<c:set var="globalbreadcrumbs" value="${catalogNavigationView}" scope="request"/>
+	<c:set var="totalCount" value="${recordSetTotal}" scope="request"/>
+	<c:if test="${empty totalCount}">
+		<c:set var="totalCount" value="0" scope="request"/>
+	</c:if>	
+	<c:set var="searchTerm" value="${responseSearchTerm}" scope="request"/>
+	<c:set var="searchMissed" value="false" scope="request"/>
+	<c:set var="globalpricemode" value="${catalogNavigationView.metaData.price}" scope="request"/>
+</c:if>
+<!-- END FacetSetup.jspf-->

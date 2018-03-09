@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+	-->
+	<PrimaryObjectDefinition creatable="true" definitionName="cmc/workspace/Task" displayName="${workspaceResources.task}" displayNameProperty="taskName" headerIcon="taskHeaderIcon" helpLink="tasks/twocreatet.htm" icon="taskIcon" idProperty="taskId" initializeObjectStoreId="false" newObjectMenuItemText="${workspaceResources.newTask}" objectType="Task" propertiesDefinition="cmc/workspace/TaskProperties" saveParentPrimaryObject="true" searchType="FindTasks">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+		<!--- Retrieves the {@link cmc/workspace/TaskGroupPrimaryObjectDefinition Task Group} object that refers to this object. -->
+		<GetReferencesService sendWorkspaceContext="false" url="/cmc/GetTaskGroupByTaskId">
+			<ServiceParam name="taskId" propertyName="taskId"/>
+			<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+			<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+		</GetReferencesService>
+		<!--- Retrieves the Contributors for this task. -->
+		<GetChildrenService objectTypes="ContributorAssociation" sendWorkspaceContext="false" url="/cmc/GetTaskContributors">
+			<ServiceParam name="taskId" propertyName="taskId"/>
+			<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+			<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+		</GetChildrenService>
+		<!--- Retrieves the {@link cmc/workspace/TaskGroupComments TaskGroupComment} child objects. -->
+		<GetChildrenService objectTypes="TaskGroupComment" sendWorkspaceContext="false" url="/cmc/GetTaskGroupComments">
+			<ServiceParam name="taskGroupId" parentProperty="true" parentType="TaskGroup" propertyName="taskGroupId"/>
+		</GetChildrenService>
+		<RefreshService url="/cmc/GetTask">
+			<ServiceParam name="taskId" propertyName="taskId"/>
+			<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+			<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+		</RefreshService>
+		<CreateService sendMultiValues="true" url="/cmc/CreateTask">
+			<ServiceParam name="taskGroupId" optional="false" parentProperty="true" parentType="TaskGroup" propertyName="taskGroupId"/>
+			<ServiceParam name="taskMemberId" objectPath="ContributorAssociation/Contributor" optional="true" propertyName="memberId"/>
+		</CreateService>
+		<UpdateService sendMultiValues="true" url="/cmc/UpdateTask">
+			<ServiceParam name="taskId" propertyName="taskId"/>
+			<ServiceParam name="taskMemberId" objectPath="ContributorAssociation/Contributor" optional="true" propertyName="memberId"/>
+		</UpdateService>
+		<DeleteService url="/cmc/DeleteTask">
+			<ServiceParam name="taskId" propertyName="taskId"/>
+		</DeleteService>
+		<ChildObjectDefinition baseDefinition="cmc/workspace/TaskGroupComments">
+			<EnablementAndCondition>
+				<EnablementOrCondition>
+					<EnablementCondition enablementValue="1" parentProperty="true" parentType="TaskGroup" propertyName="status"/>
+					<EnablementCondition enablementValue="2" parentProperty="true" parentType="TaskGroup" propertyName="status"/>
+					<EnablementCondition enablementValue="3" parentProperty="true" parentType="TaskGroup" propertyName="status"/>
+				</EnablementOrCondition>
+				<EnablementOrCondition>
+					<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+					<EnablementCondition contextName="workspaceContributor" enablementValue="true"/>
+					<EnablementAndCondition>
+						<EnablementCondition contextName="workspaceApprover" enablementValue="true"/>
+						<EnablementOrCondition>
+							<LogonIdEnablementCondition conditionId="approverIdCondition1" objectPath="ApproverAssociation/Approver" package="cmc/workspace" parentProperty="true" parentType="TaskGroup" propertyName="logonId"/>
+							<LogonIdEnablementCondition conditionId="approverIdCondition2" objectPath="ApproverAssociation/Approver" package="cmc/workspace" propertyName="logonId"/>
+						</EnablementOrCondition>
+					</EnablementAndCondition>
+				</EnablementOrCondition>
+			</EnablementAndCondition>
+		</ChildObjectDefinition>
+		<Xml name="template">
+			<status>INACTIVE</status>
+		</Xml>
+		<TaskWorkOnClientAction package="cmc/workspace"/>
+		<TaskCompleteClientAction package="cmc/workspace"/>
+		<TaskApproveClientAction package="cmc/workspace"/>
+		<ContributorTaskRejectClientAction package="cmc/workspace"/>
+		<ApprovalTaskRejectClientAction package="cmc/workspace"/>
+		<TaskReturnToActiveClientAction package="cmc/workspace"/>
+		<PropertyDefinition copyProtected="true" displayName="${workspaceResources.status}" propertyName="status" send="false"/>
+		<PropertyDefinition displayName="${workspaceResources.taskName}" maximumSize="254" propertyName="taskName" required="true" trim="true"/>
+		<PropertyDefinition displayName="${workspaceResources.dueDate}" propertyName="dueDate" type="datetime"/>
+		<RequiredParentValidator errorMessage="${workspaceResources.missingTaskGroupParent}" validatorId="parentExistsCheck" validatorType="requiredParentTaskGroupValidator"/>
+		<ReferenceObjectDefinition allowDuplicates="false" derivedId="true" idProperty="associationId" objectType="ContributorAssociation" referencedTypes="Contributor"/>
+	</PrimaryObjectDefinition>
+
+
+	<!---
+		@keywords private
+		Client action definition that enables users to work on a task in workspace.
+	-->
+	<ClientAction allowMultipleSelection="false" classDefinition="true" definitionName="cmc/workspace/TaskWorkOnClientAction" displayName="${workspaceResources.Singleton.workOn.string}" toolbarIcon="taskWorkOnButton">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			require(["cmc/workspace/TaskRefreshServiceForWorkOnTask"], function(TaskRefreshServiceForWorkOnTask) {
+				TaskRefreshServiceForWorkOnTask.Singleton.doRequest(objects[0]);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="TODO" propertyName="status"/>
+				<EnablementCondition enablementValue="REDO" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementCondition>
+				<!--- @keywords private -->
+				<method args="o" name="isEnabled">
+					<![CDATA[
+					if (o.getPropertyValue("taskIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTask").value) {
+						return false;
+					}
+					return true;
+					]]>
+				</method>
+				<!--- @keywords private -->
+				<method args="o, del" name="registerDelegate">
+					<![CDATA[
+					del.connect(ContextUtil.Singleton.findContextValue(null, "workspaceTask"), "onvalue");
+					]]>
+				</method>
+			</EnablementCondition>
+			<EnablementOrCondition>
+				<EnablementAndCondition>
+					<EnablementCondition contextName="workspaceContributor" enablementValue="true"/>
+					<EnablementCondition contextName="workspaceApprover" enablementValue="false"/>
+					<EnablementCondition contextName="workspaceManager" enablementValue="false"/>
+				</EnablementAndCondition>
+				<LogonIdEnablementCondition objectPath="ContributorAssociation/Contributor" package="cmc/workspace" propertyName="logonId"/>
+			</EnablementOrCondition>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that completes a task in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/TaskCompleteClientAction" displayName="${workspaceResources.Singleton.markComplete.string}" toolbarIcon="taskMarkCompleteButton">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+				WorkspaceUtil.Singleton.completeTasks(objects);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="TODO" propertyName="status"/>
+				<EnablementCondition enablementValue="REDO" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementCondition enablementValue="1" propertyName="usage"/>
+			<EnablementOrCondition>
+				<EnablementAndCondition>
+					<EnablementCondition contextName="workspaceContributor" enablementValue="true"/>
+					<EnablementCondition contextName="workspaceApprover" enablementValue="false"/>
+					<EnablementCondition contextName="workspaceManager" enablementValue="false"/>
+				</EnablementAndCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<LogonIdEnablementCondition objectPath="ContributorAssociation/Contributor" package="cmc/workspace" propertyName="logonId"/>
+			</EnablementOrCondition>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that approves a task in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/TaskApproveClientAction" displayName="${workspaceResources.Singleton.approve.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var taskGroups = [];
+			for (var i = 0; i < objects.length; i++) {
+				taskGroups.push(objects[i].getParentPrimaryObject());
+			}
+			require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+				WorkspaceUtil.Singleton.approveTaskGroups(taskGroups);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="TODO" propertyName="status"/>
+				<EnablementCondition enablementValue="REDO" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementCondition enablementValue="2" propertyName="usage"/>
+			<EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<LogonIdEnablementCondition objectPath="ContributorAssociation/Contributor" package="cmc/workspace" propertyName="logonId"/>
+			</EnablementOrCondition>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that rejects a contributor task in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/ContributorTaskRejectClientAction" displayName="${workspaceResources.Singleton.reject.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="TaskRejectService" moduleName="cmc/workspace/TaskRejectService"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			for (var i = 0; i < objects.length; i++) {
+				TaskRejectService.Singleton.doRequest(objects[i]);
+			}
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementCondition enablementValue="COMPLETED" propertyName="status"/>
+			<EnablementCondition enablementValue="1" propertyName="usage"/>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="1" parentProperty="true" propertyName="status"/>
+				<EnablementCondition enablementValue="2" parentProperty="true" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<LogonIdEnablementCondition objectPath="ApproverAssociation/Approver" package="cmc/workspace" parentProperty="true" parentType="TaskGroup" propertyName="logonId"/>
+			</EnablementOrCondition>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that rejects an approval task in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/ApprovalTaskRejectClientAction" displayName="${workspaceResources.Singleton.reject.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var taskGroups = [];
+			for (var i = 0; i < objects.length; i++) {
+				taskGroups.push(objects[i].getParentPrimaryObject());
+			}
+			require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+				WorkspaceUtil.Singleton.rejectTaskGroups(taskGroups);
+			});
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="TODO" propertyName="status"/>
+				<EnablementCondition enablementValue="REDO" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementCondition enablementValue="2" propertyName="usage"/>
+			<EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<LogonIdEnablementCondition objectPath="ContributorAssociation/Contributor" package="cmc/workspace" propertyName="logonId"/>
+			</EnablementOrCondition>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		Client action definition that returns a task to active in workspace.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/workspace/TaskReturnToActiveClientAction" displayName="${workspaceResources.Singleton.returnToActive.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="TaskReturnToActiveService" moduleName="cmc/workspace/TaskReturnToActiveService"/>
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action is executed from the "Edit" menu,
+			toolbar or the context menu.
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			for (var i = 0; i < objects.length; i++) {
+				TaskReturnToActiveService.Singleton.doRequest(objects[i]);
+			}
+			]]>
+		</method>
+
+		<EnablementAndCondition>
+			<EnablementCondition enablementValue="COMPLETED" propertyName="status"/>
+			<EnablementCondition enablementValue="1" propertyName="usage"/>
+			<EnablementOrCondition>
+				<EnablementCondition enablementValue="1" parentProperty="true" propertyName="status"/>
+				<EnablementCondition enablementValue="2" parentProperty="true" propertyName="status"/>
+			</EnablementOrCondition>
+			<EnablementOrCondition>
+				<EnablementCondition contextName="workspaceManager" enablementValue="true"/>
+				<LogonIdEnablementCondition objectPath="ApproverAssociation/Approver" package="cmc/workspace" parentProperty="true" parentType="TaskGroup" propertyName="logonId"/>
+			</EnablementOrCondition>
+		</EnablementAndCondition>
+	</ClientAction>
+
+	<Service definitionName="cmc/workspace/TaskRefreshServiceForWorkOnTask" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetTask">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskId" propertyName="taskId"/>
+		<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+		<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			if (requestParent.getPropertyValue("status") == "TODO" || requestParent.getPropertyValue("status") == "REDO") {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnTask(requestParent);
+				});
+			}
+			else {
+				MessageLogger.Singleton.logException("", workspaceResources.Singleton.workOnTaskWrongStatus.string);
+			}
+			]]>
+		</method>
+	</Service>
+
+	<Service definitionName="cmc/workspace/TaskCompleteService" sendSiblingRequestsInParallel="false" sendWorkspaceContext="false" singletonDefinition="true" transactionService="true" url="/cmc/CompleteTask">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskId" propertyName="taskId"/>
+		<ServiceParam parameterName="taskGroupId" parentProperty="true" propertyName="taskGroupId"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var successMessage = foundationResources.Singleton.replaceValues("customServiceSuccessful", [workspaceResources.Singleton.markComplete.string, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			MessageLogger.Singleton.logStatus(successMessage);
+			if (requestParent.getPropertyValue("taskIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTask").value) {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.clearContext();
+				});
+			}
+			for (var refKey in requestParent.referenceMap) {
+				if (requestParent.referenceMap[refKey].objectType == "ChildTask") {
+					var parentTaskGroup = requestParent.referenceMap[refKey].parentObject;
+					if (parentTaskGroup.objectType == "TaskGroup") {
+						parentTaskGroup.refreshing = true;
+						parentTaskGroup.objectDefinition.refreshService.doRequest(parentTaskGroup);
+						parentTaskGroup.refreshChildren();
+					}
+				}
+			}
+			for (var key in requestParent.model.objectMap) {
+				if (requestParent.model.objectMap[key].objectType == "ToDoTasksTop" || requestParent.model.objectMap[key].objectType == "CompletedTasksTop") {
+					requestParent.model.objectMap[key].refreshChildren();
+				}
+			}
+			]]>
+		</method>
+	</Service>
+
+	<Service definitionName="cmc/workspace/TaskRejectService" sendSiblingRequestsInParallel="false" sendWorkspaceContext="false" singletonDefinition="true" transactionService="true" url="/cmc/RejectTask">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskId" propertyName="taskId"/>
+		<ServiceParam parameterName="taskGroupId" parentProperty="true" propertyName="taskGroupId"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var successMessage = foundationResources.Singleton.replaceValues("customServiceSuccessful", [workspaceResources.Singleton.reject.string, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			MessageLogger.Singleton.logStatus(successMessage);
+			requestParent.getProperty("status").setVariable("value", "REDO");
+			for (var refKey in requestParent.referenceMap) {
+				if (requestParent.referenceMap[refKey].objectType == "ChildTask") {
+					var parentTaskGroup = requestParent.referenceMap[refKey].parentObject;
+					if (parentTaskGroup.objectType == "TaskGroup") {
+						parentTaskGroup.refreshing = true;
+						parentTaskGroup.objectDefinition.refreshService.doRequest(parentTaskGroup);
+						parentTaskGroup.refreshChildren();
+					}
+				}
+			}
+			for (var key in requestParent.model.objectMap) {
+				if (requestParent.model.objectMap[key].objectType == "CompletedTasksTop") {
+					requestParent.model.objectMap[key].refreshChildren();
+					break;
+				}
+			}
+			]]>
+		</method>
+	</Service>
+
+	<Service definitionName="cmc/workspace/TaskReturnToActiveService" sendSiblingRequestsInParallel="false" sendWorkspaceContext="false" singletonDefinition="true" transactionService="true" url="/cmc/ReturnToActiveTask">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskId" propertyName="taskId"/>
+		<ServiceParam parameterName="taskGroupId" parentProperty="true" propertyName="taskGroupId"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var successMessage = foundationResources.Singleton.replaceValues("customServiceSuccessful", [workspaceResources.Singleton.returnToActive.string, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			MessageLogger.Singleton.logStatus(successMessage);
+			requestParent.getProperty("status").setVariable("value", "TODO");
+			for (var refKey in requestParent.referenceMap) {
+				if (requestParent.referenceMap[refKey].objectType == "ChildTask") {
+					var parentTaskGroup = requestParent.referenceMap[refKey].parentObject;
+					if (parentTaskGroup.objectType == "TaskGroup") {
+						parentTaskGroup.refreshing = true;
+						parentTaskGroup.objectDefinition.refreshService.doRequest(parentTaskGroup);
+						parentTaskGroup.refreshChildren();
+					}
+				}
+			}
+			for (var key in requestParent.model.objectMap) {
+				if (requestParent.model.objectMap[key].objectType == "CompletedTasksTop") {
+					requestParent.model.objectMap[key].refreshChildren();
+					break;
+				}
+			}
+			]]>
+		</method>
+	</Service>
+
+	<Service definitionName="cmc/workspace/TaskGroupApproveService" sendSiblingRequestsInParallel="false" sendWorkspaceContext="false" singletonDefinition="true" transactionService="true" url="/cmc/ApproveTaskGroup">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskGroupId" propertyName="taskGroupId"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var successMessage = foundationResources.Singleton.replaceValues("customServiceSuccessful", [workspaceResources.Singleton.approve.string, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			MessageLogger.Singleton.logStatus(successMessage);
+			if (requestParent.getPropertyValue("taskGroupIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").value) {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.clearContext();
+				});
+			}
+			requestParent.refreshChildren();
+			for (var key in requestParent.model.objectMap) {
+				if (requestParent.model.objectMap[key].objectType == "ToDoTasksTop") {
+					requestParent.model.objectMap[key].refreshChildren();
+					break;
+				}
+			}
+			]]>
+		</method>
+	</Service>
+
+	<Service definitionName="cmc/workspace/TaskGroupRejectService" sendSiblingRequestsInParallel="false" sendWorkspaceContext="false" singletonDefinition="true" transactionService="true" url="/cmc/RejectTaskGroup">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<ServiceParam parameterName="taskGroupId" propertyName="taskGroupId"/>
+
+		<!---
+			@keywords private
+			This method is called when a service completed successfully.
+			@param cmc/foundation/ModelObject requestParent: The object on which this service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var successMessage = foundationResources.Singleton.replaceValues("customServiceSuccessful", [workspaceResources.Singleton.reject.string, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			MessageLogger.Singleton.logStatus(successMessage);
+			if (requestParent.getPropertyValue("taskGroupIdentifier") == ContextUtil.Singleton.findContextValue(null, "workspaceTaskGroup").value) {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.clearContext();
+				});
+			}
+			requestParent.refreshChildren();
+			for (var key in requestParent.model.objectMap) {
+				if (requestParent.model.objectMap[key].objectType == "ToDoTasksTop") {
+					requestParent.model.objectMap[key].refreshChildren();
+					break;
+				}
+			}
+			]]>
+		</method>
+	</Service>
+
+	<EnablementCondition classDefinition="true" definitionName="cmc/workspace/LogonIdEnablementCondition" forceResolveAll="true">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var returnValue = false;
+			var propertyValues = this.getValues(o);
+			for (var i = 0; i < propertyValues.length; i++) {
+				if (propertyValues[i] == ContextUtil.Singleton.findContextValue(null, "logonId").value) {
+					returnValue = true;
+				}
+			}
+			if (this.negate) {
+				returnValue = !returnValue;
+			}
+			return returnValue;
+			]]>
+		</method>
+	</EnablementCondition>
+
+</Definitions>

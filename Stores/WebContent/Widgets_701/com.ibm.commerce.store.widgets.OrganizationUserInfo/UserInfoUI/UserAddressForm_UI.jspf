@@ -1,0 +1,192 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN UserAddressForm_UI.jspf -->
+<%@ include file="/Widgets_701/Common/Address/AddressHelperCountrySelection.jspf" %>
+<script type="text/javascript">
+	require(["dijit/registry", "dojo/ready","dojo/domReady!"], function(registry, ready) { 
+		AddressHelper.setStateDivName("stateDiv");
+		ready(function(){
+			var countrySelectWidget = registry.byId("WC_UserAddress_Form_Input_country");
+			countrySelectWidget.on("keyDown", function(e) {saveTabPress(e)});
+			countrySelectWidget.on("blur", function(e) {setFocus('WC_UserAddress_Form_Input_state')});
+		});
+	});
+</script>
+
+<c:forTokens items="${addressFieldOrder}" delims="," var="field" varStatus="addressCount">
+	<c:set var="ariaRequiredAttribute" value=""/>
+	<c:set var="requiredField" value=""/>
+	<c:if test="${field == fn:toUpperCase(field)}" >
+		<c:set var="ariaRequiredAttribute">aria-required="true"</c:set>
+		<c:set var="requiredField">class="required_field"</c:set>
+	</c:if>
+	<c:if test="${addressCount.first }" >
+		<div class="row" >
+	</c:if>
+	<c:choose>
+		<c:when test="${field == 'ADDRESS'}">
+			<div class="col4 formField" >
+				<div class="field" />
+					<div class="column_label">
+						<span class="spanacce">
+							<label for="<c:out value='WC_UserAddress_Form_Input_address1'/>">
+								<wcst:message bundle="${widgetText}" key="STREET_ADDRESS_LINE_1"/>
+							</label>
+						</span>
+						<span ${requiredField}>
+							<wcst:message bundle="${widgetText}" key="STREET_ADDRESS"/>
+						</span>
+					</div>
+					<input type="text" maxlength="99" size="35" ${ariaRequiredAttribute} id="<c:out value='WC_UserAddress_Form_Input_address1'/>" name="<c:out value="address1"/>" value="<c:out value='${street}'/>"/>
+					<div class="nodisplay" >
+						<span class="spanacce">
+							<label for="<c:out value='WC_UserAddress_Form_Input_address2'/>">
+								<wcst:message bundle="${widgetText}" key="STREET_ADDRESS_LINE_2"/>
+							</label>
+						</span>
+						<input type="text" maxlength="49" size="35" id="<c:out value='WC_UserAddress_Form_Input_address2'/>" name="<c:out value="address2"/>" value="<c:out value='${street2}'/>"/>
+					</div>
+				</div>
+			</div>
+		</c:when>
+		
+		<c:when test="${field == 'CITY'}">
+			<div class="col4 formField" >
+				<div class="field" >
+					<div class="column_label">
+						<label ${requiredField} for="<c:out value='WC_UserAddress_Form_Input_${fn:toUpperCase(field)}'/>">
+							<wcst:message bundle="${widgetText}" key="CITY2"/>
+						</label>
+					</div>
+					<input type="text" maxlength="40" size="35" id="<c:out value='WC_UserAddress_Form_Input_${fn:toUpperCase(field)}'/>" name="city" value="<c:out value='${city}'/>" ${ariaRequiredAttribute}/>
+				</div>
+			</div>
+		</c:when>
+		
+		<c:when test="${field == 'COUNTRY/REGION'}">
+			<div class="col4 formField" >
+				<div class="field" >
+					<div class="column_label">
+						<span class="spanacce">
+							<label for="WC_UserAddress_Form_Input_country">
+								<wcst:message bundle="${widgetText}" key="COUNTRY2_ACCE"/>
+							</label>
+						</span>
+						<span ${requiredField}>
+							<wcst:message bundle="${widgetText}" key="COUNTRY2"/>
+						</span>
+					</div>
+					<c:set var="lang" value="${locale}" />
+					<c:set var="country_language_select" value="${fn:split(lang, '_')}" />
+					<select data-dojo-type="wc/widget/Select" data-dojo-props="forceWidth:true, maxHeight: -1" ${ariaRequiredAttribute} id="WC_UserAddress_Form_Input_country" name="country" onChange="javascript:AddressHelper.loadAddressFormStatesUI(this.valueNode.form.name, '','stateDiv','WC_UserAddress_Form_Input_state')">
+						<c:forEach var="country" items="${countryBean.countries}">
+							<option value="<c:out value="${country.code}"/>"
+								<c:choose>
+									<c:when test="${!empty country1}">
+										<c:if test="${country.code eq country1 || country.displayName eq country1}">
+											selected="selected"
+										</c:if>
+									</c:when>
+									<c:otherwise>
+										<c:if test="${country.code eq country_language_select[1]}">
+											selected="selected"
+											<c:set var="country1" value="${country.code}" />
+										</c:if>
+									</c:otherwise>
+								</c:choose>
+							>
+							<c:out value="${country.displayName}"/></option>
+						</c:forEach>
+					</select>
+				</div>
+			</div>
+		</c:when>
+		
+		<c:when test="${field == 'STATE/PROVINCE' || field == 'state/province'}">
+			<div class="col4 formField" >
+				<div class="field" />
+					<div class="column_label">
+						<label ${requiredField} for="WC_UserAddress_Form_Input_state">
+							<wcst:message bundle="${widgetText}" key="REG_STATE"/>
+						</label>
+					</div>
+					<c:set var="key1" value="store/${WCParam.storeId}/country/country_state_list+${langId}+${country1}"/>
+					<c:set var="countryBean" value="${cachedOnlineStoreMap[key1]}"/>
+					<c:if test="${empty countryBean}">
+						<wcf:rest var="countryBean" url="store/{storeId}/country/country_state_list" cached="true">
+							<wcf:var name="storeId" value="${WCParam.storeId}" />
+							<wcf:param name="langId" value="${langId}" />
+							<wcf:param name="countryCode" value="${country1}"/>
+						</wcf:rest>
+						<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${countryBean}"/>
+					</c:if>
+					<c:choose>
+						<c:when test="${!empty countryBean.countryCodeStates}">
+							<div id="stateDiv">
+								<select data-dojo-type="wc/widget/Select" data-dojo-props="forceWidth:true, maxHeight: -1" id="WC_UserAddress_Form_Input_state" name="state" ${ariaRequiredAttribute}>
+									<c:forEach var="state1" items="${countryBean.countryCodeStates}">
+										<option value="<c:out value="${state1.code}"/>"
+											<c:if test="${state1.code eq state || state1.displayName eq state}">
+												selected="selected"
+											</c:if>
+										>
+											<c:out value="${state1.displayName}"/>
+										</option>
+									</c:forEach>
+								</select>
+							</div>
+						</c:when>
+						<c:otherwise>
+							<div id="stateDiv">
+								<input name="state" type="text" maxlength="40" size="35" id="WC_UserAddress_Form_Input_state" value="<c:out value='${state}'/>" ${ariaRequiredAttribute}/>
+							</div>
+						</c:otherwise>
+					</c:choose>
+				</div>
+			</div>
+		</c:when>
+		
+		<c:when test="${field == 'ZIP'}">
+			<div class="col4 formField" >
+				<div class="field" >
+					<div id="WC_AddressEntryForm<c:out value='_${paramPrefix}'/>_div_14" class="column_label">
+						<c:choose>
+							<c:when test="${isBrazilStore}"><%-- Brazil CEP# ( similar to zipcode ) --%>
+								<label ${requiredField} for="<c:out value='WC_UserAddress_Form_Input_${fn:toUpperCase(field)}'/>">
+									<wcst:message bundle="${widgetText}" key="CEP_CODE"/>
+								</label>
+							</c:when>
+							<c:otherwise><!-- Madisons zipcode -->
+								<label ${requiredField} for="<c:out value='WC_UserAddress_Form_Input_${fn:toUpperCase(field)}'/>">
+									<wcst:message bundle="${widgetText}" key="ZIP_CODE"/>
+								</label>
+							</c:otherwise>
+						</c:choose>
+					</div>
+					<input type="text" maxlength="30" size="35" id="<c:out value='WC_UserAddress_Form_Input_${fn:toUpperCase(field)}'/>" name="zipCode" value="<c:out value='${zipCode}'/>" ${ariaRequiredAttribute}/>
+				</div>
+			</div>
+		</c:when>		
+		<c:when test="${field == 'new_line'}">
+			</div>
+			<div class="row">
+		</c:when>
+	</c:choose>
+	<c:if test="${addressCount.last}" >
+		</div>
+	</c:if>
+</c:forTokens>
+
+<!-- END UserAddressForm_UI.jspf -->

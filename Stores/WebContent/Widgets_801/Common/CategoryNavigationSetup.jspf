@@ -1,0 +1,149 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- BEGIN CategoryNavigationSetup.jspf-->
+
+<c:if test="${empty includedCategoryNavigationSetupJSPF}">
+
+	<c:set var="includedCategoryNavigationSetupJSPF" value="includedCategoryNavigationSetupJSPF" scope="request"/> <%-- For singleton feature --%>
+
+	<c:set var="categoryId" value="${WCParam.categoryId}"/>
+	<c:if test = "${empty categoryId}">
+		<c:set var="categoryId" value="${param.categoryId}"/>
+	</c:if>
+
+	<c:set var="searchType" value="${WCParam.searchType}" scope="request"/>
+	
+	<%-- Do not need to get category facets separately in case of expanded category navigation. --%>
+	<flow:ifDisabled feature="ExpandedCategoryNavigation">
+	
+		<%-- Use a deep search with no filters in order to populate the complete child category list with product counts.  Since the category search will return only the category facet belonging to the resulting products, we must use this for now to obtain the complete view.  --%>
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView1" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byCategory/${WCParam.categoryId}" >
+				<wcf:param name= "profileName" value="IBM_ComposeFacetListByCategoryId" />
+				<wcf:param name="searchSource" value="E" />
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="searchType" value="${searchType}" />
+				<wcf:param name = "buyable" value ="1" />
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<c:forEach var="contractId" items="${env_activeContractIds}">
+					<wcf:param name="contractId" value="${contractId}"/>
+				</c:forEach>
+			</wcf:rest>
+			<c:set var="globalcategories" value="${catalogNavigationView1.facetView}" scope="request"/>
+		</c:catch>
+	</flow:ifDisabled>
+
+	<%-- Category navigation.  Only display products and facets belonging to the current category with a shallow search --%>
+
+	<c:if test="${empty pageSize}" >
+		<c:set var="pageSize" value="${param.resultsPerPage}"/>
+		<c:if test="${empty pageSize}">
+			<c:set var="pageSize" value="12"/>
+		</c:if>
+	</c:if>
+    <c:if test="${empty pageNum}">
+		<c:set var="pageNum" value = "${beginIndex div pageSize}" />
+        <fmt:formatNumber var="pageNum" maxFractionDigits="0" groupingUsed="false" value="${pageNum}" />
+    </c:if>
+	<%-- 
+		  If searchProfile is set by the parent JSP, then use it.
+		  If searchProfile is not set, then do some optimization here. Set it to Summary profile, if pageView is GRID. If pageView is NOT GRID, then
+		  let the server to decide on the searchProfile.
+		  Also, make sure that ribbonAd environment variable is NOT set to true.. For Ribbon Ad we need Detail profile.
+	--%>
+	<c:if test="${empty searchProfile && (empty env_displayRibbonAdInGridMode || env_displayRibbonAdInGridMode == 'false')}">
+		<c:if test="${pageView eq 'grid' || param.pageView eq 'grid'}">
+			<c:set var="searchProfile" value="IBM_findProductsByCategory_Summary"/>
+		</c:if>
+	</c:if>
+	<c:catch var="searchServerException">
+		<wcf:rest var="catalogNavigationView1" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byCategory/${WCParam.categoryId}" >
+			<wcf:param name="pageSize" value="${pageSize}" />
+			<wcf:param name="pageNumber" value="${pageNum + 1}" />
+			<wcf:param name="profileName" value="${searchProfile}" />
+			<wcf:param name="searchTerm" value="${newSearchTerm}" />
+			<wcf:param name="intentSearchTerm" value="${intentSearchTerm}" />
+			<wcf:param name="searchType" value="${searchType}" />
+			<wcf:param name="metaData" value="${WCParam.metaData}" />
+			<%-- Default sort for CatEntListWidget --%>
+			<c:choose>
+				<c:when test="${not empty sortBy }" >
+					<wcf:param name="orderBy" value="${sortBy}" />
+				</c:when>
+				<c:otherwise>
+					<wcf:param name="orderBy" value="${WCParam.orderBy}" />
+				</c:otherwise>
+			</c:choose>
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="currency" value="${env_currencyCode}"/>
+			<wcf:param name="responseFormat" value="json"/>		
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<c:forEach var="entry" items="${WCParam}">
+				<c:choose>
+					<c:when test="${fn:startsWith(entry.key, 'facet_') && !empty WCParam[entry.key]}">
+						<wcf:param name="facet" value="${WCParam[entry.key]}" />
+					</c:when>
+					<c:when test="${fn:startsWith(entry.key, 'facetLimit_') && !empty WCParam[entry.key]}">
+						<wcf:param name="facetLimit" value="${WCParam[entry.key]}" />
+					</c:when>
+				</c:choose>
+			</c:forEach>
+			<wcf:param name="advancedFacetList" value="${newAdvancedFacetList}"/>
+			<wcf:param name="categoryId" value="${currentCategoryId}" />
+			<wcf:param name="filterTerm" value="${newFilterTerm}" />
+			<wcf:param name="filterType" value="${WCParam.filterType}" />
+			<wcf:param name="filterFacet" value="${WCParam.filterFacet}" />
+			<wcf:param name="manufacturer" value="${newManufacturer}" />
+			<wcf:param name="minPrice" value="${WCParam.minPrice}" />
+			<wcf:param name="maxPrice" value="${WCParam.maxPrice}" />
+			<wcf:param name="physicalStoreIds" value="${cookieVal}" />
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>		
+			<flow:ifEnabled feature="ExpandedCategoryNavigation">
+				<%-- Perform deep search to retrieve all products within the current category and all the subcategories.  The default of this parameter in the expression is "N" for shallow search Navigation to return immediate products in the category.  --%>
+				<wcf:param name="searchSource" value="E" />
+			</flow:ifEnabled>
+		</wcf:rest>
+	</c:catch>
+	<flow:ifEnabled feature="ExpandedCategoryNavigation">
+		<c:set var="globalcategories" value="${catalogNavigationView1.facetView}" scope="request"/>
+	</flow:ifEnabled>
+	<c:set var="globalfacets" value="${catalogNavigationView1.facetView}" scope="request"/>
+	
+	<c:set var="globalresults" value="${catalogNavigationView1.catalogEntryView}" scope="request"/>
+	 
+	<c:set var="globalbreadcrumbs" value="${catalogNavigationView1}" scope="request"/>
+
+	<fmt:parseNumber var="recordSetTotal" value="${catalogNavigationView1.recordSetTotal}" integerOnly="true"/> 
+	<c:set var="totalCount" value="${recordSetTotal}" scope="request"/>
+	<c:if test="${empty totalCount}">
+		<c:set var="totalCount" value="0" scope="request"/>
+	</c:if>
+	<c:set var="searchMissed" value="false" scope="request"/>
+	
+	<c:set var="globalpricemode" value="${catalogNavigationView1.metaData.price}" scope="request"/>
+
+	<c:set var="totalContentCount" value="0" scope="request"/>
+
+	<c:set var="totalSearchCount" value="${totalCount + totalContentCount}" scope="request"/>
+
+	<c:set var="originalTotalSearchCount" value="${totalSearchCount}" scope="request"/> <%-- When we do search again, totalSearchCount will be updated. Save it for further use --%>
+	<flow:ifEnabled feature="Analytics">
+		<%@ include file="AnalyticsSearch.jspf" %>
+	</flow:ifEnabled> 
+</c:if>
+<!-- END CategoryNavigationSetup.jspf-->

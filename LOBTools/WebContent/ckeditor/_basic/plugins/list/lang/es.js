@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","es",{bulletedlist:"Lista con viñetas",numberedlist:"Lista numérica",ibm:{numberedTitle:"Lista numérica",bulletedTitle:"Lista con viñetas",description:"Los valores se aplicarán al nivel de lista actual",fontsize:"Tamaño de font:"}});

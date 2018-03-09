@@ -1,0 +1,807 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This instance contains utility functions that process date and time values. Some of the functions
+		handle date and time formats using date and time pattern strings. Unquoted letters from A to Z and
+		from 'a' to 'z' can be interpreted as pattern letters. Each pattern letter represents a component
+		in a time or time value. The following pattern letters are defined:
+		
+		Letter					Date or Time Component			Presentation			Examples
+		========================================================================================
+		y						Year							Number					2007, 07
+		M						Month in a year					Number					12, 01
+		H						Hour in a day					Number					23, 02
+		m						Minute in an hour				Number					34, 07, 7
+		d						Day in a week					Number					05, 23
+		s						Second in a minute				Number					05, 59
+		S						Millisecond in a second			Number					999, 007
+	-->
+	<Node definitionName="cmc/foundation/DateUtil" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Default date format
+		-->
+		<variable name="DATE_FORMAT" type="string" value="yyyy-MM-ddT00:00:00.001"/>
+		<!---
+			Default date format for the end of the day
+		-->
+		<variable name="DATE_FORMAT_END" type="string" value="yyyy-MM-ddT23:59:59.999"/>
+		<!---
+			Date format without a time
+		-->
+		<variable name="DATE_ONLY_FORMAT" type="string" value="yyyy-MM-dd"/>
+		<!---
+			Default time format
+		-->
+		<variable name="TIME_FORMAT" type="string" value="HH:mm"/>
+		<!---
+			Default datetime format
+		-->
+		<variable name="DATE_TIME_FORMAT" type="string" value="yyyy-MM-ddTHH:mm:00.001"/>
+		
+		<!---
+			@keywords private
+			Default time separator for display
+		-->
+		<variable name="UI_TIME_FORMAT_SEPARATOR" type="string" value=":"/>
+		<!---
+			@keywords private
+			When business user types in the year, with yy format, always asume year 2000
+		-->
+		<variable name="YEAR_DEFAULT_FOR_YY" type="string" value="20"/>
+		<!---
+			@keywords private
+			returns date format
+		-->
+		<variable name="UI_DATE_FORMAT" type="number" value="1"/>
+		<!---
+			@keywords private
+			returns time format
+		-->
+		<variable name="UI_TIME_FORMAT" type="number" value="2"/>
+		<!---
+			@keywords private
+			Dreturns date and time format
+		-->
+		<variable name="UI_DATE_TIME_FORMAT" type="number" value="3"/>
+		<!---
+			@keywords private
+			returns date time format with seconds
+		-->
+		<variable name="UI_DATE_TIME_FORMAT_WITH_SECONDS" type="number" value="4"/>
+		
+		<!---
+			Formats a given date value based on the given format pattern string. Only the following
+			patterns are supported: yyyy, yy, MM, M, dd, d, HH, mm, ss, SSS. All the other patterns will not
+			be interpreted properly.
+			@param Date date a Date object whose value will be formatted. This object can't be null or undefined.
+			@param String fmt a pattern string that specifies how the given date value should be formatted.
+			@return String a formatted date time string.
+		 -->
+		<method args="date, fmt" name="format">
+			<![CDATA[
+			if (date && fmt) {
+				var resultstr = fmt;
+				if (resultstr.indexOf('yyyy') != -1) {
+					resultstr = StringUtil.Singleton.replace(resultstr, "yyyy", StringUtil.Singleton.padleft(date.getFullYear(), "0", 4));
+				}
+				else {
+					resultstr = StringUtil.Singleton.replace(resultstr, "yy", StringUtil.Singleton.padleft(date.getFullYear().toString().slice(2), "0", 2));
+				}
+				if (resultstr.indexOf('MM') != -1) {
+					resultstr = StringUtil.Singleton.replace(resultstr, "MM", StringUtil.Singleton.padleft((date.getMonth() + 1), "0", 2));
+				}
+				else {
+					resultstr = StringUtil.Singleton.replace(resultstr, "M", date.getMonth() + 1);
+				}
+				if (resultstr.indexOf('dd') != -1) {
+					resultstr = StringUtil.Singleton.replace(resultstr, "dd", StringUtil.Singleton.padleft(date.getDate(), "0", 2));
+				}
+				else {
+					resultstr = StringUtil.Singleton.replace(resultstr, "d", date.getDate());
+				}
+				resultstr = StringUtil.Singleton.replace(resultstr, "HH", StringUtil.Singleton.padleft(date.getHours(), "0", 2));
+				resultstr = StringUtil.Singleton.replace(resultstr, "mm", StringUtil.Singleton.padleft(date.getMinutes(), "0", 2));
+				resultstr = StringUtil.Singleton.replace(resultstr, "ss", StringUtil.Singleton.padleft(date.getSeconds(), "0", 2));
+				resultstr = StringUtil.Singleton.replace(resultstr, "SSS", StringUtil.Singleton.padleft(date.getMilliseconds(), "0", 3));
+				resultstr = StringUtil.Singleton.replace(resultstr, "AM", StringUtil.Singleton.padleft(date.getMilliseconds(), "0", 3));
+				return resultstr;
+			}
+			else {
+				return "";
+			}
+			]]>
+		</method>
+		
+		<!---
+			Formats a given date value based on the format from the user prefernces.
+			@param Date date a Date object whose value will be formatted. This object can't be null or undefined.
+			@param Number type format of the date that you want returned.  UI_DATE_FORMAT, UI_TIME_FORMAT, UI_DATE_TIME_FORMAT, UI_DATE_TIME_FORMAT_WITH_SECONDS
+			@return String a formatted date time string.
+		 -->		
+		<method args="date, type" name="formatUI">
+			<![CDATA[
+			var resultstr = "";
+			if (date) {
+				if (type == 1) {
+					resultstr = this.format(date, this.getDatePreferenceFormat());
+				}
+				else if (type == 2) {
+					resultstr = this.getFormattedTime(date, true);
+				}
+				else if (type == 3) {
+					resultstr = this.format(date, this.getDatePreferenceFormat()) + " " + this.getFormattedTime(date, false);
+				}
+				else if (type == 4) {
+					resultstr = this.format(date, this.getDatePreferenceFormat()) + " " + this.getFormattedTime(date, true);
+				}
+			}
+			return resultstr;
+			]]>
+		</method>
+		
+		<!---
+			Parses a given string to a Date object according to the given format. Only the following
+			patterns are supported: yyyy, MM, dd, HH, mm, ss, SSS. All the other patterns will not
+			be interpreted properly.
+			@param String str a string to be parsed into Date object
+			@param String fmt a pattern string that specifies how the given string should be parsed.
+			@return Date a Date object if parsing is successful. The object represents the same date as
+			the given string. Otherwise, null will be returned.
+		 -->
+		<method args="str, fmt" name="parse">
+			<![CDATA[
+			if (str) {
+				if (str.indexOf(" ") >= 0) return null;
+				str = StringUtil.Singleton.trim(str);
+				var currentDate = new Date();
+				var year = currentDate.getFullYear();
+				var month = currentDate.getMonth();
+				var day = currentDate.getDate();
+				var hours = 0;
+				var minutes = 0;
+				var seconds = 0;
+				var milliseconds = 0;
+				var t;
+				if (fmt.indexOf("dd") < 0) {
+					t = fmt.indexOf("d");
+					if (t >= 0) {
+						fmt = StringUtil.Singleton.insertStringAt(fmt, 'd', t);
+						if (!StringUtil.Singleton.isInteger(str.substr(t + 1, 1))) {
+							str = StringUtil.Singleton.insertStringAt(str, '0', t);
+						}
+					}
+				}
+				if (fmt.indexOf("MM") < 0) {
+					t = fmt.indexOf("M");
+					if (t >= 0) {
+						fmt = StringUtil.Singleton.insertStringAt(fmt, 'M', t);
+						if (!StringUtil.Singleton.isInteger(str.substr(t + 1, 1))) {
+							str = StringUtil.Singleton.insertStringAt(str, '0', t);
+						}
+					}
+				}
+				if (fmt.indexOf("yyyy") < 0) {
+					t = fmt.indexOf("yy");
+					if (t >= 0) {
+						fmt = StringUtil.Singleton.insertStringAt(fmt, 'yy', t);
+						str = StringUtil.Singleton.insertStringAt(str, this.YEAR_DEFAULT_FOR_YY, t);
+					}
+				}
+				str = str.concat('XX');
+				var i;
+				i = fmt.indexOf("yyyy");
+				if (i >= 0) {
+					year = Number(str.substr(i, 4));
+				}
+				i = fmt.indexOf("MM");
+				if (i >= 0) {
+					month = Number(str.substr(i, 2)) - 1;
+				}
+				i = fmt.indexOf("dd");
+				if (i >= 0) {
+					day = Number(str.substr(i, 2));
+				}
+				i = fmt.indexOf("HH");
+				if (i >= 0 && str.length > i) {
+					hours = Number(str.substr(i, 2));
+				}
+				i = fmt.indexOf("mm");
+				if (i >= 0 && str.length > i) {
+					minutes = Number(str.substr(i, 2));
+				}
+				i = fmt.indexOf("ss");
+				if (i >= 0 && str.length > i) {
+					seconds = Number(str.substr(i, 2));
+				}
+				i = fmt.indexOf("SSS");
+				if (i >= 0 && str.length > i) {
+					milliseconds = Number(str.substr(i, 3));
+				}
+				var resultdate = new Date();
+				resultdate.setDate(1);
+				resultdate.setFullYear(year);
+				resultdate.setMonth(month);
+				resultdate.setDate(day);
+				resultdate.setHours(hours);
+				resultdate.setMinutes(minutes);
+				resultdate.setSeconds(seconds);
+				resultdate.setMilliseconds(milliseconds);
+				if (resultdate.getTime()) {
+					if (resultdate.getFullYear() != year || resultdate.getMonth() != month || resultdate.getDate() != day) {
+						return null;
+					}
+					return resultdate;
+				}
+				else {
+					return null;
+				}
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Gets the date format from the business users preference selection and returns true if month comes before year. 
+			Example: d/M/yyyy is true and yyyy.dd.MM is false.
+			@return boolean: true if month is before year, false otherwise.
+		 -->
+		<method name="isMonthBeforeYear">
+			<![CDATA[
+			var format = this.getDatePreferenceFormat();
+			return (format.indexOf("yy") > format.indexOf("M"));
+			]]>
+		</method>
+		
+		<!---
+			Gets the date format from the business users prefernce selection.
+			@return string: Format of date such as yyyy.dd.MM or d/M/yyyy.
+		 -->
+		<method name="getDatePreferenceFormat">
+			<![CDATA[
+			var prefFormat = PreferenceManager.Singleton.getPreference("CMCDateFormat");
+			if (prefFormat) {
+				return prefFormat;
+			}
+			else {
+				return ("yyyy/MM/dd");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Gets the date format to be displayed to users.
+			@return cmc/foundation/ResourceBundleKey: Resource that contains format of date for display such as YYYY.DD.MM or D/M/YYYY.
+		 -->
+		<method name="getDatePreferenceFormatDisplayKey">
+			<![CDATA[
+			var prefFormatKey = PreferenceManager.Singleton.getPreferenceDisplayKey("CMCDateFormat");
+			if (prefFormatKey) {
+				return prefFormatKey;
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Gets the time format from the business users preference selection.
+			@return string: Format of date such as 12HR or 24HR.
+		 -->
+		<method name="getTimePreferenceFormat">
+			<![CDATA[
+			var prefFormat = PreferenceManager.Singleton.getPreference("CMCTimeFormat");
+			if (prefFormat) {
+				return prefFormat;
+			}
+			else {
+				return ("12HR");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Gets the time format to be displayed to users.
+			@return string: Format of date such as HH:MM AM/PM or HH:MM.
+		 -->
+		<method name="getTimePreferenceFormatDisplayKey">
+			<![CDATA[
+			var prefFormat = PreferenceManager.Singleton.getPreference("CMCTimeFormat");
+			if (prefFormat == "12HR") {
+				return foundationResources.Singleton.timePicker12HourDisplayTimeFormat;
+			}
+			else {
+				return foundationResources.Singleton.timePicker24HourDisplayTimeFormat;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Extracts millisecons from the given date. If the given date is null or undefined, null will be returned.
+			@param Date date an instance of Date object. This parameter can be undefined or null.
+			@return Number milliseconds in the given date object, or null if the given date is undefined or null.
+		 -->
+		<method args="date" name="normalizeToMilliseconds">
+			<![CDATA[
+			if (date) {
+				return date.getTime();
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Converts a given hour into 12-hour format. If the converted hour is of single
+			digit, a leading zero will be padded.
+			@param Integer Hours an integer ranging from 0 to 23
+			@return String an hour string in 12-hour format
+		 -->
+		<method args="hours" name="get12HourFormattedHours">
+			<![CDATA[
+			var fHours = hours % 12;
+			if (fHours == 0) {
+				fHours = 12;
+			}
+			var result = fHours < 10 ? [0, fHours].join("") : String(fHours);
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Extracts the PM/AM marker from a given 24-formatted hour.
+			@param Integer hours an integer ranging from 0 to 23.
+			@return String PM if the given hour is greater than 11. AM otherwise.
+		 -->
+		<method args="hours" name="get12HourFormattedAppendix">
+			<![CDATA[
+			return hours > 11 ? "PM" : "AM";
+			]]>
+		</method>
+		
+		<!---
+			Converts an integer into formatted minute.
+			@param Integer minutes an integer ranging from 0 to 59.
+			@return String a formatted string representing minute. If the given integer
+			        is of single digit, a leading zero will be padded.
+		 -->
+		<method args="minutes" name="getFormattedMinutes">
+			<![CDATA[
+			return minutes < 10 ? [0, minutes].join("") : String(minutes);
+			]]>
+		</method>
+		
+		<!---
+			Extracts the time from a Date object into 12-hour formatted string. For example,
+			if a Date object represents time 23:12, the resulted string will be "11:12 AM".
+			@param Date date a Date object whose time will be extracted
+			@return String a 12-hour formatted string that represents the time in the given Date object
+		 -->
+		<method args="date, sec" name="get12HourFormattedTime">
+			<![CDATA[
+			if (sec) {
+				return [this.get12HourFormattedHours(date.getHours()), this.UI_TIME_FORMAT_SEPARATOR, this.getFormattedMinutes(date.getMinutes()), this.UI_TIME_FORMAT_SEPARATOR, this.getFormattedMinutes(date.getSeconds()), " ", this.get12HourFormattedAppendix(date.getHours())].join("");
+			}
+			else {
+				return [this.get12HourFormattedHours(date.getHours()), this.UI_TIME_FORMAT_SEPARATOR, this.getFormattedMinutes(date.getMinutes()), " ", this.get12HourFormattedAppendix(date.getHours())].join("");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Extracts the time from a Date object into 12-hour formatted string. For example,
+			if a Date object represents time 23:12, the resulted string will be "11:12 AM".
+			@param Date date a Date object whose time will be extracted
+			@return String a 12-hour formatted string that represents the time in the given Date object
+		 -->
+		<method args="date, sec" name="get24HourFormattedTime">
+			<![CDATA[
+			if (sec) {
+				return [date.getHours(), this.UI_TIME_FORMAT_SEPARATOR, this.getFormattedMinutes(date.getMinutes()), this.UI_TIME_FORMAT_SEPARATOR, this.getFormattedMinutes(date.getSeconds())].join("");
+			}
+			else {
+				return [date.getHours(), this.UI_TIME_FORMAT_SEPARATOR, this.getFormattedMinutes(date.getMinutes())].join("");
+			}
+			]]>
+		</method>
+		
+				
+		<method args="date, sec, fmt" name="getFormattedTime">
+			<![CDATA[
+			if (typeof(sec) == "undefined") sec = false;
+			if (typeof(fmt) == "undefined") fmt = null;
+			if (date) {
+				if (!fmt) {
+					fmt = this.getTimePreferenceFormat();
+				}
+				if (fmt == "12HR") {
+					return this.get12HourFormattedTime(date, sec);
+				}
+				else if (fmt == "24HR") {
+					return this.get24HourFormattedTime(date, sec);
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<method args="str, fmt" name="parseFormattedTime">
+			<![CDATA[
+			if (typeof(fmt) == "undefined") fmt = null;
+			if (!fmt) {
+				fmt = this.getTimePreferenceFormat();
+			}
+			if (fmt == "12HR") {
+				return this.parse12HourFormattedTime(str);
+			}
+			else if (fmt == "24HR") {
+				return this.parse24HourFormattedTime(str);
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			Converts a 12-hour formatted string into a Date object. If the string is not well formed, null
+			will be returned.
+			@param str a string to be parsed into a Date object. The string should be of form hh:mm AM or
+			hh:mm PM.
+			@return a Date object if the given string is well formed, null otherwise.
+		 -->
+		<method args="str" name="parse12HourFormattedTime">
+			<![CDATA[
+			var date = null;
+			if (str) {
+				date = new Date();
+				var hours = 0;
+				var minutes = 0;
+				var tokens = str.split(this.UI_TIME_FORMAT_SEPARATOR);
+				var hourStr = tokens[0];
+				var minStr = tokens[1];
+				hours = parseInt(hourStr, 10);
+				if (isNaN(hours) || hours < 0) {
+					return null;
+				}
+				else if (hours > 23) {
+					return null;
+				}
+				minutes = parseInt(minStr, 10);
+				if (isNaN(minutes) || minutes < 0) {
+					return null;
+				}
+				else if (minutes > 59) {
+					return null;
+				}
+				else if (isNaN(parseInt(minStr.substr(1, 1), 10))) {
+					return null;
+				}
+				if (minStr && (minStr.indexOf("P") != -1 || str.indexOf("p") != -1) && hours != 12) {
+					hours += 12;
+				}
+				else if (minStr && (minStr.indexOf("A") != -1 || str.indexOf("a") != -1) && hours == 12) {
+					hours = 0;
+				}
+				date = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, 0, 0);
+			}
+			return date;
+			]]>
+		</method>
+		
+		<!---
+			Converts a 24-hour formatted string into a Date object. If the string is not well formed, null
+			will be returned.
+			@param str a string to be parsed into a Date object. The string should be of form hh:mm.
+			@return a Date object if the given string is well formed, null otherwise.
+		 -->
+		<method args="str" name="parse24HourFormattedTime">
+			<![CDATA[
+			var date = null;
+			if (str) {
+				date = new Date();
+				var hours = 0;
+				var minutes = 0;
+				var tokens = str.split(this.UI_TIME_FORMAT_SEPARATOR);
+				var hourStr = tokens[0];
+				var minStr = tokens[1];
+				hours = parseInt(hourStr, 10);
+				if (isNaN(hours) || hours < 0) {
+					return null;
+				}
+				else if (hours > 23) {
+					return null;
+				}
+				minutes = parseInt(minStr, 10);
+				if (isNaN(minutes) || minutes < 0) {
+					return null;
+				}
+				else if (minutes > 59) {
+					return null;
+				}
+				else if (isNaN(parseInt(minStr.substr(1, 1), 10))) {
+					return null;
+				}
+				date = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, 0, 0);
+			}
+			return date;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Calculates the number of days between two date objects.
+			@param Date date1 date to be substracted from date2
+			@param Date date2 date to subtract date1
+			@return Integer number of days in date2 - date1
+		 -->
+		<method args="date1, date2" name="datedaysdiff">
+			<![CDATA[
+			if (date1 != null && date2 != null) {
+				return Math.round((date1.getTime() - date2.getTime()) / 86400000);
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Calculates the number of months between two date objects.
+			@param Date date1 date to be substracted from date2
+			@param Date date2 date to subtract date1
+			@return Integer number of months in date2 - date1
+		 -->		
+		<method args="date1, date2" name="datemonthsdiff">
+			<![CDATA[
+			if (date1 != null && date2 != null) {
+				return (date2.getFullYear() - date1.getFullYear()) * 12 + (date2.getMonth() - date1.getMonth());
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Compares two given dates. It checks only for day, month and year.
+			@param Date date1 first date for comparison.
+			@param Date date2 second date for comparison.
+			@return Boolean true if the two given dates are equal, false if the dates are not equal and null if both the dates are null.
+		 -->		
+		<method args="date1, date2" name="compareDate">
+			<![CDATA[
+			if (date1 == null && date2 == null) {
+				return null;
+			}
+			else if (date1 == null || date2 == null) {
+				return false;
+			}
+			else {
+				return date1.getDate() == date2.getDate() && date1.getMonth() == date2.getMonth() && date1.getFullYear() == date2.getFullYear();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Copies the value of given date into another Date object.
+			@param Date date a Date object whose value is to be copied.
+			@return Date a new Date instance that has the same value as the given date.
+		 -->
+		<method args="date" name="copydate">
+			<![CDATA[
+			if (date != null) {
+				return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Increases a given date by the given number of days.
+			@param Date date the date to be increased.
+			@param Number days number of days to be added to the given date
+		 -->
+		<method args="date, days" name="adddays">
+			<![CDATA[
+			if (date != null) {
+				date.setDate(date.getDate() + days);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calculates number of days from the given date to the end of the month of the date.
+			@param Date date a date instance whose remaining days in its month will be calculated.
+			@return Integer number of days that the given date's month remains from the given date.
+		 -->
+		<method args="date" name="daysleftinmonth">
+			<![CDATA[
+			var iDate = date;
+			var i1Date = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+			return this.datedaysdiff(i1Date, iDate);
+			]]>
+		</method>
+		
+		<!---
+			Calculates number of days in the month of the given date
+			@param Date a date instance. The number of days in its month will be returned.
+			@return number of days in the month of the given date
+		 -->
+		<method args="date" name="daysinmonth">
+			<![CDATA[
+			return this.daysleftinmonth(new Date(date.getFullYear(), date.getMonth(), 1));
+			]]>
+		</method>
+
+		<!---
+			Determines if a date is between two given dates.
+			@param Date the date to check
+			@param Date date1 the lower bound of the date range
+			@param Date date2 the upper bound of the date rage
+			@return true if date1 < date < date2, false otherwise.
+		 -->
+		<method args="date, date1, date2" name="dateinrange">
+			<![CDATA[
+			return (!date1 || this.datedaysdiff(date, date1) >= 0) && (!date2 || this.datedaysdiff(date, date2) <= 0);
+			]]>
+		</method>		
+
+		<!---
+			@keywords private
+			Extracts the substring from a string corresponding to the given pattern based on the given format. For example,
+			getPatternValue("yyyy-mm-dd", "mm", "2008-02-01") will return "02".
+			@param String format a format pattern that describes the given string.
+			@param String pattern A pattern string that is part of the given format.
+			@param String str the string from which a substring will be extracted
+			@return the extracted substring, or null if nothing is extracted.
+		 -->
+		<method args="format, pattern, str" name="getPatternValue">
+			<![CDATA[
+			var patternIndex = format.indexOf(pattern);
+			return str.substring(patternIndex, patternIndex + pattern.length);
+			]]>
+		</method>		
+		
+		<!---
+			@keywords private
+			Replaces with a new value the substring from a string corresponding to the given pattern based on the given format. For example,
+			getUpdatedPatternValue("yyyy-mm-dd", "mm", "2008-02-01", "03") will return "2008-03-01".
+			@param String format a format pattern that describes the given string.
+			@param String pattern A pattern string that is part of the given format.
+			@param String str the string from which a substring will be extracted.
+			@param String newStr the value used to replace the found substring
+			@return a new string with the updated substring
+		 -->
+		<method args="format, pattern, str, newStr" name="getUpdatedPatternString">
+			<![CDATA[
+			var patternIndex = format.indexOf(pattern);
+			return str.substring(0, patternIndex) + StringUtil.Singleton.padleft(newStr, "0", pattern.length) + str.substring(patternIndex + pattern.length);
+			]]>
+		</method>		
+
+		<!---
+			@keywords private
+			Finds the pattern in a format string. One of the pattern letters is at the given position.
+			For example, getPositionPattern("yyyy-mm-dd", "-", 7) will return "mm".
+			@param String format a format string from which we look for a pattern
+			@param String separator separator used in the given format
+			@param pos position of any of the letters in the patter to be found
+		 -->
+		<method args="format, separator, pos" name="getPositionPattern">
+			<![CDATA[
+			var totalLength = 0;
+			var entries = format.split(separator);
+			for (var i = 0; i < entries.length; i++) {
+				totalLength += (entries[i].length + separator.length);
+				if (pos < totalLength) {
+					return entries[i];
+				}
+			}
+			return null;
+			]]>
+		</method>	
+
+		<!---
+			@keywords private
+			Returns the current date. Sets hours, minutes, seconds and milliseconds to 0(zero).
+		-->
+		<method name="getCurrentDate">
+			<![CDATA[
+			var currentDate = new Date();
+			currentDate.setHours(0);
+			currentDate.setMinutes(0);
+			currentDate.setSeconds(0);
+			currentDate.setMilliseconds(0);
+			return currentDate;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calculates the number of days from getTime for the given date object
+			@param Date date the date to convert to the time format
+			@return Integer representing the date in days
+		 -->
+		<method args="date" name="getTimeDay">
+			<![CDATA[
+			if (date) {
+				return Math.floor(date.getTime() / (86400000));
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns a globally cached time value for a given string.
+		-->
+		<method args="s" name="getCachedTimeDay">
+			<![CDATA[
+			var t = null;
+			if (s) {
+				if (!this.__cachedDates) {
+					this.__cachedDates = {};
+				}
+				t = this.__cachedDates[s];
+				if (!t) {
+					t = this.getTimeDay(this.parse(s, this.DATE_FORMAT));
+					this.__cachedDates[s] = (t == null ? "nodate" : t);
+				}
+				if (t == "nodate") {
+					t = null;
+				}
+			}
+			return t;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the first day off set value depending on the firstDayOfWeek preference set by the business user.
+			@return number
+		 -->		
+		<method name="getFirstDayOffSet">
+			<![CDATA[
+			var firstDay = PreferenceManager.Singleton.getPreference("CMCFirstDayOfWeek");
+			var offset = 0;
+			if (firstDay == 'SUN') offset = 0;
+			else if (firstDay == 'MON') offset = 1;
+			else if (firstDay == 'TUE') offset = 2;
+			else if (firstDay == 'WED') offset = 3;
+			else if (firstDay == 'THU') offset = 4;
+			else if (firstDay == 'FRI') offset = 5;
+			else if (firstDay == 'SAT') offset = 6;
+			return offset;
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

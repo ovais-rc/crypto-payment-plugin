@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("format","ru",{label:"Формат",panelTitle:"Формат абзаца",tag_address:"Адрес",tag_div:"Normal (DIV)",tag_h1:"Заголовок 1",tag_h2:"Заголовок 2",tag_h3:"Заголовок 3",tag_h4:"Заголовок 4",tag_h5:"Заголовок 5",tag_h6:"Заголовок 6",tag_p:"Обычный",tag_pre:"Форматированное"});

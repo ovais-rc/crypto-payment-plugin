@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","el",{indent:"Αύξηση εσοχής",outdent:"Μείωση εσοχής"});

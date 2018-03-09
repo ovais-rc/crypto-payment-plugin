@@ -1,0 +1,1682 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		This class defines a base object selector. A base object selector allows an object to be selected by either dragging and
+		dropping the selected object into the base selector, or by using quick add functionality.
+		The selected object is then populated in the object selector's <CODE>object</CODE> attribute.
+		
+		This class should not be instantiated directly. It is used internally by {@link cmc/foundation/ObjectSelector}.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseObjectSelector">
+		<dependency localName="UtilitiesButton" moduleName="cmc/foundation/UtilitiesButton"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="RemoveObjectButton" moduleName="cmc/foundation/RemoveObjectButton"/>
+		<dependency localName="ObjectSelectorViews" moduleName="cmc/foundation/ObjectSelectorViews"/>
+		<dependency localName="ObjectSearchWidget" moduleName="cmc/foundation/ObjectSearchWidget"/>
+		<!---
+			@keywords private
+			This attribute defines the style. By default it is derived by parent properties component.
+		-->
+		<variable name="style" value="${this.parent.style}"/>
+		<!---
+			@keywords private
+			Model instance.
+		-->
+		<variable name="model"/>
+		<!---
+			This attribute provides a comma separated list of reference object types that are supported by this object selector.
+			This is a required attribute.
+		-->
+		<variable name="objectTypes" type="string"/>
+		<!---
+			This attribute holds a reference to the instance of {@link cmc/foundation/ModelObject} that is being modified by the
+			properties view that contains this object selector.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			The current reference object that is selected by the base object selector.
+		-->
+ 		<variable name="object" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute indicates whether the delete action is currently enabled for this reference editor. The default value of this attribute is "false".
+		-->
+		<variable name="deleteEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute indicates whether the add action is currently enabled for this reference editor. The default value of this attribute is "true".
+		-->
+		<variable name="addEnabled" type="boolean" value="true"/>				
+		<!---
+			@keywords private
+		-->
+		<variable name="propertiesComponent"/>
+		<!---
+			This attribute is an optional string to use as the header for the widget view.
+		-->
+		<variable name="headerText" type="string" value="${this.propertiesComponent.headerText}"/>
+		
+		<!--- @keywords private -->
+		<method args="args, parent" name="constructor">
+			<![CDATA[
+			this.updateDisplayNameDel = new EventHandler.Class(this, "updateDisplayName");
+			this.removeObjectDel = new EventHandler.Class(this, "removeObject");
+			this.checkEnabledDel = new EventHandler.Class(this, "checkEnabled");
+			this.updateActionsDel = new EventHandler.Class(this, "updateActions");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.createViews();
+			]]>
+		</handler>
+	
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateDisplayNameDel.disconnectAll();
+			delete this.updateDisplayNameDel;
+			this.removeObjectDel.disconnectAll();
+			delete this.removeObjectDel;
+			delete this.objectDefinitions;
+			this.checkEnabledDel.disconnectAll();
+			delete this.checkEnabledDel;
+			this.updateActionsDel.disconnectAll();
+			delete this.updateActionsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this view to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			this.o = newObject;
+			if (this.o != null) {
+				this.objectDefinitions = this.model.getObjectDefinitions(this.o, this.objectTypes);
+			}
+			else {
+				this.objectDefinitions = null;
+			}
+			this.createActions();
+			this.removeObject();
+			this.checkEnabled();
+			]]>
+		</method>
+		
+		<!---
+			Create object selector views.
+		-->
+		<method name="createViews">
+			<![CDATA[
+			new ObjectSelectorViews.Class(this, {
+				name: "editorViews"
+			});
+			this.createActions();
+			this.updateActions();
+			this.updateDisplayName();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="createActions">
+			<![CDATA[
+			var primaryDefs = this.objectDefinitions;
+			if (primaryDefs && primaryDefs.length > 0 && !this._actionsCreated && this.editorViews) {
+				var createSearchWidget = false;
+				for (var i = 0; i < primaryDefs.length; i++) {
+					if (primaryDefs.searchType) {
+						createSearchWidget = true;
+					}
+				}
+				if (createSearchWidget) {
+					this.searchWidget = new ObjectSearchWidget.Class(this.editorViews.actionArea, {
+						editor: this,
+						y: 1
+					});
+				}
+				new RemoveObjectButton.Class(this.editorViews.actionArea, {
+					editor: this
+				});
+				new UtilitiesButton.Class(this.editorViews.actionArea, {
+					editor: this,
+					objectDefinition: primaryDefs[0]
+				});
+				this._actionsCreated = true;
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="updateActions">
+			<![CDATA[
+			this.updateActionsDel.disconnectAll();
+			if (this.searchWidget) {
+				var primaryDefs = this.objectDefinitions;
+				var searchTypes = {};
+				var searchDefs = [];
+				for (var i = 0; i < primaryDefs.length; i++) {
+					var searchDef = primaryDefs[i].getSearchDefinition(this.updateActionsDel);
+					if (searchDef && !searchTypes[searchDef.searchType]) {
+						searchTypes[searchDef.searchType] = true;
+						searchDefs.push(searchDef);
+					}
+				}
+				if (searchDefs.length > 0) {
+					this.searchWidget.setVariable("searchDefinitions", searchDefs);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			This method updates the name displayed based on the value of {@link cmc/foundation/ModelObject#objectLongDisplayName} for
+			{@link cmc/foundation/BaseObjectSelector#object}.
+		-->
+		<method args="e" name="updateDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.editorViews) {
+				return;
+			}
+			var displayText = "";
+			if (this.object != null) {
+				displayText = this.object.objectLongDisplayName;
+			}
+			this.editorViews.sideBorders.referenceArea.background.referenceDisplayName.setVariable('text', displayText);
+			]]>
+		</method>
+		
+		<!---
+			This method updates the reference object that is selected.
+		-->
+		<method name="updateObject">
+			<![CDATA[
+			this.updateDisplayNameDel.disconnectAll();
+			this.removeObjectDel.disconnectAll();
+			if (this.object != null) {
+				this.updateDisplayNameDel.connect(this.object, "onobjectLongDisplayName");
+				this.removeObjectDel.connect(this.object, "beingDestroyed");
+			}
+			this.updateDisplayName();
+			]]>
+		</method>
+		
+		<!---
+			This method sets the specified object as the new object being selected by the object selector. This method has the effect of changing the value
+			of {@link cmc/foundation/BaseObjectSelector#object}. The method will call {@link cmc/foundation/BaseObjectSelector#removeObject} to ensure
+			the removal of what was previously selected.
+			
+			@param cmc/foundation/ModelObject newObject: the new primary object that is being referenced
+		-->
+		<method args="newObject" name="setNewObject">
+			<![CDATA[
+			newObject = newObject.getReferencedObject();
+			this.removeObject();
+			this.setVariable("object", newObject);
+			this.object.registerObjectView(this);
+			this.object.incrementReferenceCount();
+			this.updateObject();
+			]]>
+		</method>
+		
+		<!---
+			This method removes the current selected object. The current selected object is the current value of {@link cmc/foundation/BaseObjectSelector#object}.
+			This method is registered to the "beingDestroyed" event for the object.
+		-->
+		<method args="e" name="removeObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.object != null) {
+				this.object.unregisterObjectView(this);
+				this.object.decrementReferenceCount();
+				this.setVariable("object", null);
+				this.updateObject();
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method returns true if the object selector has an object that is currently selected and false otherwise.
+			The current selected object is the current value of {@link cmc/foundation/BaseObjectSelector#object}.
+			
+			@return boolean This method returns true if there is a selected object and false otherwise.
+		-->
+		<method name="hasObject">
+			<![CDATA[
+			return this.object != null;
+			]]>
+		</method>
+		
+		<!---
+			This method checks if the specified object matches one of the object types supported by this object selector.
+			It is used to determine whether copied/dragged objects can be pasted/dropped on this selector.
+			
+			@param cmc/foundation/ModelObject testObject The object to test.
+			@return boolean The method returns true if the object is compatible for this object selector, and false otherwise.
+		-->
+		<method args="testObject" name="isAddEnabled">
+			<![CDATA[
+			var matchFound = false;
+			if (!this.o.readOnly && this.objectDefinitions != null) {
+				var oDef = testObject.getReferencedObject().objectDefinition;
+				var oDefs = this.objectDefinitions;
+				for (var i = 0; i < oDefs.length; i++) {
+					if (oDefs[i] == oDef) {
+						matchFound = true;
+						break;
+					}
+				}
+			}
+			return matchFound;
+			]]>
+		</method>
+		
+		<!---
+			Check if open is enabled.
+			@return boolean: true if open is allowed.
+		-->
+		<method name="isOpenEnabled">
+			<![CDATA[
+			return this.object != null && this.object.isOpenEnabled();
+			]]>
+		</method>
+		
+		<!---
+			Perform open.
+		-->
+		<method name="doOpen">
+			<![CDATA[
+			if (this.object != null) {
+				this.object.doOpen();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method checks the current enablement of the available actions and updates the action buttons accordingly.
+			For example, if the object currently selected is read only, then the delete functionality will be disabled.
+		-->
+		<method args="e" name="checkEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkEnabledDel.disconnectAll();
+			var actionEnabled = this.enabled && this.o != null && this.hasObject();
+			if (actionEnabled != this.deleteEnabled) {
+				this.setVariable("deleteEnabled", actionEnabled);
+			}
+			actionEnabled = this.enabled && this.o != null;
+			if (actionEnabled != this.addEnabled) {
+				this.setVariable("addEnabled", actionEnabled);
+			}
+			this.checkEnabledDel.connect(this, "onenabled");
+			this.checkEnabledDel.connect(this, "onobject");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords private
+		This class defines an object selector to appear in a properties view.
+		
+		<p>An object selector allows an object to be selected by either dragging and dropping the selected object into the selector,
+		or by using quick add functionality.
+		
+		<p>The selected object is then populated in the object selector's <CODE>object</CODE> attribute. A list of object types
+		supported by the selector must be provided.
+				
+		Sample usage:
+			@START_CODE
+				<ObjectSelector objectTypes="SampleFolder,SampleObject"/>
+			@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/ObjectSelector">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="BaseObjectSelector" moduleName="cmc/foundation/BaseObjectSelector"/>
+		<!---
+			This attribute provides a comma separated list of reference object types that are supported by this object selector.
+			This is a required attribute.
+		-->
+		<variable name="objectTypes" type="string"/>
+		<!---
+			This attribute is an optional string to use as the header for the widget view. If not provided, the value defaults to "Name".
+		-->
+		<variable name="headerText" type="string" value="${foundationResources.Singleton.refEditorTableHeader.string}"/>
+	
+		<!---
+			@keywords private
+			This method creates an instance of {@link cmc/foundation/BaseObjectSelector} to use as the editor for the given property component.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var baseSelector = new BaseObjectSelector.Class(parentComponent, {
+				name: "editor",
+				model: parentComponent.model,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				enabled: parentComponent.enabled,
+				objectTypes: this.objectTypes,
+				propertiesComponent: this
+			});
+			]]>
+		</method>
+	
+	</PropertiesComponent>
+
+	<!---
+		@keywords private
+		
+		This is the base class for the reference editor. It is an abstract class and should not be instantiated directly.
+		It is used internally by {@link cmc/foundation/ReferenceEditor}.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseReferenceEditor">
+		<dependency localName="UtilitiesButton" moduleName="cmc/foundation/UtilitiesButton"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="RemoveObjectButton" moduleName="cmc/foundation/RemoveObjectButton"/>
+		<dependency localName="ObjectSelectorViews" moduleName="cmc/foundation/ObjectSelectorViews"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ObjectSearchWidget" moduleName="cmc/foundation/ObjectSearchWidget"/>
+		<dependency localName="NewObjectButton" moduleName="cmc/foundation/NewObjectButton"/>
+		<!---
+			This attribute defines the style. By default it is derived by parent properties component.
+		-->
+		<variable name="style" value="${this.parent.style}"/>
+		<!---
+			@keywords private
+			Model instance.
+		-->
+		<variable name="model"/>
+		<!---
+			This attribute is a comma separated list of reference object types that are supported by this reference editor.
+			This is a required attribute.
+		-->
+		<variable name="referenceObjectTypes" type="string"/>
+		<!---
+			This attribute is a comma separated list of parent object types of the reference objects being edited.
+			This attribute should only be specified if the object being edited is not the parent of the
+			reference object.
+		-->
+		<variable name="parentObjectTypes" type="string" value="${null}"/>
+		<!---
+			If it is set to false, then the	reference editor will only allow the declaration of a reference to
+			an existing object. The default is false.
+		-->
+		<variable name="allowCreate" type="boolean" value="false"/>
+		<!---
+			This attribute holds a reference to the instance of cmc/foundation/ModelObject that is being modified by the
+			properties view that contains this reference editor.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			The reference object that is currently selected.
+		-->
+		<variable name="referenceObject" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute indicates whether the delete action is currently enabled. It is updated internally by
+			{@link cmc/foundation/BaseReferenceEditor#checkEnabled}.
+		-->
+		<variable name="deleteEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute indicates whether the add action is currently enabled. It is updated internally by
+			{@link cmc/foundation/BaseReferenceEditor#checkEnabled}.
+		-->
+		<variable name="addEnabled" type="boolean" value="true"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="propertiesComponent"/>
+		<!---
+			An optional string to use as the header for the widget view.
+		-->
+		<variable name="headerText" type="string" value="${this.propertiesComponent.headerText}"/>
+		
+		<!---
+			@keywords private
+			Instance of search widget {@link cmc/foundation/ObjectSearchWidget}
+		-->
+		<variable name="searchWidget"/>
+		<!---
+			@keywords private
+			Instance of utility button {@link cmc/foundation/UtilitiesButton}
+		-->
+		<variable name="utilitiesButton"/>
+		<!---
+			@keywords private
+			Instance of new button {@link cmc/foundation/NewObjectButton}
+		-->
+		<variable name="newButton"/>
+		<!---
+			Resource name of the new button.
+		-->
+		<variable name="newButtonResource" type="string" value="grid_createNewIconForSingleAction"/>
+
+		<!--- @keywords private -->
+		<method args="args, parent" name="constructor">
+			<![CDATA[
+			this.updateObjectDel = new EventHandler.Class(this, "updateObject");
+			this.updateDisplayNameDel = new EventHandler.Class(this, "updateDisplayName");
+			this.checkEnabledDel = new EventHandler.Class(this, "checkEnabled");
+			this.updateActionsDel = new EventHandler.Class(this, "updateActions");
+			this.checkEnabledIsCreatableDel = new EventHandler.Class(this, "checkEnabled");
+			this.checkEnabledIsDeletableDel = new EventHandler.Class(this, "checkEnabled");
+			this.releaseReferenceObjectDel = new EventHandler.Class(this, "releaseReferenceObject");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.createViews();
+			]]>
+		</handler>	
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateObjectDel.disconnectAll();
+			delete this.updateObjectDel;
+			this.updateDisplayNameDel.disconnectAll();
+			delete this.updateDisplayNameDel;
+			this.releaseReferenceObjectDel.disconnectAll();
+			delete this.releaseReferenceObjectDel;
+			delete this.objectDefinitions;
+			delete this.parentObjectDefinitions;
+			delete this.referencedObjectDefinitions;
+			this.checkEnabledDel.disconnectAll();
+			delete this.checkEnabledDel;
+			this.updateActionsDel.disconnectAll();
+			delete this.updateActionsDel;
+			this.checkEnabledIsCreatableDel.disconnectAll();
+			delete this.checkEnabledIsCreatableDel;
+			this.checkEnabledIsDeletableDel.disconnectAll();
+			delete this.checkEnabledIsDeletableDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			this.o = newObject;
+			this.parentObjectDefinitions = null;
+			this.referencedObjectDefinitions = null;
+			this.updateObjectDel.disconnectAll();
+			if (this.o != null) {
+				if (this.parentObjectTypes != null) {
+					this.parentObjectDefinitions = this.model.getObjectDefinitions(null, this.parentObjectTypes);
+					this.objectDefinitions = [];
+					for (var i = 0; i < this.parentObjectDefinitions.length; i++) {
+						var parentDef = this.parentObjectDefinitions[i];
+						var types = StringUtil.Singleton.splitAndTrim(this.referenceObjectTypes, ",");
+						for (var j = 0; j < types.length; j++) {
+							var def = parentDef.getChildDefinition(types[j]);
+							if (def && def.isReferencedDefinition(this.o.objectDefinition)) {
+								this.objectDefinitions.push(def);
+							}
+						}
+					}
+					this.updateObjectDel.connect(this.o, "onreferences");
+				}
+				else {
+					this.objectDefinitions = this.model.getObjectDefinitions(this.o, this.referenceObjectTypes);
+					this.referencedObjectDefinitions = [];
+					for (var i = 0; i < this.objectDefinitions.length; i++) {
+						var defs = this.objectDefinitions[i].getReferencedDefinitions(this.updateObjectsDel);
+						if (defs != null) {
+							for (var j = 0; j < defs.length; j++) {
+								if (defs[j] != null) {
+									this.referencedObjectDefinitions.push(defs[j]);
+								}
+							}
+						}
+					}
+					this.updateObjectDel.connect(this.o, "onchildObjects");
+				}
+			}
+			else {
+				this.parentObjectDefinitions = null;
+				this.objectDefinitions = null;
+				this.referencedObjectDefinitions = null;
+			}
+			this.createActions();
+			this.updateActions();
+			this.checkEnabled();
+			this.updateObject();
+			]]>
+		</method>
+		
+		<!---
+			This method creates the reference editor views by initializing an instance of {@link cmc/foundation/ObjectSelectorViews}.
+		-->
+		<method name="createViews">
+			<![CDATA[
+			new ObjectSelectorViews.Class(this, {
+				name: "editorViews"
+			});
+			this.createActions();
+			this.updateActions();
+			this.updateDisplayName();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="createActions">
+			<![CDATA[
+			if (!this._actionsCreated && this.editorViews) {
+				this.searchWidget = new ObjectSearchWidget.Class(this.editorViews.actionArea, {
+					editor: this,
+					searchDefinitions: null,
+					y: 1
+				});
+				this.newButton = new NewObjectButton.Class(this.editorViews.actionArea, {
+					editor: this,
+					actionDefinitions: null,
+					buttonResourceForSingleAction: this.newButtonResource,
+					y: 5
+				});
+				new RemoveObjectButton.Class(this.editorViews.actionArea, {
+					editor: this,
+					y: 5
+				});
+				this.utilitiesButton = new UtilitiesButton.Class(this.editorViews.actionArea, {
+					editor: this,
+					objectDefinitions: null,
+					y: 5
+				});
+				this._actionsCreated = true;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will update the toolbar actions with the new object object definition			
+		-->
+		<method name="updateActions">
+			<![CDATA[
+			this.updateActionsDel.disconnectAll();
+			if (this.editorViews) {
+				var primaryDefs = null;
+				if (this.parentObjectDefinitions != null) {
+					primaryDefs = this.parentObjectDefinitions;
+				}
+				else {
+					primaryDefs = this.referencedObjectDefinitions;
+				}
+				if (!primaryDefs) {
+					primaryDefs = [];
+				}
+				var searchDefs = [];
+				var searchTypes = {};
+				for (var i = 0; i < primaryDefs.length; i++) {
+					var searchDef = primaryDefs[i].getSearchDefinition(this.updateActionsDel);
+					if (searchDef && !searchTypes[searchDef.searchType]) {
+						searchTypes[searchDef.searchType] = true;
+						searchDefs.push(searchDef);
+					}
+				}
+				if (searchDefs.length > 0) {
+					this.searchWidget.setVariable("searchDefinitions", searchDefs);
+				}
+				else {
+					this.searchWidget.setVariable("searchDefinitions", null);
+				}
+				if (primaryDefs.length > 0) {
+					this.utilitiesButton.setVariable("objectDefinition", primaryDefs[0]);
+				}
+				else {
+					this.utilitiesButton.setVariable("objectDefinition", null);
+				}
+				if (this.allowCreate) {
+					var creatableDefs = [];
+					for (var i = 0; i < primaryDefs.length; i++) {
+						if (primaryDefs[i].creatable && !primaryDefs[i].isBaseDefinition) {
+							creatableDefs.push(primaryDefs[i]);
+						}
+					}
+					if (creatableDefs.length > 0) {
+						this.newButton.setVariable("actionDefinitions", creatableDefs);
+					}
+					else {
+						this.newButton.setVariable("actionDefinitions", null);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method updates the reference objects. This method will be called by a delegate which listens on
+			{@link cmc/foundation/BaseReferenceEditor#o} for changes in the values of its {@link cmc/foundation/ModelObject#references} if a value for
+			{@link cmc/foundation/BaseReferenceEditor#parentObjectTypes} was provided, and otherwise listens for changes in values of
+			{@link cmc/foundation/ModelObject#childObjects}.
+		-->
+		<method args="e" name="updateObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newReferenceObject = null;
+			if (this.o != null) {
+				var objects = null;
+				if (this.parentObjectDefinitions != null) {
+					objects = this.o.references;
+				}
+				else {
+					objects = this.o.childObjects;
+				}
+				for (var i = 0; i < objects.length && newReferenceObject == null; i++) {
+					var def = objects[i].objectDefinition;
+					for (var j = 0; j < this.objectDefinitions.length; j++) {
+						if (def == this.objectDefinitions[j]) {
+							if (!objects[i].pendingDelete) {
+								newReferenceObject = objects[i];
+								break;
+							}
+						}
+					}
+				}
+			}
+			if (newReferenceObject != this.referenceObject) {
+				this.releaseReferenceObjectDel.disconnectAll();
+				if (this.referenceObject) {
+					this.referenceObject.unregisterObjectView(this);
+				}
+				if (newReferenceObject) {
+					newReferenceObject.registerObjectView(this);
+				}
+				this.setVariable("referenceObject", newReferenceObject);
+				this.updateDisplayNameDel.disconnectAll();
+				if (this.referenceObject != null) {
+					var displayObject = null;
+					if (this.parentObjectDefinitions != null) {
+						displayObject = this.referenceObject.parentObject;
+					}
+					else {
+						displayObject = this.referenceObject;
+					}
+					if (displayObject != null) {
+						this.updateDisplayNameDel.connect(displayObject, "onobjectLongDisplayName");
+					}
+					this.releaseReferenceObjectDel.connect(this.referenceObject, "beingDestroyed");
+				}
+				this.updateDisplayName();
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method releases the reference object and sets {@link cmc/foundation/BaseReferenceEditor#referenceObject} to null.
+		-->
+		<method args="e" name="releaseReferenceObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.releaseReferenceObjectDel.disconnectAll();
+			this.referenceObject = null;
+			this.updateDisplayName();
+			this.checkEnabled();
+			]]>
+		</method>
+		
+		<!---
+			This method updates the display name to use for the reference editor based on the current value of
+			{@link cmc/foundation/BaseReferenceEditor#referenceObject}.
+		-->
+		<method args="e" name="updateDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.editorViews) {
+				return;
+			}
+			var displayText = "";
+			if (this.referenceObject != null) {
+				var displayObject = null;
+				if (this.parentObjectDefinitions != null) {
+					displayObject = this.referenceObject.parentObject;
+				}
+				else {
+					displayObject = this.referenceObject.getReferencedObject();
+				}
+				if (displayObject != null) {
+					displayText = displayObject.objectLongDisplayName;
+				}
+			}
+			this.editorViews.sideBorders.referenceArea.background.referenceDisplayName.setVariable('text', StringUtil.Singleton.escapeText(displayText));
+			]]>
+		</method>
+		
+		<!---
+			This method sets the specified object as the new referenced object.
+			If {@link cmc/foundation/BaseReferenceEditor#o} is readonly then this method has no effect.
+			
+			@param cmc/foundation/ModelObject newObject The new primary object that is being referenced
+		-->
+		<method args="newObject" name="setNewObject">
+			<![CDATA[
+			newObject = newObject.getReferencedObject();
+			var roDefs = this.objectDefinitions;
+			if (this.parentObjectDefinitions != null) {
+				for (var i = 0; i < roDefs.length; i++) {
+					if (newObject.objectDefinition.isChildDefinition(roDefs[i]) && roDefs[i].isCreatable(newObject, this.o)) {
+						roDef = roDefs[i];
+						break;
+					}
+				}
+				if (roDef != null) {
+					newObject.lock();
+					this.removeObject();
+					var newRO = this.model.createNewObject(roDef, newObject);
+					newRO.addChild(this.o);
+					newObject.unlock();
+				}
+			}
+			else {
+				var roDef = null;
+				for (var i = 0; i < roDefs.length; i++) {
+					if (roDefs[i].isReferencedDefinition(newObject.objectDefinition) && roDefs[i].isCreatable(this.o, newObject)) {
+						roDef = roDefs[i];
+						break;
+					}
+				}
+				if (roDef != null) {
+					this.o.lock();
+					this.removeObject();
+					var newRO = this.model.createNewObject(roDef, this.o);
+					newRO.addChild(newObject);
+					this.o.unlock();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method removes the current referenced object from the reference editor and deletes it.
+		-->
+		<method name="removeObject">
+			<![CDATA[
+			if (this.referenceObject != null && !this.referenceObject.readOnly) {
+				this.referenceObject.deleteObject();
+				this.checkEnabled();
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method returns true if the reference editor has an object and false otherwise.
+			@return boolean: The method returns true if there is a selected object and false otherwise.
+		-->
+		<method name="hasObject">
+			<![CDATA[
+			return this.referenceObject != null;
+			]]>
+		</method>
+		
+		<!---
+			This method checks if the specified object matches the object types declared for this reference editor.
+			@param cmc/foundation/ModelObject testObject The object to test.
+			@return boolean This method returns true if the object matches one of the supported object types and false otherwise.
+		-->
+		<method args="testObject" name="isAddEnabled">
+			<![CDATA[
+			var matchFound = false;
+			if (this.o != null && (!this.hasObject() || !this.referenceObject.readOnly)) {
+				var po = testObject.getReferencedObject();
+				var roDefs = this.objectDefinitions;
+				if (this.parentObjectDefinitions != null) {
+					for (var i = 0; i < roDefs.length; i++) {
+						if (po.objectDefinition.isChildDefinition(roDefs[i]) && roDefs[i].isCreatable(po, this.o)) {
+							matchFound = true;
+							break;
+						}
+					}
+					if (matchFound && (!this.o.moveable || po == this.o || po == this.o.getParentPrimaryObject() || po.isAncestor(this.o))) {
+						matchFound = false;
+					}
+				}
+				else {
+					for (var i = 0; i < roDefs.length; i++) {
+						if (roDefs[i].isReferencedDefinition(po.objectDefinition) && roDefs[i].isCreatable(this.o, po)) {
+							matchFound = true;
+							break;
+						}
+					}
+				}
+			}
+			return matchFound;
+			]]>
+		</method>
+		
+		<!---
+			Check if open is enabled.
+			@return boolean: true if open is allowed.
+		-->
+		<method name="isOpenEnabled">
+			<![CDATA[
+			var openEnabled = false;
+			if (this.referenceObject != null) {
+				if (this.parentObjectDefinitions != null) {
+					openEnabled = this.referenceObject.parentObject.isOpenEnabled();
+				}
+				else {
+					openEnabled = this.referenceObject.isOpenEnabled();
+				}
+			}
+			return openEnabled;
+			]]>
+		</method>
+		
+		<!---
+			Perform open.
+		-->
+		<method name="doOpen">
+			<![CDATA[
+			if (this.referenceObject != null) {
+				if (this.parentObjectDefinitions != null) {
+					this.referenceObject.parentObject.doOpen();
+				}
+				else {
+					this.referenceObject.doOpen();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method checks the current enablement of the available actions and updates them accordingly.
+		-->
+		<method args="e" name="checkEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkEnabledDel.disconnectAll();
+			this.checkEnabledIsCreatableDel.disconnectAll();
+			this.checkEnabledIsDeletableDel.disconnectAll();
+			var actionEnabled = this.o != null && this.hasObject() && this.referenceObject.isDeletable(this.checkEnabledIsDeletableDel);
+			if (actionEnabled) {
+				if (this.parentObjectDefinitions != null) {
+					this.checkEnabledIsDeletableDel.connect(this.o, "onmoveable");
+					actionEnabled = this.o.moveable;
+				}
+				else if (this.referenceObject.objectDefinition.parentReference) {
+					this.checkEnabledIsDeletableDel.connect(this.referenceObject.getReferencedObject(), "onmoveable");
+					actionEnabled = this.referenceObject.getReferencedObject().moveable;
+				}
+			}
+			if (actionEnabled != this.deleteEnabled) {
+				this.setVariable("deleteEnabled", actionEnabled);
+			}
+			actionEnabled = false;
+			if (this.o != null && (!this.hasObject() || !this.referenceObject.readOnly)) {
+				var roDefs = this.objectDefinitions;
+				if (this.parentObjectDefinitions != null) {
+					if (this.o.moveable) {
+						for (var i = 0; i < roDefs.length; i++) {
+							if (roDefs[i].isCreatable(null, this.o, this.checkEnabledIsCreatableDel)) {
+								actionEnabled = true;
+								break;
+							}
+						}
+					}
+				}
+				else {
+					for (var i = 0; i < roDefs.length; i++) {
+						if (roDefs[i].isCreatable(this.o, null, this.checkEnabledIsCreatableDel)) {
+							actionEnabled = true;
+							break;
+						}
+					}
+				}
+			}
+			if (actionEnabled != this.addEnabled) {
+				this.setVariable("addEnabled", actionEnabled);
+			}
+			this.checkEnabledDel.connect(this, "onreferenceObject");
+			if (this.referenceObject != null) {
+				this.checkEnabledDel.connect(this.referenceObject, "onreadOnly");
+			}
+			if (this.editorViews) {
+				this.editorViews.setVariable("enabled", this.deleteEnabled || this.addEnabled);
+				EventUtil.trigger(this.editorViews, "onselect");
+			}
+			]]>
+		</method>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Component>
+	
+	<!---
+		This class defines the reference editor.
+		
+		A reference editor is used to provide support for editing the relationship between two primary objects. The reference editor
+		is declared as part of the properties view of one primary object and allows the user to select another primary object.
+		In general, a reference editor can be used to edit any "0..1" or "1..1" relationship to another
+		primary object. If the relationship is "0..*" or "1..*", then you must use a {@link cmc/foundation/ChildListEditor#child list editor}.
+		The related primary object can either be a parent object such as a parent category for a product, or it can be a child object such
+		as a target product for a promotion. The reference editor will create and delete instances of {@link cmc/foundation/ModelObject} described by
+		the object definitions specified by {@link cmc/foundation/ReferenceEditor#referenceObjectTypes}.
+		
+		<p>The business user can select a compatible primary object using drag and drop, copy and paste or with the quick search
+		mechanism that is part of this editor.
+		
+		<p>cmc/foundation/ReferenceEditor extends {@link cmc/foundation/PropertiesComponent} and can appear in a properties view.
+		
+		<p>Sample usage:
+		@START_CODE
+			<ReferenceEditor
+					parentObjectTypes="SampleParentObject"
+					referenceObjectTypes="SampleObject"
+					allowCreate="true"/>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/ReferenceEditor">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="BaseReferenceEditor" moduleName="cmc/foundation/BaseReferenceEditor"/>
+		<!---
+			A comma separated list of the reference {@link cmc/foundation/ObjectDefinition#objectType object types} that are supported by this
+			reference editor. These object types must correspond to {@link cmc/foundation/ReferenceObjectDefinition reference object definitions} or
+			{@link cmc/foundation/ParentReferenceObjectDefinition parent reference object definitions}. If the reference editor is being used to edit
+			a parent relationship, then the reference object types must match object definitions found under the primary object definitions
+			specified by "parentObjectTypes". If the reference editor is being used to edit a child object, then the reference object types
+			must match object definitions found under the current object's object definition where the "current object" is the object being
+			edited in the properties view. If one or more of the reference object types does not match an object definition found
+			under the current object's object definition, then it will be ignored. This can occur if a properties view is reused for
+			different types of objects. This is a required attribute.
+		-->
+		<variable name="referenceObjectTypes" type="string"/>
+		<!---
+			A comma separated list of parent {@link cmc/foundation/ObjectDefinition#objectType object types}. This attribute should only be specified
+			if the reference editor is used to edit a parent relationship. The parent object types are used to identify compatible parent
+			{@link cmc/foundation/PrimaryObjectDefinition primary objects}. The reference object types specified by "referenceObjectTypes" will be used
+			to find reference object definitions declared under the primary object definition. The reference object definitions must specify
+			the current object's object type with {@link cmc/foundation/ReferenceObjectDefinition#referencedType} or {@link cmc/foundation/ReferenceObjectDefinition#referencedTypes}.
+			All combinations of "parentObjectTypes" and "referenceObjectTypes" will be examined for compatible reference object definitions.
+			Incompatible combinations and object types will be ignored. The object types must be declared such that there is at most one valid reference
+			object definition when a specific parent primary object definition is matched with the current object's object definition.
+		-->
+		<variable name="parentObjectTypes" type="string" value="${null}"/>
+		<!---
+			This attribute indicates that a new object can be created. If it is set to false, then the
+			reference editor will only allow the declaration of a reference to
+			an existing object. The default is false.
+		-->
+		<variable name="allowCreate" type="boolean" value="false"/>
+		<!---
+			An optional string to use as the header for the widget view. If it is not provided, the value defaults to "Name".
+		-->
+		<variable name="headerText" type="string" value="${foundationResources.Singleton.refEditorTableHeader.string}"/>
+		<!---
+			Resource name of the create new object button.
+		-->
+		<variable name="newButtonResource" type="string" value="grid_createNewIconForSingleAction"/>
+	
+		<!---
+			@keywords private
+			This method creates an instance of {@link cmc/foundation/BaseReferenceEditor} for the given property component.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var refEditor = new BaseReferenceEditor.Class(parentComponent, {
+				name: "editor",
+				model: parentComponent.model,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				enabled: parentComponent.enabled,
+				referenceObjectTypes: this.referenceObjectTypes,
+				parentObjectTypes: this.parentObjectTypes,
+				allowCreate: this.allowCreate,
+				newButtonResource: this.newButtonResource,
+				propertiesComponent: this
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Reference editors should determine their enablement on its own by looking at their
+			object definitions to find out if they are creatable. Overwrites the
+			{@link cmc/foundation/PropertiesComponent#updateEnablement} method to do nothing.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		Selected object views for object selector and reference editor.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/ObjectSelectorViews" focusable="false">
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="ReferenceMenu" moduleName="cmc/foundation/ReferenceMenu"/>
+		<variable name="headerBackgroundColor" type="string" value="#efefef"/>
+		<!---
+			Indicates that this reference editor is the active selection view.
+		-->
+		<variable name="activated" type="boolean" value="false"/>		
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateActivatedDel = new EventHandler.Class(this, "updateActivated");
+			this.updateActivatedDel.connect(this.parent.model, "onactiveSelectionView");
+			new ReferenceMenu.Class(this, {
+				name: "menu",
+				reference: this.parent
+			});
+			this.menu.addView(this);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateActivatedDel.disconnectAll();
+			delete this.updateActivatedDel;
+			]]>
+		</method>
+
+		<!---
+			Update the activated attribute flag by checking if this is the active selection view.
+		-->		
+		<method args="e" name="updateActivated">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("activated", this.parent.model.activeSelectionView == this);
+			]]>
+		</method>
+		
+		<!---
+			Check if open is enabled.
+			@return boolean: true if open is allowed.
+		-->
+		<method name="isOpenEnabled">
+			<![CDATA[
+			var openEnabled = false;
+			if (this.parent.o != null) {
+				openEnabled = this.parent.isOpenEnabled();
+			}
+			return openEnabled;
+			]]>
+		</method>
+		
+		
+		<!---
+			Perform open.
+		-->
+		<method name="doOpen">
+			<![CDATA[
+			if (this.parent.o != null) {
+				this.parent.doOpen();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if paste is enabled.
+			@return boolean: true if paste is allowed
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			var pasteEnabled = false;
+			if (this.parent.o != null) {
+				var objects = this.parent.model.clipboardObjects;
+				if (objects.length == 1) {
+					pasteEnabled = this.parent.isAddEnabled(objects[0]);
+				}
+			}
+			return pasteEnabled;
+			]]>
+		</method>
+
+		<!---
+			Perform paste.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			if (this.parent.o != null) {
+				var objects = this.parent.model.clipboardObjects;
+				if (objects.length == 1) {
+					this.parent.setNewObject(objects[0]);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if delete is enabled.
+		-->
+		<method name="isDeleteEnabled">
+			<![CDATA[
+			return this.parent.deleteEnabled;
+			]]>
+		</method>
+		
+		<!---
+			Perform delete.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			this.parent.removeObject();
+			]]>
+		</method>
+		
+		<AxisLayout axis="y" spacing="5"/>
+		<Component name="actionArea">
+			<AxisLayout axis="x" spacing="3"/>
+		</Component>
+		<Component bgcolor="${this.classroot.parent.style.bordercolor}" name="sideBorders" width="${Math.max(this.parent.parent.propertiesComponent.minWidth - 3, this.parent.actionArea.width)}">
+
+			<Component clickable="true" focusable="true" name="referenceArea" width="${this.parent.width - 2}" x="1">
+				<AxisLayout axis="y" spacing="0"/>
+				<Component bgcolor="${this.classroot.parent.style.bordercolor}" height="1" name="topBorder" width="${this.parent.width}"/>
+				<Component bgcolor="${this.classroot.headerBackgroundColor}" clip="true" height="28" name="title" width="${this.parent.width}">
+					<Component height="${this.parent.height}" width="${this.parent.width}" x="0" y="0">
+						<CenterLayout/>
+						<AxisLayout axis="x"/>
+						<Component bgcolor="${this.parent.bgcolor}" height="${this.parent.height}" name="leftPadding" width="3" x="${this.parent.x}"/>
+						<TextComponent text="${this.classroot.parent.headerText}" fontstyle="bold"/>
+					</Component>
+				</Component>
+				<Component bgcolor="${this.classroot.parent.style.bordercolor}" height="1" name="middleBorder" width="${this.parent.width}"/>
+				<Component bgcolor="${this.classroot.parent.style.forminputbgcolor}" height="${this.referenceDisplayName.height &lt; 28 ? 28 : this.referenceDisplayName.height}" name="background" width="${this.parent.width}">
+					<CenterLayout/>
+					<AxisLayout axis="x"/>
+					<Component bgcolor="${this.parent.bgcolor}" height="${this.parent.height}" name="leftPadding" width="3" x="${this.parent.x}"/>
+					<TextComponent multiline="true" name="referenceDisplayName" width="220" x="${this.parent.x}"/>
+				</Component>
+			
+				<Component bgcolor="${this.classroot.parent.style.bordercolor}" height="1" name="bottomBorder" width="${this.parent.width}"/>
+
+				<handler name="onfocus">
+					<![CDATA[
+					this.classroot.parent.model.setVariable("activeSelectionView", this.classroot);
+					if (this.classroot.menu) {
+						var caller = this;
+						require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+							ContextMenuUtil.Singleton.setAsDefault(caller.parent.parent.menu);
+						});
+					}
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				
+				<handler name="onblur">
+					<![CDATA[
+					if (this.classroot.menu) {
+						var caller = this;
+						require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+							ContextMenuUtil.Singleton.resetDefault(caller.parent.parent.menu);
+						});
+					}
+					]]>
+				</handler>
+			
+				<handler name="onmousedown">
+					<![CDATA[
+					this.classroot.parent.model.setVariable("activeSelectionView", this.classroot);
+					]]>
+				</handler>
+				
+				<handler name="ondblclick">
+					<![CDATA[
+					if (this.classroot.parent.o != null && this.classroot.parent.isOpenEnabled()) {
+						this.classroot.parent.doOpen();
+					}
+					]]>
+				</handler>
+			</Component>
+		</Component>
+
+		<DropTarget dragAndDropManager="${DndManager.Singleton}" targetKey="${'element'}">
+			<handler args="sources" name="ondroppedintarget">
+				<![CDATA[
+				var o = ModelUtil.Singleton.findObjectForView(sources[0]);
+				if (o != null) {
+					this.classroot.parent.setNewObject(o.getReferencedObject());
+				}
+				]]>
+			</handler>
+			<method args="sources" name="isEnabled">
+				<![CDATA[
+				var dropEnabled = false;
+				if (this.classroot.parent.o != null && sources.length == 1) {
+					dropEnabled = this.classroot.parent.isAddEnabled(ModelUtil.Singleton.findObjectForView(sources[0]));
+				}
+				return dropEnabled;
+				]]>
+			</method>
+		</DropTarget>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		
+		A class that defines a button for creating a new reference button.
+		
+		This button will only appear on a {@link cmc/foundation/ReferenceEditor} whose <CODE>{@link cmc/foundation/ReferenceEditor#allowCreate allowCreate}</CODE> attribute is true.
+		When this button is pressed, a new primary object will be created, and it will call {@link cmc/foundation/ReferenceEditor#setNewObject} on
+		the associated editor, passing in the newly created object as the parameter.
+		
+		cmc/foundation/NewObjectButton is created by the {@link cmc/foundation/ReferenceEditor} itself. It should not be instantiated on its own.
+	-->
+	<ActionListButton buttonResource="grid_createNewIcon" buttonResourceForSingleAction="grid_createNewIconForSingleAction" classDefinition="true" defaultActionDefinition="${this.actionDefinitions == null ? null : this.actionDefinitions[0]}" definitionName="cmc/foundation/NewObjectButton" displaySelectedIndicator="true" enabled="${this.editor.addEnabled}" visible="${this.actionDefinitions == null ? false : true}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			The {@link cmc/foundation/ReferenceEditor reference editor} that this button is associated with.
+		-->
+		<variable name="editor" value="${null}"/>
+		
+		<Tooltip text="${foundationResources.Singleton.refEditorNew.string}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.createdPrimaryObjectDel = new EventHandler.Class(this, "createdPrimaryObject");
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.createdPrimaryObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+	
+		<!---
+			This method performs the action of the button.
+			@param cmc/foundation/ObjectDefinition definition The object definition for the new object to create
+		-->
+		<method args="definition" name="doAction">
+			<![CDATA[
+			if (definition == null) {
+				definition = this.actionDefinitions[0];
+			}
+			definition.doCreate({
+				createCallbackDel: this.createdPrimaryObjectDel
+			});
+			]]>
+		</method>
+		
+		<!---
+			This method adds a reference child for the given newly created primary object. It is called by a delegate set up in
+			{@link cmc/foundation/NewObjectButton#doAction} when it finishes creating the new object.
+			@param cmc/foundation/ModelObject newObject The newly created object.
+		-->
+		<method args="newObject" name="createdPrimaryObject">
+			<![CDATA[
+			this.editor.setNewObject(newObject);
+			]]>
+		</method>
+	</ActionListButton>
+
+	<!---
+		@keywords private
+		
+		This class defines a button for removing a reference from a {@link cmc/foundation/ReferenceEditor} or a {@link cmc/foundation/ObjectSelector}.
+		cmc/foundation/RemoveObjectButton is created by instances of {@link cmc/foundation/ObjectSelector} and {@link cmc/foundation/ReferenceEditor}.
+		It should not be instantiated on its own.
+	-->
+	<BaseButton classDefinition="true" definitionName="cmc/foundation/RemoveObjectButton" enabled="${this.editor.deleteEnabled}" focusable="true" imageSet="grid_deleteIcon">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<!---
+			The {@link cmc/foundation/ReferenceEditor reference editor} or {@link cmc/foundation/ObjectSelector object selector} that this button is
+			associated with.
+		-->
+		<variable name="editor"/>
+	
+		<Tooltip text="${foundationResources.Singleton.refEditorDelete.string}"/>
+		
+		<!---
+			A handler for onlclick. When the button is pressed, the removeObject method is called on the
+			{@link cmc/foundation/RemoveObjectButton#editor associated editor}.
+			<ul>
+				<li>If {@link cmc/foundation/RemoveObjectButton#editor} is a {@link cmc/foundation/ReferenceEditor reference editor},
+				{@link cmc/foundation/ReferenceEditor#removeObject} is called. </li>
+				<li>If {@link cmc/foundation/RemoveObjectButton#editor} is a {@link cmc/foundation/ObjectSelector object selector},
+				{@link cmc/foundation/ObjectSelector#removeObject} is called.
+			</ul>
+		-->
+		<handler name="onclick">
+			<![CDATA[
+			this.editor.removeObject();
+			]]>
+		</handler>
+		<!---
+			@keywords private
+			Handle onfocus event. 
+		-->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this
+				});
+			}
+			]]>
+		</handler>
+	</BaseButton>
+
+	<!---
+		@keywords private
+		
+		This class defines the search widget to use for {@link cmc/foundation/ReferenceEditor} and {@link cmc/foundation/ObjectSelector}.
+		This widget is used to search for an object that matches the criteria for the editor or selector.
+		cmc/foundation/ObjectSearchWidget is created by instances of {@link cmc/foundation/ObjectSelector} and {@link cmc/foundation/ReferenceEditor}.
+		It should not be instantiated on its own.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/ObjectSearchWidget" visible="${this.searchDefinitions == null ? false : true}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			The {@link cmc/foundation/ReferenceEditor reference editor} or {@link cmc/foundation/ObjectSelector object selector} that this button is
+			associated with.
+		-->
+		<variable name="editor"/>
+		<!---
+			An array of search definitions that can be used for conducting the search.
+		-->
+		<variable name="searchDefinitions" value="${null}"/>
+		<!---
+			The current search definition being used.
+		-->
+		<variable name="currentDefinition" value="${null}"/>
+		<!---
+			The search results object.
+		-->
+		<variable name="searchResults" value="${null}"/>
+		<!---
+			The string request identifier for the curent search results.
+		-->
+		<variable name="serviceRequestId" type="string" value=""/>
+		<!---
+			Flag that indicates whether multiple search results is allowed or not. The default value is false.
+		-->
+		<variable name="allowMultipleResults" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.searchCompleteDel = new EventHandler.Class(this, "searchComplete");
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.searchCompleteDel.disconnectAll();
+			delete this.searchCompleteDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets currentDefinition and defaultActionDefinition.
+		-->
+		<handler name="onsearchDefinitions">
+			<![CDATA[
+			this.resetSearchField();
+			if (this.searchDefinitions != null) {
+				this.currentDefinition = this.searchDefinitions[0];
+				var doUpdateSearchDefinitions = false;
+				for (var i = 0; i < this.searchDefinitions.length; i++) {
+					if (!this.searchDefinitions[i].showInUtilitiesView && this.editor.o != null && !this.editor.o.isContextReadOnly()) {
+						this.searchDefinitions[i].showInUtilitiesView = true;
+						doUpdateSearchDefinitions = true;
+					}
+				}
+				if (doUpdateSearchDefinitions && this.editor.o.model.oEditor.utilities) {
+					this.editor.o.model.oEditor.utilities.updateSearchDefinitions();
+				}
+			}
+			else {
+				this.currentDefinition = null;
+			}
+			this.searchButton.setVariable("defaultActionDefinition", this.currentDefinition);
+			]]>
+		</handler>
+		
+		<!---
+			This method invokes search action using the current search definition.
+		-->
+		<method name="doSearch">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/ObjectSearchWidget doSearch: " + this.searchTextArea.searchText.getText());
+			if (StringUtil.Singleton.trim(this.searchTextArea.searchText.getText()) == "") {
+				this.serviceRequestId = "-1";
+				var params = {};
+				params.requestIdentifier = "-1";
+				params.searchResultObjects = [];
+				params.statusMessage = foundationResources.Singleton.searchResultsNoCriteriaMsg.string;
+				this.searchComplete(params);
+			}
+			else {
+				var s = this.editor.model.findSearchResults(this.currentDefinition.searchType);
+				this.searchResults = s;
+				this.searchCompleteDel.disconnectAll();
+				this.searchCompleteDel.connect(s, "onsearchComplete");
+				s.doSearch({
+					searchText: this.searchTextArea.searchText.getText()
+				});
+				this.serviceRequestId = s.searchDefinition.searchService.requestIdentifier;
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+		<!---
+			This method is called when the search is complete. It behaves in different ways depending on the search results that
+			are returned:
+			<ul>
+				<li>
+					If one result is returned, the <CODE>setNewObject</CODE> method is called on {@link cmc/foundation/ObjectSearchWidget#editor}
+					passing the returned object in as a parameter.
+				</li>
+				<li>
+					If more than one result is returned, a message is logged by the {@link cmc/foundation/MessageLogger}.
+				</li>
+				<li>
+					If no search results are returned, a message is logged by the {@link cmc/foundation/MessageLogger}.
+				</li>
+			</ul>
+			
+			@param object args: the arguments containing the search service requestIdentifier and the search result objects
+		-->
+		<method args="args" name="searchComplete">
+			<![CDATA[
+			if (args && args.requestIdentifier == this.serviceRequestId) {
+				this.searchCompleteDel.disconnectAll();
+				var errorMessage = null;
+				if (args) {
+					if (args.searchResultObjects) {
+						var objects = args.searchResultObjects;
+						if (objects.length == 0) {
+							errorMessage = args.statusMessage;
+						}
+						else {
+							var doUtilitiesOpen = false;
+							if (objects.length == 1 || (this.allowMultipleResults && objects.length <= this.searchTextArea.searchText.getText().split(",").length)) {
+								var addEnabled = true;
+								for (var i = 0; i < objects.length; i++) {
+									if (!this.editor.isAddEnabled(objects[i])) {
+										addEnabled = false;
+										break;
+									}
+								}
+								if (addEnabled) {
+									for (var i = 0; i < objects.length; i++) {
+										this.editor.setNewObject(objects[i]);
+									}
+									MessageLogger.Singleton.logStatus(args.statusMessage);
+								}
+								else {
+									doUtilitiesOpen = true;
+								}
+							}
+							else {
+								doUtilitiesOpen = true;
+							}
+							if (doUtilitiesOpen) {
+								var oEditor = this.editor.o.model.oEditor;
+								var currentDefinition = this.currentDefinition;
+								require(["cmc/foundation/UtilitiesSplitView"], function(UtilitiesSplitView) {
+									if (!oEditor.utilities) {
+										new UtilitiesSplitView.Class(oEditor.content.workAreaUtilitiesSplit, {
+											name: "utilitiesSplit",
+											oEditor: oEditor
+										});
+									}
+									var utilities = oEditor.utilities;
+									utilities.setContext(currentDefinition);
+									utilities.open();
+								});
+							}
+						}
+					}
+					else if (args.statusMessage) {
+						errorMessage = args.statusMessage;
+					}
+				}
+				if (errorMessage != null) {
+					MessageLogger.Singleton.logException(null, errorMessage);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method clears the text from the search field, and unregisters the delegate listening for results of searches
+			already in progress.
+			
+			This method is called when the <CODE>o</CODE> of the {@link cmc/foundation/ObjectSearchWidget#editor} changes.
+		-->
+		<method name="resetSearchField">
+			<![CDATA[
+			this.searchCompleteDel.disconnectAll();
+			this.searchTextArea.searchText.setVariable('text', "");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.editor" name="ono">
+			<![CDATA[
+			this.resetSearchField();
+			]]>
+		</handler>
+		
+		<AxisLayout axis="x" spacing="8"/>
+		
+		<BorderedView name="searchTextArea" borderSize="1" borderColor="${this.classroot.editor.addEnabled ? '#959595' : '#b1b1b1'}" paddingLeftSize="8" paddingRightSize="8">
+			<InputTextComponent name="searchText" width="133" height="28">
+				<variable name="enabled" type="boolean" value="${this.classroot.editor.addEnabled}"/>
+				<handler args="kc" name="onkeydown">
+					<![CDATA[
+					if (kc == 13) {
+						this.classroot.doSearch();
+					}
+					]]>
+				</handler>				
+			</InputTextComponent>	
+			<!---
+				@keywords private
+				Handle onfocus event. 
+			-->
+			<handler eventSource="this.searchText" name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this.searchText,
+						indicatorView: this,
+						offset: 1
+					});
+				}
+				]]>
+			</handler>
+		</BorderedView>
+
+		<ActionListButton actionDefinitions="${this.parent.searchDefinitions}" defaultActionDefinition="${this.classroot.currentDefinition}" displaySelectedIndicator="true" enabled="${this.classroot.editor.addEnabled &amp;&amp; this.classroot.searchTextArea.searchText.text != ''}" name="searchButton">
+			<variable name="buttonText" value="${foundationResources.Singleton.refEditorFindAndAdd.string}"/>
+			<variable name="dropdownResource" value="searchDropdownResource"/>
+			<variable name="dropdownOffset" value="8"/>
+			
+			<Tooltip extendedText="${foundationResources.Singleton.refEditorFindAndAddExtendedHelp.string}" linkURL="tasks/ttfsearch.htm" text="${foundationResources.Singleton.refEditorFindAndAdd.string}"/>
+			
+			<method args="definition" name="doAction">
+				<![CDATA[
+				if (definition) {
+					this.classroot.currentDefinition = definition;
+				}
+				if (typeof (definition) == "undefined" || definition == null) {
+					this.classroot.doSearch();
+				}
+				]]>
+			</method>
+		</ActionListButton>
+	</Component>
+
+</Definitions>

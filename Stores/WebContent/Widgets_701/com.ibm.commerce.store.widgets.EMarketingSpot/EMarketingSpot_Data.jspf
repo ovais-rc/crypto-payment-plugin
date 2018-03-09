@@ -1,0 +1,225 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%--
+  *
+  * Create the e-Marketing Spot.
+  *
+--%>
+
+<%
+   /* Get the e-Marketing Spot name from the request parameters, and decode it in case it has been encoded. */
+   String emsName = request.getParameter("emsName");
+   
+   /* Determine the current page context and build emsName as needed */
+   String emsType = request.getParameter("emsType");
+   Object emsNameLocalPrefix = request.getAttribute("emsNameLocalPrefix");
+   if (emsType != null && emsType.equals("local")&& emsNameLocalPrefix != null && (emsNameLocalPrefix instanceof String)){
+   		String emsLocalPrefix = (String) emsNameLocalPrefix;
+   		if (emsName != null && ! emsLocalPrefix.isEmpty()) {
+   			emsName = emsLocalPrefix + emsName;
+   		}
+   }
+   
+   if (emsName != null) {
+	   request.setAttribute("emsName", emsName);
+   }
+   
+   Object DM_marketingSpotBehavior = request.getAttribute("DM_emsBehavior-" + emsName);
+   if (DM_marketingSpotBehavior != null) {
+   	request.setAttribute("DM_marketingSpotBehavior", DM_marketingSpotBehavior.toString());
+   }
+
+   /* Set the name of the command that has called this page. */
+   String pathInfo = (String)request.getAttribute("javax.servlet.forward.path_info");
+   if (pathInfo != null && pathInfo.startsWith ("/")) {
+      pathInfo = pathInfo.substring (1);
+   }
+   request.setAttribute("requestURI", pathInfo);
+
+%>
+
+<%--
+  *
+  * Set up the URL to handle the full path 
+  *
+--%>
+<wcf:url var="homePageURL" patternName="HomePageURLWithLang">
+	<wcf:param name="langId" value="${langId}" />
+	<wcf:param name="storeId" value="${storeId}" />
+	<wcf:param name="catalogId" value="${catalogId}" />
+	<wcf:param name="urlLangId" value="${urlLangId}"/>
+</wcf:url>
+
+<c:set var="emsName" value="${requestScope.emsName}"/>
+<c:set var="requestURI" value="${requestScope.requestURI}"/>
+<c:set var="commandName" value="${WCParam.commandName}"/>
+<c:if test="${empty commandName}" >
+	<c:set var="commandName" value="${param.commandName}"/>
+</c:if>
+<c:if test="${!empty commandName}">
+	<c:set var="requestURI" value="${commandName}"/>
+</c:if>
+<c:set var="espotName" value="${fn:replace(emsName,' ','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\\\\','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\"','')}"/>	
+<c:set var="espotName" value="${fn:replace(espotName,'\\\'','')}"/>	
+	
+<%-- Call the REST service to get the data to display in the e-Marketing Spot --%>
+<wcf:rest var="eSpotDatasRoot" url="/store/{storeId}/espot/{name}" format="json" >
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:var name="name" value="${emsName}" encode="true"/>
+		
+		<%-- the name of the e-Marketing Spot --%>
+		<wcf:param name="DM_EmsName" value="${emsName}" />
+		<%-- 
+		  * 
+		  * Used for JSP caching of espot, Behavior:
+		  * - if the espot is being JSP cached, then it is not necessary to command cache the information being loaded by the engine
+		  * - if the espot is not being JSP cached, then the engine should command cache the information being loaded by the engine
+		  *
+		--%>
+		<wcf:param name="DM_marketingSpotBehavior" value="${requestScope.DM_marketingSpotBehavior}"/>
+
+	    <%-- do not retrieve the catalog group SDO but obtain the catalog group Id only --%>
+	    <wcf:param name="DM_ReturnCatalogGroupId" value="true" />
+
+	    <%-- do not retrieve the catalog entry SDO but obtain the catalog entry Id only --%>
+	    <wcf:param name="DM_ReturnCatalogEntryId" value="true" />
+			
+		<wcf:param name="DM_contextPath" value="${env_contextAndServletPath}" />
+           <wcf:param name="DM_imagePath" value="${requestScope.jspStoreImgDir}" />
+           
+		<%-- pass along product ID for the promotion --%>
+		<%-- Give preference to the requestparamter first and then to request attribute --%>
+		
+	<c:if test="${empty WCParamValues.productId}">	
+		<c:if test="${!empty param.productId}">
+			<c:set var="productId" value="${param.productId}"/>
+		</c:if>
+		<c:if test="${!empty productId}">
+			<wcf:param name="productId" value="${productId}" />
+		</c:if>
+	</c:if>
+		
+		<c:if test="${maxProductsToDisplay != null}">
+		    <wcf:param name="DM_DisplayProducts"   value="${maxProductsToDisplay}" />
+		</c:if>
+		
+		<c:if test="${!empty param.numberCategoriesToDisplay}">
+        	<wcf:param name="DM_DisplayCategories" value="${param.numberCategoriesToDisplay}" />
+        </c:if>
+         <c:if test="${!empty param.numberContentToDisplay}">
+                <wcf:param name="DM_DisplayContent"    value="${param.numberContentToDisplay}" />
+         </c:if>                                          
+		<%-- URL command name --%>
+		<wcf:param name="DM_ReqCmd" value="${requestURI}" />
+		
+		<%-- URL name value pair parameters --%>  
+		<c:catch>                  
+			<c:forEach var="aParam" items="${WCParamValues}">
+			    <c:forEach var="aValue" items="${aParam.value}">
+					<c:if test="${aParam.key !='logonPassword' && aParam.key !='logonPasswordVerify' && aParam.key !='URL' && aParam.key !='logonPasswordOld' && aParam.key !='logonPasswordOldVerify' && aParam.key !='account' && aParam.key !='cc_cvc' && aParam.key !='check_routing_number' && aParam.key !='plainString' && aParam.key !='xcred_logonPassword'}">
+						<wcf:param name="${aParam.key}" value="${aValue}"/>
+					</c:if>
+			    </c:forEach>
+			</c:forEach>
+		</c:catch>            
+		<%-- Example of specifying the customer is viewing a particular product.
+		     The marketing activity could then display merchandising associations
+		     of this product.
+		      
+		    <wcf:param name="productId" value="12345" />
+		--%>
+		<%-- Example of specifying the customer is viewing a set of product.
+		     The marketing activity could then display merchandising associations
+		     of these products.
+		         
+		     <wcf:param name="productId" value="12345,67890,54321" />
+		--%>
+		                                    
+		<%-- Example of including a value from a specific cookie
+		     <wcf:param name="MYCOOKIE" value="${cookie.MYCOOKIE.value}" />
+		--%>
+		    
+		<%-- Example of including all cookies 
+		     <c:forEach var="cookieEntry" items="${cookie}">
+		         <wcf:param name="${cookieEntry.key}" value="${cookieEntry.value.value}" />                    
+		     </c:forEach>
+		--%>
+		
+		<c:if test="${!empty param.substitutionName1 && !empty param.substitutionValue1}">
+			<wcf:param name="DM_SubstitutionName1" value="${param.substitutionName1}" />
+			<wcf:param name="DM_SubstitutionValue1" value="${param.substitutionValue1}" />
+		</c:if>
+		<c:if test="${!empty param.substitutionName2 && !empty param.substitutionValue2}">
+			<wcf:param name="DM_SubstitutionName2" value="${param.substitutionName2}" />
+			<wcf:param name="DM_SubstitutionValue2" value="${param.substitutionValue2}" />
+		</c:if>
+		<c:if test="${!empty param.substitutionName3 && !empty param.substitutionValue3}">
+			<wcf:param name="DM_SubstitutionName3" value="${param.substitutionName3}" />
+			<wcf:param name="DM_SubstitutionValue3" value="${param.substitutionValue3}" />
+		</c:if>
+		<c:if test="${!empty param.substitutionName4 && !empty param.substitutionValue4}">
+			<wcf:param name="DM_SubstitutionName4" value="${param.substitutionName4}" />
+			<wcf:param name="DM_SubstitutionValue4" value="${param.substitutionValue4}" />
+		</c:if>
+		
+		<c:if test="${empty param.substitutionName1}">
+			<wcf:param name="DM_SubstitutionName1" value="[storeName]" />
+			<wcf:param name="DM_SubstitutionValue1" value="${storeName}" />
+		</c:if>
+		<c:if test="${empty param.substitutionName2}">
+			<wcf:param name="DM_SubstitutionName2" value="[fullPathHomeURL]" />
+			<wcf:param name="DM_SubstitutionValue2" value="${homePageURL}" />
+		</c:if>
+		<c:if test="${empty param.substitutionName3}">
+			<wcf:param name="DM_SubstitutionName3" value="[langlocale]" />
+			<wcf:param name="DM_SubstitutionValue3" value="${locale}" />
+		</c:if>
+
+		<wcf:param name="DM_SubstitutionName4" value="[productTotalCount]" />
+		<wcf:param name="DM_SubstitutionValue4" value="${searchTabSubText1}" />
+
+		<wcf:param name="DM_SubstitutionName5" value="[contentTotalCount]" />
+		<wcf:param name="DM_SubstitutionValue5" value="${searchTabSubText2}" />
+              		 
+		<c:if test="${!empty param.previewReport}">
+		    <wcf:param name="DM_PreviewReport" value="${param.previewReport}"/>
+		</c:if>
+</wcf:rest>
+
+<c:if test="${!empty eSpotDatasRoot.MarketingSpotData[0]}" >
+	<c:set  var="eSpotDatas" value="${eSpotDatasRoot.MarketingSpotData[0]}"/>
+</c:if>
+<wcf:eMarketingSpotCache marketingSpotDataJSON="${eSpotDatas}" 
+  contentDependencyName="contentId" 
+  catalogEntryDependencyName="productId"
+  categoryDependencyName="categoryId" 
+/>
+
+<c:set var="contentRec" value="false" />
+<c:set var="categoryRec" value="false" />
+<c:set var="catEntryRec" value="false" />
+<c:forEach var="eSpotD" items="${eSpotDatas.baseMarketingSpotActivityData}" >
+
+    <c:if test='${eSpotD.baseMarketingSpotDataType eq "MarketingContent"}'>
+    	<c:set var="contentRec" value="true" />
+    </c:if>
+   	<c:if test='${eSpotD.baseMarketingSpotDataType eq "CatalogGroupId" && !empty eSpotD.baseMarketingSpotActivityID}'>
+    	<c:set var="categoryRec" value="true" />
+    </c:if>
+   <c:if test='${eSpotD.baseMarketingSpotDataType eq "CatalogEntryId" && !empty eSpotD.baseMarketingSpotActivityID}'>
+    	<c:set var="catEntryRec" value="true" />
+    </c:if>
+</c:forEach>

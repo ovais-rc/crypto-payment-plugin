@@ -1,0 +1,151 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<script type="text/javascript" src="${staticIBMAssetAliasRoot}${env_siteWidgetsDir}com.ibm.commerce.store.widgets.SavedOrderInfo/javascript/SavedOrderInfo.js"></script>
+	
+<script type="text/javascript">
+	dojo.addOnLoad(function() { 
+		SavedOrderInfoJS.setCommonParameters('<c:out value="${langId}"/>','<c:out value="${storeId}" />','<c:out value="${catalogId}" />');
+		<wcst:message var="SAVEDORDERINFO_UPDATE_SUCCESS" key="SAVEDORDERINFO_UPDATE_SUCCESS" bundle="${widgetText}"/>
+		
+		MessageHelper.setMessage("SAVEDORDERINFO_UPDATE_SUCCESS", <wcf:json object="${SAVEDORDERINFO_UPDATE_SUCCESS}"/>);				
+	});
+</script>
+	
+<c:set var="pageSize" value="1"/>	
+<c:set var="startNumber" value="1" />
+<c:set var="beginIndex" value="${WCParam.beginIndex}" />
+<c:if test="${empty beginIndex}">
+	<c:set var="beginIndex" value="0" />
+</c:if>
+
+<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+
+<c:set var="orderId" value="${WCParam.orderId}"/>
+<c:if test="${empty orderId}">
+	<c:set var="orderId" value="${param.orderId}"/>
+</c:if>
+
+<c:choose>
+	<c:when test="${!empty orderId}">
+		<wcf:rest var="order" url="store/{storeId}/order/{orderId}" scope="request">
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:var name="orderId" value="${orderId}" encode="true"/>
+			<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+			<wcf:param name="pageSize" value="${pageSize}"/>
+			<wcf:param name="pageNumber" value="${currentPage}"/>
+		</wcf:rest>
+		<c:if test="${empty order.orderItem && beginIndex >= pageSize}">
+			<c:set var="beginIndex" value="${beginIndex - pageSize}" />
+			<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+			<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+			<wcf:rest var="order" url="store/{storeId}/order/{orderId]" scope="request">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:var name="orderId" value="${orderId}" encode="true"/>
+				<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="${currentPage}"/>
+			</wcf:rest>
+		</c:if>
+	</c:when>
+	<c:otherwise>
+		<wcf:rest var="order" url="store/{storeId}/cart/@self" scope="request">
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+			<wcf:param name="pageSize" value="${pageSize}"/>
+			<wcf:param name="pageNumber" value="${currentPage}"/>
+		</wcf:rest>
+		<c:if test="${empty order.orderItem && beginIndex >= pageSize}">
+			<c:set var="beginIndex" value="${beginIndex - pageSize}" />
+			<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+			<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+			<wcf:rest var="order" url="store/{storeId}/cart/@self" scope="request">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+				<wcf:param name="pageSize" value="${pageSize}"/>
+				<wcf:param name="pageNumber" value="${currentPage}"/>
+			</wcf:rest>
+		</c:if>
+	</c:otherwise>
+</c:choose>
+
+<%--
+***
+* Get current order id (The current shopping cart).
+***
+--%>
+<c:set var="cart" value="${requestScope.orderInCart}"/>
+<c:if test="${empty cart || cart == null}">
+	<wcf:rest var="cart" url="store/{storeId}/cart/@self">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+		<wcf:param name="isSummary" value="true"/>
+		<wcf:param name="pageSize" value="1"/>
+		<wcf:param name="pageNumber" value="1"/>
+	</wcf:rest>
+</c:if>
+<c:set var="currentOrderId" value="${cart.orderId}"/>
+
+<%-- Need to reset currencyFormatterDB as initialized in JSTLEnvironmentSetup.jspf, as the currency code used there is from commandContext. For order history we want to display with currency used when the order was placed. --%>
+<c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${order.grandTotalCurrency}+-1+${langId}"/>
+<c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+<c:if test="${empty currencyFormatterDB}">
+	<wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+		<wcf:var name="storeId" value="${storeId}" />
+		<wcf:param name="q" value="byCurrency" />
+		<wcf:param name="currency" value="${order.grandTotalCurrency}" />
+		<wcf:param name="numberUsage" value="-1" />
+		<wcf:param name="langId" value="${langId}" />
+	</wcf:rest>
+	<c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+</c:if>
+
+<c:set var="currencyDecimal" value="${currencyFormatterDB.decimalPlaces}"/>
+		
+<c:if test="${order.grandTotalCurrency == 'KRW'}">
+	<c:set property="currencySymbol" value="&#8361;" target="${currencyFormatterDB}"/>
+</c:if>
+
+<c:if test="${order.grandTotalCurrency == 'PLN'}">
+	<c:set property="currencySymbol" value="z&#322;" target="${currencyFormatterDB}"/>
+</c:if>
+
+<%-- These variables are used to hold the currency symbol --%>
+<c:choose>
+	<c:when test="${order.grandTotalCurrency == 'ar_EG' && order.grandTotalCurrency == 'EGP'}">
+		<c:set var="CurrencySymbolToFormat" value=""/>
+		<c:set var="CurrencySymbol" value="${currencyFormatterDB.currencySymbol}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}"/>
+		<c:set var="CurrencySymbol" value=""/>
+	</c:otherwise>
+</c:choose>
+
+<%--Variable to store the last updated date --%>
+<c:choose>
+	<c:when test="${!empty order.lastUpdateDate}">
+		<c:catch>
+			<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+		</c:catch>
+		<c:if test="${empty lastUpdateDate}">
+			<c:catch>
+				<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+			</c:catch>
+		</c:if>
+	</c:when>
+</c:choose>
+          
+<%@ include file="/Widgets_701/Common/SavedOrder/SavedOrder_OnBehalf_setup.jspf" %>

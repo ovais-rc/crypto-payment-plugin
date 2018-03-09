@@ -1,0 +1,87 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+  *****
+  * This JSP creates an HTML table displaying the promotion code redemption
+  * field plus all the applied promotion in an order.
+  *
+  * How to use this snippet?
+  * 1. To display this feature in your store's checkout page, you can cut and
+  *    paste the code from the snippet to your checkout page, or simply include it:
+  *			<c:import url="../../Snippets/Marketing/Promotions/PromotionsCodeDisplay.jsp">
+  *				<c:param name="orderId" value="10001"/>
+	*			</c:import>
+  *****
+--%>
+<!-- BEGIN PaymentAmount.jspf -->
+
+<c:set var="orderSummary" value="${requestScope.orderInCart}"/>
+<c:if test="${empty orderSummary || orderSummary==null}">
+	<wcf:rest var="orderSummary" url="store/{storeId}/cart/@self">
+		<wcf:var name="storeId" value="${WCParam.storeId}" encode="true"/>
+		<wcf:param name="profileName" value="IBM_Summary" />
+	</wcf:rest>
+</c:if>
+
+<c:set var="currentTotal" value="0"/>
+<c:set var="piAmount" value=""/>
+
+<c:if test="${!empty param.currentTotal}">
+	<c:set var= "currentTotal" value="${param.currentTotal}"/>
+</c:if>
+<c:if test="${!empty WCParam.currentTotal}">
+	<c:set var="currentTotal" value="${WCParam.currentTotal}" />
+</c:if>
+
+<c:set var="requestedPIAmount" value="false"/>
+<c:if test="${!empty param.piAmount}">
+	<c:set var="requestedPIAmount" value="true"/>
+	<c:set var= "piAmount" value="${param.piAmount}"/>
+</c:if>
+<c:if test="${!empty WCParam.piAmount}">
+	<c:set var="requestedPIAmount" value="true"/>
+	<c:set var="piAmount" value="${WCParam.piAmount}" />
+</c:if>
+
+<%-- if PiAmount is not set, then calculate the piamount --%>
+<c:if test="${!requestedPIAmount && (empty piAmount || piAmount/1==0)}">
+	<fmt:parseNumber var="piAmount" value='${orderSummary.grandTotal}'/>
+	<c:if test="${paymentAreaNumber > 1}">
+		<c:set var="piAmount" value="${piAmount - currentTotal}"/>
+	</c:if>
+
+	<c:if test="${piAmount < 0}">
+		<c:set var="piAmount" value="0"/>
+	</c:if>
+</c:if>
+
+<%-- check if the user has entered in an amount for the payment area. If so, display what the user has entered previously --%>
+<c:set var="key" value="paymentAreaAmount${paymentAreaNumber}"/>
+<c:if test="${!empty param[key]}">
+	<c:set var="piAmount" value="${param[key]}"/>
+</c:if>
+	
+<span class="payment_amount">
+	<span class="required-field">*</span>
+	<label for="piAmount_<c:out value='${paymentAreaNumber}_display' />"><fmt:message bundle="${storeText}" key="AMOUNT"/></label>
+</span>
+<br/>
+
+<span> 	
+	<input aria-required="true" type="tel" name="piAmount_display" value="<fmt:formatNumber value='${piAmount}' type='currency' maxFractionDigits='${env_currencyDecimal}' currencySymbol=''/>" id="piAmount_<c:out value='${paymentAreaNumber}_display' />" onchange="JavaScript:TealeafWCJS.processDOMEvent(event);CheckoutPayments.validateAmount('PaymentForm','<c:out value='${paymentAreaNumber}'/>');CheckoutPayments.updatePaymentObject(<c:out value='${paymentAreaNumber}'/>, 'piAmount');"/>
+	<input type="hidden" name="piAmount" value="<c:out value='${piAmount}'/>" id="piAmount_<c:out value='${paymentAreaNumber}' />" onchange="CheckoutPayments.formatAmountDisplayForLocale('<c:out value='${paymentAreaNumber}'/>')" />	
+</span>
+
+<!-- END PaymentAmount.jspf -->

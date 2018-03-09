@@ -1,0 +1,341 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+*****
+This object snippet displays the price for a catalog entry.
+
+Required parameters:
+
+catalogEntry:	This is the catalog entry for which the price will be displayed. It has to 
+              	CatalogEntryViewType.
+              	
+type: 	This parameter is used to indicate the type of the given catalogEntry. It 
+		has to be one of {product, item, bundle, package}. By default, the type 
+		is either package or item.
+
+displayPriceRange: 	This parameter is used to indicate whether or not to display the tiered
+			pricing setup for the catalog entry. Only items, products, packages will
+			display this.
+
+dynamicKitprice:  Only required for 'dynamicKit' type, this parameter is used to pass in the price 
+		object of particular contract.
+
+The rules for price display are as follows: 
+    
+     For product and bundle: 
+     	-- If there is no available item price, a message indicating 
+           that no price is available will be displayed. 
+        -- If the minimum item price is not equal to the maximum item
+           price, a price range will be displayed. 
+        -- If there is only one item price, and the list price is either
+           unavailable or smaller than the item price, then only the
+           item price will be displayed. 
+        -- If there is only one item price, and the list price is greater than
+           the item price, then both the list price and the item price will be
+           displayed. 
+           
+      For item and package: 
+        -- If there is no offer price, a message indicating that no price is
+           available will be displayed. 
+        -- If there is no list price or the list price is smaller than the 
+           offer price, then only will the offer price be displayed. 
+        -- If the list price is greater than the offer price, then both the
+           list price and the offer price will be displayed.
+*****
+--%>
+
+<%-- 
+***	
+*	Make sure the following variables are initially empty, because 
+*    the display will be based on whether they are null or not, and 
+*    the including page may contain the same variables. 
+***
+--%>
+<!-- BEGIN CatalogEntryPriceDisplay.jspf-->
+
+<c:set var="minimumPrice" value=""/>
+<c:set var="maximumPrice" value=""/>
+<c:set var="emptyPriceString" value=""/>
+<c:set var="priceString" value=""/>
+<c:remove var="indexedPrice"/>
+<c:remove var="listPrice"/>
+<c:remove var="calculatedPrice"/>
+<c:remove var="minimumPriceString"/>
+<c:remove var="maximumPriceString"/>
+<c:set var="dataBean" value="true"/>
+
+<c:set var="apendId" value="${catalogEntry.uniqueID}"/>
+<c:set var="checkNumberOfApplicableContractIds" value="false"/>
+<c:set var="listPriced" value="false"/>
+<c:forEach var="price" items="${catalogEntry.price}" >
+	<c:choose>
+		<c:when test="${price.usage == 'Display'}">
+			<c:set var="displayPrice" value="${price.value}" />
+			<c:set var="listPriced" value="true"/>
+		</c:when>
+		<c:when test="${price.usage == 'Offer'}">
+			<c:set var="calculatedPrice" value="${price}" />
+			<c:set var="checkNumberOfApplicableContractIds" value="true"/>
+		</c:when>
+	</c:choose>
+</c:forEach>
+
+<c:set var="minimumPrice" value="${calculatedPrice.minimumValue}"  />
+<c:set var="maximumPrice" value="${calculatedPrice.maximumValue}"  />
+<c:set var="minimumPriceString" value="${calculatedPrice.minimumValue.value}"  />
+<c:set var="maximumPriceString" value="${calculatedPrice.maximumValue.value}"  />
+	
+<c:set var="offerPriceString" value="${minimumPriceString}"/>
+	<%-- If minimum price is empty, means all SKUs has the same offer price. Get the offer price from first SKU--%>
+<c:if test="${empty offerPriceString}">
+	<c:if test="${!empty catalogEntry.SKUs[0].price}">
+		<c:forEach var="price" items="${catalogEntry.SKUs[0].price}" >
+			<c:if test="${price.priceUsage == 'Offer'}">
+				<c:set var="offerPriceString" value="${price.value}" />
+			</c:if>
+		</c:forEach>
+	</c:if>
+	<%-- If offer price is still empty, use product's offer price--%>
+	<c:if test="${empty offerPriceString}">
+		<c:set var="offerPriceString" value="${calculatedPrice.value}"/>
+	</c:if>
+</c:if>
+
+<c:if test="${catalogEntry.catalogEntryTypeCode eq 'dynamicKit'}">
+	<c:set var="dataBean" value="false"/>
+</c:if>
+
+<c:choose>
+	<%--
+	***
+	*	If there is no price, then get a message indicating there 
+	*	is no available price. This rule applies only to Dynamic Kits.
+	***
+	--%>
+	<c:when test="${type eq 'dynamicKit' && empty catalogEntry.price}">
+		<fmt:message bundle="${storeText}" var="emptyPriceString" key="NO_PRICE_AVAILABLE" />
+	</c:when>
+	
+	<%-- 
+	***
+	*	This rule applies only to Dynamic Kits.
+	*	Dynamic Kits do not have a price range. Only the best price is displayed.
+	***
+	--%>
+	<c:when test="${type eq 'dynamicKit' && !empty dynamicKitprice}">
+		<c:choose>
+			<c:when test="${dynamicKitprice.description == 'I'}">
+				<c:set var="indexedPrice" value="${dynamicKitprice}" />
+			</c:when>
+			<c:when test="${dynamicKitprice.description == 'L'}">
+				<c:set var="listPrice" value="${dynamicKitprice}" />
+			</c:when>
+			<c:when test="${dynamicKitprice.description == 'O'}">
+				<c:set var="calculatedPrice" value="${dynamicKitprice}" />
+			</c:when>
+		</c:choose>
+		
+
+		<c:if test="${not empty indexedPrice}" >
+			<c:if test="${not empty listPrice && listPrice.value gt indexedPrice.value}" >
+				<c:set var="strikedPriceString" value="${listPrice.value.value}"/>
+			</c:if>
+			<c:set var="priceString" value="${indexedPrice.value}"/>
+		</c:if>
+		<c:if test="${not empty calculatedPrice}" >
+			<c:remove var="strikedPriceString"/>
+			<c:set var="minimumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.minimumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</c:set>
+			<c:set var="maximumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.maximumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</c:set>
+			<c:choose>
+				<c:when test="${not empty minimumPriceString && not empty maximumPriceString}">
+					<c:set var="priceString" value="${minimumPriceString} - ${maximumPriceString}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${not empty listPrice && listPrice.value gt calculatedPrice.value}" >
+						<c:set var="strikedPriceString">
+							<fmt:formatNumber value="${listPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+							<c:out value="${CurrencySymbol}"/>
+						</c:set>
+					</c:if>
+					<c:set var="priceString">
+						<fmt:formatNumber value="${calculatedPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+						<c:out value="${CurrencySymbol}"/>
+					</c:set>
+				</c:otherwise>
+			</c:choose>
+		</c:if>
+	</c:when>
+
+	<c:when test="${type eq 'individualContractPrice' && empty catalogEntry.price}">
+		<fmt:message bundle="${storeText}" var="emptyPriceString" key="NO_PRICE_AVAILABLE" />
+	</c:when>
+
+	<c:when test="${type eq 'individualContractPrice' && !empty catalogEntryPrice}">
+		<c:choose>
+			<c:when test="${catalogEntryPrice.description == 'I'}">
+				<c:set var="indexedPrice" value="${catalogEntryPrice}" />
+			</c:when>
+			<c:when test="${catalogEntryPrice.description == 'L'}">
+				<c:set var="listPrice" value="${catalogEntryPrice}" />
+			</c:when>
+			<c:when test="${catalogEntryPrice.description == 'O'}">
+				<c:set var="calculatedPrice" value="${catalogEntryPrice}" />
+			</c:when>
+		</c:choose>
+		<c:if test="${not empty indexedPrice}" >
+			<c:if test="${not empty listPrice && listPrice.value gt indexedPrice.value}" >
+				<c:set var="strikedPriceString" value="${listPrice.value}"/>
+			</c:if>
+			<c:set var="priceString" value="${indexedPrice.value}"/>
+		</c:if>
+		<c:if test="${not empty calculatedPrice}" >
+			<c:remove var="strikedPriceString"/>
+			<c:set var="minimumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.minimumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</c:set>
+			<c:set var="maximumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.maximumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</c:set>
+			<c:choose>
+				<c:when test="${not empty minimumPriceString && not empty maximumPriceString}">
+					<c:set var="priceString" value="${minimumPriceString} - ${maximumPriceString}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${not empty listPrice && listPrice.value gt calculatedPrice.value}" >
+						<c:set var="strikedPriceString">
+							<fmt:formatNumber value="${listPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+							<c:out value="${CurrencySymbol}"/>
+						</c:set>
+					</c:if>
+					<c:set var="priceString">
+						<fmt:formatNumber value="${calculatedPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+						<c:out value="${CurrencySymbol}"/>
+					</c:set>
+				</c:otherwise>
+			</c:choose>
+		</c:if>
+	</c:when>
+	<%--
+	***
+	*	If there is no calculated contract price or range, then get a message 
+	*   indicating there is no available price. This rule applies to
+	*	any type of a catalog entry.
+	*
+	--%>
+	<c:when test="${ empty offerPriceString && empty minimumPriceString}">
+		<fmt:message bundle="${storeText}" var="emptyPriceString" key="NO_PRICE_AVAILABLE" />
+	</c:when>
+	
+	<%-- 
+	***
+	*	If there is a price range, then make the range the price to 
+	*	be displayed.
+	***
+	--%>
+	<c:when test="${!empty minimumPrice && !empty maximumPrice && (minimumPrice.value != maximumPrice.value)}">
+		 <fmt:message bundle="${storeText}" var="priceString" key="PRICE_RANGE" >
+			<fmt:param><fmt:formatNumber value="${minimumPriceString}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/><c:out value="${CurrencySymbol}"/></fmt:param>
+			<fmt:param><fmt:formatNumber value="${maximumPriceString}"  type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/><c:out value="${CurrencySymbol}"/></fmt:param>
+		 </fmt:message>
+	</c:when>
+</c:choose>
+
+<c:set var="executeExtensionFragment" value="false"/>
+
+<%@ include file="CatalogEntryPriceDisplayExt.jspf"%>
+
+<c:if test="${!executeExtensionFragment}">
+	<c:choose>
+		<%-- If the price is unavailable, print out the corresponding message --%>
+		<c:when test="${!empty emptyPriceString}">
+			<span class="price"> 
+				<c:out value="${emptyPriceString}"/>
+			</span>
+		</c:when>
+		
+		<%-- If the price string has been set, then we simply print it out. --%>
+		<c:when test="${!empty priceString}">
+			<span class="price">
+				<c:out value="${priceString}" escapeXml="false" />
+			</span>
+		</c:when>
+		
+		<%-- If the list price does not exist or is smaller than the offer price, print out the offer price only. --%>
+		<c:when test="${dataBean && (!listPriced || displayPrice <= offerPriceString)}">
+			<span class="price">
+				<fmt:formatNumber value="${offerPriceString}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</span>
+		</c:when>
+		
+		<c:otherwise>
+			<span class="listprice">
+				<fmt:formatNumber value="${displayPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</span>
+			<span class="price">
+				<fmt:formatNumber value="${offerPriceString}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+				<c:out value="${CurrencySymbol}"/>
+			</span>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<c:if test="${displayPriceRange && (!empty b2bStore && b2bStore != 'true')}">
+	<c:if test="${type != 'bundle' && checkNumberOfApplicableContractIds}">
+		<c:forEach var="price" items="${catalogEntry.price}" varStatus="appContractIdCounter">
+			<c:if test="${price.priceUsage == 'Offer'}">
+				<!-- For each contract -->
+				<c:forEach var="priceRange" items="${price.priceRange}" varStatus="priceRangeCounter">
+					<!-- For each contract price range -->
+					<c:choose>
+						<c:when test="${empty priceRange.maximumQuantity && priceRangeCounter.index == '0'}">
+						<!-- If there is only one price range: don't display -->	
+						</c:when>
+						<c:when test="${!empty priceRange.maximumQuantity}">
+							<span class="price">
+							<fmt:formatNumber var="localizedPrice" value="${priceRange.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+							<fmt:message bundle="${storeText}" key="TieredPricingDisp" >
+								<fmt:param value="${priceRange.minimumQuantity}" />
+								<fmt:param value="${priceRange.maximumQuantity}" />
+								<fmt:param value="${localizedPrice}${CurrencySymbol}" />
+							</fmt:message>
+							</span>
+						</c:when>
+						<c:otherwise>
+							<span class="price">
+							<fmt:formatNumber var="localizedPrice" value="${priceRange.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>										
+							<fmt:message bundle="${storeText}" key="TieredPricingDispLast" >
+								<fmt:param value="${priceRange.minimumQuantity}" />
+								<fmt:param value="${localizedPrice}${CurrencySymbol}" />
+							</fmt:message>
+							</span>
+						</c:otherwise>
+					</c:choose>
+				</c:forEach>
+			</c:if>
+		</c:forEach>
+	</c:if>
+</c:if>
+	
+<!-- END CatalogEntryPriceDisplay.jspf-->

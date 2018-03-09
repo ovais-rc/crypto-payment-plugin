@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+
+<Definitions>
+	    
+    <!---
+    	@keywords private
+    	Search Service to get the list of catalogs (master and sales) for the loaded store
+    -->
+    <Service definitionName="cmc/catalog/CatalogSelectionGetCatalogListService" retryOnError="true" singletonDefinition="true" url="/cmc/FindCatalogs">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+
+        <!---
+			Parses the catalog objects. And sets the values in the requested parent.
+			@param XML dataElement: the parent data element
+			@param cmc/catalog/CatalogSelectionWidget requestParent : the parent widget that invokes the service
+			@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+			@param string reqIdentifier: the request identifier associated with the dataset that returned this data
+			@param number startIndex: the start index for this request
+		-->
+        <method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			var oldSelectedCatalogId = requestParent.getValue();
+			var masterCatalog = null;
+			var noSalesCatalogStoreType = new Array("DPS", "DPX", "SPS", "SHS", "HCP", "PBS");
+			var storeType = ContextUtil.Singleton.findContextValue(requestParent.advancedSearchContent.oEditor, "storeType").value;
+			requestParent.setValues([]);
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var catalog = this.parseCatalog(dataElement.childNodes[i]);
+				if (catalog.masterCatalog == "true" || noSalesCatalogStoreType.indexOf(storeType) == -1) {
+					requestParent.addValue(catalog);
+					if (oldSelectedCatalogId != null && catalog.value == oldSelectedCatalogId) {
+						requestParent.selectValue(catalog);
+					}
+					if (catalog.masterCatalog == "true") {
+						masterCatalog = catalog;
+					}
+				}
+			}
+			if (requestParent.selectedValue == null) {
+				requestParent.selectValue(masterCatalog);
+			}
+			]]>
+		</method>
+
+		<!---
+			Parses each catalog object.
+			@param XML dataElement: the child data element
+			@returns cmc/foundation/CatalogSelection : a cmc/foundation/CatalogSelection catalog object.
+		-->
+        <method args="dataElement" name="parseCatalog">
+			<![CDATA[
+			var catalog = {};
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var e = dataElement.childNodes[i];
+				if (e.nodeName == "catalogId") {
+					var textNode = e.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+						catalog.value = textNode.nodeValue;
+					}
+				}
+				if (e.nodeName == "identifier") {
+					var textNode = e.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+						catalog.displayName = textNode.nodeValue;
+					}
+				}
+				if (e.nodeName == "primary") {
+					var textNode = e.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+						if (textNode.nodeValue == "true") {
+							catalog.masterCatalog = "true";
+						}
+						else {
+							catalog.masterCatalog = "false";
+						}
+					}
+				}
+				if (e.nodeName == "objectStoreId") {
+					var textNode = e.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+						catalog.objectStoreId = textNode.nodeValue;
+					}
+				}
+			}
+			return catalog;
+			]]>
+		</method>
+    </Service>
+    
+    <!---
+    	@keywords private
+    	Catalog Selection Widget to display the list of catalogs in the given store.
+    -->
+    <BaseComboBox classDefinition="true" definitionName="cmc/catalog/CatalogSelectionWidget">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+        
+        <!--- A reference to the parent content class -->
+        <variable name="advancedSearchContent" value="${null}"/>
+
+		<!--- @keywords private -->
+        <method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.onLoadDel == null) {
+				this.onLoadDel = new EventHandler.Class(this, "reload");
+				this.onLoadDel.connect(this.advancedSearchContent, "onload");
+			}
+			this.reload();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.onLoadDel.disconnectAll();
+			delete this.onLoadDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Reloads the widget every time the Advanced Search Panel is opened to refresh the catalog list
+		-->
+		<method args="e" name="reload">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.advancedSearchContent.advancedSearchDialog.open) {
+				var caller = this;
+				require(["cmc/catalog/CatalogSelectionGetCatalogListService"], function(CatalogSelectionGetCatalogListService) {
+					CatalogSelectionGetCatalogListService.Singleton.doRequest(caller, {
+						storeId: ContextUtil.Singleton.findContextValue(caller.advancedSearchContent.oEditor, "storeId").value
+					});
+				});
+			}
+			else {
+				this.setValues([]);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="getIdentifier">
+			<![CDATA[
+			if (this.selectedValue == null) {
+				return null;
+			}
+			return this.selectedValue.displayName;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="getObjectStoreId">
+			<![CDATA[
+			if (this.selectedValue == null) {
+				return null;
+			}
+			return this.selectedValue.objectStoreId;
+			]]>
+		</method>
+		
+    </BaseComboBox>
+</Definitions>

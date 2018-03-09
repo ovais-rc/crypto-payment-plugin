@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","id",{block:"Rata Kanan Kiri",center:"Rata Tengah",left:"Rata Kiri",right:"Rata Kanan"});

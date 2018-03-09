@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+	<Report reportName="biBALoyalCustomersProductReport" online="true" dataSourceName="WCA DataSource">
+		<comment></comment>
+		<SQLvalue>
+
+SELECT distinct
+	LOYAL_CUSTOMER.LOGONID AS "Logon ID",
+	LOYAL_CUSTOMER.USER_NAME AS "User Name",
+	PRO.PARTNUM AS "Part Number",
+	PREF.NAME AS "Product Name",
+	PREF.SHORT_DESCRIPTION AS "Product Description",
+	COUNT(FOI.ORDER_ID) AS "Times Ordered by This User"
+FROM
+	WCA.PERIOD P,
+	WCA.FACT_ORDERS AS FO,
+	WCA.FACT_ORDERITEMS FOI,
+	WCA.PRODUCT PRO,
+	WCA.PRODUCT_REF PREF,	
+	(SELECT distinct M.MEMBER_ID AS USER_ID,
+		U.LOGONID AS LOGONID,
+		CONCAT(COALESCE(M.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(M.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(M.LAST_NAME,'')))) AS USER_NAME,		
+		SUM(DISTINCT FO.TOTAL_VALUE) AS TOTAL_ORDER_VALUE
+	FROM
+		WCA.PERIOD P,
+		wca.MEMBER M,
+		WCA.USERREG AS U,
+		WCA.FACT_ORDERS AS FO,
+		WCA.PRODUCT_REF AS PREF
+	WHERE
+		FO.MEMBER_ID = U.USERS_ID
+		AND M.MEMBER_ID = U.USERS_ID
+		AND P.PER_ID = FO.PER_ID
+		AND (WCA.PARAM_VALUE_IN(CHAR(PREF.LANGUAGE_ID), 'REPORT_LANGUAGE')=1)		
+		AND P.CALENDAR_DATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+ 		AND P.CALENDAR_DATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+		AND FO.STORE_ID IN ({storeent_id})	
+	GROUP BY 
+		M.MEMBER_ID,
+		U.LOGONID,
+		M.FIRST_NAME,
+		M.MIDDLE_NAME,
+		M.LAST_NAME
+	ORDER BY
+		TOTAL_ORDER_VALUE DESC  FETCH FIRST 100 ROWS ONLY
+	) AS LOYAL_CUSTOMER
+
+WHERE
+	LOYAL_CUSTOMER.USER_ID = FO.MEMBER_ID
+	AND FOI.ORDER_ID = FO.ORDER_ID
+	AND FOI.PRODUCT_ID = PRO.PRODUCT_ID
+	AND FOI.PRODUCT_ID = PREF.PRODUCT_ID
+	AND (P.PER_ID = FO.PER_ID and PRO.PRODUCT_ID NOT IN (SELECT COALESCE(INTEGER(PARAM.PARAM_VALUE),-9999) FROM WCA.PARAMETERS PARAM WHERE PARAM.PARAM_TYPE ='PRODUCT_ID_DEFAULT'))
+	AND (WCA.PARAM_VALUE_IN(CHAR(PREF.LANGUAGE_ID), 'REPORT_LANGUAGE')=1) 
+	AND (WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SUBMITTED')=1 OR
+	WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED')=1 )
+	AND P.CALENDAR_DATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+ 	AND P.CALENDAR_DATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+	AND FOI.STORE_ID IN ({storeent_id})	
+
+GROUP BY 
+	LOYAL_CUSTOMER.LOGONID,
+	LOYAL_CUSTOMER.USER_NAME,
+	PRO.PARTNUM,
+	PREF.NAME,
+	PREF.SHORT_DESCRIPTION,
+	LOYAL_CUSTOMER.TOTAL_ORDER_VALUE
+ORDER BY
+	{sortBy} {sortOrder}
+
+	</SQLvalue>
+		<display>
+			<standardInfo>
+				<resourceBundle>bi.biNLS</resourceBundle>
+				<title>BALoyalCustomersProduct</title>
+				<message>BALoyalCustomersProduct</message>
+			</standardInfo>
+			<userDefinedParameters>
+				<THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+				<TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+				<spaceBetweenColumns>25</spaceBetweenColumns>
+				<columnDefaultAttributes>
+					<displayInReport>true</displayInReport>
+					<columnWidth>0</columnWidth>
+					<maxEntryLength>999</maxEntryLength>
+					<columnType>string</columnType>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columnDefaultAttributes>
+				<columns>
+					<columnKey>C0</columnKey>
+					<columnName>logonId</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					  <columnType>string</columnType>
+				</columns>
+				<columns>
+					<columnKey>C1</columnKey>
+					<columnName>userName</columnName>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C2</columnKey>
+					<columnName>partNum</columnName>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C3</columnKey>
+					<columnName>prodName</columnName>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C4</columnKey>
+					<columnName>prodDescrip</columnName>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C5</columnKey>
+					<columnName>numOfTimesOrdered</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+					  <columnType>integer</columnType>
+				</columns>
+			</userDefinedParameters>
+		</display>
+	</Report>
+	 
+</Reporting>

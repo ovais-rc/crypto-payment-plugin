@@ -1,0 +1,120 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="orgName" value="${param.orgName}"/>
+
+<%-- Add support for contains, starts with and ends with TODO 
+SEARCHTYPE_CASEINSENSITIVE_CONTAINS = 4
+SEARCHTYPE_CASEINSENSITIVE_STARTSWITH = 3;
+SEARCHTYPE_CASEINSENSITIVE_EXACTMATCH = 6; --%>
+<%-- Defaults to SEARCHTYPE_CASEINSENSITIVE_CONTAINS --%>
+<c:set var="orgNameSearchType" value="4"/>
+
+<c:set var="beginIndex" value="${param.startIndex}"/>
+<c:if test="${empty beginIndex}">
+	<c:set var="beginIndex" value="${0}"/>
+</c:if>
+<c:set var="pageSize" value="${orgListPageSizeBreakPoint}"/>
+
+<c:if test="${!empty orgName}">
+	<wcf:rest var="organizationSearchResultsList" url="store/${WCParam.storeId}/organization" scope="request">
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="q" value="organizationsICanAdmin"/>
+		<wcf:param name="orgNameSearchType" value="${orgNameSearchType}"/>
+		<wcf:param name="startIndex" value="${beginIndex}"/>
+		<wcf:param name="maxResults" value="${pageSize}"/>
+		<c:choose>
+			<c:when test="${orgName eq '*'}">
+				<wcf:param name="orgName" value=""/>
+			</c:when>
+			<c:otherwise>
+				<wcf:param name="orgName" value="${orgName}"/>
+			</c:otherwise>
+		</c:choose>
+	</wcf:rest>
+</c:if>
+
+<wcf:url var="OrganizationCreateEditView" value="OrganizationCreateEditView">
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="storeId" value="${WCParam.storeId}"/>
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+</wcf:url>
+
+
+<c:choose>
+	<c:when test="${param.forParentOrg eq 'true'}" >
+		<c:if  test=" ${!empty param.parentOrgEntityId}">
+			<c:set var="selectedOrgEntityId" value="${param.parentOrgEntityId}" scope="request"/>
+		</c:if>
+		<c:if test="${!empty param.parentOrgEntityName}">
+			<c:set var="selectedOrgEntityName" value="${param.parentOrgEntityName}" scope="request"/>
+		</c:if>
+	</c:when>
+	<c:otherwise >
+		<c:if test="${!empty param.orgEntityId}">
+			<c:set var="selectedOrgEntityId" value="${param.orgEntityId}" scope="request"/>
+		</c:if>
+		<c:if test="${!empty param.orgEntityName}">
+			<c:set var="selectedOrgEntityName" value="${param.orgEntityName}" scope="request"/>
+		</c:if>
+	</c:otherwise>
+</c:choose>
+
+<%-- Start setting pagination data --%>
+<%-- 
+	Before including this page, set the following variables 
+	1. totalPages
+	2. currentPage
+	3. pageSize
+	4. linkPrefix
+	5. eventName to publish on click of pagination controls
+	6. otherViews (pass true to display listGridView or false to hide them
+	7. otherViewsEventName - to publish on click of other views icon (grid or list)
+--%>
+
+<c:set var="linkPrefix" value="orgSearchResults"/>
+<c:set var="eventName" value="orgSearchResults_PaginationControl_changed"/>
+<c:set var="totalCount" value="${organizationSearchResultsList.recordSetTotal}"/>
+<c:set var="endIndex" value = "${pageSize + beginIndex}"/>
+<c:if test="${endIndex > totalCount}">
+	<c:set var="endIndex" value = "${totalCount}"/>
+</c:if>
+
+
+<c:if test = "${!empty organizationSearchResultsList}">
+	
+	<c:set  var="totalPages"  value = "${totalCount / pageSize * 1.0}"/>
+	<%-- Get a float value from totalPages which is a string --%>
+	<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="false" parseLocale="en_US"/>
+	<%-- do a ceil if totalPages contains fraction digits --%>
+	<c:set var="totalPages" value = "${totalPages + (1 - (totalPages % 1)) % 1}"/>
+
+	<c:set var="currentPage" value = "${( beginIndex + 1) / pageSize}" />
+	<%-- Get a float value from currentPage which is a string --%>
+
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="false" parseLocale="en_US"/>
+	
+	<%-- do a ceil if currentPage contains fraction digits --%>
+	<c:set var="currentPage" value = "${currentPage + (1 - (currentPage % 1)) % 1}"/>
+	
+	<%-- Get a float value from currentPage which is a string --%>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="false" parseLocale="en_US"/>
+		
+</c:if>
+
+<c:if test = "${organizationSearchResultsList.recordSetTotal eq 0}">
+	<wcst:message var="emptySearchResultsMessage" key="ORG_SEARCH_RESULTS_EMPTY" bundle="${widgetText}"> 
+		<wcst:param value="${orgName}"/>
+	</wcst:message>
+</c:if>

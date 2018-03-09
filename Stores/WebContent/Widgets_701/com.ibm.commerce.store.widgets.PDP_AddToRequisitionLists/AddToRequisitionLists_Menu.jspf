@@ -1,0 +1,279 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- Set variables when add list service returns and widget should show success message instead --%>
+<c:choose>
+	<c:when test="${paramValues.showSuccess[0] == 'true'}">
+		<c:set var="showSuccessStyle" value="block"/>
+		<c:set var="hideSuccessStyle" value="none"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="showSuccessStyle" value="none"/>
+		<c:set var="hideSuccessStyle" value="block"/>
+	</c:otherwise>
+</c:choose>
+
+<%-- If buttonStyle is false, do not show button --%>
+<c:if test="${!empty param.buttonStyle}">
+	<c:set var="buttonStyle" value="${param.buttonStyle}" />
+</c:if>
+
+<%-- Unique identifier for this widget --%>
+<c:set var="parentPage" value="" />
+<c:if test="${!empty widgetPrefix}">
+	<c:set var="parentPage" value="${widgetPrefix}" />
+</c:if>
+<c:if test="${!empty param.parentPage}">
+	<c:set var="parentPage" value="${param.parentPage}" />
+</c:if>
+
+<%-- Set product Id --%>
+<c:if test="${!empty paramValues.productId}">
+	<c:set var="productId" value="${paramValues.productId[0]}" />
+</c:if>
+
+<c:set var="addToListFunction" value="addToList()" />
+<c:if test="${!empty param.moveToRequisitionList && param.moveToRequisitionList eq true}">
+	<c:set var="addToListFunction" value="moveToList('${parentPage}')" />
+	<%-- When an order item is being moved to the list, the quantity is passed as a parameter --%>
+	<c:if test="${!empty param.quantity}">
+		<c:set var="quantity" value="${param.quantity}"/>
+	</c:if>
+</c:if>
+
+<script>
+	<%-- When quantity input text box value changes, capture the new value and use it during Add to Req List action --%>
+	dojo.addOnLoad(function(){
+		dojo.topic.subscribe("Quantity_Changed", function(newQuantity) {
+			eval("addReqListsJS<c:out value="${parentPage}"/>.setQuantity('"+newQuantity+"');");
+		});
+	});
+</script>
+
+<%-- Check if adding multiple SKUs --%>
+<c:if test="${type == 'bundle' || !empty paramValues.type && paramValues.type[0] == 'bundle' || param.addMultipleSKUs eq true || !empty paramValues.addMultipleSKUs && paramValues.addMultipleSKUs[0]}">
+	<c:set var="addToListFunction" value="addSkus2RequisitionListAjax()" />
+</c:if>
+
+<%-- Check if adding saved order to requisition list --%>
+<c:if test="${!empty param.addSavedOrder && param.addSavedOrder eq true}">
+	<c:set var="addToListFunction" value="addOrderToRequisitionList()" />
+</c:if>
+
+<div style="position:relative;">
+	<c:choose>
+		<c:when test="${!empty buttonStyle && buttonStyle eq 'none'}">
+		</c:when>
+		<c:otherwise>
+			<div class="requisitionListBox" id="<c:out value="${parentPage}"/>requisitionList">
+				<div class="addRequisitionList">
+					<div class="button" id="<c:out value="${parentPage}"/>addToShoppingListBtn" 
+						onclick="javascript:addReqListsJS<c:out value="${parentPage}"/>.setProductId('${productId}');addReqListsJS<c:out value="${parentPage}"/>.setQuantity('${quantity}');addReqListsJS<c:out value="${parentPage}"/>.toggleDropDownMenu(${type == 'bundle' || !empty paramValues.type && paramValues.type[0] == 'bundle' ? 'true, false, false, null, true' : ''});" 
+						onkeypress="javascript:if(event.keyCode == 0 || event.keyCode == 13){event.preventDefault();addReqListsJS<c:out value="${parentPage}"/>.setProductId('${productId}');addReqListsJS<c:out value="${parentPage}"/>.setQuantity('${quantity}');addReqListsJS<c:out value="${parentPage}"/>.toggleDropDownMenu(${type == 'bundle' || !empty paramValues.type && paramValues.type[0] == 'bundle' ? 'true, false, false, null, true' : ''});}" 
+						role="button" aria-haspopup="true" aria-label="<wcst:message key="SL_ADD_TO_REQUISITION" bundle="${widgetText}"/>" tabindex="0"
+						> 
+						<c:choose>
+							<c:when test="${!empty param.moveToRequisitionList && param.moveToRequisitionList eq true}">
+								<p class="button_text"><wcst:message key="SL_MOVE_TO_REQUISITION" bundle="${widgetText}"/></p>
+							</c:when>
+							<c:otherwise>
+								<p class="button_text"><wcst:message key="SL_ADD_TO_REQUISITION" bundle="${widgetText}"/></p>
+							</c:otherwise>
+						</c:choose>
+					</div>
+				</div>
+			</div>
+		</c:otherwise>
+	</c:choose>
+	
+	<div class="clearFloat"/>
+	<div id="<c:out value="${parentPage}"/>requisitionListContent" class="requisitionListContent popup"
+		role="dialog" aria-label="<wcst:message key='SL_ACCE_REGION_ADD_REQ_LIST' bundle='${widgetText}'/>"
+		style="display:<c:out value="${showSuccessStyle}"/>;">
+			<c:choose>
+				<c:when test="${userType eq 'G'}">
+					<div class="close" role="button" aria-label="<wcst:message key='CLOSE' bundle='${widgetText}'/>" 
+							onclick="addReqListsJS<c:out value="${parentPage}"/>.setProductId('${productId}');addReqListsJS<c:out value="${parentPage}"/>.toggleDropDownMenu(${type == 'bundle' || !empty paramValues.type && paramValues.type[0] == 'bundle' ? 'true, false, false, null, true' : ''});" 
+							onkeypress="if(event.keyCode == 0 || event.keyCode == 13){addReqListsJS<c:out value="${parentPage}"/>.setProductId('${productId}');addReqListsJS<c:out value="${parentPage}"/>.toggleDropDownMenu(${type == 'bundle' || !empty paramValues.type && paramValues.type[0] == 'bundle' ? 'true, false, false, null, true' : ''});}"
+							tabindex="0">
+					</div>
+					<div class="signIn">
+						<h1>
+							<wcst:message key="SL_SIGN_IN_OR_REGISTER_TO_ACCESS_LIST" bundle="${widgetText}"/>
+						</h1>
+	
+	<%--					<div class="signInForm">
+								<div class="container">
+								<input placeholder="<wcst:message key='SL_EMAIL' bundle='${widgetText}'/>" type="text" class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset"/>
+									<input placeholder="<wcst:message key='SL_PASSWORD' bundle='${widgetText}'/>" type="password" class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset">
+									<div class="row signInFormFooter">
+										<div class="col6">
+											<div class="saveButton">
+												<div class="button_text" onclick="MessageHelper.displayStatusMessage(storeNLS['SL_SIGNIN_HEADER'])">
+													<wcst:message key='SL_SIGN_IN' bundle='${widgetText}'/>
+												</div>
+											</div>
+										</div>
+										<div class="col6 forgotPassword">
+											<a href="<c:out value="${ForgetPasswordURL}"/>" class="ui-link">
+												<wcst:message key='SL_FORGOT_PASSWORD' bundle='${widgetText}'/>
+											</a>
+										</div>
+									</div>							
+								</div>
+							</div>--%>
+						<div class="register">
+							<div class="container">
+								<h2><wcst:message key="GLOBALLOGIN_HAVING_NEW_ACCOUNT" bundle="${widgetText}"/></h2>
+								<div class="cancelButton" onclick="javascript:setPageLocation('<c:out value="${RegisterURL}"/>')"
+									role="button">
+									<div class="button">
+										<p class="button_text"><wcst:message key="SL_REGISTER" bundle="${widgetText}"/></p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</c:when>
+				<c:otherwise>
+					<div class="reqListSelect" id="<c:out value="${parentPage}"/>requisitionListSelect" style="display:<c:out value="${hideSuccessStyle}"/>;">
+						<div class="close" role="button" aria-label="<wcst:message key='CLOSE' bundle='${widgetText}'/>" 
+								onclick="javascript:addReqListsJS<c:out value="${parentPage}"/>.toggleDropDownMenu();"
+								onkeypress="if(event.keyCode == 0 || event.keyCode == 13){addReqListsJS<c:out value="${parentPage}"/>.toggleDropDownMenu();}" 
+								tabindex="0">
+						</div>
+						<div class="listSelect" role="radiogroup" aria-label="<wcst:message key="SL_SELECT_LIST_DESC" bundle="${widgetText}"/>">
+							<div class="item">
+								<h1><wcst:message key="SL_SELECT_LIST_DESC" bundle="${widgetText}"/></h1>
+							</div>
+							<div id="<c:out value="${parentPage}"/>scrollContainer" class="scroll">
+								<c:forEach var="reqList" items="${requisitionListDetailsList}">
+									<div class="item">
+										<div class="container">
+											<c:set var="search" value="'"/>
+											<c:set var="replace" value="&#039;"/>
+												<div tabindex="0" class="radioButton" role="radio" aria-checked="false" 
+												onclick="addReqListsJS<c:out value="${parentPage}"/>.checkRadioButton(this, '<c:out value="${reqList.listId}"/>', '<c:out value="${fn:replace(reqList.name, search, replace)}"/>');addReqListsJS<c:out value="${parentPage}"/>.toggleCreateListDetailsMenu(false);"
+												onkeydown="if(event.keyCode == 32 || event.keyCode == 13){addReqListsJS<c:out value="${parentPage}"/>.checkRadioButton(this, '<c:out value="${reqList.listId}"/>', '<c:out value="${reqList.name}"/>');addReqListsJS<c:out value="${parentPage}"/>.toggleCreateListDetailsMenu(false);}">
+													<span class="spanacce"><c:out value="${reqList.name}"/></span>
+													<div class="checked"></div>
+												</div>
+											<c:remove var="search"/>
+											<c:remove var="replace"/>
+											<div class="listName"><c:out value="${reqList.name}"/></div>
+											<span class="type"><i><c:out value="${reqList.type}"/></i></span>
+										</div>
+									</div>
+								</c:forEach>
+								
+								<div class="item">
+									<div class="container">
+										<div class="radioButton" 
+											onclick="addReqListsJS<c:out value="${parentPage}"/>.checkRadioButton(this);addReqListsJS<c:out value="${parentPage}"/>.toggleCreateListDetailsMenu(true)"
+											onkeydown="if(event.keyCode == 32 || event.keyCode == 13){addReqListsJS<c:out value="${parentPage}"/>.checkRadioButton(this);addReqListsJS<c:out value="${parentPage}"/>.toggleCreateListDetailsMenu(true);}"
+											role="radio" aria-checked="false" tabindex="0">
+											<span class="spanacce"><wcst:message key="SL_CREATE_NEW_REQUISITION_DESC" bundle="${widgetText}"/></span>
+											<div class="checked"></div>
+										</div>
+										<wcst:message key="SL_CREATE_NEW_REQUISITION_DESC" bundle="${widgetText}"/>
+										<div class="newList" id="<c:out value="${parentPage}"/>createNewListMenu" style="display:none;">
+											<input id="<c:out value="${parentPage}"/>newListNameInput" type="text" maxlength="254" placeholder="<wcst:message key="SL_NEW_LIST_DESC" bundle="${widgetText}"/>" 
+											aria-label="<wcst:message key="SL_NEW_LIST_DESC" bundle="${widgetText}"/>"
+											class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset"/>
+											<div class="sortingDropdown" onclick="addReqListsJS<c:out value="${parentPage}"/>.toggleListTypeMenu();" onkeydown="addReqListsJS<c:out value="${parentPage}"/>.handleKeyEventListTypeMenu(event);"
+												role="listbox" aria-label="<wcst:message key="SL_ACCE_CHOOSE_TYPE" bundle="${widgetText}"/>" tabindex="0">
+												<div class="noSort" id="<c:out value="${parentPage}"/>listTypeY" role="alert" aria-live="polite" >
+													<wcst:message key="SL_PRIVATE_DESC" bundle="${widgetText}"/>
+												</div>
+												<div class="noSort" id="<c:out value="${parentPage}"/>listTypeZ" role="alert" aria-live="polite" style="display:none;">
+													<wcst:message key="SL_SHARED_DESC" bundle="${widgetText}"/>
+												</div>
+												<div class="dropdownArrow"></div>
+												<div class="sortDropdown" id="<c:out value="${parentPage}"/>listTypeMenu" style="display:none;">
+													<ul>
+														<li class="sortOption" role="option" onclick="addReqListsJS<c:out value="${parentPage}"/>.setListType('Y');" tabindex="-1"><wcst:message key="SL_PRIVATE_DESC" bundle="${widgetText}"/></li>
+														<li class="sortOption" role="option" onclick="addReqListsJS<c:out value="${parentPage}"/>.setListType('Z');"tabindex="-1"><wcst:message key="SL_SHARED_DESC" bundle="${widgetText}"/></li>
+													</ul>
+												</div>
+											</div>
+											<div class="clearFloat"></div>
+										</div>			
+									</div>
+								</div>
+							</div>
+							
+							<div class="addNewListFooter">
+								<div class="container">									
+									<div class="saveButton" role="button" id="<c:out value="${parentPage}"/>requisitionListsSaveButton" 
+											onclick="MessageHelper.setFocusElement('<c:out value="${parentPage}"/>requisitionListsSaveButton');addReqListsJS<c:out value="${parentPage}"/>.<c:out value="${addToListFunction}"/>;" tabindex="0"
+											onkeydown="MessageHelper.setFocusElement('<c:out value="${parentPage}"/>requisitionListsSaveButton');if(event.keyCode == 32 || event.keyCode == 13){event.preventDefault();addReqListsJS<c:out value="${parentPage}"/>.<c:out value="${addToListFunction}"/>;}"
+											tabindex="0">
+										<div class="button_text"><wcst:message key="SL_ADD_TO_REQUISITION" bundle="${widgetText}"/></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					
+					<div class="productAdded" id="<c:out value="${parentPage}"/>productAdded" style="display:<c:out value="${showSuccessStyle}"/>;" aria-labelledby="<c:out value="${parentPage}"/>productAddedMessage" aria-live="polite" role="dialog">
+						<c:choose>
+							<c:when test="${!empty paramValues.addSavedOrder && paramValues.addSavedOrder[0]}">
+								<div id="<c:out value="${parentPage}"/>productAddedMessage" class="message">
+									<wcst:message key="SL_ORDER_ADDED_TO" bundle="${widgetText}">
+										<wcst:param value="${paramValues.orderId[0]}"/>
+										<wcst:param value="${paramValues.listName[0]}"/>
+									</wcst:message>
+								</div>
+							</c:when>
+							<c:otherwise>
+								<wcst:message key="SL_ADDED_TO" bundle="${widgetText}" var="addedMessage"><wcst:param value="${paramValues.listName[0]}"/></wcst:message>
+								<div id="<c:out value="${parentPage}"/>productAddedMessage" class="message"><c:out value="${addedMessage}"/></div>
+
+								<c:set var="numberOfSKUsAdded" value="1" />
+								<c:if test="${!empty paramValues.numberOfSKUs[0]}">
+									<fmt:parseNumber var="numberOfSKUsAdded" type="number" value="${paramValues.numberOfSKUs[0]}" />
+								</c:if>
+								
+								<c:forEach begin="0" end="${numberOfSKUsAdded - 1}" var="i">
+									<c:if test="${i < 3}">
+										<c:if test="${!empty paramValues.productThumbnail[i]}">
+											<div class="product">
+												<img src="<c:out value="${paramValues.productThumbnail[i]}"/>" alt="<c:out value="${addedMessage}"/>"/>
+												<div class="productTitle" id="<c:out value="${parentPage}"/>addedProductTitle">
+													<c:out value="${paramValues.productName[i]}"/> <c:out value="${paramValues.productSKU[i]}"/>
+												</div>
+												<div class="clearFloat"></div>
+											</div>
+										</c:if>
+									</c:if>
+									<c:if test="${i == 2}">
+										<div class="ellipsis">...</div>
+									</c:if>
+								</c:forEach>
+							</c:otherwise>
+						</c:choose>
+
+						<div class="footer">
+							<div id="<c:out value="${parentPage}"/>requisitionListsContShopButton" class="saveButton" onclick="addReqListsJS<c:out value="${parentPage}"/>.continueShopping();"
+								onkeypress="if(event.keyCode == 0 || event.keyCode == 13){event.preventDefault();addReqListsJS<c:out value="${parentPage}"/>.continueShopping();}"
+								role="button" tabindex="0">
+								<div class="button_text"><wcst:message key="SL_CONTINUE_SHOPPING" bundle="${widgetText}"/></div>
+							</div>
+						</div>
+					</div>
+				</c:otherwise>
+			</c:choose>
+		</div>
+	</div>
+</div>

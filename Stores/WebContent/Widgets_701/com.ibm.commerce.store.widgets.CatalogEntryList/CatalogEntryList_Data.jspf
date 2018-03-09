@@ -1,0 +1,279 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<c:set var="disableProductCompare" value="false" scope="request"/>
+<c:if test="${param.showCompareBox == 'false' || param.disableProductCompare == 'true'}">
+	<c:set var="disableProductCompare" value = "true" />
+</c:if>
+<c:set var="pageView" value="${param.pageView}"/>
+<c:if test="${empty pageView}">
+	<c:set var="pageView" value = "grid" scope="request"/>
+</c:if>
+
+<%-- Get GlobalPriceMode to determine the whether the products can be sorted by price or not --%>
+<c:set var="globalpricemode" value="${cookie.priceMode.value}" scope="request"/>
+<c:if test="${globalpricemode == null}">
+	<wcst:alias name="StoreHelper" var="priceMode">
+		<wcf:param name="parameter" value=""/>
+		<wcf:param name="parameter" value="${storeId}"/>
+	</wcst:alias>
+	<c:set var="globalpricemode" value="${priceMode}"/>
+	<%
+		Cookie priceModeCookie = new Cookie("priceMode", (String) pageContext.getAttribute("globalpricemode"));
+		priceModeCookie.setPath("/");
+		response.addCookie(priceModeCookie);
+	%>
+
+</c:if>
+
+<c:set var="sortBy" value="" scope="request"/>
+<c:choose>
+<%-- param.sortBy is from widget property --%>
+<c:when test="${not empty param.sortBy}" >
+	<c:if test="${(globalpricemode == 1 && param.sortBy != '0') || param.sortBy == '1' || param.sortBy == '2' || param.sortBy == '3' || param.sortBy == '4'}">
+		<c:set var="sortBy" value="${param.sortBy}" scope="request"/>
+	</c:if >
+</c:when>
+<c:when test="${not empty param.orderBy}" >
+	<c:if test="${(globalpricemode == 1 && param.orderBy != '0') || param.orderBy == '1' || param.orderBy == '2' || param.orderBy == '3' || param.orderBy == '4'}">
+		<c:set var="sortBy" value="${param.orderBy}" scope="request"/>
+	</c:if >
+</c:when>
+</c:choose>
+
+<c:set var="env_resultsPerRow" value="4" scope="request"/>
+
+<c:set var="initPageView" value="${param.initPageView }" />
+<c:if test="${empty initPageView }" >
+	<c:set var="initPageView" value="${param.pageView }" />
+</c:if>
+
+<c:set var="initSortOrder" value="${param.initSortOrder }" />
+<c:if test="${empty initSortOrder }" >
+	<c:set var="initSortOrder" value="${param.sortBy }" />
+</c:if>
+
+<wcf:url var="ProductListingViewURL" value="ProductListingView" type="Ajax">
+    <wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="storeId" value="${storeId}"/>
+	<wcf:param name="catalogId" value="${catalogId}"/>
+	<wcf:param name="advancedSearch" value="${WCParam.advancedSearch}"/>
+	<wcf:param name="sType" value="SimpleSearch"/>
+	<wcf:param name="categoryId" value="${WCParam.categoryId}"/>
+	<wcf:param name="categoryFacetHierarchyPath" value="${WCParam.categoryFacetHierarchyPath}"/>
+	<wcf:param name="top_category" value="${WCParam.top_category}"/>
+	<wcf:param name="top_category2" value="${WCParam.top_category2}"/>
+	<wcf:param name="top_category3" value="${WCParam.top_category3}"/>
+	<wcf:param name="top_category4" value="${WCParam.top_category4}"/>
+	<wcf:param name="top_category5" value="${WCParam.top_category5}"/>
+	<wcf:param name="parent_category_rn" value="${WCParam.parent_category_rn}"/>
+	<wcf:param name="searchType" value="${searchType}"/>
+	<wcf:param name="facet" value="${WCParam.facet}"/>
+	<wcf:param name="searchTermScope" value="${WCParam.searchTermScope}" />
+	<wcf:param name="searchTerm" value="${intentSearchTerm}" />
+	<wcf:param name="metaData" value="${metaData}"/>
+	<wcf:param name="resultCatEntryType" value="${WCParam.resultCatEntryType}"/>
+	<wcf:param name="filterFacet" value="${WCParam.filterFacet}"/>
+	<wcf:param name="manufacturer" value="${WCParam.manufacturer}"/>
+	<wcf:param name="emsName" value="${param.emsName}" />
+	<wcf:param name="gridPosition" value="${param.gridPosition}" />
+	<wcf:param name="resultsPerPage" value="${pageSize}" />
+	<wcf:param name="disableProductCompare" value="${disableProductCompare}" />
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+	<wcf:param name="filterTerm" value="${WCParam.filterTerm}" />
+	<wcf:param name="enableSKUListView" value="${param.enableSKUListView}" />
+	<c:if test="${env_inPreview && !env_storePreviewLink}">
+		<wcf:param name="initSortOrder" value="${initSortOrder}" />
+		<wcf:param name="initPageView" value="${initPageView}" />
+		<wcf:param name="pgl_widgetName" value="${param.pgl_widgetName}" />
+		<wcf:param name="pgl_widgetId" value="${param.pgl_widgetId}" />
+		<wcf:param name="pgl_widgetSlotId" value="${param.pgl_widgetSlotId}"/>
+		<wcf:param name="pgl_widgetSeqeunce" value="${param.pgl_widgetSeqeunce}"/>
+		<wcf:param name="pgl_widgetDefName" value="${param.pgl_widgetDefName}"/>
+	</c:if>
+	<wcf:param name="ddkey" value="ProductListingView${widgetSuffix}"/>
+</wcf:url>
+
+<c:set var="categoryId" value="${WCParam.categoryId}" />
+<c:if test="${!empty categoryId}">
+	<c:set var="key1" value="categoryview/byId/${categoryId}"/>
+	<c:set var="catGroupDetailsView" value="${cachedCategoryViewMap[key1]}"/>
+	<c:if test="${empty catGroupDetailsView}">
+		<wcf:rest var="catGroupDetailsView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/byId/${categoryId}" >
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="currency" value="${env_currencyCode}"/>
+			<wcf:param name="responseFormat" value="json"/>
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+		<wcf:set target = "${cachedCategoryViewMap}" key="${key1}" value="${catGroupDetailsView}"/>
+	</c:if>
+</c:if>
+
+<c:if test="${!empty catGroupDetailsView}">
+	<c:set var="compareReturnName" value="${catGroupDetailsView.catalogGroupView[0].name}"/>
+</c:if>
+
+<c:if test="${empty categoryName && !empty WCParam.searchTerm}">
+	<wcst:message var="tempSearchString" key="SEARCH_TERM" bundle="${widgetText}" >
+		<wcst:param value="${WCParam.searchTerm}"/>
+	</wcst:message>
+	<c:set var="compareReturnName" value="${tempSearchString}"/>
+</c:if>
+
+<c:if test="${!empty param.emsName}">
+	<%@include file="AdditionalContents_Data.jspf" %>
+	<%
+		java.util.List<String> contentPositionsList = new java.util.ArrayList<String>();
+		java.util.List<String> contentNamesList = new java.util.ArrayList<String>();
+	%>
+	
+	<%-- A Map to store the sequence values of the default content --%>
+	<jsp:useBean id="defaultContentSequenceMap" class="java.util.HashMap" type="java.util.Map"/>
+	<c:forEach var="defaultContentSequence" items="${eSpotDatas.defaultContentDisplaySequence}">
+		<c:if test="${defaultContentSequence.resultFormat == 'MarketingContent'}">
+			<c:set target="${defaultContentSequenceMap}" property="${defaultContentSequence.resultId}" value="${defaultContentSequence.displaySequence}"/>
+		</c:if>  
+	</c:forEach>	
+		
+	<c:set var="upperLimit" value="${beginIndex + pageSize}" />
+	<c:forEach var="eSpotData"
+		items="${eSpotDatas.baseMarketingSpotActivityData}">
+		<c:set var="contentPos" value="${defaultContentSequenceMap[eSpotData.contentId]}" />
+		<fmt:parseNumber var="contentPosInt" integerOnly="true" type="number" value="${contentPos}" parseLocale="en_US"/>
+		<c:if test="${contentPosInt > beginIndex && contentPosInt <= upperLimit}">
+			<c:set var="contentName" value="${eSpotData.contentName}" />
+			<%
+				contentNamesList.add((String) pageContext.getAttribute("contentName"));
+				contentPositionsList.add((String) pageContext.getAttribute("contentPos"));
+			%>
+		</c:if>
+	</c:forEach>
+
+	<%
+		request.setAttribute("contentNames", contentNamesList);
+		request.setAttribute("contentPositions", contentPositionsList);
+	%>
+</c:if>
+
+<c:set var="env_grid_pagination_count" value = "${12}" scope="request"/>
+<c:set var="env_list_pagination_count" value = "${8}" scope="request"/>
+<c:set var="endIndex" value = "${pageSize + beginIndex}"/>
+
+<%-- divide to calculate page number and round down --%>
+<c:set var="pageNum" value = "${(endIndex div pageSize) - 1}" />
+<fmt:formatNumber var="pageNum" maxFractionDigits="0" groupingUsed="false" value="${pageNum}" />
+
+<c:choose>
+	<c:when test="${!empty WCParam.searchTerm || !empty WCParam.manufacturer || !empty WCParam.facet || !empty WCParam.metaData || WCParam.advancedSearch == 1}">
+		<%@include file = "/Widgets_701/Common/SearchSetup.jspf" %>
+	</c:when>
+	<c:otherwise>
+		<c:if test="${!empty categoryId}">
+			<%@include file = "/Widgets_701/Common/CategoryNavigationSetup.jspf" %>
+		</c:if>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="endIndex" value = "${pageSize + beginIndex}"/>
+<c:if test="${endIndex > totalCount}">
+	<c:set var="endIndex" value = "${totalCount}"/>
+</c:if>
+<%-- totalCount is set in SearchSetup.jspf file.. --%>
+<fmt:parseNumber var="total" value="${totalCount}" parseLocale="en_US"/> <%-- Get a float value from totalCount which is a string --%>
+
+<c:set  var="totalPages"  value = "${total / pageSize * 1.0}"/>
+<%-- Get a float value from totalPages which is a string --%>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="false" parseLocale="en_US"/>
+
+<%-- do a ceil if totalPages contains fraction digits --%>
+<c:set var="totalPages" value = "${totalPages + (1 - (totalPages % 1)) % 1}"/>
+
+<c:set var="currentPage" value = "${( beginIndex + 1) / pageSize}" />
+<%-- Get a float value from currentPage which is a string --%>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="false" parseLocale="en_US"/>
+
+<%-- do a ceil if currentPage contains fraction digits --%>
+<c:set var="currentPage" value = "${currentPage + (1 - (currentPage % 1)) % 1}"/>
+
+<%-- Get a float value from currentPage which is a string --%>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="false" parseLocale="en_US"/>
+
+<%-- Get number of items to be displayed in this page --%>
+<fmt:parseNumber var="numOfItemsInPage" value="${endIndex - beginIndex}" integerOnly="false" parseLocale="en_US"/>
+
+<%-- If we are using grid mode, then we need to know the total number of rows to display --%>
+<c:set var="totalRows"  value="${numOfItemsInPage / env_resultsPerRow}"/>
+
+<%-- Get a float value from totalRows which is a string --%>
+<fmt:parseNumber var="totalRows" value="${totalRows}" integerOnly="false" parseLocale="en_US"/>
+
+<%-- do a ceil if totalRows contains fraction digits --%>
+<c:set var="totalRows" value = "${totalRows + (1 - (totalRows % 1)) % 1}"/>
+
+<%-- This will be passed as params to compare page to create the best SEO product url possible --%>
+<c:set var="categoryIds" value="{top_category: '${fn:escapeXml(WCParam.top_category)}', parent_category_rn: '${fn:escapeXml(WCParam.parent_category_rn)}', categoryId: '${fn:escapeXml(WCParam.categoryId)}'}" scope="request"/>
+
+<c:set var="columnCountByWidth_Grid" value="${!empty param.columnCountByWidth ? param.columnCountByWidth : '{0:1,201:2,488:3,730:4,923:5,1207:6}'}"/>
+<c:choose>
+	<c:when test="${param.enableSKUListView == 'true'}">
+		<c:set var="columnCountByWidth_List" value="${!empty param.columnCountByWidth ? param.columnCountByWidth : '{0:1}'}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="columnCountByWidth_List" value="${!empty param.columnCountByWidth ? param.columnCountByWidth : '{0:1,900:2}'}"/>
+	</c:otherwise>
+</c:choose>
+
+<%-- Check if featured image SKU is displayable --%>
+<jsp:useBean id="featuredImageCatEntries" class="java.util.LinkedHashMap" scope="page"/>
+<c:forEach var="catEntry" items="${globalresults}">
+	<c:if test="${not empty catEntry.imageDisplayItemID}">
+		<%-- Find all catEntry with featured image set --%>
+		<c:set target="${featuredImageCatEntries}" property="${catEntry.uniqueID}" value="${catEntry.imageDisplayItemID}"/>
+	</c:if>
+</c:forEach>
+<c:if test="${fn:length(featuredImageCatEntries) > 0}">
+	<%-- Get SKU data only for catentries with featured image set --%>
+	<wcf:rest var="featuredImageCatEntriesWithSKU" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byIds" >
+		<c:forEach var="entry" items="${featuredImageCatEntries}">
+			<wcf:param name="id" value="${entry.key}"/>
+		</c:forEach>
+		<wcf:param name="langId" value="${langId}" />
+		<wcf:param name="currency" value="${env_currencyCode}" />
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+		<wcf:param name="profileName" value="IBM_findProductByIdsWithAttributesAndAttachments" />
+		<c:forEach var="contractId" items="${env_activeContractIds}">
+			<wcf:param name="contractId" value="${contractId}"/>
+		</c:forEach>
+	</wcf:rest>
+	<c:forEach var="catEntryFeaturedImage" items="${featuredImageCatEntriesWithSKU.catalogEntryView}">
+		<c:forEach var="sku" items="${catEntryFeaturedImage.sKUs}">
+			<c:forEach var="featuredImageCatEntry" items="${featuredImageCatEntries}">
+				<%-- Go through the SKUs of the catentries with featured image set --%>
+				<c:if test="${sku.uniqueID == featuredImageCatEntry.value}">
+					<%-- A SKU ID that matches the featured image ID is found, so featured image ID is valid; mark it that is valid --%>
+					<c:set target="${featuredImageCatEntries}" property="${catEntryFeaturedImage.uniqueID}" value=""/>
+				</c:if>
+			</c:forEach>
+		</c:forEach>
+	</c:forEach>
+	<c:forEach var="catEntry" items="${globalresults}">
+		<c:if test="${not empty featuredImageCatEntries[catEntry.uniqueID]}">
+			<%-- Go through all catentries.  If featured image ID is not marked, then it is invalid.  Clear featured image ID from catentry --%>
+			<c:set target="${catEntry}" property="imageDisplayItemID" value=""/>
+		</c:if>	
+	</c:forEach>	
+</c:if>

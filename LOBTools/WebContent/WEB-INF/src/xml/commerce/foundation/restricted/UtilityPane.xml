@@ -1,0 +1,2344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		Utilities search grid view. The utilities grid view only displays the object icon and display name.  If the attribute
+		<code>objectLongDisplayName</code> is defined for the object, it will be used.
+	-->
+	<ObjectGrid classDefinition="true" definitionName="cmc/foundation/UtilitiesSearchGrid" editable="false" isConfigurable="false" listBorderSize="0" padding="0">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<GridIconTypeImage name="typeIcon" propertyName="null" text="${foundationResources.Singleton.utilitiesGrid_type.string}" width="100"/>
+		<GridDisplayName name="displayName" propertyName="null" showLongDisplayName="true" width="170"/>
+	</ObjectGrid>
+
+	<!---
+		@keywords private
+		Utilities details grid view. The utilities grid view only displays the object icon and display name.
+	-->
+	<ObjectGrid classDefinition="true" definitionName="cmc/foundation/UtilitiesDetailsGrid" editable="false" isConfigurable="false" listBorderSize="0" padding="0">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<GridIconTypeImage name="typeIcon" propertyName="null" text="${foundationResources.Singleton.utilitiesGrid_type.string}" width="100"/>
+		<GridDisplayName name="displayName" propertyName="null" width="170"/>
+	</ObjectGrid>
+
+	<!---
+		@keywords private
+		Utilities clipboard grid view. The utilities grid view only displays the object icon and long display name.  If the attribute
+		<code>objectLongDisplayName</code> is defined for the object, it will be used.
+	-->
+	<ObjectGrid classDefinition="true" definitionName="cmc/foundation/UtilitiesClipboardGrid" editable="false" isConfigurable="false" listBorderSize="0" padding="0">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<GridIconTypeImage name="typeIcon" propertyName="null" text="${foundationResources.Singleton.utilitiesGrid_type.string}" width="100"/>
+		<GridDisplayName name="displayName" propertyName="null" showLongDisplayName="true" text="${foundationResources.Singleton.utilitiesGrid_name.string}" width="170"/>
+	</ObjectGrid>
+
+	<!---
+		@keywords private
+		Utilities search widget.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/UtilitiesSearchWidget">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		
+		<!---
+			@keywords private
+			Current search definition.
+		-->
+		<variable name="searchDefinition" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Reference to utilities panel. This is a required attribute.
+		-->
+		<variable name="utilities" value="${null}"/>
+
+		<!---
+			@keywords private
+			
+			Invoke search.
+			@param cmc/foundation/SearchDefinition definition: search definition
+			@param object options: search options
+		-->
+		<method args="definition, options" name="doSearch">
+			<![CDATA[
+			if (typeof(definition) == "undefined") definition = null;
+			if (typeof(options) == "undefined") options = null;
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/UtilitiesSearchWidget doSearch: " + this.searchTextArea.searchText.getText());
+			if (options == null) {
+				var searchText = this.searchTextArea.searchText.getText();
+				this.searchOptions = {};
+				this.searchOptions.searchText = searchText;
+			}
+			else {
+				this.searchOptions = options;
+			}
+			if (definition == null) {
+				definition = this.searchDefinition;
+			}
+			MessageLogger.Singleton.clearStatusMessage();
+			this.parent.oEditor.model.doSearch(definition.searchType, this.searchOptions);
+			for (var i = 0; i < this.parent.searchTypeSelector.values.length; i++) {
+				if (definition == this.parent.searchTypeSelector.values[i]) {
+					this.parent.searchTypeSelector.setVariable("selectedValue", this.parent.searchTypeSelector.values[i]);
+				}
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+		<AxisLayout axis="x" spacing="1"/>
+		<CenterLayout axis="y"/>
+		<Component name="searchTextArea" height="30" width="${this.parent.width}">
+		    <Component height="${this.parent.height}" bgcolor="#959595" width="1"  x="0" y="0"/>
+		    <Component height="${this.parent.height}" bgcolor="#959595" width="1"  x="${this.parent.width - this.width}" y="0"/>
+		    <Component bgcolor="#959595" height="1"  width="${this.parent.width }" x="0" y="0"/>
+		    <Component bgcolor="#959595" height="1" width="${this.parent.width}" x="0" y="${this.parent.height - this.height}"/>
+			<InputTextComponent name="searchText" width="${this.parent.searchButton.x - this.x - 8}" x="8" valign="middle">
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<!---
+					Handle keys.
+					@param number kc: key code
+				-->
+				<handler args="kc" name="onkeydown">
+					<![CDATA[
+					if (kc == 13) {
+						this.classroot.doSearch();
+					}
+					]]>
+				</handler>
+			</InputTextComponent>
+			
+			<FocusableBaseButton doesenter="true" imageSet="searchButtonResource" name="searchButton" x="${this.parent.width - this.width - 8}" y="${(this.parent.height-this.height)/2}">
+				<Tooltip text="${foundationResources.Singleton.searchButtonTip.string}"/>
+				
+				<!---
+					Perform the action.
+				-->
+				<method name="doAction">
+					<![CDATA[
+					if (Logger.Singleton.perfTraceEnabled) {
+						Logger.Singleton.perfTrace("cmc/foundation/UtilitiesSearchWidget", "doclick", "Start searchButton ");
+					}
+					this.classroot.doSearch();
+					if (Logger.Singleton.perfTraceEnabled) {
+						Logger.Singleton.perfTrace("cmc/foundation/UtilitiesSearchWidget", "doclick", "End searchButton ");
+					}
+					]]>
+				</method>
+			    <handler name="onclick">
+					<![CDATA[
+					this.doAction();
+					]]>
+				</handler>
+			</FocusableBaseButton>
+		</Component>
+
+	</Component>
+
+	<!---
+		@keywords private
+		
+		A Search tab that in the utility view.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/UtilitiesSearch" height="${this.parent.availableHeight}">
+		<dependency localName="AdvancedSearchActionDefinition" moduleName="cmc/foundation/AdvancedSearchActionDefinition"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="UtilitiesSearchGrid" moduleName="cmc/foundation/UtilitiesSearchGrid"/>
+		<dependency localName="UtilitiesSearchResultsMenu" moduleName="cmc/foundation/UtilitiesSearchResultsMenu"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="UtilitiesSearchResultsBackgroundMenu" moduleName="cmc/foundation/UtilitiesSearchResultsBackgroundMenu"/>
+
+		<!---
+			@keywords private
+			Reference to the business object editor.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		
+		<!---
+		
+		@keywords private
+			Reference to utilities panel. This is a required attribute.
+		-->
+		<variable name="utilities" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Current search results.
+		-->
+		<variable name="searchResults" value="${null}"/>
+		
+		<!---
+			@keywords private
+			The availableHeight for the list class
+		-->		
+		<variable name="availableHeight" type="number" value="${this.height - this.searchGridContainer.y}"/>
+		
+		<!---
+			@keywords private
+			Pane title.
+		-->
+		<variable name="paneTitle" type="string" value="${foundationResources.Singleton.utilitiesSearch.string}"/>
+		<!---
+			@keywords private
+			Extended text.
+		-->
+		<variable name="extendedText" type="string" value="${foundationResources.Singleton.utilitiesSearchExtendedHelp.string}"/>
+		<!---
+			Text of the link that appears in the tooltip for extended help.  null or empty string means use framework default.
+		-->
+		<variable name="linkText" type="string" value=""/>
+		<!---
+			Relative URL for the online help link.
+		-->
+		<variable name="linkURL" type="string" value="tasks/ttfutilitiespane.htm"/>
+		<!---
+			Search results grid instances. A search definition can be configured with a custom search results view by specifying 
+			the "utilitiesListClass" attribute.
+			@keywords private
+		-->
+		<variable name="searchGrids" value="${{}}"/>
+
+		<!---
+			@keywords private
+			Initialize utilities search.
+			
+			@param cmc/foundation/BusinessObjectEditor boe: business object editor instance
+		-->
+		<method args="boe" name="initializeSearch">
+			<![CDATA[
+			this.oEditor = boe;
+			this.updateSearchDefinitions();
+			this.showSearchGrid();
+			]]>
+		</method>		
+
+		<!---
+			@keywords private
+			Updates the search definitions.
+		-->
+		<method args="e" name="updateSearchDefinitions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateSearchDefinitionsDel) {
+				this.updateSearchDefinitionsDel.disconnectAll();
+			}
+			else {
+				this.updateSearchDefinitionsDel = new EventHandler.Class(this, "updateSearchDefinitions");
+			}
+			var searchDefinitions = [];
+			var defaultDefinition = this.oEditor.model.defaultSearchDefinition;
+			var currentDefinition = this.searchWidget.searchDefinition;
+			for (var i = 0; i < this.oEditor.model.searchDefinitions.length; i++) {
+				var def = this.oEditor.model.searchDefinitions[i];
+				if (def.showInUtilitiesView) {
+					if (def.enablementCondition == null || def.enablementCondition.isEnabled(null)) {
+						searchDefinitions.push(def);
+						if (def == defaultDefinition) {
+							currentDefinition = null;
+						}
+					}
+					else {
+						if (currentDefinition == def) {
+							currentDefinition = null;
+						}
+						if (defaultDefinition == def) {
+							defaultDefinition = null;
+						}
+					}
+					if (def.enablementCondition != null) {
+						def.enablementCondition.registerDelegate(null, this.updateSearchDefinitionsDel);
+					}
+				}
+			}
+			var advancedSearchDefinitions = [];
+			for (var i = 0; i < searchDefinitions.length; i++) {
+				var def = searchDefinitions[i];
+				if (def.advancedSearchContentClass_moduleName != null) {
+					advancedSearchDefinitions.push(def);
+				}
+			}
+			if (advancedSearchDefinitions.length != 0) {
+				var advSearchDef = this.searchWidget.advancedSearchActionDefinition;
+				if (!advSearchDef) {
+					var advSearchDef = new AdvancedSearchActionDefinition.Class(this.searchWidget, {
+						name: "advancedSearchActionDefinition",
+						searchDefinitions: advancedSearchDefinitions,
+						addSeparatorBefore: true,
+						oEditor: this.oEditor
+					});
+				}
+				else {
+					advSearchDef.setVariable("searchDefinitions", advancedSearchDefinitions);
+				}
+				searchDefinitions.push(advSearchDef);
+			}
+			this.searchTypeSelector.setValues(searchDefinitions);
+			if (currentDefinition == null) {
+				currentDefinition = defaultDefinition == null ? searchDefinitions[0] : defaultDefinition;
+			}
+			this.searchTypeSelector.setVariable("selectedValue", currentDefinition);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Initialize the object.
+		-->		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.showSearchGridDel = new EventHandler.Class(this, "showSearchGrid");
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the search context.
+			
+			@param string searchType: the search type to select
+		-->
+		<method args="searchType" name="setContext">
+			<![CDATA[
+			if (searchType != null) {
+				var searchDefinition = this.oEditor.model.getSearchDefinition(searchType);
+				this.searchTypeSelector.setVariable("selectedValue", searchDefinition);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Destroy this object.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateHeaderTextDel.unregisterAll();
+			delete this.updateHeaderTextDel;
+			if (this.updateSearchDefinitionsDel) {
+				this.updateSearchDefinitionsDel.disconnectAll();
+				delete this.updateSearchDefinitionsDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the search text area to match the current search results.
+		-->
+		<method name="updateSearchText">
+			<![CDATA[
+			if (this.searchResults != null) {
+				if (this.searchResults.searchOptions != null && this.searchResults.searchOptions.searchText) {
+					this.searchWidget.searchTextArea.searchText.setVariable("text", this.searchResults.searchOptions.searchText);
+				}
+				else {
+					this.searchWidget.searchTextArea.searchText.setVariable("text", "");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the search result message area with an informational statement about the search results.
+		-->
+		<method args="e" name="updateResultsMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.updateResultsMessageDel) {
+				this.updateResultsMessageDel = new EventHandler.Class(this, "updateResultsMessage");
+			}
+			if (this.searchResults != null) {
+				this.updateResultsMessageDel.disconnectAll();
+				this.updateResultsMessageDel.connect(this.searchResults, "onstatusMessage");
+				if (this.searchResults.hasError) {
+					this.resultsMessage.setVariable('fgcolor', "#e71d32");
+				}
+				else {
+					this.resultsMessage.setVariable('fgcolor', null);
+				}
+				this.resultsMessage.setVariable("text", this.searchResults.statusMessage);
+				var searchGridPos = this.resultsMessage.y;
+				if (StringUtil.Singleton.trim(this.searchResults.statusMessage).length > 0) {
+					searchGridPos += this.resultsMessage.height + 8;
+					this.updateResultsMessageDel.connect(this.resultsMessage, "onheight");
+				}
+				this.searchGridContainer.setVariable("y", searchGridPos);
+				this.updateSearchText();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->		
+		<handler eventSource="this.searchTypeSelector" name="onselectedValue">
+			<![CDATA[
+			var def = this.searchTypeSelector.selectedValue;
+			if (def && def == this.searchWidget.advancedSearchActionDefinition) {
+				this.searchWidget.advancedSearchActionDefinition.dialog.openWindow();
+				for (var i = 0; i < this.searchTypeSelector.values.length; i++) {
+					if (this.searchWidget.searchDefinition == this.searchTypeSelector.values[i]) {
+						this.searchTypeSelector.selectedValue = this.searchTypeSelector.values[i];
+					}
+				}
+			}
+			else {
+				this.searchWidget.setVariable("searchDefinition", def);
+				this.showSearchGrid();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Get the search results grid to display inside the search tab
+			@param {@link cmc/foundation/ObjectDefinition} def: The definition for the search.
+			@returns view: The search results grid.
+		-->
+		<method name="showSearchGrid">
+			<![CDATA[
+			this.showSearchGridDel.disconnectAll();
+			var def = this.searchWidget.searchDefinition;
+			if (this.searchResults != null && this.searchResults.searchDefinition != def) {
+				for (var i in this.searchGrids) {
+					var searchGrid = this.searchGrids[i];
+					if (searchGrid.visible) {
+						searchGrid.setVariable("visible", false);
+						this.searchResults.releaseView(searchGrid);
+						this.searchResults = null;
+						break;
+					}
+				}
+			}
+			if (this.searchResults == null && def != null) {
+				if (def.utilitiesListClass_moduleName != null && def.utilitiesListClass == null) {
+					this.showSearchGridDel.connect(def, "onutilitiesListClass");
+					def.loadDeferredVariable("utilitiesListClass");
+				}
+				else {
+					var searchGridClass = def.utilitiesListClass != null ? def.utilitiesListClass : UtilitiesSearchGrid;
+					var searchGrid = this.searchGrids[searchGridClass.definitionName];
+					if (!searchGrid) {
+						if (searchGridClass.Class) {
+							searchGrid = new searchGridClass.Class(this.searchGridContainer, {
+								rowMenuClass: UtilitiesSearchResultsMenu,
+								menuClass: UtilitiesSearchResultsBackgroundMenu,
+								listBorderSize: 0,
+								padding: 0,
+								editable: false
+							});
+						}
+						else {
+							searchGrid = DefinitionUtil.createDefinitionInstance(searchGridClass, this.searchGridContainer, {
+								rowMenuClass: UtilitiesSearchResultsMenu,
+								menuClass: UtilitiesSearchResultsBackgroundMenu,
+								listBorderSize: 0,
+								padding: 0,
+								editable: false
+							});
+						}
+						this.searchGrids[searchGridClass.definitionName] = searchGrid;
+					}
+					searchGrid.setVariable("visible", true);
+					searchGrid.bringToFront();
+					this.searchResults = this.oEditor.model.bindViewToSearchResults(searchGrid, def.searchType);
+				}
+			}
+			if (def != null && def.utilitiesListClass == null && this.searchGrids[UtilitiesSearchGrid.definitionName]) {
+				this.showSearchGridDel.connect(def, "onheaderText");
+				this.searchGrids[UtilitiesSearchGrid.definitionName].displayName.setVariable("text", def.headerText);
+			}
+			this.updateResultsMessage();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the grid column header text, if {@link cmc/foundation/SearchDefinition} is defined in the searchWidget, the attribute <code>headerText</code>
+			will be used.
+		-->
+		
+
+		<BaseComboBox defaultTextResourceBundleKey="${foundationResources.Singleton.utilitiesSearchSelectSearchType}" name="searchTypeSelector" width="${this.parent.searchGridContainer.width - 38}" x="19"/>  
+		<UtilitiesSearchWidget name="searchWidget" utilities="${this.classroot.utilities}" x="19" y="38" width="${this.parent.searchGridContainer.width - 38}"/>
+		<TextComponent multiline="true" name="resultsMessage" fgcolor="#e71d32" text=" " width="${this.parent.searchGridContainer.width - 38}" x="19" y="76"/>
+		<Component name="searchGridContainer"/>
+	</Component>
+	
+	<!---
+		@keywords private
+		Browse object tree node for the utilities view.
+	-->
+	<Tree classDefinition="true" definitionName="cmc/foundation/UtilitiesBrowseObjectTree" maxObjectViews="20">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="UtilitiesBrowseObjectTreeMenu" moduleName="cmc/foundation/UtilitiesBrowseObjectTreeMenu"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="UtilitiesBrowseObjectTree" moduleName="cmc/foundation/UtilitiesBrowseObjectTree"/>
+		<!---
+			The class used to create child nodes.
+		-->
+		<variable name="objectClass" type="module" value="${UtilitiesBrowseObjectTree}"/>
+		<!---
+			Reference to the business object editor instance.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			Indicates that the children should be loaded recursively.
+		-->
+		<variable name="recurse" value="false"/>
+		<!---
+			Indicates that this node is a leaf node.
+		-->
+		<variable name="isTreeLeaf" type="boolean" value="false"/>
+		<!---
+			The model object associated with this tree node.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			The object being referenced through "o".
+		-->
+		<variable name="referencedObject" value="${null}"/>
+		<!---
+			Indicates that the child tree nodes have been created.
+		-->
+		<variable name="childrenCreated" type="boolean" value="false"/>
+		<!---
+			An array of the filtered child object definitions for this node. Only
+			child object definitions that will be visible in the tree view
+			will be included in this array.
+		-->
+		<variable name="objectDefinitions" value="${null}"/>
+		<!---
+			Indicates that this tree node can be used to navigate to the child objects.
+			Navigating to child objects is allowed for primary, organizational, parent reference,
+			and collection reference objects.
+		-->
+		<variable name="navigationEnabled" type="boolean" value="true"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.oEditor == null) {
+				this.oEditor = this.immediateParent.parent.oEditor;
+			}
+			this.updateDisplayNameDel = new EventHandler.Class(this, "updateDisplayName");
+			this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			this.updateFilterDel = new EventHandler.Class(this, "updateFilter");
+			if (this != this.getRoot()) {
+				this.updateFilterDel.connect(this.getRoot(), "onfilter");
+			}
+			if (this.item) {
+				new UtilitiesBrowseObjectTreeMenu.Class(this, {
+					name: "menu",
+					tree: this
+				});
+				this.menu.addView(this.item.contextMenuArea);
+			}
+			this.updateReferencedObjectDel = new EventHandler.Class(this, "updateReferencedObject");
+			this.checkStatusMessageDel = new EventHandler.Class(this, "checkStatusMessage");
+			this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+			this.checkLeafDel = new EventHandler.Class(this, "checkLeaf");
+			this.updateExpandedTreesDel = new EventHandler.Class(this, "updateExpandedTrees");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="checkLeaf">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkLeafDel.disconnectAll();
+			var leaf = false;
+			if (this.navigationEnabled) {
+				this.checkLeafDel.connect(this, "onstatusMessage");
+				if (this.statusMessage == "" && this.objectDefinitions != null) {
+					var oDef = this.referencedObject.objectDefinition;
+					if (oDef.organizational) {
+						leaf = this.objectDefinitions.length == 0 && oDef.getOrganizedObjectDefinitions(this.checkLeafDel) != null && oDef.getOrganizedObjectDefinitions().length > 0;
+					}
+					else {
+						leaf = this.objectDefinitions.length == 0;
+					}
+					if (!leaf && this.childrenCreated && this.children.height == 0) {
+						this.checkLeafDel.connect(this.children, "onheight");
+						leaf = true;
+					}
+				}
+			}
+			else {
+				leaf = true;
+			}
+			if (leaf != this.isTreeLeaf) {
+				this.setVariable("isTreeLeaf", leaf);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.o) {
+				this.releaseChildObjectTree();
+				this.oList = null;
+				this.referencedObject = null;
+				this.o = null;
+			}
+			this.updateDisplayNameDel.disconnectAll();
+			delete this.updateDisplayNameDel;
+			this.updateDisplayNameStyleDel.disconnectAll();
+			delete this.updateDisplayNameStyleDel;
+			this.updateFilterDel.disconnectAll();
+			delete this.updateFilterDel;
+			this.updateReferencedObjectDel.disconnectAll();
+			delete this.updateReferencedObjectDel;
+			this.checkStatusMessageDel.disconnectAll();
+			delete this.checkStatusMessageDel;
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.checkLeafDel.disconnectAll();
+			delete this.checkLeafDel;
+			this.updateExpandedTreesDel.disconnectAll();
+			delete this.updateExpandedTreesDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			When the oList is updated, we listen to the objectViewsUpdated event to trigger an update.
+		-->		
+		<handler name="onoList">
+			<![CDATA[
+			this.updateExpandedTreesDel.disconnectAll();
+			if (this.oList) {
+				this.updateExpandedTreesDel.connect(this.oList, "objectViewsUpdated");
+			}
+			this.updateExpandedTrees();
+			]]>
+		</handler>
+
+		<!---
+			Set the model object for this tree node.
+			@param cmc/foundation/ModelObject newObject: the new model object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.releaseModelObjectDel.disconnectAll();
+				this.updateDisplayNameDel.disconnectAll();
+				this.updateDisplayNameStyleDel.disconnectAll();
+				this.updateReferencedObjectDel.disconnectAll();
+				if (this.o) {
+					if (this.selected) {
+						this.setVariable("selected", false);
+					}
+					if (this.open) {
+						this.setVariable("open", false);
+					}
+					this.releaseChildObjectTree();
+					this.referencedObject = null;
+				}
+				this.o = newObject;
+				if (this.o) {
+					var oDef = this.o.objectDefinition;
+					this.navigationEnabled = oDef.primary || oDef.organizational || oDef.parentReference || oDef.collectionReference;
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					if (this.o.getIcon() != null) {
+						this.setVariable("icon", this.o.getIcon());
+					}
+					if (this.o.objectDisplayName != null) {
+						this.setVariable("text", this.o.objectDisplayName);
+					}
+					this.updateDisplayNameDel.connect(this.o, "onobjectDisplayName");
+					this.updateDisplayNameStyleDel.connect(this.o, "ondisplayNameStyle");
+					this.referencedObject = this.o.getReferencedObject();
+					if (this.referencedObject == null) {
+						this.updateReferencedObjectDel.connect(this.o, "onchildObjects");
+					}
+					else {
+						this.updateReferencedObject();
+					}
+					this.updateDisplayNameStyle();
+				}
+				else {
+					this.referencedObject = null;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method releases the {@link cmc/foundation/ModelObject model object} from this tree node.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			Update the referenced object.
+		-->
+		<method args="e" name="updateReferencedObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.referencedObject = this.o.getReferencedObject();
+			if (this.referencedObject != null) {
+				this.updateReferencedObjectDel.disconnectAll();
+				if (this.navigationEnabled) {
+					if (this.open) {
+						this.createChildObjectTree();
+					}
+				}
+				if (this.selected) {
+					this.getRoot().utilitiesDetails.setVariable("o", this.referencedObject);
+				}
+				this.updateObjectDefinitions();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the child list nodes to match the current filter.
+		-->
+		<method args="e" name="updateFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.oList) {
+				var newFilter = this.getRoot().filter;
+				if (this.oList.baseFilter != newFilter) {
+					if (this.oList.getViewsLength() > 0) {
+						this.oList.setVariable("baseFilter", newFilter);
+					}
+					else if (this.open) {
+						this.setVariable("open", false);
+					}
+				}
+			}
+			this.updateObjectDefinitions();
+			]]>
+		</method>
+		
+		<!---
+			Update the array of child object definitions that match
+			the current filter.
+		-->
+		<method name="updateObjectDefinitions">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/UtilitiesBrowseObjectTree", "updateObjectDefinitions");
+			}
+			if (this.referencedObject != null) {
+				this.objectDefinitions = [];
+				if (this.navigationEnabled && this.getRoot().filter) {
+					var filter = this.getRoot().filter;
+					var oDef = this.referencedObject.objectDefinition;
+					var defs = oDef.organizational ? oDef.organizedObjectDefinitions : oDef.getReferenceObjectDefinitions();
+					if (defs != null) {
+						for (var i = 0; i < defs.length; i++) {
+							var childDef = defs[i];
+							if (filter.objectTypeMatchesFilter(childDef.objectType)) {
+								this.objectDefinitions.push(childDef);
+							}
+						}
+					}
+				}
+				this.checkLeaf();
+			}
+			else {
+				this.objectDefinitions = null;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/UtilitiesBrowseObjectTree", "updateObjectDefinitions");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="createChildObjectTree">
+			<![CDATA[
+			if (!this.childrenCreated && this.navigationEnabled) {
+				this.childrenCreated = true;
+				this.referencedObject.bindViewToChildren(this, this.getRoot().filter, null, this);
+				this.checkStatusMessage();
+				this.checkLeaf();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="releaseChildObjectTree">
+			<![CDATA[
+			if (this.childrenCreated) {
+				this.childrenCreated = false;
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var v = this.children.childComponents[i];
+					if (v.releaseChildObjectTree) {
+						v.releaseChildObjectTree();
+					}
+				}
+				this.referencedObject.releaseViewFromChildren(this);
+				this.checkStatusMessage();
+				this.checkLeaf();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o1, o2, sortAscending" name="compare">
+			<![CDATA[
+			var compare = false;
+			var currentFilter = this.getRoot().filter;
+			if (currentFilter) {
+				compare = currentFilter.objectCompare(o1, o2);
+			}
+			return compare;
+			]]>
+		</method>		
+		
+		<!---
+			Handle the expand event. If this is the first time the
+			object's children have been expanded, then the child nodes will
+			be created.
+		-->
+		<handler name="onopen">
+			<![CDATA[
+			if (this.o) {
+				if (this.open) {
+					this.createChildObjectTree();
+				}
+				else {
+					this.releaseChildObjectTree();
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			When this tree is expanded, we store the time it was expanded with it and its parents.  We also close any other tree nodes
+			in the browse tree when we have more than the maximinum number of tree nodes expanded.
+		-->
+		<method args="e" name="updateExpandedTrees">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.open && this.oList && this.oList.getViewsLength() > 0) {
+				if (!this.__expandedTime) {
+					var rootObjectTree = this.getRootObjectTree();
+					var expandedTime = (new Date()).getTime();
+					var tree = this;
+					tree.__expandedTime = expandedTime;
+					while (tree && !tree.isRoot() && tree != rootObjectTree) {
+						tree = tree.parent;
+						tree.__expandedTime = expandedTime;
+					}
+					if (rootObjectTree) {
+						rootObjectTree.closeChildrenTreesLeastRecent();
+					}
+				}
+			}
+			else {
+				this.__expandedTime = null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the root object tree, the first tree under the "Top" tree node.
+		-->
+		<method name="getRootObjectTree">
+			<![CDATA[
+			var tree = null;
+			if (this.o && this.o.objectDefinition.objectType != "Top") {
+				tree = this;
+				while (tree && !tree.isRoot() && !tree.parent.o.objectDefinition.objectType != "Top") {
+					tree = tree.parent;
+				}
+			}
+			return tree;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calculates the ordered expanded times and updates the given array.  Iterating through the children of this tree, this method checks
+			the expanded time for expanded child tree nodes and updates the given expandedTimes array by inserting each expanded time in the appropriate
+			ordered position in the array.  This method recurses to this tree's leaf nodes.
+			@param Array expandedTimes: An ordered array of expanded times. The array is ordered in ascending order and does not have duplicate entries.
+		-->
+		<method args="expandedTimes" name="calculateOrderedExpandedTimes">
+			<![CDATA[
+			for (var i = 0; i < this.children.childComponents.length; i++) {
+				var child = this.children.childComponents[i];
+				if (child instanceof exports.Class && child.__expandedTime) {
+					var insertIdx = expandedTimes.length;
+					for (var j = 0; j < expandedTimes.length; j++) {
+						if (child.__expandedTime == expandedTimes[j]) {
+							insertIdx = -1;
+							break;
+						}
+						if (child.__expandedTime < expandedTimes[j]) {
+							insertIdx = j;
+							break;
+						}
+					}
+					if (insertIdx > -1) {
+						expandedTimes.splice(insertIdx, 0, child.__expandedTime);
+					}
+					child.calculateOrderedExpandedTimes(expandedTimes);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method closes all the children trees least recently expanded.  Closing trees will occur when we have a number expanded greater than the maximum number
+			of browse tree nodes expanded, the maxBrowseTreesExpanded context value.
+		-->
+		<method name="closeChildrenTreesLeastRecent">
+			<![CDATA[
+			var contextValue = ContextUtil.Singleton.findContextValue(null, "maxBrowseTreesExpanded");
+			if (contextValue) {
+				var maxBrowseTreesExpanded = contextValue.value;
+				if (maxBrowseTreesExpanded && maxBrowseTreesExpanded > 1) {
+					var time = null;
+					var expandedTimes = [];
+					this.calculateOrderedExpandedTimes(expandedTimes);
+					if (expandedTimes.length >= maxBrowseTreesExpanded) {
+						time = expandedTimes[expandedTimes.length - maxBrowseTreesExpanded];
+					}
+					if (time) {
+						this.closeChildrenTreesBeforeTime(time);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method closes all the children trees that were expanded before the given time.
+			@param number time: The given time.
+		-->
+		<method args="time" name="closeChildrenTreesBeforeTime">
+			<![CDATA[
+			if (time) {
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var child = this.children.childComponents[i];
+					if (child instanceof exports.Class && child.__expandedTime) {
+						child.closeChildrenTreesBeforeTime(time);
+						if (child.__expandedTime < time) {
+							child.setVariable("open", false);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler args="isSelected" name="onselected">
+			<![CDATA[
+			var details = this.getRoot().utilitiesDetails;
+			if (isSelected) {
+				if (this.referencedObject != null) {
+					details.setVariable("o", this.referencedObject);
+				}
+			}
+			else if (details.o != null && details.o == this.referencedObject) {
+				details.setVariable("o", null);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Update the display name.
+		-->
+		<method args="e" name="updateDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o.objectDisplayName != null) {
+				this.setVariable("text", this.o.objectDisplayName);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the tree node display name style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newTextColor = this.style.textcolor;
+			var newTextStyle = "plain";
+			var style = this.o.displayNameStyle;
+			if (style != null) {
+				newTextColor = style.color;
+				if (style.bold && style.italic) {
+					newTextStyle = "bolditalic";
+				}
+				else if (style.bold) {
+					newTextStyle = "bold";
+				}
+				else if (style.italic) {
+					newTextStyle = "italic";
+				}
+			}
+			if (this.textColor != newTextColor) {
+				this.setVariable("textColor", newTextColor);
+			}
+			if (this.textStyle != newTextStyle) {
+				this.setVariable("textStyle", newTextStyle);
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the status message.
+		-->
+		<method args="e" name="checkStatusMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkStatusMessageDel.disconnectAll();
+			var newMessage = "";
+			if (this.open && this.oList && this.navigationEnabled) {
+				this.checkStatusMessageDel.connect(this.oList, "onstatusObject");
+				this.checkStatusMessageDel.connect(this, "onopen");
+				if (this.oList.statusObject != null) {
+					if (this.oList.statusObject.messageForTree) {
+						newMessage = this.oList.statusObject.messageForTree;
+					}
+					else {
+						newMessage = this.oList.statusObject.message;
+					}
+				}
+			}
+			if (this.statusMessage != newMessage) {
+				this.setVariable("statusMessage", newMessage);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->		
+		<handler name="onactivate">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/UtilitiesBrowseObjectTree", "onactivate");
+			}
+			this.referencedObject.doOpen();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/UtilitiesBrowseObjectTree", "onactivate");
+			}
+			]]>
+		</handler>
+		<DragSource dragAndDropManager="${DndManager.Singleton}" placement="dragtreeitem" targetKeys="${['browseElement', 'element']}"/>
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</Tree>
+
+	<!---
+		@keywords private
+		Root tree node for the browse tab of the utilities view.
+	-->
+	<UtilitiesBrowseObjectTree classDefinition="true" definitionName="cmc/foundation/UtilitiesRootBrowseTree" maxObjectViews="${null}" showroot="false" visible="true">
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		
+		<!---
+			The current filter.
+		-->
+		<variable name="filter" value="${null}"/>
+		<!---
+			Utilities details.
+		-->
+		<variable name="utilitiesDetails" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.filter = this.parent.filterSelector.selectedValue;
+			this.updateFilterDel.connect(this.parent.filterSelector, "onselectedValue");
+			]]>
+		</method>
+		
+		<!---
+			Returns an array of the currently selected objects.
+		-->
+		<method name="getSelectedObjects">
+			<![CDATA[
+			var s = this.getSelection();
+			var selectedObjects = [];
+			if (s && s.o) {
+				selectedObjects.push(s.o);
+			}
+			return selectedObjects;
+			]]>
+		</method>
+		
+		<!---
+			Update the filter to match the currently selected filter.
+		-->
+		<method args="e" name="updateFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newFilter = this.parent.filterSelector.selectedValue;
+			if (newFilter != this.filter) {
+				this.setVariable("filter", newFilter);
+				if (this.oList) {
+					this.oList.setVariable("baseFilter", newFilter);
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler args="f" name="onfocus">
+			<![CDATA[
+			if (f != null && f != this) {
+				this.oEditor.model.setVariable("activeSelectionView", this);
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler eventSource="this.oEditor.model" name="onactiveSelectionView">
+			<![CDATA[
+			this.setVariable("activated", this.oEditor.model.activeSelectionView == this);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="restoreFocus">
+			<![CDATA[
+			FocusUtil.setFocus(this.parent, false);
+			]]>
+		</method>
+	</UtilitiesBrowseObjectTree>
+	
+	<!---
+		@keywords private
+		
+		A Browse tab that in the uitlity view that uses to Browse object.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/UtilitiesBrowse">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="UtilitiesRootBrowseTree" moduleName="cmc/foundation/UtilitiesRootBrowseTree"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="BaseComboBox" moduleName="cmc/foundation/BaseComboBox"/>
+	
+		<!---
+			@keywords private
+			Reference to the business object editor instance.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates that this view is splittable.
+		-->
+		<variable name="splittable" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Pane title.
+		-->
+		<variable name="paneTitle" type="string" value="${foundationResources.Singleton.utilitiesBrowse.string}"/>
+		<!---
+			@keywords private
+			Extended text.
+		-->
+		<variable name="extendedText" type="string" value="${foundationResources.Singleton.utilitiesBrowseExtendedHelp.string}"/>
+		<!---
+			Text of the link that appears in the tooltip for extended help.  null or empty string means use framework default.
+		-->
+		<variable name="linkText" type="string" value=""/>
+		<!---
+			Relative URL for the online help link.
+		-->
+		<variable name="linkURL" type="string" value="tasks/ttfutilitiespane.htm"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the filter selector's width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		
+		<!--- @keywords private -->
+		<method args="e" name="checkFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkFilterDel.disconnectAll();
+			var enabledFilters = [];
+			var retrievedFilters = this.oEditor.getBrowseUtilityFilters();
+			for (var i = 0; i < retrievedFilters.length; i++) {
+				var currentFilter = retrievedFilters[i];
+				if (currentFilter.enablementCondition) {
+					currentFilter.enablementCondition.registerDelegate(this.oEditor, this.checkFilterDel);
+				}
+				if (currentFilter.isEnabled(this.oEditor)) {
+					enabledFilters.unshift(currentFilter);
+				}
+			}
+			if (enabledFilters.length == 0) {
+				this.filterSelector.setVariable("selectedValue", null);
+				this.filterSelector.setValues(null);
+				this.filterSelector.setVariable("visible", false);
+			}
+			else if (enabledFilters.length == 1) {
+				this.filterSelector.setVariable("selectedValue", enabledFilters[0]);
+				this.filterSelector.setValues(enabledFilters);
+				this.filterSelector.setVariable("visible", false);
+			}
+			else {
+				var selectedValue = null;
+				if (this.oEditor.defaultFilter != null) {
+					for (var i = 0; i < enabledFilters.length; i++) {
+						if (enabledFilters[i] === this.oEditor.defaultFilter) {
+							selectedValue = this.oEditor.defaultFilter;
+							break;
+						}
+					}
+				}
+				if (selectedValue == null) {
+					selectedValue = enabledFilters[0];
+				}
+				this.filterSelector.setVariable("selectedValue", selectedValue);
+				this.filterSelector.setValues(enabledFilters);
+				this.filterSelector.setVariable("visible", true);
+			}
+			this.browseTree.setVariable('y', this.filterSelector.visible ? 43 : 0);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Initialize utilities browse.
+		-->
+		<method args="boe" name="initializeBrowse">
+			<![CDATA[
+			this.oEditor = boe;
+			var filter = new BaseComboBox.Class(this, {
+				name: "filterSelector",
+				x: 19
+			});
+			this.updateFilterSelectorWidthDel = new EventHandler.Class(this, "updateFilterSelectorWidth");
+			this.updateFilterSelectorWidthDel.connect(this.availableWidthView, "onavailableWidth");
+			this.updateFilterSelectorWidth();
+			this.checkFilterDel = new EventHandler.Class(this, "checkFilter");
+			new UtilitiesRootBrowseTree.Class(this, {
+				name: "browseTree",
+				utilitiesDetails: boe.utilities.parent.details,
+				oEditor: boe
+			});
+			this.checkFilter();
+			this.browseTree.setVariable("o", boe.navigationTree.o);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateFilterSelectorWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.filterSelector) {
+				this.filterSelector.setVariable('width', this.availableWidthView.availableWidth - 38);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.checkFilterDel.disconnectAll();
+			delete this.checkFilterDel;
+			if (this.updateFilterSelectorWidthDel) {
+				this.updateFilterSelectorWidthDel.disconnectAll();
+				delete this.updateFilterSelectorWidthDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the browse context.
+		-->
+		<method args="browseFilterType" name="setContext">
+			<![CDATA[
+			if (browseFilterType != null) {
+				var filters = this.oEditor.filters;
+				var filter = null;
+				for (var i = 0; i < filters.length; i++) {
+					if (filters[i].filterType == browseFilterType && filters[i].isEnabled(this.oEditor)) {
+						filter = filters[i];
+						break;
+					}
+				}
+				this.filterSelector.setVariable("selectedValue", filter);
+			}
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords private
+		
+		A Clipboard tab that in the uitlity view.  This clipboard is different the the system clipboard.
+		For security reasons, Flash applications do not have unrestricted access to the system clipboard.
+		
+		User can drag different objects into the clipboard and use it later.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/UtilitiesClipboard" height="${this.parent.availableHeight}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="UtilitiesClipboardMenu" moduleName="cmc/foundation/UtilitiesClipboardMenu"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="ModelObjectList" moduleName="cmc/foundation/ModelObjectList"/>
+		<dependency localName="UtilitiesClipboardMenuRow" moduleName="cmc/foundation/UtilitiesClipboardMenuRow"/>
+		
+		<!---
+			@keywords private
+			List of utilities objects.
+		-->
+		<variable name="clipboardObjects" value="${[]}"/>
+		<!---
+			@keywords private
+			Model object list.
+		-->
+		<variable name="modelObjectList" value="${null}"/>
+		<!---
+			@keywords private
+			Reference to the business object editor instance.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			@keywords private
+			Reference to utilities panel. This is a required attribute.
+		-->
+		<variable name="utilities" value="${null}"/>
+		<!---
+			@keywords private
+			The availableHeight for the list class
+		-->		
+		<variable name="availableHeight" type="number" value="${this.height - this.clipboardGrid.y}"/>
+		<!---
+			@keywords private
+			Pane title.
+		-->
+		<variable name="paneTitle" type="string" value="${foundationResources.Singleton.utilitiesClipboard.string}"/>
+		<!---
+			@keywords private
+			Extended text.
+		-->
+		<variable name="extendedText" type="string" value="${foundationResources.Singleton.utilitiesClipboardExtendedHelp.string}"/>
+		<!---
+			Text of the link that appears in the tooltip for extended help.  null or empty string means use framework default.
+		-->
+		<variable name="linkText" type="string" value=""/>
+		<!---
+			Relative URL for the online help link.
+		-->
+		<variable name="linkURL" type="string" value="tasks/ttfutilitiespane.htm"/>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.modelObjectList = new ModelObjectList.Class(this, {
+				v: this.clipboardGrid,
+				modelObjects: this.clipboardObjects
+			});
+			this.removeObjectDel = new EventHandler.Class(this, "removeObject");
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.removeObjectDel.disconnectAll();
+			delete this.removeObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Initialize the clipboard.
+		-->
+		<method args="boe" name="initializeClipboard">
+			<![CDATA[
+			this.oEditor = boe;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update clipboard open object list.
+		-->
+		<method name="clearUtilityClipboardObject">
+			<![CDATA[
+			this.clipboardObjects = [];
+			this.updateClipboardObjects();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Remove the specified object from the clipboard. This method is
+			registered to the "beingDestroyed" event for all the objects
+			in the clipboard.
+		-->
+		<method args="o" name="removeObject">
+			<![CDATA[
+			var index = this.clipboardObjects.indexOf(o);
+			if (index != -1) {
+				this.clipboardObjects.splice(index, 1);
+			}
+			this.updateClipboardObjects();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Remove the currently selected objects from the clipboard.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			var objects = this.clipboardGrid.getSelectedObjects();
+			for (var i = 0; i < objects.length; i++) {
+				var index = this.clipboardObjects.indexOf(objects[i]);
+				this.clipboardObjects.splice(index, 1);
+			}
+			this.updateClipboardObjects();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if the delete action is enabled.
+		-->
+		<method name="isDeleteEnabled">
+			<![CDATA[
+			return this.clipboardGrid.getSelectedObjects().length > 0;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Paste the objects in the CMC clipboard into the utilities clipboard.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			var objects = this.oEditor.model.clipboardObjects;
+			for (var i = 0; i < objects.length; i++) {
+				var o = objects[i].getReferencedObject();
+				if (o.objectDefinition.primary && this.clipboardObjects.indexOf(o) == -1) {
+					this.clipboardObjects.push(o);
+				}
+			}
+			this.updateClipboardObjects();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if paste is enabled.
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			var objects = this.oEditor.model.clipboardObjects;
+			var pasteEnabled = objects.length > 0;
+			for (var i = 0; i < objects.length; i++) {
+				var o = objects[i].getReferencedObject();
+				if (!o.objectDefinition.primary) {
+					pasteEnabled = false;
+				}
+			}
+			return pasteEnabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if the list of objects can be dropped on the clipboard.
+			
+			@param Array sources: list of drag sources
+		-->
+		<method args="sources" name="isDropEnabled">
+			<![CDATA[
+			var dropEnabled = true;
+			for (var i = 0; i < sources.length; i++) {
+				var o = ModelUtil.Singleton.findObjectForView(sources[i]).getReferencedObject();
+				if (!o.objectDefinition.primary) {
+					dropEnabled = false;
+				}
+			}
+			return dropEnabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Add the dropped objects to the clipboard.
+		-->
+		<method args="sources" name="droppedInTarget">
+			<![CDATA[
+			for (var i = 0; i < sources.length; i++) {
+				var o = ModelUtil.Singleton.findObjectForView(sources[i]).getReferencedObject();
+				if (this.clipboardObjects.indexOf(o) == -1) {
+					this.clipboardObjects.push(o);
+				}
+			}
+			this.updateClipboardObjects();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Refresh the clipboard view.
+		-->
+		<method name="updateClipboardObjects">
+			<![CDATA[
+			this.removeObjectDel.disconnectAll();
+			for (var i = 0; i < this.clipboardObjects.length; i++) {
+				this.removeObjectDel.connect(this.clipboardObjects[i], "beingDestroyed");
+			}
+			this.modelObjectList.setVariable("modelObjects", this.clipboardObjects);
+			var showClipboard = this.clipboardObjects.length > 0;
+			]]>
+		</method>
+		
+		<Button name="clearButton" height="33" text="${foundationResources.Singleton.clipboardClear.string}" x="19">
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.clearUtilityClipboardObject();
+				]]>
+			</handler>
+		</Button>
+		<UtilitiesClipboardGrid menuClass="${UtilitiesClipboardMenu}" name="clipboardGrid" rowMenuClass="${UtilitiesClipboardMenuRow}" y="42">
+			<DropTarget dragAndDropManager="${DndManager.Singleton}" dropObject="${this.parent}" targetKey="${'element'}">
+				<handler args="sources" name="ondroppedintarget">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/UtilitesClipboard ondroppedintarget");
+					this.classroot.droppedInTarget(sources);
+					]]>
+				</handler>
+				<method args="currentDragSources" name="isEnabled">
+					<![CDATA[
+					return this.classroot.isDropEnabled(currentDragSources);
+					]]>
+				</method>
+			</DropTarget>	
+		</UtilitiesClipboardGrid>
+	</Component>
+	
+	<!---
+		@keywords private
+		Utilities view tab.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/UtilityTab">
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<!---
+			Reference to utilities view.
+		-->
+		<variable name="utilities"/>
+		<!---
+			Reference to the tab pane associated with this tab. This is a required attribute.
+		-->
+		<variable name="tabPane"/>
+		<!---
+			Indicates that this is the active tab. This attribute should not be set directly. Changing the "activePane"
+			attribute on the utilities view will cause this attribute to be modified.
+		-->
+		<variable name="active" type="boolean" value="false"/>
+		<!---
+			Indicates that the tab can tab focus.
+		-->
+		<variable name="focusable" value="true"/>
+		<!---
+			Margin size.
+		-->
+		<variable name="margin" type="number" value="20"/>
+		<!---
+			Pane title.
+		-->
+		<variable name="paneTitle" type="string" value="${this.tabPane.paneTitle}"/>
+		<!---
+			Tab width.
+		-->
+		<variable name="width" value="${this.tabTitle.width + this.margin * 2}"/>
+	
+		<!---
+			Extended text that appears in the tooltip.  null or empty string means tooltip will not show.
+		-->
+		<variable name="extendedText" type="string" value="${this.tabPane.extendedText}"/>
+
+		<!---
+			Text of the link that appears in the tooltip for extended help.  null or empty string means use framework default.
+		-->
+		<variable name="linkText" type="string" value="${this.tabPane.linkText}"/>
+
+		<!---
+			Relative URL for the online help link.  null or empty string means use do not display link.
+		-->
+		<variable name="linkURL" type="string" value="${this.tabPane.linkURL}"/>
+		
+		<!---
+			The display name of the tab. Used by overflowbutton
+		-->
+		<variable name="displayName" type="string" value="${this.tabPane.paneTitle}"/>
+		
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var tabs = this.utilities.tabs;
+			if (!tabs) {
+				tabs = [];
+				this.utilities.tabs = tabs;
+			}
+			tabs.push(this);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this.tabTitle
+				});
+			}
+			]]>
+		</handler>	
+		
+		<!---
+			Update the active state for this tab.
+		-->
+		<method name="updateActive">
+			<![CDATA[
+			this.setVariable("active", this.utilities.activePane == this.tabPane);
+			if (this.active) {
+				this.tabPane.setVariable("visible", true);
+				this.tabPane.bringToFront();
+				this.utilities.setVariable("splittable", this.tabPane.splittable == true);
+				this.tabTitle.setVariable("fgcolor", "#4178be");
+			}
+			else {
+				this.tabPane.setVariable("visible", false);
+				this.tabTitle.setVariable("fgcolor", "#464646");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle changes to the "activePane" attribute of the utilities view.
+		-->
+		<handler eventSource="this.utilities" name="onactivePane">
+			<![CDATA[
+			this.updateActive();
+			]]>
+		</handler>
+
+		<!---
+			Handle mouse click events. This will activate the current tab.
+		-->
+		<handler name="onclick">
+			<![CDATA[
+			this.utilities.setVariable("activePane", this.tabPane);
+			]]>
+		</handler>
+		
+		<!---
+			Handle key down events. If the tab has focus, then enter or spacebar
+			will cause this tab to be activated.
+		-->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 13 || k == 32) {
+				this.utilities.setVariable("activePane", this.tabPane);
+			}
+			]]>
+		</handler>
+		
+		<Tooltip extendedText="${this.classroot.extendedText}" linkText="${this.classroot.linkText}" linkURL="${this.classroot.linkURL}"/>
+		
+		<Component width="${this.parent.width}" imageSet="${this.parent.active ? 'toolTabActive' : 'toolTabInactive'}" stretches="width"/>		
+		<TextComponent name="tabTitle" text="${this.parent.paneTitle}" x="${this.parent.margin}" valign="middle" fontsize="14"/>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		
+		This is the Utilities view.  It has three tabs with Find, Browse and Clipboard. {@link cmc/foundation/UtilitiesSearch},
+		{@link cmc/foundation/UtilitiesBrowse}, {@link cmc/foundation/UtilitiesClipboard} to help user manage products.
+		
+		This view can be open/close in the View menu or in the toolbar.
+	-->
+	<Panel addRightSpacing="false" classDefinition="true" definitionName="cmc/foundation/Utilities" headerIconResource="utilityHeaderIcon" useCompactPadding="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="UtilitiesClipboard" moduleName="cmc/foundation/UtilitiesClipboard"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="TabOverflowButton" moduleName="cmc/foundation/TabOverflowButton"/>
+		<dependency localName="UtilitiesSearch" moduleName="cmc/foundation/UtilitiesSearch"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="UtilityTab" moduleName="cmc/foundation/UtilityTab"/>
+		<dependency localName="UtilitiesBrowse" moduleName="cmc/foundation/UtilitiesBrowse"/>
+	
+		<!---
+			@keywords private
+			The title of the panel
+		-->
+		<variable name="title" type="string" value="${foundationResources.Singleton.utilitiesTitle.string}"/>
+		
+		<!---
+			@keywords private
+			Business object editor instance
+		-->
+		<variable name="oEditor" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Active utilities pane.
+		-->
+		<variable name="activePane" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Array of tabs within the utility view
+		-->
+		<variable name="tabs" value="${[]}"/>
+		
+		<!---
+			@keywords private
+			Indicates to the frame manager that the utilities view can be split.
+		-->
+		<variable name="splittable" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Reference to the details view for the utilities view.
+		-->
+		<variable name="details"/>
+		
+		<!---
+			@keywords private
+			Indicates that the views have been created.
+		-->
+		<variable name="viewsCreated" type="boolean" value="false"/>
+
+		<!---
+			Shortcut keys to move to next tab, default is ['Control', 'Pagedown']
+		-->
+		<variable name="moveToNextTabShortcutKeys" value="${['Control', 'Pagedown']}"/>
+
+		<!---
+			Shortcut keys to move to previous tab, default is ['Control', 'Pageup']
+		-->
+		<variable name="moveToPreviousTabShortcutKeys" value="${['Control', 'Pageup']}"/>
+		
+		<!---
+			Reference to overflow button.
+		-->
+		<variable name="overflowButton"/>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.moveToNextTabDel = new EventHandler.Class(this, "moveToNextTab");
+			this.moveToPreviousTabDel = new EventHandler.Class(this, "moveToPreviousTab");
+			this.inherited(arguments);
+			this.checkUtilityOverflowTabsDel = new EventHandler.Class(this, "checkUtilityOverflowTabs");
+			this.checkUtilityOverflowTabs();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.moveToNextTabDel.disconnectAll();
+			delete this.moveToNextTabDel;
+			this.moveToPreviousTabDel.disconnectAll();
+			delete this.moveToPreviousTabDel;
+			this.checkUtilityOverflowTabsDel.disconnectAll();
+			delete this.checkUtilityOverflowTabsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Reset this utilities pane. Called when the business object editor is closed.
+		-->
+		<method name="reset">
+			<![CDATA[
+			this.resetViews();
+			this.parent.details.setModelObject(null);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Registers the shortcut keys.
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.inherited(arguments);
+				KeyUtil.callOnKeyCombo(this.moveToNextTabDel, this.moveToNextTabShortcutKeys);
+				KeyUtil.callOnKeyCombo(this.moveToPreviousTabDel, this.moveToPreviousTabShortcutKeys);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Unregisters the shortcut keys.
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.inherited(arguments);
+				KeyUtil.removeKeyComboCall(this.moveToNextTabDel, this.moveToNextTabShortcutKeys);
+				KeyUtil.removeKeyComboCall(this.moveToPreviousTabDel, this.moveToPreviousTabShortcutKeys);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Move to the next tab.
+		-->
+		<method args="e" name="moveToNextTab">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				for (var i = 0; i < this.tabs.length; i++) {
+					if (this.tabs[i].active) {
+						var nextTab = this.tabs[(i + 1) % this.tabs.length];
+						EventUtil.trigger(nextTab, "onclick");
+						FocusUtil.setFocus(nextTab, false);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Move to the previous tab.
+		-->
+		<method args="e" name="moveToPreviousTab">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				for (var i = 0; i < this.tabs.length; i++) {
+					if (this.tabs[i].active) {
+						var previousTab = this.tabs[((i - 1) + this.tabs.length) % this.tabs.length];
+						EventUtil.trigger(previousTab, "onclick");
+						FocusUtil.setFocus(previousTab, false);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Open the utilities view.
+		-->
+		<method name="open">
+			<![CDATA[
+			this.createViews();
+			if (this.oEditor.content.maximizedPanel != null) {
+				this.oEditor.content.maximizedPanel.setVariable("maximized", false);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the focus to the utilities view.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			if (!ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				for (var i = 0; i < this.tabs.length; i++) {
+					if (this.tabs[i].active) {
+						FocusUtil.setFocus(this.tabs[i], false);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the context of the utility pane based on the specified object definition.
+			
+			@param cmc/foundation/ObjectDefinition objectDefinition: the object definition that describes the context
+		-->
+		<method args="objectDefinition" name="setContext">
+			<![CDATA[
+			if (objectDefinition != null) {
+				this.createViews();
+				if (objectDefinition.browseFilterType && objectDefinition.browseFilterType != null) {
+					this.setVariable("activePane", this.panes.browsePane);
+					this.panes.browsePane.setContext(objectDefinition.browseFilterType);
+				}
+				else if (objectDefinition.searchType != null) {
+					this.setVariable("activePane", this.panes.searchPane);
+					this.panes.searchPane.setContext(objectDefinition.searchType);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Updates the search definitions.
+		-->
+		<method name="updateSearchDefinitions">
+			<![CDATA[
+			if (this.panes && this.panes.searchPane) {
+				this.panes.searchPane.updateSearchDefinitions();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Initialize the utilities view.
+			
+			@param cmc/foundation/BusinessObjectEditor boe: business object editor instance
+		-->
+		<method args="boe" name="initializeUtilities">
+			<![CDATA[
+			this.oEditor = boe;
+			if (!this.closed) {
+				this.createViews();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create the utility views.
+		-->
+		<method name="createViews">
+			<![CDATA[
+			if (!this.viewsCreated && this.oEditor != null) {
+				new UtilitiesSearch.Class(this.panes, {
+					utilities: this,
+					name: "searchPane"
+				});
+				new UtilityTab.Class(this.header.tabs, {
+					utilities: this,
+					tabPane: this.panes.searchPane
+				});
+				this.panes.searchPane.initializeSearch(this.oEditor);
+				new UtilitiesBrowse.Class(this.panes, {
+					name: "browsePane"
+				});
+				new UtilityTab.Class(this.header.tabs, {
+					utilities: this,
+					tabPane: this.panes.browsePane
+				});
+				this.panes.browsePane.initializeBrowse(this.oEditor);
+				new UtilitiesClipboard.Class(this.panes, {
+					utilities: this,
+					name: "clipboardPane"
+				});
+				new UtilityTab.Class(this.header.tabs, {
+					utilities: this,
+					tabPane: this.panes.clipboardPane
+				});
+				this.panes.clipboardPane.initializeClipboard(this.oEditor);
+				this.setVariable("viewsCreated", true);
+				this.setVariable("activePane", this.panes.searchPane);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Reset the subviews created by the createViews() method.
+		-->
+		<method name="resetViews">
+			<![CDATA[
+			if ("searchPane" in this.panes) {
+				this.panes.searchPane.searchWidget.searchDefinition = null;
+				this.panes.searchPane.updateSearchDefinitions();
+				this.panes.searchPane.searchWidget.searchTextArea.searchText.setVariable("text", "");
+				this.setVariable("activePane", this.panes.searchPane);
+			}
+			if ("browsePane" in this.panes && "filterSelector" in this.panes.browsePane) {
+				this.panes.browsePane.filterSelector.setVariable("selectedValue", (this.oEditor.defaultFilter == null ? this.oEditor.filters[0] : this.oEditor.defaultFilter));
+			}
+			if ("clipboardPane" in this.panes) {
+				this.panes.clipboardPane.clearUtilityClipboardObject();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Checks the overflow tabs and creates the overflow tabs list button.
+		-->
+		<method args="e" name="checkUtilityOverflowTabs">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkUtilityOverflowTabsDel.disconnectAll();
+			this.checkUtilityOverflowTabsDel.connect(this, "onwidth");
+			var tabsWidth = this.header.tabs.x;
+			var overflowTabs = [];
+			for (var i = 0; i < this.tabs.length; i++) {
+				var tab = this.tabs[i];
+				tabsWidth += tab.width;
+				if (tabsWidth > this.width) {
+					overflowTabs.push(tab);
+					tab.setVariable("focusable", false);
+				}
+				else {
+					tab.setVariable("focusable", true);
+				}
+				this.checkUtilityOverflowTabsDel.connect(tab, "onwidth");
+			}
+			if (overflowTabs.length > 0) {
+				if (!this.overflowButton) {
+					this.overflowButton = new TabOverflowButton.Class(this, {
+						placement: "header",
+						actionDefinitions: overflowTabs
+					});
+				}
+				else {
+					this.overflowButton.setVariable("actionDefinitions", overflowTabs);
+					this.overflowButton.setVariable("visible", true);
+				}
+				this.overflowButton.setVariable('x', this.width - this.overflowButton.width);
+				this.overflowButton.bringToFront();
+				this.overflowButton.setVariable("focusable", true);
+			}
+			else if (this.overflowButton) {
+				this.overflowButton.setVariable("visible", false);
+				this.overflowButton.setVariable("focusable", false);
+			}
+			]]>
+		</method>	
+		
+		<Component name="header" placement="tabArea" width="${this.immediateParent.width}">
+			<Component bgcolor="#c1c1c1" name="bgLine" height ="1" x="19" width="${this.parent.width - 38}" y="${this.parent.tabs.height - 1}"/>
+			<Component name="tabs" x="19">
+				<AxisLayout axis="x"/>
+			</Component>
+		</Component>
+
+		<Component name="panes" y="14">
+			<variable name="availableWidth" type="number" value="${this.immediateParent.availableWidth - this.x}"/>	
+			<variable name="availableHeight" type="number" value="${this.immediateParent.availableHeight - this.y}"/>
+		</Component>
+	</Panel>
+	
+	<!---
+		@keywords private
+		Utilities details view. If the utilities view is splittable, then this view will be visible.
+		The details view will show the child objects for the currently selected object.
+	-->
+	<Panel addRightSpacing="false" classDefinition="true" closed="${this.parent.utilities.closed}" definitionName="cmc/foundation/UtilitiesDetails" useCompactPadding="true">
+		<dependency localName="UtilitiesDetailsMenu" moduleName="cmc/foundation/UtilitiesDetailsMenu"/>
+		<dependency localName="ChildListBackgroundMenu" moduleName="cmc/foundation/ChildListBackgroundMenu"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="UtilitiesDetailsGrid" moduleName="cmc/foundation/UtilitiesDetailsGrid"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		
+		<!---
+			@keywords private
+			The current model object associated with the details view.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Details grid instances. An object definitions can be configured with a custom details view by specifying the "utilitiesListClass" attribute.
+			@keywords private
+		-->
+		<variable name="detailsGrids" value="${{}}"/>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			new Component.Class(this, {
+				name: "headerPadView",
+				placement: "title",
+				height: 10
+			});
+			this.updateHeaderDel = new EventHandler.Class(this, "updateHeader");
+			this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateHeaderDel.disconnectAll();
+			delete this.updateHeaderDel;
+			this.updateDisplayNameStyleDel.disconnectAll();
+			delete this.updateDisplayNameStyleDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set the new model object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				if (this.detailsGrid && this.detailsGrid.oList && this.o) {
+					if (this.o.getReferencedObject()) {
+						this.o.getReferencedObject().releaseViewFromChildren(this.detailsGrid);
+					}
+					this.detailsGrid.setVariable("visible", false);
+				}
+				this.o = newObject;
+				if (newObject != null) {
+					var oDef = newObject.objectDefinition;
+					this.detailsGrid = this.getDetailsGrid(oDef);
+					if (oDef.organizational) {
+						if (oDef.objectType != "Top") {
+							newObject.bindViewToChildren(this.detailsGrid);
+							this.detailsGrid.setVariable("visible", true);
+						}
+					}
+					else if (oDef.filters.length > 0) {
+						newObject.bindViewToChildren(this.detailsGrid, oDef.filters[0]);
+						this.detailsGrid.setVariable("visible", true);
+					}
+					else {
+						var oDefs = oDef.parentReferenceObjectDefinitions;
+						oDefs = oDefs.concat(oDef.collectionReferenceObjectDefinitions);
+						if (oDefs.length > 0) {
+							var objectTypes = [];
+							for (var i = 0; i < oDefs.length; i++) {
+								objectTypes.push(oDefs[i].objectType);
+							}
+							newObject.bindViewToChildren(this.detailsGrid, null, objectTypes.join());
+							this.detailsGrid.setVariable("visible", true);
+						}
+					}
+				}
+				this.updateHeader();
+				this.updateDisplayNameStyle();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the details grid to display inside the browse tab
+			@param {@link cmc/foundation/ObjectDefinition} def: The definition for the browse.
+			@returns view: The details grid.
+		-->
+		<method args="def" name="getDetailsGrid">
+			<![CDATA[
+			var detailsGridClass = def.utilitiesListClass != null ? def.utilitiesListClass : UtilitiesDetailsGrid;
+			var detailsGrid = this.detailsGrids[detailsGridClass];
+			if (!detailsGrid) {
+				if (detailsGridClass.Class) {
+					detailsGrid = new detailsGridClass.Class(this, {
+						rowMenuClass: UtilitiesDetailsMenu,
+						menuClass: ChildListBackgroundMenu,
+						listBorderSize: 0,
+						padding: 0,
+						editable: false
+					});
+				}
+				else {
+					detailsGrid = DefinitionUtil.createDefinitionInstance(detailsGridClass, this, {
+						rowMenuClass: UtilitiesDetailsMenu,
+						menuClass: ChildListBackgroundMenu,
+						listBorderSize: 0,
+						padding: 0,
+						editable: false
+					});
+				}
+				this.detailsGrids[detailsGridClass] = detailsGrid;
+			}
+			return detailsGrid;
+			]]>
+		</method>
+
+		<!---
+			Update the panel header
+		-->
+		<method args="e" name="updateHeader">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateHeaderDel.disconnectAll();
+			var newTitle = "";
+			var newMessage = "";
+			var newErrorMessage = "";
+			if (this.o != null) {
+				newTitle = StringUtil.Singleton.escapeText(this.o.objectDisplayName);
+				this.updateHeaderDel.connect(this.o, "onobjectDisplayName");
+				if (this.o.objectDefinition.utilitiesListClass == null) {
+					this.updateHeaderDel.connect(this.o.objectDefinition, "ondetailsViewHeaderText");
+					this.detailsGrid.displayName.setVariable("text", this.o.objectDefinition.detailsViewHeaderText);
+				}
+				if (this.detailsGrid && this.detailsGrid.oList) {
+					if (this.detailsGrid.oList.statusObject != null) {
+						if (this.detailsGrid.oList.statusObject.hasError) {
+							newErrorMessage = this.detailsGrid.oList.statusObject.message;
+						}
+						else {
+							newMessage = this.detailsGrid.oList.statusObject.message;
+						}
+					}
+					this.updateHeaderDel.connect(this.detailsGrid.oList, "onstatusObject");
+				}
+			}
+			this.setVariable("title", newTitle);
+			this.setVariable("errorMessage", newErrorMessage);
+			this.setVariable("titleMessage", newMessage);
+			]]>
+		</method>
+		
+		<!---
+			Update the panel header style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newTextColor = "#0";
+			var newTextStyle = "plain";
+			this.updateDisplayNameStyleDel.disconnectAll();
+			if (this.o != null) {
+				var style = this.o.displayNameStyle;
+				this.updateDisplayNameStyleDel.connect(this.o, "ondisplayNameStyle");
+				if (style != null) {
+					newTextColor = style.color;
+					if (style.bold && style.italic) {
+						newTextStyle = "bolditalic";
+					}
+					else if (style.bold) {
+						newTextStyle = "bold";
+					}
+					else if (style.italic) {
+						newTextStyle = "italic";
+					}
+				}
+			}
+			if (this.textColor != newTextColor) {
+				this.setVariable("textColor", newTextColor);
+			}
+			if (this.textStyle != newTextStyle) {
+				this.setVariable("textStyle", newTextStyle);
+			}
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</Panel>
+	
+	<SplitView classDefinition="true" definitionName="cmc/foundation/UtilitiesSplitView" axis="y" ySplitSize="400">
+		<variable name="oEditor"/>
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.oEditor.utilities = this.utilities;
+			this.utilities.initializeUtilities(this.oEditor);
+			this.oEditor.checkViewVisibilityDel.connect(this.utilities, "onclosed");
+			]]>
+		</method>
+		
+		<Utilities closed="true" maximizable="false" name="utilities">
+			<handler name="oninit">
+				<![CDATA[
+				this.classroot.oEditor.framesList.push(this);
+				]]>
+			</handler>
+		</Utilities>
+		<UtilitiesDetails closable="false" maximizable="false" name="details">
+			<handler name="oninit">
+				<![CDATA[
+				this.classroot.oEditor.framesList.push(this);
+				]]>
+			</handler>
+		</UtilitiesDetails>
+	</SplitView>
+
+</Definitions>

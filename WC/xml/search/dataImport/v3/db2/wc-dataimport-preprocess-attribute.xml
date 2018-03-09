@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->  
+<_config:DIHPreProcessConfig xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../../xsd/wc-dataimport-preprocess.xsd ">
+
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  fetchSize="500" batchSize="500">
+		<_config:table definition="create table TI_CATENTREL_#INDEX_SCOPE_TAG# (combinekey VARCHAR(50) not null, catentry_id_parent bigint not null, catentry_id_child bigint not null,  PRIMARY KEY (combinekey))" name="TI_CATENTREL_#INDEX_SCOPE_TAG#"/>
+		<_config:query sql="select rtrim(cast(a.catentry_id_parent as char(23))) ||'_'|| rtrim(cast(a.catentry_id_child as char(23))) combinekey, a.catentry_id_parent catentry_id_parent, a.catentry_id_child catentry_id_child from catentrel a, ti_catentry_#INDEX_SCOPE_TAG# b, catentry c WHERE a.catentry_id_parent=b.catentry_id and c.catentry_id=a.catentry_id_child and c.MARKFORDELETE=0 and a.catreltype_id not in ('DK_PDK','PDK_COMPONENT')"/>
+		<_config:mapping>
+			<_config:key queryColumn="combinekey" tableColumn="combinekey"/>
+			<_config:column-mapping>
+				<_config:column-column-mapping>
+					<_config:column-column queryColumn="catentry_id_parent" tableColumn="catentry_id_parent" />
+					<_config:column-column queryColumn="catentry_id_child" tableColumn="catentry_id_child" />
+				</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>            
+	</_config:data-processing-config>
+
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.AttributeDataPreProcessor"  fetchSize="500" batchSize="500">
+		<_config:table definition="CREATE TABLE TI_ATTR_#INDEX_SCOPE_TAG#_#lang_tag# (CATENTRY_ID BIGINT NOT NULL, ATTRS CLOB, ATTRI CLOB, ATTRF CLOB, SRCHS CLOB, SRCHI CLOB, SRCHF CLOB, PRIMARY KEY (CATENTRY_ID))" name="TI_ATTR_#INDEX_SCOPE_TAG#_#lang_tag#" />
+		<_config:query sql="(select catentryattr.catentry_id , attrvaldesc.attr_id attr_id, attrvaldesc.stringvalue attr_stringvalue, attrvaldesc.integervalue attr_integervalue, attrvaldesc.floatvalue attr_floatvalue, af.attrtype_id attrtype_id, af.srchfieldname attr_name, attr.searchable from catentryattr,attrvaldesc, TI_CATENTRY_#INDEX_SCOPE_TAG# CE, attrdictsrchconf af, attr
+							where catentryattr.catentry_id=CE.catentry_id and catentryattr.attr_id=af.attr_id and attrvaldesc.attrval_id=catentryattr.attrval_id and attrvaldesc.language_id=?language_id? and af.attr_id=attr.attr_id and af.mastercatalog_id=?master_catalog_id?)
+							UNION 
+							(select c.catentry_id_parent CATENTRY_ID, attrvaldesc.attr_id attr_id, attrvaldesc.stringvalue attr_stringvalue, attrvaldesc.integervalue attr_integervalue, attrvaldesc.floatvalue attr_floatvalue, af.attrtype_id attrtype_id, af.srchfieldname attr_name, attr.searchable
+									from catentryattr,attrvaldesc, TI_CATENTREL_#INDEX_SCOPE_TAG# c, attrdictsrchconf af, attr
+									where c.catentry_id_child=catentryattr.catentry_id and 
+										attrvaldesc.attrval_id=catentryattr.attrval_id and attrvaldesc.language_id=?language_id? and
+										catentryattr.attr_id=af.attr_id and af.attr_id=attr.attr_id and af.mastercatalog_id=?master_catalog_id?)  
+										order by catentry_id, attrtype_id"/>
+		<_config:mapping>
+			  <_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+			  <_config:column-mapping>
+				<_config:row-column-mapping>
+					<_config:row-column-name attrNameColName="attr_id" attrValueColName="attr_id"/>
+				</_config:row-column-mapping>
+			  </_config:column-mapping>
+		</_config:mapping>
+		<_config:property name="split_by" value="||"/>
+		
+		<!-- grouping query will be used if the "-grouping true" is passed in when running the di-preprocess utility, or when IndexResultGrouping search property is set when preprocessing through the runtime, i.e. preview or index schedule command.
+			1. It will disable rolling up of defining attribute dictionary attribute values to product beans.
+			2. It will enable rolling down of descriptive attributes into Item beans.
+		-->
+		<_config:property name="groupingQuery" value="(select catentryattr.catentry_id , attrvaldesc.attr_id attr_id, attrvaldesc.stringvalue attr_stringvalue, attrvaldesc.integervalue attr_integervalue, attrvaldesc.floatvalue attr_floatvalue, af.attrtype_id attrtype_id, af.srchfieldname attr_name, attr.searchable from catentryattr,attrvaldesc, TI_CATENTRY_#INDEX_SCOPE_TAG# CE, attrdictsrchconf af, attr
+							where catentryattr.catentry_id=CE.catentry_id and catentryattr.attr_id=af.attr_id and attrvaldesc.attrval_id=catentryattr.attrval_id and attrvaldesc.language_id=?language_id? and af.attr_id=attr.attr_id and af.mastercatalog_id=?master_catalog_id?)
+							UNION 
+							(select c.catentry_id_parent CATENTRY_ID, attrvaldesc.attr_id attr_id, attrvaldesc.stringvalue attr_stringvalue, attrvaldesc.integervalue attr_integervalue, attrvaldesc.floatvalue attr_floatvalue, af.attrtype_id attrtype_id, af.srchfieldname attr_name, attr.searchable
+									from catentryattr,attrvaldesc, TI_CATENTREL_#INDEX_SCOPE_TAG# c, attrdictsrchconf af, attr
+									where c.catentry_id_child=catentryattr.catentry_id and 
+										attrvaldesc.attrval_id=catentryattr.attrval_id and attrvaldesc.language_id=?language_id? and
+										catentryattr.attr_id=af.attr_id and af.attr_id=attr.attr_id and af.mastercatalog_id=?master_catalog_id? and 1=-1) 
+							UNION 
+							(select c.catentry_id_child CATENTRY_ID, attrvaldesc.attr_id attr_id, attrvaldesc.stringvalue attr_stringvalue, attrvaldesc.integervalue attr_integervalue, attrvaldesc.floatvalue attr_floatvalue, af.attrtype_id attrtype_id, af.srchfieldname attr_name, attr.searchable
+									from catentryattr,attrvaldesc, TI_CATENTREL_#INDEX_SCOPE_TAG# c, attrdictsrchconf af, attr
+									where c.catentry_id_parent=catentryattr.catentry_id and 
+										attrvaldesc.attrval_id=catentryattr.attrval_id and attrvaldesc.language_id=?language_id? and
+										catentryattr.attr_id=af.attr_id and af.attr_id=attr.attr_id and (select count(*) from catentryattr where catentry_id=c.catentry_id_child and attr_id=catentryattr.attr_id and usage=2)=0 and af.mastercatalog_id=?master_catalog_id?) 
+										order by catentry_id, attrtype_id" />
+	</_config:data-processing-config>
+    
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  fetchSize="500" batchSize="500">
+		<_config:table definition="CREATE TABLE TI_ADATTR_#INDEX_SCOPE_TAG#_#lang_tag# (CATENTRY_ID BIGINT NOT NULL, ATTRIBUTES CLOB, PRIMARY KEY (CATENTRY_ID))" name="TI_ADATTR_#INDEX_SCOPE_TAG#_#lang_tag#"/>
+		<_config:query sql="SELECT CATENTRYATTR.CATENTRY_ID CATENTRY_ID,CATENTRYATTR.SEQUENCE,
+								rtrim(cast(CATENTRYATTR.ATTR_ID as char(23))) ||'/_/'||
+								rtrim(cast(ATTR.IDENTIFIER as char(254))) ||'/_/'||
+								rtrim(cast(ATTRDESC.NAME as char(254))) ||'/_/'||
+								rtrim(cast(cast(CATENTRYATTR.SEQUENCE as decimal(20,5)) as char(26))) ||'/_/'||
+								rtrim(cast(CATENTRYATTR.ATTRVAL_ID as char(23))) ||'/_/'||
+								rtrim(cast(ATTRVAL.IDENTIFIER as char(254))) ||'/_/'||
+								rtrim(cast(COALESCE(COALESCE(ATTRVALDESC.STRINGVALUE,ATTRVALDESC.VALUE),'0') as varchar(2000))) ||'/_/'||
+								rtrim(cast(cast(COALESCE(ATTRVALDESC.SEQUENCE,0) as decimal(20,5)) as char(26))) ||'/_/'||
+								rtrim(cast(COALESCE(ATTR.DISPLAYABLE,1) as char(1)))||'/_/'||		
+								rtrim(cast(COALESCE(ATTR.SEARCHABLE,0) as char(1)))||'/_/'||		
+								rtrim(cast(COALESCE(ATTR.COMPARABLE,0) as char(1)))||'/_/'||		
+								rtrim(cast(COALESCE(ATTR.STOREDISPLAY,0) as char(1)))||'/_/'||	
+								rtrim(cast(COALESCE(ATTR.FACETABLE,0) as char(1)))||'/_/'||		
+								rtrim(cast(CATENTRYATTR.USAGE as char(1))) ||'/_/'||
+								rtrim(cast(COALESCE(NULLIF(ATTRVALDESC.IMAGE1,''),'0') as char(254))) ||'/_/'||
+								rtrim(cast(COALESCE(ATTRDESC.GROUPNAME,'-') as char(64))) ||'/_/'||
+								rtrim(cast(COALESCE(QTYUNITDSC.DESCRIPTION, '0') as char(254))) ||'/_/'||
+								rtrim(cast(COALESCE(QTYUNITDSC.QTYUNIT_ID, '0') as char(254))) ||'/_/'||
+								rtrim(cast(COALESCE(NULLIF(ATTRVALDESC.IMAGE2,''),'0') as char(254))) ATTRIBUTES
+							FROM 
+								CATENTRYATTR
+								INNER JOIN TI_CATENTRY_#INDEX_SCOPE_TAG# ON (CATENTRYATTR.CATENTRY_ID=TI_CATENTRY_#INDEX_SCOPE_TAG#.CATENTRY_ID)
+								INNER JOIN ATTR ON (CATENTRYATTR.ATTR_ID=ATTR.ATTR_ID)
+								INNER JOIN ATTRVAL ON (CATENTRYATTR.ATTRVAL_ID=ATTRVAL.ATTRVAL_ID) 
+								LEFT OUTER JOIN ATTRDESC ON (ATTR.ATTR_ID=ATTRDESC.ATTR_ID) AND ATTRDESC.LANGUAGE_ID=?language_id?
+								LEFT OUTER JOIN ATTRVALDESC ON (ATTRVAL.ATTRVAL_ID=ATTRVALDESC.ATTRVAL_ID) AND ATTRVALDESC.LANGUAGE_ID=?language_id?
+								LEFT OUTER JOIN QTYUNITDSC ON (ATTRVALDESC.QTYUNIT_ID = QTYUNITDSC.QTYUNIT_ID AND QTYUNITDSC.LANGUAGE_ID=?language_id?)
+						   ORDER BY 
+								CATENTRYATTR.CATENTRY_ID,CATENTRYATTR.SEQUENCE"/>
+		<_config:mapping>
+			<_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+				<_config:column-mapping>
+					<_config:column-column-mapping>
+						<_config:column-column queryColumn="ATTRIBUTES" tableColumn="ATTRIBUTES" separator="||"/>
+					</_config:column-column-mapping>
+				</_config:column-mapping>
+		</_config:mapping>           
+	</_config:data-processing-config>
+  
+</_config:DIHPreProcessConfig>

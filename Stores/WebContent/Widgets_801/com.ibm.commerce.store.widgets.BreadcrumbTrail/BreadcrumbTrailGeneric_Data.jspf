@@ -1,0 +1,103 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%-- Initializing the param variables --%>
+<c:set var="top_category" value=""/>
+<c:set var="pageName" value=""/>
+
+<%-- Check first in the param and then in WCParam --%>
+<c:if test="${!empty param.top_category}">
+	<c:set var="top_category" value="${param.top_category}"/>
+</c:if>
+<c:if test="${!empty WCParam.top_category}">
+	<c:set var="top_category" value="${WCParam.top_category}"/>
+</c:if>
+<c:if test="${!empty param.productId}">
+	<c:set var="productId" value="${param.productId}"/>
+</c:if>
+<c:if test="${!empty WCParam.productId}">
+	<c:set var="productId" value="${WCParam.productId}"/>
+</c:if>
+<c:if test="${!empty param.pageName}">
+	<c:set var="pageName" value="${param.pageName}"/>
+</c:if>
+<c:if test="${!empty WCParam.pageName}">
+	<c:set var="pageName" value="${WCParam.pageName}"/>
+</c:if>
+
+<%-- A Map to store the bread crumb items along with their URLs--%>
+<jsp:useBean id="breadCrumbItemsMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+
+<%-- Sets the Home url to the Map--%>
+<wcst:message var="home" key="BCT_HOME"  bundle="${widgetText}"/>
+<c:set target="${breadCrumbItemsMap}" property="${home}" value="${env_TopCategoriesDisplayURL}"/>
+
+<%-- Sets the Home as the last bread crumb item --%>
+<c:set var="lastBreadCrumbItem" value="${home}"/>
+
+<%-- Page specific bread crumbs --%>
+<c:choose>
+	<%-- When it is a Advanced Search Page --%>
+	<c:when test="${pageName eq 'AdvancedSearchPage'}">
+		<wcst:message var="lastBreadCrumbItem" key="TITLE_ADVANCED_SEARCH"  bundle="${widgetText}" />
+	</c:when>
+	<%-- When it is a Static Search Page --%>
+	<c:when test="${pageName eq 'StaticSearchPage'}">
+		<c:set var="lastBreadCrumbItem" value=""/>
+	</c:when>
+	<%-- Default BreadCrumb for rest of the pages --%>
+	<c:otherwise>
+		<%-- Check if productId is passed as a param --%>
+		<c:if test="${!empty productId}">
+			<%-- Try to get it from our internal cached hashMap --%>
+			<c:set var="key1" value="${productId}+getCatalogEntryViewSummaryByID"/>
+			<c:set var="bcCatalogEntry" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+			<c:if test="${empty bcCatalogEntry}">
+				<c:set var="key1" value="${productId}+getCatalogEntryViewAllByID"/>
+				<c:set var="bcCatalogEntry" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+				<c:if test="${empty bcCatalogEntry}">
+					<%-- Sets Product Name as the last bread crumb item --%>
+					<c:catch var ="invalidProductException">
+						<wcf:rest var="bcCatalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}" >
+							<wcf:param name="langId" value="${langId}" />
+							<wcf:param name="currency" value="${env_currencyCode}" />
+							<wcf:param name="responseFormat" value="json" />
+							<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+							<c:forEach var="contractId" items="${env_activeContractIds}">
+								<wcf:param name="contractId" value="${contractId}"/>
+							</c:forEach>
+						</wcf:rest>
+					</c:catch>
+					<c:if test="${empty invalidProductException}">
+						<c:set var="bcCatalogEntry" value="${bcCatalogNavigationView.catalogEntryView[0]}"/>
+						<%-- Cache it in our internal hash map --%>
+						<wcf:set target = "${cachedCatalogEntryDetailsMap}" key="${productId}+getCatalogEntryViewSummaryByID" value="${bcCatalogEntry}"/>
+					</c:if>
+				</c:if>
+			</c:if>
+			<c:if test="${empty invalidProductException}">
+				<c:set var="lastBreadCrumbItem" value="${bcCatalogEntry.name}"/>
+			</c:if>
+		</c:if>
+		
+		<c:set target="${breadCrumbItemsMap}" property="${lastBreadCrumbItem}" value="${null}"/>
+	</c:otherwise>
+</c:choose>
+
+<c:forEach var="breadCrumb" items="${breadCrumbItemsMap}" varStatus="status">
+	<c:set var="breadCrumbList" value="${breadCrumbList}${breadCrumb.key}" scope="request"/>
+	<c:if test="${!empty lastBreadCrumbItem}">
+		<c:set var="breadCrumbList" value="${breadCrumbList};" scope="request"/>
+	</c:if>
+</c:forEach>
+<c:set var="breadCrumbList" value="${breadCrumbList}${lastBreadCrumbItem}" scope="request"/>

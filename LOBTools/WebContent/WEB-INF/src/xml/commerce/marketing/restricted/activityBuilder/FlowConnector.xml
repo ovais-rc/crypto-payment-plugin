@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>The default flow connector class for use in {@link cmc/marketing/ActivityBuilder activity builders}. Within an activity builder,
+		a connector joins two elements together visually, and when elements are dropped onto a connector, the elements
+		are inserted between the two, previously joined elements.</p>
+	-->
+	<BaseFlowConnector classDefinition="true" definitionName="cmc/marketing/BaseFlowConnector">
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+
+		<!--- @keywords private -->
+		<method args="sources" name="handleDroppedElements">
+			<![CDATA[
+			this.parentFlow.o.lock();
+			var parentPath = FlowUtils.Singleton.getParentFlowPath(this);
+			if (parentPath) {
+				var parentPathObj = parentPath.o;
+				var parentFlowElement = this.getFlowElement();
+				if ((parentFlowElement != null) && sources[0].flowElement) {
+					if (sources[0].flowElement.o == parentFlowElement.o) {
+						this.parentFlow.o.unlock(true);
+						this.parentFlow.o.updateChildObjects();
+						return;
+					}
+				}
+				for (var i = 0; i < sources.length; i++) {
+					var newObject = null;
+					var insertSequence;
+					if (parentFlowElement == null) {
+						insertSequence = FlowUtils.Singleton.getNextSequenceNumber(parentPathObj);
+					}
+					else {
+						insertSequence = FlowUtils.Singleton.getNextSequenceNumber(parentPathObj, parentFlowElement.o);
+					}
+					if (sources[i].flowElement) {
+						var moveObj = sources[i].flowElement.o;
+						newObject = parentPathObj.model.createNewObject(null, parentPathObj, true, moveObj);
+						newObject.setPropertyValue("sequence", null, insertSequence);
+						moveObj.deleteObject();
+					}
+					else {
+						var objectType = sources[i].dragObject.objectType;
+						var objectDef = parentPathObj.model.getObjectDefinition(parentPathObj, objectType);
+						var branchType = "";
+						if ((objectDef.elemTemplateType == "Branch") && (parentFlowElement != null)) {
+							this.parentFlow.unselectAll();
+							var parentFlowElementType = parentFlowElement.o.objectDefinition.elemTemplateType;
+							if (parentFlowElementType == "Trigger") {
+								branchType = "random";
+							}
+							var siblings = parentPath.getChildren();
+							for (var i = 0; i < siblings.length; i++) {
+								if (siblings[i] == parentFlowElement) {
+									var j = i + 1;
+									while ((j < siblings.length) && (siblings[j].o.objectDefinition.elemTemplateType == parentFlowElementType)) {
+										siblings[j].select();
+										j++;
+									}
+									break;
+								}
+							}
+							parentFlowElement.select();
+							parentFlowElement.addElementsToBranch(branchType, objectType);
+						}
+						else {
+							newObject = parentPathObj.model.createNewObject(objectDef, parentPathObj);
+							newObject.setPropertyValue("sequence", null, insertSequence);
+							if (objectDef.elemTemplateType == "Branch") {
+								var pathObjectDefinition = newObject.model.getObjectDefinition(newObject, parentPathObj.objectType);
+								insertSequence = FlowUtils.Singleton.getNextSequenceNumber(newObject);
+								var topFlowObj = newObject.model.createNewObject(pathObjectDefinition, newObject);
+								topFlowObj.setPropertyValue("sequence", null, insertSequence);
+								insertSequence = FlowUtils.Singleton.getNextSequenceNumber(newObject);
+								var botFlowObj = newObject.model.createNewObject(pathObjectDefinition, newObject);
+								botFlowObj.setPropertyValue("sequence", null, insertSequence);
+								newObject.updateChildObjects();
+								topFlowObj.updateChildObjects();
+								botFlowObj.updateChildObjects();
+							}
+						}
+					}
+				}
+			}
+			this.parentFlow.o.unlock(true);
+			this.parentFlow.o.updateChildObjects();
+			this.parentFlow.unselectAll();
+			]]>
+		</method>
+	</BaseFlowConnector>
+
+	<!--- @keywords private -->
+	<BaseFlowConnector classDefinition="true" definitionName="cmc/marketing/WebActivityFlowConnector" package="cmc/marketing">
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!--- @keywords private -->
+		<method args="dragSources" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (!enabled) {
+				return false;
+			}
+			else {
+				var parentFlowPath = FlowUtils.Singleton.getParentFlowPath(this);
+				if (parentFlowPath) {
+					var hasExperiment = this.parentFlow && this.parentFlow.o && this.parentFlow.o.getPropertyValue("experimentType") == "Experiment";
+					var creatingExperiment = false;
+					if ((dragSources.length == 1) && dragSources[0].dragObject.objectType && (dragSources[0].dragObject.objectType == "branch")) {
+						creatingExperiment = true;
+						if (hasExperiment) {
+							return false;
+						}
+					}
+					var parentFlowElement = this.getFlowElement();
+					var elements = FlowUtils.Singleton.getSortedElements(parentFlowPath.o);
+					if (parentFlowElement == null) {
+						if (creatingExperiment) {
+							return false;
+						}
+						if (elements.length > 0 && (parentFlowPath != this.parentFlow.flowPath)) {
+							var lastElement = elements[elements.length - 1];
+							if (lastElement.objectDefinition.elemTemplateType == "Trigger") {
+								return false;
+							}
+						}
+					}
+					if (parentFlowElement && parentFlowElement.o) {
+						if ((elements[0] == parentFlowElement.o) && this.parentFlow && (parentFlowPath == this.parentFlow.flowPath) && !creatingExperiment) {
+							return false;
+						}
+						if ((parentFlowElement.o.objectDefinition.elemTemplateType == "Trigger") && !creatingExperiment) {
+							return false;
+						}
+						if ((parentFlowElement.o.objectDefinition.objectType == "branch") && (dragSources[0].dragObject.objectType == "simpleBranch")) {
+							return false;
+						}
+					}
+					var movedBranch = null;
+					if (dragSources[0].flowElement) {
+						for (var i = 0; i < dragSources.length; i++) {
+							if (dragSources[i].flowElement.o && dragSources[i].flowElement.o.objectDefinition.elemTemplateType == "Branch") {
+								movedBranch = dragSources[i].flowElement;
+								break;
+							}
+						}
+					}
+					if (movedBranch) {
+						var ancestor = this;
+						while (ancestor != null && ancestor != RootComponent.Singleton) {
+							if (ancestor == movedBranch) {
+								return false;
+							}
+							ancestor = ancestor.parent;
+						}
+					}
+				}
+				return true;
+			}
+			]]>
+		</method>
+	</BaseFlowConnector>
+	
+	<!--- @keywords private -->
+	<BaseFlowConnector classDefinition="true" definitionName="cmc/marketing/DialogActivityFlowConnector" package="cmc/marketing">
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!--- @keywords private -->
+		<method args="dragSources" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (!enabled) {
+				return false;
+			}
+			else {
+				var parentFlowPath = FlowUtils.Singleton.getParentFlowPath(this);
+				if (parentFlowPath) {
+					var hasExperiment = this.parentFlow && this.parentFlow.o && this.parentFlow.o.getPropertyValue("experimentType") == "Experiment";
+					var creatingExperiment = false;
+					if ((dragSources.length == 1) && dragSources[0].dragObject.objectType && (dragSources[0].dragObject.objectType == "branch")) {
+						creatingExperiment = true;
+						if (hasExperiment) {
+							return false;
+						}
+					}
+					var parentFlowElement = this.getFlowElement();
+					if (parentFlowElement && parentFlowElement.o) {
+						if ((parentFlowElement.o.objectType == "branch") && (dragSources[0].dragObject.objectType == "simpleBranch")) {
+							return false;
+						}
+					}
+					var movedBranch = null;
+					if (dragSources[0].flowElement) {
+						for (var i = 0; i < dragSources.length; i++) {
+							if (dragSources[i].flowElement.o && dragSources[i].flowElement.o.objectDefinition.elemTemplateType == "Branch") {
+								movedBranch = dragSources[i].flowElement;
+								break;
+							}
+						}
+					}
+					if (movedBranch) {
+						var ancestor = this;
+						while (ancestor != null && ancestor != RootComponent.Singleton) {
+							if (ancestor == movedBranch) {
+								return false;
+							}
+							ancestor = ancestor.parent;
+						}
+					}
+				}
+				return true;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="sources" name="handleDroppedElements">
+			<![CDATA[
+			this.parentFlow.o.lock();
+			var parentPath = FlowUtils.Singleton.getParentFlowPath(this);
+			if (parentPath) {
+				var parentPathObj = parentPath.o;
+				var parentFlowElement = this.getFlowElement();
+				if ((parentFlowElement != null) && sources[0].flowElement) {
+					if (sources[0].flowElement.o == parentFlowElement.o) {
+						this.parentFlow.o.unlock(true);
+						this.parentFlow.o.updateChildObjects();
+						return;
+					}
+				}
+				for (var i = 0; i < sources.length; i++) {
+					var newObject = null;
+					var insertSequence;
+					if (parentFlowElement == null) {
+						insertSequence = FlowUtils.Singleton.getNextSequenceNumber(parentPathObj);
+					}
+					else {
+						insertSequence = FlowUtils.Singleton.getNextSequenceNumber(parentPathObj, parentFlowElement.o);
+					}
+					if (sources[i].flowElement) {
+						var moveObj = sources[i].flowElement.o;
+						newObject = parentPathObj.model.createNewObject(null, parentPathObj, true, moveObj);
+						newObject.setPropertyValue("sequence", null, insertSequence);
+						moveObj.deleteObject();
+					}
+					else {
+						var objectType = sources[i].dragObject.objectType;
+						var objectDef = parentPathObj.model.getObjectDefinition(parentPathObj, objectType);
+						var branchType = "";
+						if ((objectDef.elemTemplateType == "Branch") && (parentFlowElement != null)) {
+							this.parentFlow.unselectAll();
+							var parentFlowElementType = parentFlowElement.o.objectDefinition.elemTemplateType;
+							var siblings = parentPath.getChildren();
+							for (var i = 0; i < siblings.length; i++) {
+								if (siblings[i] == parentFlowElement) {
+									var j = i + 1;
+									while ((j < siblings.length) && (siblings[j].o.objectDefinition.elemTemplateType == parentFlowElementType)) {
+										siblings[j].select();
+										j++;
+									}
+									break;
+								}
+							}
+							parentFlowElement.select();
+							parentFlowElement.addElementsToBranch(branchType, objectType);
+						}
+						else {
+							newObject = parentPathObj.model.createNewObject(objectDef, parentPathObj);
+							newObject.setPropertyValue("sequence", null, insertSequence);
+							if (objectDef.elemTemplateType == "Branch") {
+								var pathObjectDefinition = newObject.model.getObjectDefinition(newObject, parentPathObj.objectType);
+								insertSequence = FlowUtils.Singleton.getNextSequenceNumber(newObject);
+								var topFlowObj = newObject.model.createNewObject(pathObjectDefinition, newObject);
+								topFlowObj.setPropertyValue("sequence", null, insertSequence);
+								insertSequence = FlowUtils.Singleton.getNextSequenceNumber(newObject);
+								var botFlowObj = newObject.model.createNewObject(pathObjectDefinition, newObject);
+								botFlowObj.setPropertyValue("sequence", null, insertSequence);
+								newObject.updateChildObjects();
+								topFlowObj.updateChildObjects();
+								botFlowObj.updateChildObjects();
+							}
+						}
+					}
+				}
+			}
+			this.parentFlow.o.unlock(true);
+			this.parentFlow.o.updateChildObjects();
+			this.parentFlow.unselectAll();
+			]]>
+		</method>
+	</BaseFlowConnector>
+</Definitions>

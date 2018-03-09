@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","da",{options:"Tilpasning af humørikon",title:"Humørikoner",toolbar:"Indsæt humørikon"});

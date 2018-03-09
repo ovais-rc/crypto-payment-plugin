@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		File upload utility. This node contains methods to launch the browse file dialog.
+	-->
+	<Node definitionName="cmc/foundation/FileUploadUtil" singletonDefinition="true">
+		<dependency localName="on" moduleName="dojo/on"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="lang" moduleName="dojo/_base/lang"/>
+		
+		
+		<!---
+			@keywords private
+			Event that notifies listeners that a file has been selected.
+		 -->
+		
+		
+		<!---
+			@keywords private
+			Event that notifies listeners that the browse dialog has been canceled.
+		 -->
+		
+				
+		<!---
+			@keywords private
+			The view to which focus will be returned after the browse dialog is closed. If it is not specified then focus will return to the view that was 
+			in focus before the browse dialog was launched.
+		-->
+		<variable name="restoreView" value="${null}"/>
+		
+		<!---
+			@keywords private
+			The maximum allowable file size in bytes.
+		-->
+		<variable name="maxSize" type="number" value="${null}"/>		
+		
+		<!--- 
+			@keywords private 
+			
+			This method will pop up the Browse for file Dialog and allow the user to select a file for upload. 
+ 
+			@param fileTypes An array of the {@link cmc/foundation/FileTypes} that can be selected.
+			@param maximumSize The maximum size permitted for an uploaded file. 
+		-->
+		<method args="fileTypes, maximumSize" name="browseForFile">
+			<![CDATA[
+			if (typeof(fileTypes) == "undefined") fileTypes = null;
+			if (typeof(maximumSize) == "undefined") maximumSize = 1000000;
+			this.restoreView = FocusUtil.getFocus();
+			var fileSelector = this.fileSelector;
+			if (!fileSelector) {
+				fileSelector = document.createElement("input");
+				this.fileSelector = fileSelector;
+				fileSelector.setAttribute("type", "file");
+				fileSelector.setAttribute("style", "display:none");
+				fileSelector.setAttribute("name", "UpLoadedFile");
+				document.body.appendChild(fileSelector);
+			}
+			if (fileSelector.onChangeHandler == null) {
+				fileSelector.onChangeHandler = on(fileSelector, "change", lang.hitch(this, function(event) {
+					this.handleSelect(event);
+				}));
+			}
+			this.maxSize = maximumSize;
+			fileSelector.click();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="fileTypes" name="buildFileTypeArray">
+			<![CDATA[
+			var fileTypeArray = new Array();
+			if (fileTypes != null) {
+				for (var i = 0; i < fileTypes.length; i++) {
+					var curTypeObject;
+					curTypeObject = new Object();
+					curTypeObject.description = fileTypes[i].description;
+					curTypeObject.extension = fileTypes[i].extension;
+					if (fileTypes[i].macTypes != null) {
+						curTypeObject.macTypes = fileTypes[i].macTypes;
+					}
+					fileTypeArray.push(curTypeObject);
+				}
+			}
+			if (fileTypeArray.length == 0) {
+				fileTypeArray = null;
+			}
+			return fileTypeArray;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private 
+			This method is a handler for the ActionScript onSelect event. It will also send a {@link cmc/foundation/FileUploadUtil#onfileSelected} event. 
+		-->
+		<method args="fr" name="onSelect">
+			<![CDATA[
+			var fileSelector = fr;
+			var fr = fr.files[0];
+			this.release(fileSelector);
+			if (fr.size == 0) {
+				if (this.restoreView != null) {
+					var caller = this;
+					require(["cmc/foundation/FileEmptyDialog"], function(FileEmptyDialog) {
+						FileEmptyDialog.Singleton.setVariable("restoreFocusView", caller.restoreView);
+					});
+				}
+				require(["cmc/foundation/FileEmptyDialog"], function(FileEmptyDialog) {
+					FileEmptyDialog.Singleton.openFileEmptyDialog(fr.name);
+				});
+				EventUtil.trigger(this, "onfileCanceled");
+			}
+			else if (this.maxSize < fr.size) {
+				if (this.restoreView != null) {
+					var caller = this;
+					require(["cmc/foundation/FileTooLargeDialog"], function(FileTooLargeDialog) {
+						FileTooLargeDialog.Singleton.setVariable("restoreFocusView", caller.restoreView);
+					});
+				}
+				var caller = this;
+				require(["cmc/foundation/FileTooLargeDialog"], function(FileTooLargeDialog) {
+					FileTooLargeDialog.Singleton.openFileTooLargeDialog(fr.name, caller.maxSize);
+				});
+				EventUtil.trigger(this, "onfileCanceled");
+			}
+			else {
+				EventUtil.trigger(this, "onfileSelected", fr);
+			}
+			]]>
+		</method> 
+		<!---
+			@keywords private
+			This method is a handler for the ActionScript handleSelect event in Action Script 3.
+		-->
+		<method args="event" name="handleSelect">
+			<![CDATA[
+			this.onSelect(event.target);
+			]]>
+		</method> 
+		
+		<!---
+			@keywords private
+			This method is a handler for the ActionScript onCancel event.
+		-->
+		<method args="fr" name="onCancel">
+			<![CDATA[
+			this.release(fr);
+			EventUtil.trigger(this, "onfileCanceled");
+			]]>
+		</method> 
+		<!---
+			@keywords private
+			This method is a handler for the ActionScript handleCancel event in Action Script 3.
+		-->
+		<method args="event" name="handleCancel">
+			<![CDATA[
+			this.onCancel(event.target);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private			
+		-->
+		<method args="fr" name="release">
+			<![CDATA[
+			if (fr.onChangeHandler) {
+				fr.onChangeHandler.remove();
+				fr.onChangeHandler = null;
+				fr.value = '';
+			}
+			if (this.restoreView != null) {
+				FocusUtil.setFocus(this.restoreView);
+			}
+			this.restoreView = null;
+			]]>
+		</method>
+		<!---
+			@keywords private
+			A view to make modal when the browse dialog is up.   
+		-->
+		<Component name="modalView" visible="false"/>				
+	</Node>
+</Definitions>

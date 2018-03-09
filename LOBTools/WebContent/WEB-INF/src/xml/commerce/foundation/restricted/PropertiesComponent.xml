@@ -1,0 +1,2337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class defines the base class for a component of a properties view. All of the
+		editors available for use within a properties view must extend this class. Using this class
+		will ensure that the properties component meets the layout requirements of {@link cmc/foundation/ObjectProperties} and
+		that the prompt text is positioned correctly.
+		This class will also handle binding this view to the right instance of {@link cmc/foundation/ModelObject}.
+		An instance of cmc/foundation/PropertiesComponent can be instantiated as a child of {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.
+		
+		<p>A single instance of {@link cmc/foundation/EnablementCondition} can be declared as the child of an instance of cmc/foundation/PropertiesComponent. If the enablement condition
+		evaluates to "true", then the component will be enabled. If the enablement condition evaluates to "false", then the component will be disabled.
+
+		<p>Do not extend this class directly if the properties component you are creating is a property editor for a single {@link cmc/foundation/ModelProperty}.
+		Instead use {@link cmc/foundation/PropertyEditor}.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/PropertiesComponent">
+		<dependency localName="FocusableComponent" moduleName="cmc/foundation/FocusableComponent"/>
+		<dependency localName="PropertiesComponentExtendedHelpIcon" moduleName="cmc/foundation/PropertiesComponentExtendedHelpIcon"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ObjectPropertiesUtil" moduleName="cmc/foundation/ObjectPropertiesUtil"/>
+		<dependency localName="PropertiesComponentClone" moduleName="cmc/foundation/PropertiesComponentClone"/>
+		<dependency localName="PropertiesComponentPrompt" moduleName="cmc/foundation/PropertiesComponentPrompt"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="DrawComponent" moduleName="cmc/foundation/DrawComponent"/>
+		<!---
+			@keywords private
+			Reference to the {@link cmc/foundation/ModelObject} instance. This is found by calling {@link cmc/foundation/ModelUtil#findModelForView} and
+			passing in this as the parameter.
+		-->
+		<variable name="model" value="${ModelUtil.Singleton.findModelForView(this)}"/>
+		<!---
+			@keywords private
+			This attribute hold a reference to the nearest ancestor view that defines a model object. This attribute value is found
+			by invoking {@link cmc/foundation/ModelUtil#findObjectView} with this as the parameter.
+		-->
+		<variable name="oView"/>
+		<!---
+			The name of the component object for this properties component. You
+			can specify a named component object for properties components if you
+			want the properties component to be dependent on another properties component.
+			All named component objects must be declared in the
+			{@link cmc/foundation/ObjectProperties#componentObjectNames} attribute of the containing
+			properties view.
+		-->
+		<variable name="componentObjectName" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the ancestor view for this. This attribute value is found by calling
+			{@link cmc/foundation/PanelManager#findPanel}.
+		-->
+		<variable name="panel" value="${PanelManager.Singleton.findPanel(this)}"/>
+		<!---
+			This attribute is an object path to use when looking up the {@link cmc/foundation/ModelObject} that this class binds to.
+			If this value is not provided, the class will bind to {@link cmc/foundation/PropertiesComponent#o}.
+			Otherwise it will bind to the object returned when this attribute is resolved relative to
+			{@link cmc/foundation/PropertiesComponent#o}.
+						
+			The default value for this attribute is null.
+		-->
+		<variable name="objectPath" type="string" value="${null}"/>
+		<!---
+			Indicates that this value is derived from the parent object. The parent object is the
+			closest primary object in the current object's hierarchy.
+			
+			For example, if <code>name="MyPropertyName"</code>,
+			<code>propertyName="a"</code>, and <code>parentProperty="true"</code>, then
+			this resolver will return the parent object's value of the property named
+			<code>a</code>. The default is "false".
+		-->
+		<variable name="parentProperty" type="boolean" value="false"/>
+		<!---
+			Qualifies the search for the parent object to those primary objects with the
+			specified object type or object group.  Used only when the <code>parentProperty="true"</code>.
+		-->
+		<variable name="parentType" type="string" value="${null}"/>
+		<!---
+			This attribute holds a reference to the instance of {@link cmc/foundation/ModelObject} that is being modified by the
+			properties view that contains this properties view component. It declares {@link cmc/foundation/PropertiesComponent#setModelObject}
+			as a setter for this attribute.
+			@type cmc/foundation/ModelObject
+		-->
+		<variable name="o"/>
+		<!---
+			This attribute indicates that this properties view component is required. The default value for this attribute is "false".
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			This attribute holds a string to use as the prompt text for this properties view component. The default value of this
+			attribute is null.
+		-->
+		<variable name="promptText" type="string" value="${null}"/>
+		<!---
+			This attribute is used to specify the color of the prompt text. The default value of this attribute is "0x000000". 
+		 -->
+		<variable name="promptColor" type="string" value="#464646"/>
+		<!---
+			This attribute is used to specify the font style of the prompt text. Valid values include "plain", "bold", "italic" or "bolditalic".
+			The default value of this attribute is "plain".
+		  -->
+		<variable name="promptFontStyle" type="string" value="plain"/>
+		<!---
+			This attribute indicates that this properties view component should have the currently selected store name appended
+			next to it's {@link cmc/foundation/PropertiesComponent#promptText}. The default value for this attribute is "false".
+		-->
+		<variable name="displayStoreName" type="boolean" value="false"/>
+		<!---
+			This attribute indicates that this properties view component should have the store name of the store that owns the primary
+			object appended to it's {@link cmc/foundation/PropertiesComponent#promptText}. The default value for this attribute is "false".
+		-->
+		<variable name="displayObjectStoreName" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the this view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			This attribute indicates to the layout manager that this properties view component should
+			be resized horizontally to consume all of the available area. The default value of this attribute is "false".
+		-->
+		<variable name="sizeToAvailableWidth" type="boolean" value="false"/>
+		<!---
+			This attribute indicates the minimum width of the editor to be retained by the layout manager,
+			if sizeToAvailableWidth is true. The default value for this attribute is 230.
+		-->
+		<variable name="minWidth" type="number" value="230"/>
+		<!---
+			This attribute provides the help text for this properties view component. The helpText will be used for creating tooltips.
+			The default value of this attribute is the empty string.
+		-->
+		<variable name="helpText" type="string" value=""/>
+		<!---
+			This attribute provides the extended help text for this properties view component. The extendedHelpText will be used for
+			creating tooltips. The default value of this attribute is the empty string.
+			
+			@see cmc/foundation/ExtendedHelpIcon#extendedHelpText.
+		-->
+		<variable name="extendedHelpText" type="string" value=""/>
+		<!---
+			This attribute provides the help link text for this properties view component. The helpLinkText will be used for creating
+			tooltips. The default value of this attribute is the empty string.
+			
+			@see cmc/foundation/ExtendedHelpIcon#helpLinkText.
+		-->
+		<variable name="helpLinkText" type="string" value=""/>
+		<!---
+			This attribute provides the help link URL for this properties view component. The helpLinkURL will be used for creating
+			tooltips. The default value of this attribute is the empty string.
+			
+			@see cmc/foundation/ExtendedHelpIcon#helpLinkURL.
+		-->
+		<variable name="helpLinkURL" type="string" value=""/>
+		<!---
+			@keywords private
+			This attribute holds the list of siblings created for this language sensitive property component.
+		-->
+		<variable name="languageSiblings" value="${[]}"/>
+		<!---
+			@keywords private
+			This attribute holds the list of siblings created for this language sensitive property component that are pooled.
+		-->
+		<variable name="languageSiblingsPool" value="${[]}"/>
+		<!---
+			@keywords private
+			The language associated with this language sensitive property. This is an instance of {@link cmc/foundation/StoreLanguage}.
+		-->
+		<variable name="language" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute holds the new prompt string after adding language sensitive information to {@link cmc/foundation/PropertiesComponent#promptText}.
+			This prompt string is what is displayed in the UI.
+		-->
+		<variable name="newPrompt" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute holds the total width of the left column which contains the prompt and help link. It is bound to the parent's
+			value of promptWidth, but if that is not defined it will default to 164.
+		-->
+		<variable name="promptWidth" type="number" value="${(typeof (this.parent.promptWidth) != 'undefined') ? this.parent.promptWidth : 164}"/>
+		<!---
+			@keywords private
+			This attribute indicates the prompt location. Valid values are "left" and "above". It is bound to the parent's value of promptLocation,
+			but if that is not defined it will default to "left".
+		-->
+		<variable name="promptLocation" type="string" value="${(typeof (this.parent.promptLocation) != 'undefined') ? this.parent.promptLocation : 'left'}"/>
+		<!---
+			@keywords private
+			This attribute indicates the spacing along x axis between the columns. It will inherit the value of xspacing from the parent
+			view, but if that is not defined the value will default to 6.
+		-->
+		<variable name="xspacing" type="number" value="${(typeof (this.immediateParent.xspacing) != 'undefined') ? this.immediateParent.xspacing : 6}"/>
+		<!---
+			@keywords private
+			This attribute specifies whether keyboard focus will be received by this property component. The default value is "false".
+		-->
+		<variable name="focusable" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the resolved {@link cmc/foundation/ObjectDefinition} for this properties component.
+		-->
+		<variable name="objectDefinition"/>
+		<!---
+			@keywords private
+			This attribute inidicates that initialization should be defered until explicity invoked.
+		-->
+		<variable name="initstage" value="defer"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the closest invisible ancestor view when this view is constructed.
+		-->
+		<variable name="visibilityView"/>		
+		<!---
+			@keywords private
+			This attribute is true when the editor is currently on focus and can have validation errors. It is updated by
+			{@link cmc/foundation/PropertiesComponent#updateActiveForError} and should not be changed directly.
+		 -->		
+		<variable name="activeForError" type="boolean" value="false"/>
+		
+		<!---
+			A comma separated string of {@link cmc/foundation/Validator#validatorType} values.
+			When there is a validator error in the {@link cmc/foundation/PropertiesComponent#o model object associated with this editor}
+			this editor will check which {@link cmc/foundation/Validator} it was created by. The error will be displayed in this editor only
+			if the error is created by a validator whose {@link cmc/foundation/Validator#validatorType} appears in the list.
+		-->
+		<variable name="validatorTypes" type="string" value=""/>
+		
+		<!---
+			Indicates that when this properties component is displayed, there will be a visual indication that it is
+			contained within its own group. This can be used instead of wrapping the properties component within an instance
+			of {@link cmc/foundation/PropertyGroup}.
+		 -->
+		<variable name="displayGrouping" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private 
+			This attribute indicates that this properties view component is a clone. The default value for this attribute is "false".
+		-->
+		<variable name="isClone" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.updateModelObjectDel = new EventHandler.Class(this, "updateModelObject");
+			this.updateModelObjectInvisibleAncestorDel = new EventHandler.Class(this, "updateModelObject");
+			this.updateEnablementDel = new EventHandler.Class(this, "updateEnablement");
+			this.updateChildrenEnablementDel = new EventHandler.Class(this, "updateChildrenEnablement");
+			this.updateChildrenEnablementDel.connect(this, "onenabled");
+			this.languageDel = new EventHandler.Class(this, "checkInputLanguages");
+			this.updateNewPromptTextDel = new EventHandler.Class(this, "updateNewPromptText");
+			this.updateValidationErrorDel = new EventHandler.Class(this, "updateValidationError");
+			this.forceInstantiationDel = new EventHandler.Class(this, "forceInstantiation");
+			this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+			this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayoutHandler");
+			if (this.visibilityView != null) {
+				this.forceInstantiationDel.connect(this.visibilityView, "onvisible");
+			}
+			else {
+				this.initstage = null;
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="getComponentObjectName">
+			<![CDATA[
+			return this.componentObjectName == null ? "o" : "o_" + this.componentObjectName;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="force" name="forceInstantiation">
+			<![CDATA[
+			if (typeof(force) == "undefined") force = null;
+			if (force == "force") {
+				this._forcingInstantiation = true;
+				this.forceInstantiationDel.disconnectAll();
+				FocusableComponent.Class.prototype.completeInstantiation.call(this);
+				if (this.o == null) {
+					this.updateModelObject();
+				}
+				DefinitionUtil.completeCreateDefinitionChildren(this);
+				this.triggerCreateViews();
+				this.updateEnablement();
+				this._forcingInstantiation = false;
+			}
+			else {
+				this.completeInstantiation();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="completeInstantiation">
+			<![CDATA[
+			if (this.visibilityView == null || this.visibilityView.visible) {
+				this.forceInstantiationDel.disconnectAll();
+				this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+				if (this.visibilityView != null) {
+					this.forceInstantiationDel.connect(this.visibilityView, "onvisible");
+				}
+				else {
+					this.inherited(arguments);
+					DefinitionUtil.completeCreateDefinitionChildren(this);
+					this.triggerCreateViews();
+					this.updateEnablement();
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.oView = ModelUtil.Singleton.findObjectView(this.parent, this.getComponentObjectName());
+			this.updateModelObject();
+			if (this.visibilityView == null) {
+				this.triggerCreateViews();
+			}
+			this.checkFocusDel = new EventHandler.Class(this, "checkFocus");
+			this.checkFocusDel.connect(FocusUtil, "onfocus");
+			]]>
+		</method>	
+
+		<!--- @keywords private -->
+		<method name="triggerCreateViews">
+			<![CDATA[
+			if (!this._viewsCreated) {
+				this._viewsCreated = true;
+				this.createViewsDel = new EventHandler.Class(this, "createViews");
+				CallbackUtil.Singleton.addDeferredCallback(this.createViewsDel, {}, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method checks the focus for the current editor and scrolls if necessary
+		-->		
+		<method args="e" name="checkFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!ViewUtil.Singleton.mouseDown && ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				this.panel.show(this);
+			}
+			else if (this.panel.currentShowView == this) {
+				this.panel.currentShowView = null;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.forceInstantiationDel.disconnectAll();
+			delete this.forceInstantiationDel;
+			this.updateChildrenEnablementDel.disconnectAll();
+			delete this.updateChildrenEnablementDel;
+			this.checkFocusDel.disconnectAll();
+			delete this.checkFocusDel;
+			this.updateEnablementDel.disconnectAll();
+			delete this.updateEnablementDel;
+			if (this.createViewsDel) {
+				CallbackUtil.Singleton.cancelCallback(this.createViewsDel);
+				delete this.createViewsDel;
+			}
+			if (this.languageDel) {
+				this.languageDel.disconnectAll();
+				delete this.languageDel;
+			}
+			this.updateNewPromptTextDel.disconnectAll();
+			delete this.updateNewPromptTextDel;
+			delete this.languageSiblings;
+			this.updateModelObjectDel.disconnectAll();
+			delete this.updateModelObjectDel;
+			this.updateModelObjectInvisibleAncestorDel.disconnectAll();
+			delete this.updateModelObjectInvisibleAncestorDel;
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.updateValidationErrorDel.disconnectAll();
+			delete this.updateValidationErrorDel;
+			if (this.updateErrorDisplayDel) {
+				this.updateErrorDisplayDel.disconnectAll();
+				delete this.updateErrorDisplayDel;
+			}
+			if (this.updateActiveForErrorDel) {
+				this.updateActiveForErrorDel.disconnectAll();
+				delete this.updateActiveForErrorDel;
+			}
+			if (this.errorDecoratorDel) {
+				this.errorDecoratorDel.disconnectAll();
+				delete this.errorDecoratorDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method updates the model object.
+		-->
+		<method args="e" name="updateModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateModelObjectDel.disconnectAll();
+			this.updateModelObjectDel.connect(this.oView, "on" + this.getComponentObjectName());
+			var newObject = null;
+			var invisibleAncestor = ViewUtil.Singleton.getInvisibleAncestor(this);
+			this.updateModelObjectInvisibleAncestorDel.disconnectAll();
+			if (invisibleAncestor != null && !this._forcingInstantiation) {
+				this.updateModelObjectInvisibleAncestorDel.connect(invisibleAncestor, "onvisible");
+			}
+			else {
+				newObject = this.oView[this.getComponentObjectName()];
+			}
+			var descendant = null;
+			if (newObject != null && this.parentProperty) {
+				descendant = newObject;
+				newObject = newObject.getParentPrimaryObject(this.parentType, this.updateModelObjectDel);
+			}
+			if (newObject != null) {
+				if (this.objectPath) {
+					this.objectDefinition = this.model.getObjectDefinition(newObject, this.objectPath);
+					if (this.objectDefinition == null) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "WARNING", "cmc/foundation/PropertiesComponent", "updateModelObject", "No object definition found for object path: " + this.objectPath);
+					}
+					if (this.objectDefinition != null && this.objectDefinition.languageSensitive) {
+						var storeConfig = ContextUtil.Singleton.findStoreConfig(newObject);
+						if ((storeConfig != null) && !this.isClone) {
+							this.language = storeConfig.getDefaultLanguage();
+						}
+						if (this.language != null) {
+							var languageObjectPath = this.objectPath + "[languageId=" + this.language.languageId + "]";
+							newObject = newObject.getObject(languageObjectPath, true, descendant, this.updateModelObjectDel);
+						}
+					}
+					else {
+						if (this.objectDefinition != null) {
+							newObject = newObject.getObject(this.objectPath, this.objectDefinition.singleInstance, descendant, this.updateModelObjectDel);
+						}
+						else {
+							newObject = newObject.getObject(this.objectPath, false, descendant, this.updateModelObjectDel);
+						}
+					}
+				}
+				else {
+					this.objectDefinition = newObject.objectDefinition;
+				}
+			}
+			this.setVariable("o", newObject);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method sets the model object for this view to the specified object.
+			@param cmc/foundation/ModelObject newObject The new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/PropertiesComponent", "setModelObject(newObject)", [newObject]);
+			}
+			if (this.o !== newObject) {
+				if (this.o != null) {
+					this.o.unregisterObjectView(this);
+				}
+				this.updateEnablementDel.disconnectAll();
+				this.languageDel.disconnectAll();
+				this.releaseModelObjectDel.disconnectAll();
+				this.updateValidationErrorDel.disconnectAll();
+				this.o = newObject;
+				if (this.editor) {
+					this.editor.setVariable("o", this.o);
+				}
+				if (this.o != null) {
+					this.o.registerObjectView(this);
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					this.updateNewPromptText();
+					if (this.isLanguageSensitive()) {
+						ContextUtil.Singleton.findContextValue(this.o, "inputLanguageIds", this.languageDel);
+						this.checkInputLanguages();
+					}
+					this.updateValidationErrorDel.connect(this.o, "onvalidationErrors");
+					this.updateValidationError();
+				}
+				else {
+					this.updateNewPromptText();
+					if (this.isLanguageSensitive()) {
+						ContextUtil.Singleton.findContextValue(this.model.oEditor, "inputLanguageIds", this.languageDel);
+					}
+				}
+				this.updateEnablement();
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/PropertiesComponent", "setModelObject(newObject)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns true if this properties component is language sensitive.
+			
+			@return boolean This method returns true if this properties component is language sensitive, and false otherwise.
+		-->
+		<method name="isLanguageSensitive">
+			<![CDATA[
+			return this.language != null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the model object, setting {@link cmc/foundation/ObjectProperties#o} to null.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method checks the supported and selected language that the	{@link cmc/foundation/BusinessObjectEditor}
+			of {@link cmc/foundation/PropertiesComponent#model} supports and replicates the properties component for each supported language.
+		-->
+		<method args="e" name="checkInputLanguages">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var change = false;
+			var context = null;
+			if (this.o != null) {
+				context = ContextUtil.Singleton.findContext(this.o);
+			}
+			var storeConfig = context != null ? context.storeConfig : null;
+			var inputLanguages = [];
+			if (storeConfig != null) {
+				inputLanguages = storeConfig.getLanguagesById(context.getContextValue("inputLanguageIds").value);
+			}
+			var languageSiblingsToPool = [];
+			for (var i = 0; i < this.languageSiblings.length; i++) {
+				var sibling = this.languageSiblings[i];
+				if (storeConfig == null || inputLanguages.indexOf(sibling.language) == 0 || inputLanguages.indexOf(sibling.language) == -1) {
+					languageSiblingsToPool.push(sibling);
+				}
+			}
+			for (var i = 0; i < languageSiblingsToPool.length; i++) {
+				this.poolLanguageClone(languageSiblingsToPool[i]);
+				change = true;
+			}
+			for (var i = 1; i < inputLanguages.length; i++) {
+				var inputLanguage = inputLanguages[i];
+				if (this.getPropertiesComponentIndex(inputLanguage.languageId) == -1) {
+					this.languageClone(inputLanguage);
+					change = true;
+				}
+			}
+			if (change) {
+				if (this.immediateParent.layout) {
+					this.immediateParent.layout.lock();
+				}
+				for (var i = 0; i < this.languageSiblings.length; i++) {
+					var lastSibling = null;
+					if (i == 0) {
+						lastSibling = this;
+					}
+					else {
+						lastSibling = this.languageSiblings[i - 1];
+					}
+					var sibling = this.languageSiblings[i];
+					var oldPos = this.immediateParent.childComponents.indexOf(sibling);
+					var newPos = this.immediateParent.childComponents.indexOf(lastSibling) + 1;
+					if (oldPos != newPos && oldPos > -1 && newPos > 0) {
+						this.immediateParent.childComponents.splice(oldPos, 1);
+						this.immediateParent.childComponents.splice(newPos, 0, sibling);
+						if (this.immediateParent.layout) {
+							this.immediateParent.layout.setLayoutOrder(lastSibling, sibling);
+						}
+						var nextSubView = this.immediateParent.childComponents[newPos + 1];
+						if (typeof (nextSubView) != "undefined" && this.immediateParent.layout) {
+							this.immediateParent.layout.setLayoutOrder(sibling, nextSubView);
+						}
+					}
+					oldPos = this.immediateParent.childNodes.indexOf(sibling);
+					newPos = this.immediateParent.childNodes.indexOf(lastSibling) + 1;
+					if (oldPos != newPos) {
+						this.immediateParent.childNodes.splice(oldPos, 1);
+						this.immediateParent.childNodes.splice(newPos, 0, sibling);
+					}
+				}
+				if (this.immediateParent.layout) {
+					this.immediateParent.layout.unlock();
+					this.immediateParent.layout.update();
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method takes a language id as an input and returns the index of the cmc/foundation/PropertiesComponent in
+			{@link cmc/foundation/PropertiesComponent#languageSiblings} for that language.	
+			@param string languageId The language id whose index to return.
+			@return number The index of the cmc/foundation/PropertiesCompoenent in {@link cmc/foundation/PropertiesComponent#languageSiblings}, or -1 if that
+						   languageId was not found.
+		-->
+		<method args="languageId" name="getPropertiesComponentIndex">
+			<![CDATA[
+			for (var i = 0; i < this.languageSiblings.length; i++) {
+				var sibling = this.languageSiblings[i];
+				if (sibling.language.languageId == languageId) {
+					return i;
+				}
+			}
+			return -1;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns a {@link cmc/foundation/PropertiesComponentClone} for the given {@link cmc/foundation/StoreLanguage}.
+			This method is called by {@link cmc/foundation/PropertiesComponent#checkInputLanguages}.
+			
+			@param cloneLanguage The cmc/foundation/StoreLanguage for the new instance of cmc/foundation/PropertiesComponentClone.
+		-->
+		<method args="cloneLanguage" name="languageClone">
+			<![CDATA[
+			var propertiesComponentClone = null;
+			if (this.languageSiblingsPool.length > 0) {
+				propertiesComponentClone = this.languageSiblingsPool.pop();
+				propertiesComponentClone.setVariable("language", cloneLanguage);
+				propertiesComponentClone.setVariable("visible", true);
+				propertiesComponentClone.updateModelObject();
+			}
+			else {
+				propertiesComponentClone = this.createLanguageClone(cloneLanguage);
+			}
+			this.languageSiblings.push(propertiesComponentClone);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method creates a {@link cmc/foundation/PropertiesComponentClone} for the given {@link cmc/foundation/StoreLanguage}.
+			This method is called by {@link cmc/foundation/PropertiesComponent#languageClone}.
+			
+			@param cloneLanguage The cmc/foundation/StoreLanguage for the new instance of cmc/foundation/PropertiesComponentClone.
+		-->
+		<method args="cloneLanguage" name="createLanguageClone">
+			<![CDATA[
+			return new PropertiesComponentClone.Class(this.parent, {
+				originalPropertiesComponent: this,
+				enablementCondition: this.enablementCondition,
+				language: cloneLanguage
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method pools the given sibling {@link cmc/foundation/PropertiesComponentClone}
+			@param propertiesComponentClone A sibling instance of cmc/foundation/PropertiesComponentClone that will be pooled
+		-->
+		<method args="propertiesComponentClone" name="poolLanguageClone">
+			<![CDATA[
+			var i = this.languageSiblings.indexOf(propertiesComponentClone);
+			this.languageSiblings.splice(i, 1);
+			this.languageSiblingsPool.push(propertiesComponentClone);
+			propertiesComponentClone.updateModelObjectDel.disconnectAll();
+			propertiesComponentClone.updateModelObjectInvisibleAncestorDel.disconnectAll();
+			propertiesComponentClone.setVariable("visible", false);
+			propertiesComponentClone.setVariable("language", null);
+			propertiesComponentClone.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates {@link cmc/foundation/PropertiesComponent#newPrompt}, appending the current store name if the
+			{@link cmc/foundation/PropertiesComponent#displayStoreName} flag is set to true.
+			This method updates {@link cmc/foundation/PropertiesComponent#newPrompt}, appending the store name of the store that owns the
+			object being edited if the {@link cmc/foundation/PropertiesComponent#displayObjectStoreName} flag is set to true.
+			This method updates {@link cmc/foundation/PropertiesComponent#newPrompt}, appending {@link cmc/foundation/StoreLanguage#languageDescription}
+			to it if {@link cmc/foundation/PropertiesComponent#language} is not null. Otherwise {@link cmc/foundation/PropertiesComponent#newPrompt} will
+			be the same as {@link cmc/foundation/PropertiesComponent#promptText}, or an empty string if {@link cmc/foundation/PropertiesComponent#promptText}
+			is undefined.
+		-->
+		<method args="e" name="updateNewPromptText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateNewPromptTextDel.disconnectAll();
+			var storeName = "";
+			var store = null;
+			if (this.o) {
+				if (this.displayObjectStoreName) {
+					var objectStoreId = "";
+					if (this.o.objectStoreId != "") {
+						objectStoreId = this.o.objectStoreId;
+					}
+					else if (this.o.parentPrimaryObject != null) {
+						objectStoreId = this.o.parentPrimaryObject.objectStoreId;
+					}
+					if (objectStoreId != "") {
+						store = StoreUtil.Singleton.storeMap[objectStoreId];
+						if (store == null) {
+							this.updateNewPromptTextDel.connect(StoreUtil.Singleton, "storeLoaded");
+						}
+						else {
+							storeName = store.displayName;
+						}
+					}
+				}
+				else if (this.displayStoreName) {
+					var storeConfig = ContextUtil.Singleton.findStoreConfig(this.o, this.updateNewPromptTextDel);
+					if (storeConfig != null) {
+						storeName = storeConfig.storeName;
+					}
+				}
+			}
+			if (this.language != null) {
+				if (storeName != "") {
+					this.setVariable("newPrompt", (this.promptText) ? (this.promptText + " (" + storeName + ") - (" + this.language.languageDescription + ")") : "");
+				}
+				else {
+					this.setVariable("newPrompt", (this.promptText) ? (this.promptText + " (" + this.language.languageDescription + ")") : "");
+				}
+				this.updateNewPromptTextDel.connect(this.language, "onlanguageDescription");
+			}
+			else {
+				if (storeName != "") {
+					this.setVariable("newPrompt", (this.promptText) ? (this.promptText + " (" + storeName + ")") : "");
+				}
+				else {
+					this.setVariable("newPrompt", (this.promptText) ? this.promptText : "");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler updates {@link cmc/foundation/PropertiesComponent#newPrompt} by calling {@link cmc/foundation/PropertiesComponent#updateNewPromptText}
+			whenever {@link cmc/foundation/PropertiesComponent#promptText} changes.
+		-->
+		<handler name="onpromptText">
+			<![CDATA[
+			this.updateNewPromptText();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This method updates the enabled attribute based on the current value of the	enablement conditions and
+			whether {@link cmc/foundation/PropertiesComponent#o} is readonly.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateEnablementDel.disconnectAll();
+			if (this.enablementCondition) {
+				if (this.o) {
+					this.enablementCondition.registerDelegate(this.o, this.updateEnablementDel);
+				}
+			}
+			if (this.o) {
+				this.updateEnablementDel.connect(this.o, "onreadOnly");
+			}
+			var isEnabled = this.o != null && !this.o.readOnly;
+			if (isEnabled && this.enablementCondition) {
+				isEnabled = this.enablementCondition.isEnabled(this.o);
+			}
+			this.setVariable("enabled", isEnabled);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the enabled attribute of its subviews based on the current value
+			of enabled.
+		-->
+		<method args="e" name="updateChildrenEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.childComponents.length; i++) {
+				if (this.childComponents[i] && typeof (this.childComponents[i].enabled) != "undefined") {
+					if (this.childComponents[i].enabled != this.enabled) {
+						this.childComponents[i].setVariable("enabled", this.enabled);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method creates the child views for this properties component by calling the following methods:
+				<ul>
+					<li>{@link cmc/foundation/PropertiesComponent#createPrompt}</li>
+					<li>{@link cmc/foundation/PropertiesComponent#createEditor}</li>
+					<li>{@link cmc/foundation/PropertiesComponent#updateValidationError}</li>
+				</ul>			
+		-->
+		<method args="args" name="createViews">
+			<![CDATA[
+			if (typeof(args) == "undefined") args = null;
+			this.updateLayoutDel.disconnectAll();
+			this.createPrompt(this);
+			this.createEditor(this);
+			if (this.editor) {
+				EventUtil.trigger(this, "oneditor", this.editor);
+			}
+			this.updateLayout(this);
+			this.updateValidationError();
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			if (args && args.setFocusToErrorArgs) {
+				this.setFocusToError(args.setFocusToErrorArgs);
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method creates the editor for the given property component. This is an abstract method and must be implemented by classes that extend
+			cmc/foundation/PropertiesComponent.
+			
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component for the new editor view.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			This handler will recreate the prompt if the user changes their tooltip preference
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if ((preference == "CMCEnableExtendedHelp") && this.prompt) {
+				this.updateLayoutDel.disconnectAll();
+				this.createPrompt(this);
+				this.updateLayout(this);
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method creates the prompt for this properties component. This is a helper method that can be called by {@link cmc/foundation/PropertiesComponent#createViews}.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the prompt
+		-->
+		<method args="parentComponent" name="createPrompt">
+			<![CDATA[
+			var indent = 0;
+			if (!parentComponent.prompt) {
+				var promptArgs = {
+					name: "prompt",
+					fgcolor: parentComponent.promptColor,
+					fontstyle: parentComponent.promptFontStyle,
+					resize: true
+				};
+				if (parentComponent.promptLocation != "above") {
+					promptArgs.width = parentComponent.promptWidth;
+					promptArgs.multiline = true;
+					promptArgs.x = indent;
+				}
+				else {
+					promptArgs.x = parentComponent.xspacing;
+				}
+				new PropertiesComponentPrompt.Class(parentComponent, promptArgs);
+			}
+			if ((PreferenceManager.Singleton.getPreference("CMCEnableExtendedHelp") == "true") && ((parentComponent.helpText != null && parentComponent.helpText != "") || (parentComponent.extendedHelpText != null && parentComponent.extendedHelpText != ""))) {
+				if (!parentComponent.extendedHelpIcon) {
+					new PropertiesComponentExtendedHelpIcon.Class(parentComponent, {
+						name: "extendedHelpIcon",
+						x: indent + parentComponent.prompt.width,
+						propertiesComponent: parentComponent
+					});
+				}
+				else {
+					parentComponent.extendedHelpIcon.setVariable("visible", true);
+				}
+			}
+			else if (parentComponent.extendedHelpIcon) {
+				parentComponent.extendedHelpIcon.setVariable("visible", false);
+			}
+			if (parentComponent.extendedHelpIcon) {
+				parentComponent.extendedHelpIcon.setVariable('x', (parentComponent.prompt.x + parentComponent.prompt.width));
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the display of error messages on this properties component. This method will show or hide the {@link cmc/foundation/ErrorMessage} on the
+			properties component as appropriate.
+		 -->
+		<method args="e" name="updateErrorDisplay">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var validationError = this.getValidationError();
+			if (this.activeForError && validationError != null) {
+				var caller = this;
+				require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+					ErrorMessage.Singleton.setVariable("attachTarget", caller.editor);
+				});
+				require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+					ErrorMessage.Singleton.show(validationError);
+				});
+			}
+			else {
+				var caller = this;
+				require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+					ErrorMessage.Singleton.hide(caller.editor);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns an array of the {@link cmc/foundation/Validator#validatorType} that apply to this properties component.
+			@return Array This method returns an array of {@link cmc/foundation/Validator#validatorType} strings that apply to this properties component.
+				If there are no validators, it returns an empty array.
+		 -->
+		<method name="getValidatorTypeList">
+			<![CDATA[
+			if (!this.validatorTypes) {
+				return [];
+			}
+			return StringUtil.Singleton.splitAndTrim(this.validatorTypes, ",");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method looks at the validation errors on {@link cmc/foundation/PropertiesComponent#o}. It returns the first one that it identifies
+			as having been created by the validator that appears in {@link cmc/foundation/PropertiesComponent#validatorTypes}.			
+
+			The error is returned the form documented in {@link cmc/foundation/ModelObject#validationErrors}. If no error exists this
+			method returns null.
+			@param cmc/foundation/EventHandler del Optional delegate to register to any events that will affect this value.
+			
+			@return String A validation error for this properties component. If none exists this method returns null.
+		 -->
+		<method args="del" name="getValidationError">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			if (!this.o) {
+				return null;
+			}
+			var errors = this.o.getValidationErrorsByValidatorTypes(this.getValidatorTypeList());
+			if (del) {
+				del.connect(this.o, "onvalidationErrors");
+			}
+			if (errors.length > 0) {
+				return errors[0];
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method hides validation error messages on this properties component.
+		 -->
+		<method name="hideValidationError">
+			<![CDATA[
+			var caller = this;
+			require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+				ErrorMessage.Singleton.hide(caller.editor);
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the value of {@link cmc/foundation/PropertiesComponent#activeForError}. This attribute will be true when the following
+			conditions are met:
+			<ul>
+				<li>There is a value for {@link cmc/foundation/PropertiesComponent#editor}</li>
+				<li>The {@link cmc/foundation/PropertiesComponent#editor} is visible</li>
+				<li>The {@link cmc/foundation/PropertiesComponent#editor} is in focus</li>
+			</ul>
+		 -->
+		<method args="e" name="updateActiveForError">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("activeForError", !!this.editor && ViewUtil.Singleton.getInvisibleAncestor(this) == null && ViewUtil.Singleton.containsView(this.editor, FocusUtil.getFocus()));
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns v's sibling view that contains the given subview. Null will be returned if
+			no such view is found.
+			
+			@param cmc/foundation/Component v The view whose sibling view will be returned.
+			@param cmc/foundation/Component subview The view that is the child of the returned sibling view, or null if no such view exists.
+			@return cmc/foundation/Component The view that is a sibling of v and contains subview.
+		 -->
+		<method args="v, subview" name="getSiblingContainer">
+			<![CDATA[
+			var result = subview;
+			while (result != null && result.parent != v.parent && result != RootComponent.Singleton) {
+				result = result.parent;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateErrorDecorator">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.errorDecoratorDel.disconnectAll();
+			if (this.errorDecorator.visible) {
+				ViewUtil.Singleton.registerVisibilityDelegate(this, this.errorDecoratorDel);
+				this.errorDecoratorDel.connect(this, "onx");
+				this.errorDecoratorDel.connect(this, "ony");
+				this.errorDecoratorDel.connect(this.editor, "onwidth");
+				this.errorDecoratorDel.connect(this.editor, "onheight");
+				this.errorDecoratorDel.connect(this.editor, "onx");
+				this.errorDecoratorDel.connect(this.editor, "ony");
+				this.errorDecorator.clear();
+				this.errorDecorator.beginPath();
+				this.errorDecorator.strokeStyle = this.style.errorreminderbordercolor;
+				this.errorDecorator.lineWidth = this.style.errorreminderbordersize;
+				var startX = this.editor.getVariableRelative("x", this) - this.x - 1;
+				var startY = this.editor.getVariableRelative("y", this) - this.y - 1;
+				this.errorDecorator.moveTo(startX, startY);
+				this.errorDecorator.lineTo(startX + this.editor.width + 1, startY);
+				this.errorDecorator.stroke();
+				this.errorDecorator.lineTo(startX + this.editor.width + 1, startY + this.editor.height + 1);
+				this.errorDecorator.stroke();
+				this.errorDecorator.lineTo(startX, startY + this.editor.height + 1);
+				this.errorDecorator.stroke();
+				this.errorDecorator.lineTo(startX, startY);
+				this.errorDecorator.stroke();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="showErrorDecorator">
+			<![CDATA[
+			if (!this.errorDecorator) {
+				var decorator = new DrawComponent.Class(this, {
+					name: "errorDecorator"
+				});
+				this.errorDecorator.sendBehind(this.editor);
+				this.errorDecoratorDel = new EventHandler.Class(this, "updateErrorDecorator");
+				this.updateErrorDecorator();
+			}
+			else {
+				this.errorDecorator.setVariable("visible", true);
+				this.updateErrorDecorator();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method refreshes the display of the validation error.
+		 -->
+		<method args="e" name="updateValidationError">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.editor) {
+				if (this.getValidationError() != null) {
+					this.showErrorDecorator();
+					if (!this.updateActiveForErrorDel) {
+						this.updateActiveForErrorDel = new EventHandler.Class(this, "updateActiveForError");
+					}
+					this.updateActiveForErrorDel.disconnectAll();
+					ViewUtil.Singleton.registerVisibilityDelegate(this, this.updateActiveForErrorDel);
+					this.updateActiveForErrorDel.connect(FocusUtil, "onfocus");
+					this.updateActiveForErrorDel.connect(FocusUtil, "onblur");
+					this.updateActiveForError();
+					if (!this.updateErrorDisplayDel) {
+						this.updateErrorDisplayDel = new EventHandler.Class(this, "updateErrorDisplay");
+					}
+					this.updateErrorDisplayDel.connect(this, "onactiveForError");
+					this.updateErrorDisplay();
+				}
+				else {
+					if (this.errorDecorator) {
+						this.errorDecorator.setVariable("visible", false);
+					}
+					if (this.updateActiveForErrorDel) {
+						this.updateActiveForErrorDel.disconnectAll();
+					}
+					var caller = this;
+					require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+						ErrorMessage.Singleton.hide(caller.editor);
+					});
+				}
+			}
+			else {
+				if (this.updateErrorDisplayDel) {
+					this.updateErrorDisplayDel.disconnectAll();
+				}
+				if (this.updateActiveForErrorDel) {
+					this.updateActiveForErrorDel.disconnectAll();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the first error associated with this properties component for display at the top of the properties view.
+			@param cmc/foundation/EventHandler del A delegate to register to events that will change the first error.
+		-->
+		<method args="del" name="getFirstError">
+			<![CDATA[
+			return this.getValidationError(del);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This handler deals with changes in the width of the properties component, and updates the width of
+			{@link cmc/foundation/PropertiesComponent#editor} accordingly.
+		-->
+		<handler name="onwidth">
+			<![CDATA[
+			if (this.sizeToAvailableWidth && this.editor) {
+				this.editor.setVariable("width", this.width - this.promptWidth - this.xspacing);
+			}
+			]]>
+		</handler>
+		<!---
+			@keywords private
+			<p>This method determines if the error message associated with the specified object, property and
+			validator type belongs to this properties component by delegating to the "handleSetFocusToError" method.
+			
+			@param Object args a map containing the arguments for this method:
+				objectPropertiesView - The object properties view that contains this properties component,
+				errorObject - The cmc/foundation/ModelObject on which the error was reported, 
+				errorProperty - The cmc/foundation/ModelProperty on which the error was reported,
+				validatorType - The type of the validator that generated the error  
+			@returns boolean true if focus is set to the editor that contains the error, false otherwise
+		-->
+		<method args="args" name="setFocusToError">
+			<![CDATA[
+			return this.handleSetFocusToError(this, args);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			<p>This method determines if the error message associated with the specified object, property and
+			validator type belongs to this properties component.
+			<p>The method checks if the object matches this properties component's {@link cmc/foundation/PropertiesComponent#o model object}
+			and whether the given validatorType is one of the {@link cmc/foundation/PropertiesComponent#validatorTypes validator types}
+			supported by the properties component. If "errorObject" and "validatorType" match this properties component, then
+			this method sets the focus to the editor and returns true.
+			<p>Otherwise the method returns false.
+			
+			@param cmc/foundation/PropertiesComponent component The properties component to which focus is to be set
+			@param object args a map containing the arguments for this method:
+				objectPropertiesView - The object properties view that contains this properties component,
+				errorObject - The cmc/foundation/ModelObject on which the error was reported, 
+				errorProperty - The cmc/foundation/ModelProperty on which the error was reported,
+				validatorType - The type of the validator that generated the error  
+			@returns boolean true if focus is set to the editor that contains the error, false otherwise
+		-->
+		<method args="component, args" name="handleSetFocusToError">
+			<![CDATA[
+			var errorFound = false;
+			if (args.errorObject == component.o) {
+				var validatorTypes = this.getValidatorTypeList();
+				for (var i = 0; i < validatorTypes.length; i++) {
+					if (args.validatorType == validatorTypes[i]) {
+						errorFound = true;
+						if (component.editor) {
+							ObjectPropertiesUtil.Singleton.showComponent(args.objectPropertiesView, component);
+							ObjectPropertiesUtil.Singleton.setDeferredFocus(component.editor);
+						}
+						else if (component.createViewsDel) {
+							var callbackArgs = CallbackUtil.Singleton.getCallbackArguments(component.createViewsDel);
+							if (callbackArgs) {
+								callbackArgs.setFocusToErrorArgs = args;
+							}
+						}
+						break;
+					}
+				}
+			}
+			return errorFound;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			<p>The method checks if modelObject matches this properties component's {@link cmc/foundation/PropertiesComponent#o model object}
+			The base implementation will ignore the objectProperty parameter, as it does not apply. 
+			<p>If this properties component has not been initialized, the method will resolve {@link cmc/foundation/PropertiesComponent#o}
+			using the {@link cmc/foundation/PropertiesComponent#objectPath} but without completing the binding in order	to perform the comparison.
+			<p>If modelObject match with this property component, then this method returns true. Otherwise, it returns false.
+			
+			@param cmc/foundation/ModelObject propertiesViewObject The cmc/foundation/ModelProperty that this cmc/foundation/PropertiesComponent is for.
+			@param cmc/foundation/ModelObject modelObject The cmc/foundation/ModelObject to match to the component's model object. 
+			@param cmc/foundation/ModelProperty objectProperty The cmc/foundation/ModelProperty that is being matched for the component.
+			@returns boolean The method returns true if modelObject matches with {@link cmc/foundation/PropertiesComponent#o}, false otherwise.
+		-->
+		<method args="propertiesViewObject, modelObject, objectProperty" name="matches">
+			<![CDATA[
+			if (typeof(objectProperty) == "undefined") objectProperty = null;
+			var matches = false;
+			if (this.o != null) {
+				if (this.o == modelObject) {
+					matches = true;
+				}
+			}
+			else if (propertiesViewObject != null) {
+				var objectToCompare = propertiesViewObject;
+				if (this.objectPath != null) {
+					objectToCompare = objectToCompare.getObject(this.objectPath);
+				}
+				if (objectToCompare != null && objectToCompare == modelObject) {
+					matches = true;
+				}
+			}
+			return matches;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the properties component layout.
+		-->
+		<method args="e" name="updateLayoutHandler">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateLayout(this);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the properties component layout.
+		-->
+		<method args="component" name="updateLayout">
+			<![CDATA[
+			component.updateLayoutDel.disconnectAll();
+			if (component.promptLocation == "above") {
+				var editorY = component.prompt.y;
+				if (component.prompt.text == "") {
+					if (component.extendedHelpIcon) {
+						component.extendedHelpIcon.setVariable("x", component.editor.x + component.editor.width);
+						component.extendedHelpIcon.setVariable("y", editorY);
+					}
+				}
+				else {
+					var promptWidth = component.prompt.getTextWidth();
+					var availableWidth = component.editor.width;
+					if (!component.sizeToAvailableWidth && component.availableWidthView && component.availableWidthView.availableWidth - component.x - 18 > availableWidth) {
+						availableWidth = component.availableWidthView.availableWidth - component.x - 18;
+					}
+					if (component.extendedHelpIcon) {
+						availableWidth -= component.extendedHelpIcon.width;
+						component.extendedHelpIcon.setVariable('x', component.prompt.x + (availableWidth > promptWidth ? promptWidth : availableWidth));
+					}
+					component.prompt.setVariable("width", availableWidth);
+					editorY += component.prompt.height + 2;
+				}
+				component.editor.setVariable("y", editorY);
+				component.updateLayoutDel.connect(component.editor, "onwidth");
+				if (component.availableWidthView && !component.sizeToAvailableWidth) {
+					component.updateLayoutDel.connect(component.availableWidthView, "onavailableWidth");
+				}
+				component.updateLayoutDel.connect(component.prompt, "onheight");
+			}
+			else {
+				var extendedHelpIconHeight = 0;
+				var promptWidth = component.promptWidth;
+				if (component.extendedHelpIcon && component.extendedHelpIcon.visible) {
+					promptWidth -= component.extendedHelpIcon.width;
+					extendedHelpIconHeight = component.extendedHelpIcon.height;
+					component.extendedHelpIcon.setVariable("x", promptWidth);
+					promptWidth -= component.xspacing;
+				}
+				var promptTarget = this.getPromptTarget(component);
+				var editorHeight = 0;
+				if (promptTarget) {
+					editorHeight = promptTarget.height;
+				}
+				component.prompt.setVariable("width", promptWidth);
+				var promptY = 0;
+				var editorY = 0;
+				var extendedHelpIconY = 0;
+				var promptHeight = component.prompt.height;
+				var componentHeight = Math.max(Math.max(promptHeight, editorHeight), extendedHelpIconHeight);
+				var promptY = (componentHeight - promptHeight) / 2;
+				var editorY = (componentHeight - editorHeight) / 2;
+				var extendedHelpIconY = (componentHeight - extendedHelpIconHeight) / 2;
+				if (component.prompt.y != promptY) {
+					component.prompt.setVariable("y", promptY);
+				}
+				if (component.editor && component.editor.y != editorY) {
+					component.editor.setVariable("y", editorY);
+				}
+				if (component.extendedHelpIcon && component.extendedHelpIcon.y != extendedHelpIconY) {
+					component.extendedHelpIcon.setVariable("y", extendedHelpIconY);
+				}
+				component.updateLayoutDel.connect(component.prompt, "onheight");
+				if (promptTarget) {
+					component.updateLayoutDel.connect(promptTarget, "onheight");
+				}
+				else {
+					component.updateLayoutDel.connect(component, "oneditor");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="getPromptTarget" args="component">
+			<![CDATA[
+			return component.editor;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</FocusableComponent>
+
+	<!---
+		This class is the base class for an object property editor displayed in the object properties view. Use this
+		base class for property editors that edit a single {@link cmc/foundation/ModelProperty}.
+		This class will handle binding this view to the right instance of {@link cmc/foundation/ModelProperty} and any required replication
+		if the business user selects multiple input languages.
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyEditor" visible="true">
+		<dependency localName="ObjectPropertiesUtil" moduleName="cmc/foundation/ObjectPropertiesUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="PropertyEditorClone" moduleName="cmc/foundation/PropertyEditorClone"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} of the current object that this property editor should
+			bind to.
+			
+			If there is no value provided for <code>{@link cmc/foundation/PropertiesComponent#objectPath objectPath}</code>,
+			then this property editor will bind to the property identified by this attribute on the
+			{@link cmc/foundation/PropertiesComponent#o current object}.
+			
+			If there is a value for {@link cmc/foundation/PropertiesComponent#objectPath}, this property editor will resolve the
+			{@link cmc/foundation/PropertiesComponent#objectPath objectPath} to find the child object.
+			Then this property editor will bind to the property identified by this attribute on that object.
+			This is a required attribute.				
+		-->
+		<variable name="propertyName" type="string"/>		
+		<!---
+			The {@link cmc/foundation/ModelProperty} instance that this property editor is editing.
+			@type cmc/foundation/ModelProperty
+		-->
+		<variable name="property"/>
+		<!---
+			This attribute indicates that when this properties component is displayed, 
+			the validation error messages should be displayed regardless of whether
+			the editor is enabled or not. The default value for this attribute is "true".
+		-->
+		<variable name="displayValidationError" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			This method creates a {@link cmc/foundation/PropertyEditorClone} for the given {@link cmc/foundation/StoreLanguage}.
+			
+			@param cloneLanguage The cmc/foundation/StoreLanguage for the new instance of cmc/foundation/PropertyEditorClone.
+		-->
+		<method args="cloneLanguage" name="createLanguageClone">
+			<![CDATA[
+			return new PropertyEditorClone.Class(this.parent, {
+				originalPropertyEditor: this,
+				enablementCondition: this.enablementCondition,
+				language: cloneLanguage
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			this.inherited(arguments);
+			var newProperty = null;
+			if (this.o != null) {
+				newProperty = this.o.getProperty(this.propertyName);
+				this.updateValidationErrorDel.disconnectAll();
+				this.updateValidationErrorDel.connect(newProperty, "onvalidationErrors");
+			}
+			this.setVariable("property", newProperty);
+			this.updateValidationError();
+			this.updateRequired();
+			if (this.editor) {
+				this.editor.setVariable("property", newProperty);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the enabled attribute based on the current value of the
+			enablement condition and whether the object is readonly.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateEnablementDel.disconnectAll();
+			if (this.enablementCondition) {
+				if (this.o) {
+					this.enablementCondition.registerDelegate(this.o, this.updateEnablementDel);
+				}
+			}
+			var newProperty = null;
+			if (this.o) {
+				newProperty = this.o.getProperty(this.propertyName);
+				this.updateEnablementDel.connect(newProperty, "onreadOnly");
+			}
+			var isEnabled = this.o != null && newProperty != null && !newProperty.readOnly;
+			if (isEnabled && this.enablementCondition) {
+				isEnabled = this.enablementCondition.isEnabled(this.o);
+			}
+			this.setVariable("enabled", isEnabled);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the required attribute.
+		-->
+		<method args="e" name="updateRequired">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateRequiredDel) {
+				this.updateRequiredDel.disconnectAll();
+			}
+			if (this.property != null && this.property.propertyDefinition != null) {
+				if (!this.updateRequiredDel) {
+					this.updateRequiredDel = new EventHandler.Class(this, "updateRequired");
+				}
+				var newRequired = this.property.propertyDefinition.isRequired(this.property.o, this.updateRequiredDel);
+				if (newRequired != this.required) {
+					this.setVariable("required", newRequired);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the error message to be displayed from the {@link cmc/foundation/PropertyEditor#property}.
+			If {@link cmc/foundation/PropertyEditor#property} is null, then this method returns null.
+			@param cmc/foundation/EventHandler del Optional delegate to register to any events that will affect this value.
+			
+			@return string The error message to be displayed. If {@link cmc/foundation/PropertyEditor#property} is null, then this method returns null.
+		-->
+		<method args="del" name="getValidationError">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			if (this.property && this.displayValidationError) {
+				var errors = this.property.getValidationErrors();
+				if (del) {
+					del.connect(this.property, "onvalidationErrors");
+				}
+				if (errors.length > 0) {
+					return errors[0];
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			<p>This method determines if the error message associated with the specified object, property and
+			validator type belongs to this property editor.
+			<p>The method checks if "errorObject" matches this property editor's {@link cmc/foundation/PropertyEditor#o model object}
+			and if "errorProperty" matches this property editor's {@link cmc/foundation/PropertyEditor#property}. 
+			If "errorObject" and "errorProperty" match this properties component, then
+			this method sets the focus to the editor and returns true.
+			<p>Otherwise the method returns false.
+			
+			@param cmc/foundation/PropertiesComponent component The properties component to which focus is to be set
+			@param object args a map containing the arguments for this method:
+				objectPropertiesView - The object properties view that contains this properties component,
+				errorObject - The cmc/foundation/ModelObject on which the error was reported, 
+				errorProperty - The cmc/foundation/ModelProperty on which the error was reported,
+				validatorType - The type of the validator that generated the error  
+			@returns boolean true if focus is set to the editor that contains the error, false otherwise
+		-->
+		<method args="component, args" name="handleSetFocusToError">
+			<![CDATA[
+			var matches = false;
+			if (args.errorProperty != null && args.errorObject == component.o && args.errorProperty == component.property) {
+				matches = true;
+				if (component.editor) {
+					ObjectPropertiesUtil.Singleton.showComponent(args.objectPropertiesView, component);
+					ObjectPropertiesUtil.Singleton.setDeferredFocus(component.editor);
+				}
+				else if (component.createViewsDel) {
+					var callbackArgs = CallbackUtil.Singleton.getCallbackArguments(component.createViewsDel);
+					if (callbackArgs) {
+						callbackArgs.setFocusToErrorArgs = args;
+					}
+				}
+			}
+			return matches;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			<p>The method checks if modelObject matches this properties component's {@link cmc/foundation/PropertiesComponent#o model object}
+			and optionally whether objectProperty matches this property editor's {@link cmc/foundation/PropertyEditor#property}. 
+			<p>If this properties component has not been initialized, the method will resolve {@link cmc/foundation/PropertiesComponent#o}
+			using the {@link cmc/foundation/PropertiesComponent#objectPath} but without completing the binding in order	to perform the comparison.
+			<p>If modelObject match with this property component, then this method returns true. Otherwise, it returns false.
+			
+			@param cmc/foundation/ModelObject propertiesViewObject The cmc/foundation/ModelProperty that this cmc/foundation/PropertiesComponent is for.
+			@param cmc/foundation/ModelObject modelObject The cmc/foundation/ModelObject for the component. 
+			@param cmc/foundation/ModelProperty objectProperty The cmc/foundation/ModelProperty that is being matched for the component. It is optional. 
+			@returns boolean The method returns true if modelObject matches with {@link cmc/foundation/PropertiesComponent#o}, false otherwise.
+		-->
+		<method args="propertiesViewObject, modelObject, objectProperty" name="matches">
+			<![CDATA[
+			if (typeof(objectProperty) == "undefined") objectProperty = null;
+			var matches = false;
+			if (this.o != null) {
+				if (objectProperty != null && this.o == modelObject && this.property == objectProperty) {
+					matches = true;
+				}
+				else if (objectProperty == null && this.o == modelObject) {
+					matches = true;
+				}
+			}
+			else if (propertiesViewObject != null) {
+				var objectToCompare = propertiesViewObject;
+				if (this.objectPath != null) {
+					objectToCompare = objectToCompare.getObject(this.objectPath);
+				}
+				if (objectProperty != null && objectToCompare != null && objectToCompare == modelObject && this.propertyName == objectProperty.propertyName) {
+					matches = true;
+				}
+				else if (objectProperty == null && objectToCompare != null && objectToCompare == modelObject) {
+					matches = true;
+				}
+			}
+			return matches;
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		This class represents a cloned cmc/foundation/PropertiesComponent. These are created as part of Multi Language Support.
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertiesComponentClone" isClone="true">
+		<!---
+			The properties component from which this component was cloned
+		-->
+		<variable name="originalPropertiesComponent"/>
+		<!---
+			Relative object path to look up model object
+		-->
+		<variable name="objectPath" type="string" value="${this.originalPropertiesComponent.objectPath}"/>
+		<!---
+			The prompt text for this properties view component.
+		-->
+		<variable name="promptText" type="string" value="${this.originalPropertiesComponent.promptText}"/>
+		<!---
+			This attribute indicates that this properties view component should have the currently selected store name appended
+			next to it's {@link cmc/foundation/PropertiesComponent#promptText}. The default value for this attribute is "false".
+		-->
+		<variable name="displayStoreName" type="boolean" value="${this.originalPropertiesComponent.displayStoreName}"/>
+		<!---
+			This attribute indicates that this properties view component should have the store name of the store that owns the primary
+			object appended to it's {@link cmc/foundation/PropertiesComponent#promptText}. The default value for this attribute is "false".
+		-->
+		<variable name="displayObjectStoreName" type="boolean" value="${this.originalPropertiesComponent.displayObjectStoreName}"/>
+		<!---
+			Indicates to the layout manager that this properties view component should
+			be resized horizontally to consume all of the available area.
+		-->
+		<variable name="sizeToAvailableWidth" type="boolean" value="${this.originalPropertiesComponent.sizeToAvailableWidth}"/>
+		<!---
+			The minimum width of the editor to be retained by the layout manager, if sizeToAvailableWidth is true.
+		-->
+		<variable name="minWidth" type="number" value="${this.originalPropertiesComponent.minWidth}"/>
+		<!---
+			Help text for this properties view component.
+		-->
+		<variable name="helpText" type="string" value="${this.originalPropertiesComponent.helpText}"/>
+		<!---
+			Extended help text for this properties view component.
+		-->
+		<variable name="extendedHelpText" type="string" value="${this.originalPropertiesComponent.extendedHelpText}"/>
+		<!---
+			Help link text for this properties view component.
+		-->
+		<variable name="helpLinkText" type="string" value="${this.originalPropertiesComponent.helpLinkText}"/>
+		<!---
+			Help link URL for this properties view component.
+		-->
+		<variable name="helpLinkURL" type="string" value="${this.originalPropertiesComponent.helpLinkURL}"/>
+		<!---
+			The list of siblings created for this language sensitive property component, null for a cloned object.
+		-->
+		<variable name="languageSiblings" value="${null}"/>
+		<!-- A comma separated string. Each token in the string is a validator type.
+			 When there is validator error in the model object associated with this editor,
+			 this editor will check if it is created by the validator that has one of the validator
+			 types. If it is, then the error will be displayed in this editor. A validator instance
+			 will have an attribute validatorType that specifies the validator's type.
+	    -->
+		<variable name="validatorTypes" type="string" value="${this.originalPropertiesComponent.validatorTypes}"/>
+		<!---
+			The name of the component object for this properties component. You
+			can specify a named component object for properties components if you
+			want the properties component to be dependent on another properties component.
+			All named component objects must be declared in the
+			{@link cmc/foundation/ObjectProperties#componentObjectNames} attribute of the containing
+			properties view.
+		-->
+		<variable name="componentObjectName" type="string" value="${this.originalPropertiesComponent.componentObjectName}"/>
+		<!---
+			This method creates the prompt for this properties component. This is a helper method that can be called by {@link cmc/foundation/PropertiesComponent#createViews}.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the prompt
+		-->
+		<method args="parentComponent" name="createPrompt">
+			<![CDATA[
+			this.originalPropertiesComponent.createPrompt(parentComponent);
+			]]>
+		</method>
+		
+		<!---
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			this.originalPropertiesComponent.createEditor(parentComponent);
+			]]>
+		</method>
+		
+		<!---
+			Update the layout for the given property component.
+			@param cmc/foundation/PropertiesComponent component The properties component to be updated.
+		-->
+		<method args="component" name="updateLayout">
+			<![CDATA[
+			this.originalPropertiesComponent.updateLayout(component);
+			]]>
+		</method>
+		
+		<!---
+			Returns true if this properties component is language sensitive
+		-->
+		<method name="isLanguageSensitive">
+			<![CDATA[
+			return false;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			<p>This method determines if the error message associated with the specified object, property and
+			validator type belongs to this properties component and if it does, then it sets the focus to the properties
+			component.
+			<p>The method delegates to the original properties component's "handleSetFocusToError" method.
+			
+			@param cmc/foundation/PropertiesComponent component The properties component to which focus is to be set
+			@param object args a map containing the arguments for this method:
+				objectPropertiesView - The object properties view that contains this properties component,
+				errorObject - The cmc/foundation/ModelObject on which the error was reported, 
+				errorProperty - The cmc/foundation/ModelProperty on which the error was reported,
+				validatorType - The type of the validator that generated the error  
+			@returns boolean true if focus is set to the editor that contains the error, false otherwise
+		-->
+		<method args="component, args" name="handleSetFocusToError">
+			<![CDATA[
+			this.originalPropertiesComponent.handleSetFocusToError(component, args);
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		A cloned cmc/foundation/PropertyEditor for MLS support
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyEditorClone" isClone="true">
+		<!---
+			The property editor from which this editor was cloned
+		-->
+		<variable name="originalPropertyEditor"/>
+		<!---
+			The property name for this property editor
+		-->		
+		<variable name="propertyName" type="string" value="${this.originalPropertyEditor.propertyName}"/>
+		<!---
+			Relative object path to look up model object
+		-->
+		<variable name="objectPath" type="string" value="${this.originalPropertyEditor.objectPath}"/>
+		<!---
+			The prompt text for this properties view component.
+		-->
+		<variable name="promptText" type="string" value="${this.originalPropertyEditor.promptText}"/>
+		<!---
+			This attribute indicates that this properties view editor should have the currently selected store name appended
+			next to it's {@link cmc/foundation/PropertiesEditor#promptText}. The default value for this attribute is "false".
+		-->
+		<variable name="displayStoreName" type="boolean" value="${this.originalPropertyEditor.displayStoreName}"/>
+		<!---
+			This attribute indicates that this properties view editor should have the store name of the store that owns the primary
+			object appended to it's {@link cmc/foundation/PropertiesEditor#promptText}. The default value for this attribute is "false".
+		-->
+		<variable name="displayObjectStoreName" type="boolean" value="${this.originalPropertyEditor.displayObjectStoreName}"/>
+		<!---
+			Indicates to the layout manager that this properties view component should
+			be resized horizontally to consume all of the available area.
+		-->
+		<variable name="sizeToAvailableWidth" type="boolean" value="${this.originalPropertyEditor.sizeToAvailableWidth}"/>
+		<!---
+			The minimum width of the editor to be retained by the layout manager, if sizeToAvailableWidth is true.
+		-->
+		<variable name="minWidth" type="number" value="${this.originalPropertyEditor.minWidth}"/>
+		<!---
+			Help text for this properties view component.
+		-->
+		<variable name="helpText" type="string" value="${this.originalPropertyEditor.helpText}"/>
+		<!---
+			Extended help text for this properties view component.
+		-->
+		<variable name="extendedHelpText" type="string" value="${this.originalPropertyEditor.extendedHelpText}"/>
+		<!---
+			Help link text for this properties view component.
+		-->
+		<variable name="helpLinkText" type="string" value="${this.originalPropertyEditor.helpLinkText}"/>
+		<!---
+			Help link URL for this properties view component.
+		-->
+		<variable name="helpLinkURL" type="string" value="${this.originalPropertyEditor.helpLinkURL}"/>
+		<!---
+			The list of siblings created for this language sensitive property component, null for a cloned object.
+		-->
+		<variable name="languageSiblings" value="${null}"/>
+		<!---
+                       A comma separated string. Each token in the string is a validator type.
+			When there is a validator error in the model object associated with this editor,
+			this editor will check if it is created by the validator that has one of the validator
+			types. If it is, then the error will be displayed in this editor. A validator instance
+			will have an attribute validatorType that specifies the validator's type.
+               -->
+		<variable name="validatorTypes" type="string" value="${this.originalPropertyEditor.validatorTypes}"/>
+		<!---
+			This attribute indicates that when this properties component is displayed, 
+			the validation error messages should be displayed regardless of whether
+			the editor is enabled or not. The default value for this attribute is "true".
+		-->
+		<variable name="displayValidationError" type="boolean" value="${this.originalPropertyEditor.displayValidationError}"/>
+		<!---
+			The name of the component object for this properties component. You
+			can specify a named component object for properties components if you
+			want the properties component to be dependent on another properties component.
+			All named component objects must be declared in the
+			{@link cmc/foundation/ObjectProperties#componentObjectNames} attribute of the containing
+			properties view.
+		-->
+		<variable name="componentObjectName" type="string" value="${this.originalPropertyEditor.componentObjectName}"/>
+		<!---
+			This method creates the prompt for this properties component. This is a helper method that can be called by {@link cmc/foundation/PropertiesComponent#createViews}.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the prompt
+		-->
+		<method args="parentComponent" name="createPrompt">
+			<![CDATA[
+			this.originalPropertyEditor.createPrompt(parentComponent);
+			]]>
+		</method>
+		
+		<!---
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			this.originalPropertyEditor.createEditor(parentComponent);
+			]]>
+		</method>
+		
+		<!---
+			Update the layout for the given property component.
+			@param cmc/foundation/PropertiesComponent component The properties component to be updated.
+		-->
+		<method args="component" name="updateLayout">
+			<![CDATA[
+			this.originalPropertyEditor.updateLayout(component);
+			]]>
+		</method>
+		
+		<!---
+			Returns true if this properties component is language sensitive
+		-->
+		<method name="isLanguageSensitive">
+			<![CDATA[
+			return false;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			<p>This method determines if the error message associated with the specified object, property and
+			validator type belongs to this property editor and if it does, then it sets the focus to the property
+			editor.
+			<p>The method delegates to the original property editor's "handleSetFocusToError" method.
+			
+			@param cmc/foundation/PropertiesComponent component The properties component to which focus is to be set
+			@param object args a map containing the arguments for this method:
+				objectPropertiesView - The object properties view that contains this properties component,
+				errorObject - The cmc/foundation/ModelObject on which the error was reported, 
+				errorProperty - The cmc/foundation/ModelProperty on which the error was reported,
+				validatorType - The type of the validator that generated the error  
+			@returns boolean true if focus is set to the editor that contains the error, false otherwise
+		-->
+		<method args="component, args" name="handleSetFocusToError">
+			<![CDATA[
+			this.originalPropertyEditor.handleSetFocusToError(component, args);
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords final
+		cmc/foundation/PropertyInputText is a simple text property editor that
+		binds to a property value {@link cmc/foundation/ModelProperty}.  Use cmc/foundation/PropertyInputText when implementing a simple
+		text box inside a {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.  The class cmc/foundation/PropertyInputText is
+		final, to create a new properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		The example below would create a text box inside a properties view and its text would indicate the name of an
+		employee.
+		@START_CODE
+			<PropertyInputText
+				objectPath="Employee/EmployeeDetails" 
+				propertyName="employeeName" 
+				promptText="${resourceBundles.employeeName}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyInputText">
+		<dependency localName="PunchOutTextEditor" moduleName="cmc/foundation/PunchOutTextEditor"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new PunchOutTextEditor.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				width: 400
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		cmc/foundation/PropertyInputLongText is a text property editor with a length
+		that spans the available width of the view. cmc/foundation/PropertyInputLongText binds to a property value {@link cmc/foundation/ModelProperty}.
+		Use cmc/foundation/PropertyInputLongText when implementing a long text box inside a {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.
+		The class cmc/foundation/PropertyInputLongText is final, to create a new properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		The example	below would create a long text box inside a properties view and its text would indicate the job description of
+		an employee.
+		@START_CODE
+			<PropertyInputLongText
+				objectPath="Employee/EmployeeDetails"
+				propertyName="employeeJobDescription"
+				promptText="${resourceBundles.employeeDescription}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyInputLongText" sizeToAvailableWidth="true">
+		<dependency localName="PunchOutTextEditor" moduleName="cmc/foundation/PunchOutTextEditor"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new PunchOutTextEditor.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		cmc/foundation/PropertyInputMultiLineText is a text property editor with a length
+		that spans the available width of the view and is multi-lined. cmc/foundation/PropertyInputMultiLineText binds to a property value
+		{@link cmc/foundation/ModelProperty}.  Use cmc/foundation/PropertyInputMultiLineText when implementing a long, multi-lined text box inside a
+		{@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.  The class cmc/foundation/PropertyInputMultiLineText is final, to create a new
+		properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		The example	below would create a long and multi-lined text box inside a properties view and its text would indicate the
+		job description of an employee.
+		@START_CODE
+			<PropertyInputMultiLineText
+				objectPath="Employee/EmployeeDetails"
+				propertyName="employeeJobDescription"
+				promptText="${resourceBundles.employeeDescription}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyInputMultiLineText" sizeToAvailableWidth="true">
+		<dependency localName="PunchOutTextEditor" moduleName="cmc/foundation/PunchOutTextEditor"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new PunchOutTextEditor.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				width: availableWidth,
+				multiline: true,
+				maximumHeight: 200
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		cmc/foundation/PropertyRichTextEditor is a rich text property editor with a length
+		that spans the available width of the view. cmc/foundation/PropertyRichTextEditor binds to a property value {@link cmc/foundation/ModelProperty}.
+		Use cmc/foundation/PropertyRichTextEditor when implementing rich text, input box inside a {@link cmc/foundation/PropertyPane} or
+		{@link cmc/foundation/PropertyGroup}.  The class cmc/foundation/PropertyRichTextEditor is final, to create a new properties widget extend
+		{@link cmc/foundation/PropertyEditor}.
+		
+		The example	below would create a rich text, input box inside a properties view and its text would indicate the
+		job description of an employee.
+		@START_CODE
+			<PropertyRichTextEditor
+				objectPath="Employee/EmployeeDetails"
+				propertyName="employeeJobDescription"
+				promptText="${resourceBundles.employeeDescription}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyRichTextEditor" minWidth="445" sizeToAvailableWidth="true">
+		<dependency localName="RichTextEditor" moduleName="cmc/foundation/RichTextEditor"/>
+		<!---
+			Maximum height to which the rich text editor can expand. The default is 420 pixels.
+		-->
+		<variable name="maximumHeight" type="number" value="420"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="textAreaHeight" type="number" value="100"/>
+		<!-- 
+			Indicates the default mode for the rich text editor. When set to true, the rich text editor will
+			default to using the rich text mode except if there are tags that the rich text mode cannot understand. 
+			When set to false the rich text editor will default to HTML mode.
+			The default is true.
+		 -->
+		<variable name="defaultToRichTextMode" type="boolean" value="true"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new RichTextEditor.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				textAreaHeight: this.textAreaHeight,
+				width: availableWidth,
+				maximumHeight: this.maximumHeight,
+				defaultToRichTextMode: this.defaultToRichTextMode
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		This class defines a property editor that you can use to edit a date {@link cmc/foundation/ModelProperty property}. 
+		The value of the property must be a date string that matches the format "yyyy-MM-ddT00:00:00.001Z".
+		The following example declares an instance of this class that edits the property with name "startDate".
+		
+		@START_CODE
+			<PropertyDatePicker
+				propertyName="startDate"
+				required="true"
+				promptText="${promotionResources.promotion_StartDate}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyDatePicker">
+		<dependency localName="DatePicker" moduleName="cmc/foundation/DatePicker"/>
+		<!---
+			Indicates whether to use the start or end of the day. When set to <code>true</code>, 23:59:59:999 is saved
+			to the server as the end of the day. If set to <code>false</code>, 00:00:00:001 is used as the start of the day.
+		-->
+		<variable name="endOfDay" type="boolean" value="false"/>
+		<!---
+			Displays the preferred time zone beside the time picker.
+			<p>The default value is <code>true<code>.
+		-->
+		<variable name="showTimeZone" type="boolean" value="true"/>
+		<!--- Indicates whether to ignore the time when saving the date string value. The default value is <code>false</code>. -->
+		<variable name="dateOnly" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new DatePicker.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				endOfDay: this.endOfDay,
+				showTimeZone: this.showTimeZone,
+				dateOnly: this.dateOnly,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		This class defines a property editor that allows users to edit a date time property.
+		The property's value must be date time string. The following example declares an instance of this class that
+		edits property with name "startdate".
+		
+		@START_CODE
+			<PropertyDateTimePicker propertyName="startdate" promptText="${mktMarketingResources.startDate}" />
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyDateTimePicker">
+		<dependency localName="DateTimePicker" moduleName="cmc/foundation/DateTimePicker"/>
+		<!---
+			When true, the time of day will default to 23:59:59:999 when the time picker is first enabled.  
+			Otherwise start of day is used 00:00:00:001. 
+		-->
+		<variable name="endOfDay" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new DateTimePicker.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				endOfDay: this.endOfDay,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		This class defines a property editor that you can use to edit a time {@link cmc/foundation/ModelProperty property}.
+		The value of the property must be a time string. The following example declares an
+		instance of this class that you can use to edit a property with the name "startTime".
+		The value of the property must be a string using the time format of "HH:mm:ss", "HH:mm" or "HH" where "HH" is a
+		two digit integer indicating the hour, "mm" is a two digit integer indicating the minute and
+		"ss" is a two digit integer indicating the second.
+
+		
+		@START_CODE
+			<PropertyTimePicker
+				propertyName="startTime"
+				timeFormat="HH:mm:ss"
+				promptText="${promotionResources.promotion_StartTime}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyTimePicker">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="TimePicker" moduleName="cmc/foundation/TimePicker"/>
+		<!---
+			The time format for setting and retrieving the property. This value can be set to "HH:mm:ss",
+			"HH:mm", or "HH". "HH" is a two digit integer indicating the hour, "mm" is a two digit integer indicating the minute,
+			and "ss" is a two digit integer indicating the second.
+			The default value is "HH:mm".
+		-->
+		<variable name="timeFormat" type="string" value="${DateUtil.Singleton.TIME_FORMAT}"/>
+		<!---
+			Displays the preferred time zone beside the time picker. 
+			<p>The default value is <code>true<code>.
+		-->
+		<variable name="showTimeZone" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new TimePicker.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				timeFormat: this.timeFormat,
+				showTimeZone: this.showTimeZone,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords final
+		cmc/foundation/PropertyViewLongText is a text property viewer with a length
+		that spans the available width of the view. It displays the value of the {@link cmc/foundation/ModelProperty property} indicated by the "propertyName"
+		attribute. This property viewer can be used to display properties that are informational only and
+		can never be edited by the business user. The text will be displayed without a surrounding text box.
+		Use cmc/foundation/PropertyViewLongText to display text inside a {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.
+		The class cmc/foundation/PropertyViewLongText is final, to create a new properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		The example below would create a long text field inside a properties view and its text would indicate the job description of
+		an employee.
+		@START_CODE
+			<PropertyViewLongText
+				objectPath="Employee/EmployeeDetails"
+				propertyName="employeeJobDescription"
+				promptText="${resourceBundles.employeeDescription}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyViewLongText" sizeToAvailableWidth="true">
+		<dependency localName="TextViewer" moduleName="cmc/foundation/TextViewer"/>
+		<!---	
+			@keywords private
+			Create the text viewer for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the viewer.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new TextViewer.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords final
+		cmc/foundation/PropertyKilobyte is a text viewer that displays a byte value in kilobytes. While the displayed value will be in kilobytes, the value
+		that is stored in the model will still be in bytes. For example, a value of "1024" in the underlying model displays as "1 KB".
+		Byte values are rounded up to the neares kilobyte. The value cannot be edited.
+		
+		The example below would create a text box inside a properties view and its text would be the size of a file
+		in kilobytes. The value stored in the model would be the value in bytes.
+		
+		@START_CODE
+			<PropertyKilobyte				
+				propertyName="fileSize"
+				promptText="${resourceBundles.fileSize}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyKilobyte">
+		<dependency localName="KilobyteViewer" moduleName="cmc/foundation/KilobyteViewer"/>
+		<!---	
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new KilobyteViewer.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: false,
+				width: 230
+			});
+			]]>
+		</method>	
+	</PropertyEditor>		
+	
+	<!---
+		@keywords private
+	 -->
+	<TextComponent classDefinition="true" definitionName="cmc/foundation/PropertiesComponentPrompt" text="${this.getPromptText(this.parent.newPrompt, this.parent.required)}" fontsize="13" fgcolor="#464646">
+		<!---
+			@keywords private
+			This method returns prompt string that is displayed in the UI.
+
+			@param promptText string The new prompt string.
+			@param required boolean required indicator
+			@return string The prompt string that is displayed in the UI.
+		-->
+		<method args="promptText, required" name="getPromptText">
+			<![CDATA[
+			if (typeof(required) == "undefined") required = null;
+			if (promptText == null) {
+				promptText = "";
+			}
+			if (required) {
+				promptText = promptText + " *";
+			}
+			return promptText;
+			]]>
+		</method>
+	</TextComponent>	
+	
+	<!---
+		@keywords final
+		<p>cmc/foundation/PropertyStaticText is a static text viewer that displays the value of the text attribute in the properties view.  There is no prompt
+		with this text and is typically used for descriptions of a group or property view.</p>
+
+		<p>The example below would show the static text defined in the properties key <code>groupDescription</code> inside a properties view.
+		@START_CODE
+			<PropertyStaticText text="${resourceBundle.groupDescription}"/>
+		@END_CODE
+		</p>
+	-->
+	<TextComponent classDefinition="true" definitionName="cmc/foundation/PropertyStaticText" multiline="true">
+		<!---
+			@keywords private
+		-->
+		<variable name="sizeToAvailableWidth" type="boolean" value="true"/>
+		<!---	
+			@keywords private
+		-->
+		<variable name="minWidth" type="number" value="200"/>
+		
+	</TextComponent>
+	
+	<!-- 
+		@keywords final
+		The cmc/foundation/PropertyObjectHeader is a property editor and is used to 
+		create an instance of the {@link cmc/foundation/ObjectHeader} class that binds to a property 
+		value {@link cmc/foundation/ModelProperty}.	 
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyObjectHeader">
+		<dependency localName="ObjectHeader" moduleName="cmc/foundation/ObjectHeader"/>
+	
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new ObjectHeader.Class(parentComponent, {
+				name: "editor",
+				x: 0,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				width: parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing
+			});
+			]]>
+		</method>
+		
+	</PropertyEditor>
+</Definitions>

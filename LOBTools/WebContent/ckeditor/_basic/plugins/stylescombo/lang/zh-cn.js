@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","zh-cn",{label:"样式",panelTitle:"样式",panelTitle1:"块样式",panelTitle2:"直接插入样式",panelTitle3:"对象样式"});

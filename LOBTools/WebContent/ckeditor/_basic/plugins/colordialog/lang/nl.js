@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","nl",{clear:"Wissen",highlight:"Accentueren",options:"Opties voor kleuren",selected:"Geselecteerde kleur",title:"KLEUREN KIEZEN",ibm:{currentColor:"Huidige kleur"}});

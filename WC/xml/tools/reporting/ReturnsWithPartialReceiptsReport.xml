@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report  reportName="ReturnsWithPartialReceiptsReport" online="true" >
+   <comment></comment>
+   <SQLvalue>
+     select rma.rma_id as "Return Number",
+     userreg.logonid as "Logon ID",
+     rma.rmadate "Return Date",
+     rma.status as "Return Status",
+     rma.totalcredit as "Return Total",
+     itemspc.partnumber as "SKU",
+     baseitmdsc.shortdescription as "Description",
+     rmaitemcmp.quantity as "Return Qty",
+     qtyunitdsc.description as "Qty Units",
+     ffmcentds.displayname as "Return FFC",
+     rma.currency as "Currency"
+     from rma, rmaitem, rmaitemcmp, itemspc, baseitem, baseitmdsc, ffmcentds, users, userreg, qtyunitdsc
+     where rma.rma_id=rmaitem.rma_id
+     and rmaitem.rmaitem_id=rmaitemcmp.rmaitem_id
+     and rmaitemcmp.itemspc_id=itemspc.itemspc_id
+     and itemspc.baseitem_id=baseitmdsc.baseitem_id
+     and itemspc.baseitem_id=baseitem.baseitem_id
+     and rma.ffmcenter_id=ffmcentds.ffmcenter_id
+     and rma.member_id=users.users_id
+     and users.users_id=userreg.users_id
+     and rmaitemcmp.shouldreceive = 'Y'
+     and rma.status &lt;&gt; 'CAN'
+     and rma.rma_id in
+       (select distinct rma.rma_id
+        from rma, rmaitem, rmaitemcmp, rtnreceipt
+        where rma.rma_id=rmaitem.rma_id
+        and rmaitem.rmaitem_id=rmaitemcmp.rmaitem_id
+        and rmaitemcmp.rmaitemcmp_id=rtnreceipt.rmaitemcmp_id
+       )
+     and
+     (
+     rmaitemcmp.quantity >
+       (select sum(RTNRECEIPT2.quantity) as "Qty Returned"
+        from rma  RMA2, rmaitem  RMAITEM2, rmaitemcmp  RMAITEMCMP2, rtnreceipt  RTNRECEIPT2
+        where RMA2.rma_id=RMAITEM2.rma_id
+        and RMAITEM2.rmaitem_id=RMAITEMCMP2.rmaitem_id
+        and RMAITEMCMP2.rmaitemcmp_id=RTNRECEIPT2.rmaitemcmp_id
+        and RMAITEM2.rmaitem_id=rmaitem.rmaitem_id
+       )
+     or rmaitemcmp.rmaitemcmp_id not in
+       (select RMAITEMCMP3.rmaitemcmp_id
+        from rma  RMA3, rmaitem  RMAITEM3, rmaitemcmp  RMAITEMCMP3, rtnreceipt  RTNRECEIPT3
+        where RMA3.rma_id=RMAITEM3.rma_id
+        and RMAITEM3.rmaitem_id=RMAITEMCMP3.rmaitem_id
+        and RMAITEMCMP3.rmaitemcmp_id=RTNRECEIPT3.rmaitemcmp_id
+        and RMA3.rma_id=rmaitem.rma_id
+       )
+     )
+     and baseitem.quantitymeasure=qtyunitdsc.qtyunit_id
+     and rma.store_id={storeent_id}
+     and qtyunitdsc.language_id={LanguageID}
+     and baseitmdsc.language_id={LanguageID}
+     and ffmcentds.language_id={LanguageID}
+     and rma.ffmcenter_id in ({FulfillmentCenterList})
+     union
+     select rma.rma_id as "Return Number",
+          '   ' as "Logon ID",
+          rma.rmadate "Return Date",
+          rma.status as "Return Status",
+          rma.totalcredit as "Return Total",
+          itemspc.partnumber as "SKU",
+          baseitmdsc.shortdescription as "Description",
+          rmaitemcmp.quantity as "Return Qty",
+          qtyunitdsc.description as "Qty Units",
+          ffmcentds.displayname as "Return FFC",
+          rma.currency as "Currency"
+          from rma, rmaitem, rmaitemcmp, itemspc, baseitem, baseitmdsc, ffmcentds, users, userreg, qtyunitdsc
+          where rma.rma_id=rmaitem.rma_id
+          and rmaitem.rmaitem_id=rmaitemcmp.rmaitem_id
+          and rmaitemcmp.itemspc_id=itemspc.itemspc_id
+          and itemspc.baseitem_id=baseitmdsc.baseitem_id
+          and itemspc.baseitem_id=baseitem.baseitem_id
+          and rma.ffmcenter_id=ffmcentds.ffmcenter_id
+          and rma.member_id=users.users_id
+          and users.users_id not in
+            (select users_id from userreg where users.users_id = userreg.users_id)
+          and rmaitemcmp.shouldreceive = 'Y'
+          and rma.status &lt;&gt; 'CAN'
+          and rma.rma_id in
+            (select distinct rma.rma_id
+             from rma, rmaitem, rmaitemcmp, rtnreceipt
+             where rma.rma_id=rmaitem.rma_id
+             and rmaitem.rmaitem_id=rmaitemcmp.rmaitem_id
+             and rmaitemcmp.rmaitemcmp_id=rtnreceipt.rmaitemcmp_id
+            )
+          and
+          (
+          rmaitemcmp.quantity >
+            (select sum(RTNRECEIPT2.quantity) as "Qty Returned"
+             from rma  RMA2, rmaitem  RMAITEM2, rmaitemcmp  RMAITEMCMP2, rtnreceipt  RTNRECEIPT2
+             where RMA2.rma_id=RMAITEM2.rma_id
+             and RMAITEM2.rmaitem_id=RMAITEMCMP2.rmaitem_id
+             and RMAITEMCMP2.rmaitemcmp_id=RTNRECEIPT2.rmaitemcmp_id
+             and RMAITEM2.rmaitem_id=rmaitem.rmaitem_id
+            )
+          or rmaitemcmp.rmaitemcmp_id not in
+            (select RMAITEMCMP3.rmaitemcmp_id
+             from rma  RMA3, rmaitem  RMAITEM3, rmaitemcmp  RMAITEMCMP3, rtnreceipt  RTNRECEIPT3
+             where RMA3.rma_id=RMAITEM3.rma_id
+             and RMAITEM3.rmaitem_id=RMAITEMCMP3.rmaitem_id
+             and RMAITEMCMP3.rmaitemcmp_id=RTNRECEIPT3.rmaitemcmp_id
+             and RMA3.rma_id=rmaitem.rma_id
+            )
+          )
+          and baseitem.quantitymeasure=qtyunitdsc.qtyunit_id
+          and rma.store_id={storeent_id}
+          and qtyunitdsc.language_id={LanguageID}
+          and baseitmdsc.language_id={LanguageID}
+          and ffmcentds.language_id={LanguageID}
+          and rma.ffmcenter_id in ({FulfillmentCenterList})
+    order by "Return Number"
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>reporting.reportStrings</resourceBundle>
+         <title>ReturnsWithPartialReceiptsReportOutputViewTitle</title>
+         <message>ReturnsWithPartialReceiptsReportOutputViewTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH {  font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD {  font-size : 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>15</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportReturnNumberColumnTitle</columnName>
+            <columnType>integer</columnType>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportCustomerIDColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportOpenedDateColumnTitle</columnName>
+            <columnType>date</columnType>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportReturnStatusColumnTitle</columnName>
+            <columnType>enumeration</columnType>
+
+              <PRC>RMAStatusPRC</PRC>
+
+              <PND>RMAStatusPND</PND>
+              <APP>RMAStatusAPP</APP>
+              <EDT>RMAStatusEDT</EDT>
+              <CLO>RMAStatusCLO</CLO>
+              <CAN>RMAStatusCAN</CAN>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportReturnAmountColumnTitle</columnName>
+            <columnType>currency</columnType>
+	    <currencySymbolColumn>C10</currencySymbolColumn>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C5</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportSKUColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C6</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportDescriptionColumnTitle</columnName>
+            <maxEntryLength>50</maxEntryLength>
+         </columns>
+         <columns>
+            <columnKey>C7</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportQtyAuthorizedColumnTitle</columnName>
+            <columnType>decimal</columnType>
+            <setMinimumFractionDigits>0</setMinimumFractionDigits>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C8</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportQtyUnitsColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C9</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportFulfillmentCenterColumnTitle</columnName>
+         </columns>
+         <columns>
+            <columnKey>C10</columnKey>
+            <columnName>ReturnsWithPartialReceiptsReportFulfillmentCenterColumnTitle</columnName>
+	    <displayInReport>false</displayInReport>
+         </columns>
+      </userDefinedParameters>
+   </display>
+  </Report>
+</Reporting>

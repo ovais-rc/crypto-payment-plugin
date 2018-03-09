@@ -1,0 +1,168 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+
+
+<%-- 
+  *****
+  * This JSP generates the CoreMetrics attribute parameters with search facet information, in the order that they were selected.
+  * The category facets are always grouped in the beginning of the breadCrumbTrailEntryView.  We first extract the leaf category only.
+  * Then we maintain a list of facets that exist before the category was selected and save that in a cookie.  With this cookie, we
+  * can keep track of when then category facet is added, and insert it accordingly.
+  *****
+--%>
+
+<!-- BEGIN AnalyticsSearch.jspf -->
+
+<c:set var="analyticsFacetAttributes" value="" scope="request"/>
+<c:set var="leafCategoryAttribute" value="" scope="request"/>
+<c:set var="preCategoryAttributes" value="${cookie.analyticsPreCategoryAttributes.value}"/>
+
+
+<c:forEach var="breadcrumb" items="${globalbreadcrumbs.breadCrumbTrailEntryView}">
+	<c:set var="facetType" value="${breadcrumb.value}" />
+	<c:set var="facetLabel" value="${breadcrumb.label}" />
+
+	<c:choose>
+		<c:when test="${breadcrumb.type_ == 'FACET_ENTRY_CATEGORY'}">
+			<fmt:message bundle="${storeText}" var="facetType" key="SEARCH_FACET_CATEGORY" />
+			<c:set var="leafCategoryAttribute" value="${facetType}:${facetLabel}" scope="request"/>
+		</c:when>
+		<c:otherwise>				
+			<c:choose>
+				<c:when test="${fn:startsWith(facetType, 'mfName')}">
+					<fmt:message bundle="${storeText}" var="facetType" key="SEARCH_FACET_MANUFACTURER" />
+				</c:when>
+				<c:when test="${fn:startsWith(facetType, 'price_')}">
+					<c:set var="rangeLabel" value="${fn:replace(facetLabel,'({','')}" />
+					<c:set var="rangeLabel" value="${fn:replace(rangeLabel,'})','')}" />
+					<c:set var="rangeLabel" value="${fn:replace(rangeLabel,'}','')}" />
+					<c:set var="rangeLabel" value="${fn:replace(rangeLabel,'{','')}" />
+					<c:set var="rangeLow" value="${fn:substringBefore(rangeLabel,' ')}" />
+					<c:set var="rangeHigh" value="${fn:substringAfter(rangeLabel,' ')}" />
+					<c:if test="${fn:contains(rangeHigh,' ')}">
+						<c:set var="rangeHigh" value="${fn:substringBefore(rangeHigh,' ')}" />
+					</c:if>		
+					<c:choose>
+						<c:when test="${fn:trim(rangeLow) eq '*'}">
+							<fmt:message bundle="${storeText}" var="facetLabel" key="SEARCH_FACET_PRICE_LESS_THAN" >
+								<fmt:param value="${fn:trim(rangeHigh)}" />
+							</fmt:message>
+						</c:when>
+						<c:when test="${fn:trim(rangeHigh) eq '*'}">
+							<fmt:message bundle="${storeText}" var="facetLabel" key="SEARCH_FACET_PRICE_MORE_THAN" >
+								<fmt:param value="${fn:trim(rangeLow)}" />
+							</fmt:message>
+						</c:when>
+						<c:otherwise>
+							<fmt:message bundle="${storeText}" var="facetLabel" key="SEARCH_FACET_PRICE_BETWEEN" >
+								<fmt:param value="${fn:trim(rangeLow)}" />
+								<fmt:param value="${fn:trim(rangeHigh)}" />
+							</fmt:message>
+						</c:otherwise>
+					</c:choose>
+					<c:remove var="rangeLabel" />
+					<c:remove var="rangeLow" />
+					<c:remove var="rangeHigh" />
+					<c:set var="facetType" value="PRICE"/>
+					<fmt:message bundle="${storeText}" var="facetType" key="SEARCH_FACET_PRICE" />
+				</c:when>
+			</c:choose>
+
+			<c:set var="newEntry" value="${facetType}:${facetLabel}"/>
+			<c:set var="testAttribute" value="${newEntry}"/>
+
+			<c:if test="${!empty analyticsFacetAttributes}">
+				<c:set var="testAttribute" value="${analyticsFacetAttributes}-_-${newEntry}"/>
+			</c:if>
+			<c:choose>
+				<c:when test="${fn:contains(preCategoryAttributes, testAttribute)}">
+					<c:set var="analyticsFacetAttributes" value="${testAttribute}" scope="request"/>
+				</c:when>
+				<c:otherwise>				
+					<c:set var="appendedAttributes" value="${newEntry}"/>
+					<c:if test="${!empty leafCategoryAttribute}">
+<%
+						// update the cookie
+						Cookie preCategoryAttributesCookie = new Cookie("analyticsPreCategoryAttributes", (String) request.getAttribute("analyticsFacetAttributes"));
+						preCategoryAttributesCookie.setPath("/");
+						response.addCookie(preCategoryAttributesCookie);
+%>					
+						<c:set var="appendedAttributes" value="${leafCategoryAttribute}-_-${newEntry}"/>
+						<c:set var="leafCategoryAttribute" value="" scope="request"/>
+					</c:if>
+
+					<c:choose>
+						<c:when test="${empty analyticsFacetAttributes}">
+							<c:set var="analyticsFacetAttributes" value="${appendedAttributes}" scope="request"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="analyticsFacetAttributes" value="${analyticsFacetAttributes}-_-${appendedAttributes}" scope="request"/>
+						</c:otherwise>
+					</c:choose>
+				</c:otherwise>
+			</c:choose>
+		</c:otherwise>
+	</c:choose>
+</c:forEach>
+
+<c:if test="${!empty leafCategoryAttribute}">
+	<c:if test="${preCategoryAttributes != analyticsFacetAttributes}">
+<%
+	// update the cookie
+	Cookie preCategoryAttributesCookie = new Cookie("analyticsPreCategoryAttributes", (String) request.getAttribute("analyticsFacetAttributes"));
+	preCategoryAttributesCookie.setPath("/");
+	response.addCookie(preCategoryAttributesCookie);
+%>
+	</c:if>
+
+	<c:choose>
+		<c:when test="${empty analyticsFacetAttributes}">
+			<c:set var="analyticsFacetAttributes" value="${leafCategoryAttribute}" scope="request"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="analyticsFacetAttributes" value="${analyticsFacetAttributes}-_-${leafCategoryAttribute}" scope="request"/>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+
+<c:if test="${empty WCParam.categoryId}">
+<%
+	// update the cookie
+	Cookie preCategoryAttributesCookie = new Cookie("analyticsPreCategoryAttributes", (String) request.getAttribute("analyticsFacetAttributes"));
+	preCategoryAttributesCookie.setPath("/");
+	response.addCookie(preCategoryAttributesCookie);
+%>
+</c:if>
+	
+
+<%
+		Cookie searchTermCookie = new Cookie("analyticsSearchTerm", (String) request.getAttribute("searchTerm"));
+		searchTermCookie.setPath("/");
+		response.addCookie(searchTermCookie);
+		
+		Cookie facetAttributesCookie = new Cookie("analyticsFacetAttributes", (String) request.getAttribute("analyticsFacetAttributes"));
+		facetAttributesCookie.setPath("/");
+		response.addCookie(facetAttributesCookie);
+%>
+<script type="text/javascript">
+	setCookie("analyticsFacetAttributes", "${analyticsFacetAttributes}", {path: "/", domain: cookieDomain});
+</script>
+              
+
+<!-- END AnalyticsSearch.jspf -->
+
+
+

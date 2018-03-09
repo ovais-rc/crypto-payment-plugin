@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","ca",{indent:"Augmenta sagnat",outdent:"Disminueix sagnat"});

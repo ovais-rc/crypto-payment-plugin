@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","nb",{block:"Juster blokkjustert",center:"Midtstill",left:"Venstrejuster",right:"Høyrejuster"});

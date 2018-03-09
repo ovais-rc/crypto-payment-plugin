@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","iw",{closed:"הדיווח נסגר. "});

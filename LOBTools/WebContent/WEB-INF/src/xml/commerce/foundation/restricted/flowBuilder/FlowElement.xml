@@ -1,0 +1,628 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- 
+		This class provides a basic view for element diagram in flow builder.
+		@keywords private 
+	-->
+	<Element classDefinition="true" definitionName="cmc/foundation/FlowElement" placement="content">
+		<dependency localName="FlowPath" moduleName="cmc/foundation/FlowPath"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="ObjectGroupFilter" moduleName="cmc/foundation/ObjectGroupFilter"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<dependency localName="FlowElementContextMenu" moduleName="cmc/foundation/FlowElementContextMenu"/>
+		<dependency localName="FlowElementSorter" moduleName="cmc/foundation/FlowElementSorter"/>
+		<!--- @keywords private -->
+		<variable name="objectClass" type="module" value="${FlowPath}"/>
+		
+		<!--- @keywords private -->
+		<variable name="oList" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<variable name="elementName" type="string" value=""/>
+
+		<!---
+			Name of the resource for this element's flow icon
+			@keywords private
+		-->
+		<variable name="icon" type="string" value="${null}"/>
+		<!---
+			Reference to the icon view of the flow element
+			@keywords private
+		-->
+		<variable name="iconView" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<variable name="summaryView" value="${null}"/>
+		<!---
+			Summary view map.
+			@keywords private
+		-->
+		<variable name="summaryViewMap" value="${{}}"/>
+
+		<!--- @keywords private -->
+		<variable name="fixedElement" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<variable name="o"/>
+
+		<!--- @keywords private -->
+		<variable name="flowPathFilter" value="${null}"/>
+
+		<!--- @keywords private -->
+		<variable name="flowPathSorter" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<variable name="pathWidth" type="number" value="0"/>
+
+		<!--- @keywords private -->
+		<variable name="pathHeight" type="number" value="0"/>
+		
+		<!---
+			A reference to the parent cmc/foundation/FlowPath
+			@keywords private
+		-->
+		<variable name="parentFlowPath" value="${null}"/>
+		
+		<!---
+			Flag indicating whether or not this element has child path elements
+		-->
+		<variable name="hasChildElements" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<variable name="contextMenuClass" type="module" value="${FlowElementContextMenu}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.flowPathFilter = new ObjectGroupFilter.Class(this, {
+				objectGroup: "FlowElement"
+			});
+			this.flowPathSorter = new FlowElementSorter.Class(this);
+			var parentFlow = FlowUtils.Singleton.getParentFlow(this);
+			if (parentFlow && parentFlow.flowBuilder) {
+				new parentFlow.flowBuilder.flowConnectorClass.Class(this.flowconnectorview, {
+					name: "flowconnector"
+				});
+			}
+			if (this.o) {
+				this.parentFlowPath = FlowUtils.Singleton.getParentFlowPath(this);
+				this.o.bindViewToChildren(this, this.flowPathFilter, null, this.flowPathSorter);
+			}
+			this.summaryView = this.MainView.iconcontentview.iconcontent.textview.summaryview;
+			this.updateSummary();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.releaseModelObjectDel) {
+				this.releaseModelObjectDel.disconnectAll();
+				delete this.releaseModelObjectDel;
+			}
+			if (this.updateElementNameDel) {
+				this.updateElementNameDel.disconnectAll();
+				delete this.updateElementNameDel;
+			}
+			if (this.sequenceDel) {
+				this.sequenceDel.disconnectAll();
+				delete this.sequenceDel;
+			}
+			if (this.pathSequenceDel) {
+				this.pathSequenceDel.disconnectAll();
+				delete this.pathSequenceDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				if (this.o) {
+					this.o.releaseViewFromChildren(this);
+				}
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+				}
+				if (this.updateElementNameDel) {
+					this.updateElementNameDel.disconnectAll();
+				}
+				else {
+					this.updateElementNameDel = new EventHandler.Class(this, "updateElementName");
+				}
+				if (this.sequenceDel) {
+					this.sequenceDel.disconnectAll();
+				}
+				else {
+					this.sequenceDel = new EventHandler.Class(this, "updateSequence");
+				}
+				if (this.pathSequenceDel) {
+					this.pathSequenceDel.disconnectAll();
+				}
+				else {
+					this.pathSequenceDel = new EventHandler.Class(this, "updatePathSequence");
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					var sequenceProp = this.o.getProperty("sequence");
+					this.sequenceDel.connect(sequenceProp, "onvalue");
+					this.o.bindViewToChildren(this, this.flowPathFilter, null, this.flowPathSorter);
+					this.parentFlowPath = FlowUtils.Singleton.getParentFlowPath(this);
+					this.setVariable("icon", this.o.objectDefinition.flowIcon);
+					this.setVariable("elementName", this.o.objectDefinition.displayName);
+					this.updateElementNameDel.connect(this.o.objectDefinition, "ondisplayName");
+					this.updateSummary();
+					this.o.validate();
+					if (this.o.objectId == this.parent.parentFlow.o.viewState) {
+						this.loadProperties();
+					}
+					var children = FlowUtils.Singleton.getSortedElements(this.o);
+					if (this.hasChildElements != children.length > 0) {
+						this.setVariable("hasChildElements", children.length > 0);
+					}
+					if (this.hasChildElements) {
+						this.pathSequenceDel.connect(this.o, "onchildObjects");
+					}
+					this.checkSelected();
+				}
+				else {
+					this.releaseSummary();
+				}
+				this.updateComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method releases the model object from this properties view by setting {@link cmc/foundation/ObjectProperties#o} to null.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateElementName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.o.objectDefinition) {
+				this.setVariable("elementName", this.o.objectDefinition.displayName);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateSequence">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.parentFlowPath && this.parentFlowPath.oList) {
+				this.parentFlowPath.oList.refreshFilteredObjects();
+			}
+			]]>
+		</method>
+
+		<!---
+			When child objects are added or removed from this element, this method notifies all of the existing paths to
+			update their sequence values.
+			@keywords private
+		-->
+		<method args="e" name="updatePathSequence">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.hasChildElements) {
+				var paths = this.getChildren();
+				for (var i = 0; i < paths.length; i++) {
+					paths[i].resetSequence();
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="v, p, a" name="determinePlacement">
+			<![CDATA[
+			if (p == "content") {
+				return this.MainView.subPathsView.paths;
+			}
+			else {
+				return this.inherited(arguments);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="updateSummary">
+			<![CDATA[
+			if (this.o) {
+				if (this.summaryView != null && this.summaryView.summary) {
+					this.summaryView.summary.setVariable("visible", false);
+					this.summaryView.summary.setVariable("o", null);
+					this.summaryView.summary = null;
+				}
+				var def = this.o.objectDefinition;
+				if (def && def.summaryClass && this.summaryView != null) {
+					var summary = this.summaryViewMap[this.o.UID + def.summaryClass.moduleName];
+					if (summary) {
+						summary.setVariable("o", this.o);
+						summary.setVariable("visible", true);
+					}
+					else {
+						summary = new def.summaryClass.Class(this.summaryView, {
+							o: this.o
+						});
+						this.summaryViewMap[this.o.UID + def.summaryClass.moduleName] = summary;
+					}
+					this.summaryView.summary = summary;
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="releaseSummary">
+			<![CDATA[
+			if (this.summaryView != null && this.summaryView.summary) {
+				this.summaryView.summary.setVariable("visible", false);
+				this.summaryView.summary.setVariable("o", null);
+				this.summaryView.summary = null;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getChildren">
+			<![CDATA[
+			var childFlowPaths = [];
+			var childViews = this.MainView.subPathsView.paths.childComponents;
+			for (var i = 0; i < childViews.length; i++) {
+				if (childViews[i].visible && childViews[i] instanceof FlowPath.Class) {
+					childFlowPaths.push(childViews[i]);
+				}
+			}
+			return childFlowPaths;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="unselectChildren">
+			<![CDATA[
+			var childFlowPaths = this.MainView.subPathsView.paths.childComponents;
+			for (var i = 0; i < childFlowPaths.length; i++) {
+				var s = childFlowPaths[i];
+				if (s.visible && s instanceof FlowPath.Class) {
+					s.unselectChildren();
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="deleteFlowElements">
+			<![CDATA[
+			this.parentFlow.o.lock();
+			var propertiesView = this.parentFlow.o.viewState;
+			if (this.selected) {
+				for (var i = 0; i < this.parentFlow.selectedElements.length; i++) {
+					var obj = this.parentFlow.selectedElements[i].o;
+					if (obj.objectId == propertiesView) {
+						this.parentFlow.hideProperties();
+						this.parentFlow.o.viewState = "";
+					}
+					this.deleteFlowElement(obj);
+				}
+			}
+			else {
+				if (this.o.objectId == propertiesView) {
+					this.parentFlow.hideProperties();
+					this.parentFlow.o.viewState = "";
+				}
+				this.deleteFlowElement(this.o);
+			}
+			this.parentFlow.o.unlock(true);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="obj" name="deleteFlowElement">
+			<![CDATA[
+			if (this.isBranch(this.o)) {
+				if (this.parentFlowPath) {
+					var insertSequenceRefObj = null;
+					var siblings = FlowUtils.Singleton.getSortedElements(this.parentFlowPath.o);
+					for (var i = 0; i < siblings.length - 1; i++) {
+						if (siblings[i] == obj) {
+							insertSequenceRefObj = siblings[i + 1];
+							break;
+						}
+					}
+					var branchPaths = FlowUtils.Singleton.getSortedElements(obj);
+					if (branchPaths.length > 0) {
+						var copyElements = FlowUtils.Singleton.getSortedElements(branchPaths[0]);
+						if (copyElements.length > 0) {
+							for (var i = 0; i < copyElements.length; i++) {
+								var insertSequence = FlowUtils.Singleton.getNextSequenceNumber(this.parentFlowPath.o, insertSequenceRefObj);
+								var cloneObj = this.parentFlowPath.o.model.createNewObject(null, this.parentFlowPath.o, true, copyElements[i]);
+								cloneObj.setPropertyValue("sequence", null, insertSequence);
+							}
+						}
+					}
+					this.parentFlowPath.o.updateChildObjects();
+				}
+			}
+			obj.deleteObject();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="forcedBranchType, branchObjectType" name="addElementsToBranch">
+			<![CDATA[
+			var pathType = "path";
+			this.parentFlow.o.lock();
+			if (branchObjectType) {
+				var firstElement = (this.selected) ? this.parentFlow.selectedElements[0] : this;
+				var lastElement = (this.selected) ? this.parentFlow.selectedElements[this.parentFlow.selectedElements.length - 1] : this;
+				var insertSequence = FlowUtils.Singleton.getNextSequenceNumber(this.parentFlowPath.o, firstElement.o);
+				var branchObj = this.parentFlowPath.o.model.createNewObject(this.parentFlowPath.o.model.getObjectDefinition(this.parentFlowPath.o, branchObjectType), this.parentFlowPath.o);
+				branchObj.setPropertyValue("sequence", null, insertSequence);
+				if ((typeof (forcedBranchType) != "undefined") && (forcedBranchType != "")) {
+					var branchProp = branchObj.getProperty("branchtype");
+					branchProp.change(forcedBranchType);
+					branchProp.setVariable("propertyReadOnly", "true");
+					branchObj.setPropertyValue("branchtypeReadOnly", "", "true");
+				}
+				var pathObjectDefinition = branchObj.model.getObjectDefinition(branchObj, pathType);
+				insertSequence = FlowUtils.Singleton.getNextSequenceNumber(branchObj);
+				var topFlowObj = branchObj.model.createNewObject(pathObjectDefinition, branchObj);
+				topFlowObj.setPropertyValue("sequence", null, insertSequence);
+				insertSequence = FlowUtils.Singleton.getNextSequenceNumber(branchObj);
+				var botFlowObj = branchObj.model.createNewObject(pathObjectDefinition, branchObj);
+				botFlowObj.setPropertyValue("sequence", null, insertSequence);
+				if (this.selected) {
+					for (var i = 0; i < this.parentFlow.selectedElements.length; i++) {
+						var e = this.parentFlow.selectedElements[i];
+						if (e instanceof exports.Class) {
+							this.addElementToBranch(e.o, topFlowObj, botFlowObj);
+						}
+					}
+				}
+				else {
+					this.addElementToBranch(this.o, topFlowObj, botFlowObj);
+				}
+				branchObj.updateChildObjects();
+				topFlowObj.updateChildObjects();
+				botFlowObj.updateChildObjects();
+			}
+			this.parentFlow.o.unlock(true);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="elementObj, topFlowObj, bottomFlowObj" name="addElementToBranch">
+			<![CDATA[
+			var insertSequence = FlowUtils.Singleton.getNextSequenceNumber(topFlowObj);
+			var moveObj = topFlowObj.model.createNewObject(null, topFlowObj, true, elementObj);
+			moveObj.setPropertyValue("sequence", null, insertSequence);
+			moveObj.updateChildObjects();
+			insertSequence = FlowUtils.Singleton.getNextSequenceNumber(bottomFlowObj);
+			var cloneObj = bottomFlowObj.model.createNewObject(null, bottomFlowObj, true, elementObj);
+			cloneObj.setPropertyValue("sequence", null, insertSequence);
+			cloneObj.updateChildObjects();
+			elementObj.deleteObject();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="addPath">
+			<![CDATA[
+			if (this.isBranch(this.o)) {
+				var currentPaths = FlowUtils.Singleton.getSortedElements(this.o);
+				if (currentPaths.length > 0) {
+					var lastPath = currentPaths[currentPaths.length - 1];
+					var elements = FlowUtils.Singleton.getSortedElements(lastPath);
+					var insertSequence = FlowUtils.Singleton.getNextSequenceNumber(this.o);
+					var pathObj = this.o.model.createNewObject(this.o.model.getObjectDefinition(this.o, "path"), this.o);
+					pathObj.setPropertyValue("sequence", null, insertSequence);
+					if (elements.length > 0) {
+						for (var i = 0; i < elements.length; i++) {
+							insertSequence = FlowUtils.Singleton.getNextSequenceNumber(pathObj);
+							var cloneObj = pathObj.model.createNewObject(null, pathObj, true, elements[i]);
+							cloneObj.setPropertyValue("sequence", null, insertSequence);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="obj" name="isBranch">
+			<![CDATA[
+			if (typeof(obj) == "undefined") obj = null;
+			if (obj == null) {
+				obj = this.o;
+			}
+			return obj && obj.objectDefinition.elemTemplateType == "Branch";
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="isDragEnabled">
+			<![CDATA[
+			var parentFlow = FlowUtils.Singleton.getParentFlow(this);
+			if ((parentFlow && !parentFlow.editableFlow) || this.fixedElement) {
+				return false;
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="del" name="getConnectorLeftExpansionSize">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var expansionSize = 0;
+			if (del != null) {
+				del.connect(this, "onhasChildElements");
+				del.connect(this, "oniconView");
+			}
+			if (!this.hasChildElements && this.iconView != null) {
+				if (del != null) {
+					del.connect(this, "onwidth");
+					del.connect(this.iconView, "onwidth");
+				}
+				expansionSize = this.width - this.iconView.width - this.flowconnectorview.width - 20;
+				if (expansionSize < 0) {
+					expansionSize = 0;
+				}
+			}
+			return expansionSize;
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="0"/>
+
+		<Component height="32" name="flowconnectorview"/>
+
+		<Component name="MainView">
+			<DragSource dragAndDropManager="${DndManager.Singleton}" dragObjectTarget="${this.classroot.MainView.iconcontentview.iconcontent}" name="dragSource" targetKeys="${['flowelement']}">
+				<variable name="flowElement" value="${this.classroot}"/>
+
+				<method name="isEnabled">
+					<![CDATA[
+					return this.classroot.isDragEnabled();
+					]]>
+				</method>
+
+				<method name="getDragSources">
+					<![CDATA[
+					var dragSources = new Array();
+					if (this.classroot.selected) {
+						for (var i = 0; i < this.classroot.parentFlow.selectedElements.length; i++) {
+							var e = this.classroot.parentFlow.selectedElements[i];
+							if (e instanceof exports.Class) {
+								if (!e.fixedElement && e.MainView.dragSource && e.MainView.dragSource.isEnabled()) {
+									dragSources.push(e.MainView.dragSource);
+								}
+								else {
+									e.unselect();
+								}
+							}
+						}
+					}
+					else {
+						this.classroot.parentFlow.unselectAll();
+						this.classroot.select();
+						dragSources.push(this);
+					}
+					return dragSources;
+					]]>
+				</method>
+			</DragSource>
+
+			<AxisLayout axis="x" spacing="0"/>
+			<Component name="iconcontentview">
+				<Component name="iconcontent">
+					<handler name="oninit">
+						<![CDATA[
+						this.menu = new this.classroot.contextMenuClass.Class(this, {
+							flowElement: this.classroot
+						});
+						this.menu.addView(this.textview);
+						]]>
+					</handler>
+					<handler eventSource="this.classroot" name="onicon">
+						<![CDATA[
+						this.menu.addView(this.wrapper.iconview.icon);
+						]]>
+					</handler>
+					<handler name="onclick">
+						<![CDATA[
+						this.classroot.loadProperties();
+						]]>
+					</handler>
+					<handler name="onmouseover">
+						<![CDATA[
+						this.classroot.parentFlow.selectBox.enabled = false;
+						if (!this.classroot.selected) {
+							this.classroot.setIconBackground(this.classroot.hoverBorderColour, this.classroot.hoverFillColour);
+						}
+						]]>
+					</handler>
+					<handler name="onmouseout">
+						<![CDATA[
+						this.classroot.parentFlow.selectBox.enabled = true;
+						if (!this.classroot.selected) {
+							this.classroot.setIconBackground(null, null);
+						}
+						]]>
+					</handler>
+					<Component height="${this.iconview.icon.height + 6}" name="wrapper" width="${this.iconview.icon.width + 6}" x="12" y="${(this.classroot.flowconnectorview.height - this.height) / 2 - 1}">
+						<Component height="${this.parent.height - 2}" name="iconview" width="${this.parent.width - 2}" x="1" y="1">
+							<Component align="center" imageSet="${this.classroot.icon}" name="icon" valign="middle">
+								<handler name="oninit">
+									<![CDATA[
+									this.classroot.setVariable("iconView", this);
+									]]>
+								</handler>
+							</Component>
+						</Component>
+					</Component>
+					<Component imageSet="wcfFlowElementIncomplete" visible="${!this.classroot.complete}" x="${this.parent.textview.x - this.width}" y="${this.parent.textview.y + 2}"/>
+					<Component name="textview" x="10" y="${this.parent.wrapper.iconview.y + this.parent.wrapper.iconview.height + 1}">
+						<AxisLayout axis="y" spacing="0"/>
+						<TextComponent fontsize="12" name="elementtext" resize="true" text="${this.classroot.elementName}"/>
+						<Component name="summaryview" width="${Math.max(this.parent.elementtext.width, 100)}"/>
+						<TextComponent fontstyle="italic" name="counttext" resize="true"/>
+						<Component height="10" name="padding"/>
+					</Component>
+				</Component>
+			</Component>
+
+			<Component name="subPathsView" visible="${this.classroot.hasChildElements}">
+				<handler name="onwidth">
+					<![CDATA[
+					this.classroot.setVariable("pathWidth", this.width);
+					]]>
+				</handler>
+				<handler name="onheight">
+					<![CDATA[
+					this.classroot.setVariable("pathHeight", this.height);
+					]]>
+				</handler>
+				<AxisLayout axis="x" spacing="0"/>
+				<Component name="paths">
+					<AxisLayout axis="y" spacing="0"/>
+				</Component>
+				<Component width="40"/>
+			</Component>
+		</Component>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Element>
+</Definitions>

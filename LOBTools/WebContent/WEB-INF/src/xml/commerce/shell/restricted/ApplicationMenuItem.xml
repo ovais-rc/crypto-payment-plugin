@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class implements the items in the Management Center menu. It extends 
+		cmc/foundation/BaseListItem class to add Commerce specific functions.
+
+		An instance of this class will be created in <code>cmc/shell/ApplicationMenuItems</code> definition when adding an item to the
+		main application menu.
+
+		Sample usage:
+		@START_CODE
+		<ApplicationMenuItem
+			id="myTool"
+			displayName="My Tool"
+			package="cmc/shell"
+			toolDefinitionName="myToolDefinition"
+			usage="myToolUsage"
+			actionName="openBusinessObjectEditor" />
+		@END_CODE
+	-->
+	<BaseListItem classDefinition="true" definitionName="cmc/shell/ApplicationMenuItem" width="${this.parent.width}">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Flag that determines whether to add a menu separator before this item or not.
+		-->
+		<variable name="addSeparatorBefore" type="boolean" value="false"/>
+		<!---
+			The display name of the menu item. This is a required attribute.
+		-->
+		<variable name="displayName" type="string"/>
+		<!---
+			The name of the class which implements the tool associated with this item.  This class must
+			extend the business object editor base class (cmc/foundation/BusinessObjectEditor).
+		-->
+		<variable deferLoad="true" name="objectClass" type="module"/>
+		<!---
+			The name of the definition that declares the tool associated with this item.  The definition must
+			extend the business object editor base class (cmc/foundation/BusinessObjectEditor). Only specify this
+			attribute if you do not provide a value for <code>objectClass</code>.
+		-->
+		<variable deferLoad="true" name="toolDefinition" type="module"/>
+		<!---
+			The name of the usage policy used to determine access to this menu item.
+			The Management Center uses the usage policy in the following ways:
+			<UL>
+			<LI>To determine if the menu item is displayed.  If the current user is allowed to use the tool for any store, the menu item will be displayed.
+			<LI>To determine the list of stores that can be selected in this tool.  Any stores which the current user is allowed to use with this tool are displayed in the store selection menu.
+			</UL>
+
+			For additional information on the usage policies and how they are defined, see the <a href="/com.ibm.commerce.management-center_customization.doc/code/Infrastructure/OnlineStore/noun-summary.htm"/>OnlineStore</a> noun.	
+		-->
+		<variable name="usage" type="string" value=""/>
+		<!---
+			The name of the method in this class to invoke when this item is selected.  The available
+			methods to invoke are:
+			<ul>
+				<li>openBusinessObjectEditor</li>
+				<li>openGettingStarted</li>
+				<li>openPreference</li>
+				<li>openLogTrace</li>
+			</ul>
+		-->
+		<variable name="actionName" type="string"/>
+		<!---
+			The short-cut key of this item.
+			@type String[]
+		-->
+		<variable name="shortCutKey"/>
+		<!---
+			Flag that determines whether the tool is available or not when working on a workspace task. The default
+			value of this flag is true.
+		-->
+		<variable name="availableToWorkspaceTasks" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Flag that determines whether to display this item in the menu or not. The default value of
+			this flag is false, and it will be changed to true when the user has access to this item.
+		-->
+		<variable name="visible" value="false"/>
+		<!---
+			@keywords private
+			Flag that indicates that the action was automatically invoked during logon.
+		-->
+		<variable name="logonAction" value="false" type="boolean"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ApplicationMenuItem", "oninit");
+			}
+			if (!this.objectClass_moduleName) {
+				this.objectClass_moduleName = this.toolDefinition_moduleName;
+			}
+			var menuItems = this.parent.menuItems;
+			if (!menuItems) {
+				menuItems = [];
+				this.parent.menuItems = menuItems;
+			}
+			menuItems.push(this);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ApplicationMenuItem", "oninit");
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="ondestroy">
+			<![CDATA[
+			var index = this.parent.menuItems.indexOf(this);
+			this.parent.menuItems.splice(index, 1);
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onselect">
+			<![CDATA[
+			if (this.selected) {
+				this.logonAction = false;
+				this.doSelect();
+				if (typeof (this.invokeActionDel) == "undefined") {
+					this.invokeActionDel = new EventHandler.Class(this, "invokeAction");
+				}
+				CallbackUtil.Singleton.addDeferredCallback(this.invokeActionDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="e" name="invokeAction">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this[this.actionName]();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="parent, args" name="constructor">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="s" name="_applystyle">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.selected) {
+				this.setVariable("bgcolor", "#4178be");
+			}
+			else if (this.hilited) {
+				this.setVariable("bgcolor", "#4178be");
+			}
+			else {
+				this.setVariable("bgcolor", "#464646");
+			}
+			if (this._enabled) {
+				this.setVariable("fgcolor", "#ffffff");
+			}
+			else {
+				this.setVariable("fgcolor", "#ffffff");
+			}				
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method shows this item in the menu when the user satisfies access control
+			requirements and is allowed to access this menu item. This is called when either
+			there is no usage assigned or cmc/shell/GetOnlineStores returns a store successfully.
+		-->
+		<method name="doShowMenuItem">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ApplicationMenuItem", "doShowMenuItem");
+			}
+			if (this.usage != "") {
+				ContextUtil.Singleton.findContextValue(null, "accessibleTools").value = ContextUtil.Singleton.findContextValue(null, "accessibleTools").value == "" ? this.usage : ContextUtil.Singleton.findContextValue(null, "accessibleTools").value + "," + this.usage;
+			}
+			this.setVariable("visible", true);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenuItem", "doShowMenuItem", "Completed displaying this item in the application menu: " + this.displayName);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ApplicationMenuItem", "doShowMenuItem");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method hides this item in the menu when the user does not satisfy access control
+			requirements and is not allowed to access this menu item. This is called when no store
+			is returned from cmc/shell/GetOnlineStores service.
+		-->
+		<method name="doHideMenuItem">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ApplicationMenuItem", "doHideMenuItem");
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenuItem", "doHideMenuItem", "Removing this item from the application menu: " + this.displayName);
+			}
+			this.setVariable("visible", false);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ApplicationMenuItem", "doHideMenuItem");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method is invoked when this menu item is selected and no specified onselect event
+			has been defined.
+		-->
+		<method name="doSelect">
+			<![CDATA[
+			SingletonRegistry.applicationMenu.closeApplicationMenu();
+			]]>
+		</method>
+
+		<!---
+			This method opens the business object editor for the tool specified in the objectClass attribute
+			that is associated with this menu item.  The business object editor will be created and launched
+			in the main work area, or if it is already created, it will be brought to focus.  If the value of
+			{@link cmc/shell/ApplicationMenuItem#actionName actionName} contains the name of this method, this method
+			will be invoked when this item is selected from the main application menu, or when the short-cut
+			key of this item is entered.
+		-->
+		<method name="openBusinessObjectEditor">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenuItem", "openBusinessObjectEditor", "Opening this tool in the work area: " + this.displayName);
+			}
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.start("openBusinessObjectEditor: " + this.displayName);
+			}
+			if (this.availableToWorkspaceTasks || ContextUtil.Singleton.findContextValue(null, "workspaceTask").value == "") {
+				EventUtil.disconnectAll(this, "openBusinessObjectEditor");
+				if (this.objectClass) {
+					ToolsController.Singleton.openTool(this.id, this.objectClass, this.usage, this.availableToWorkspaceTasks, undefined, undefined, !this.logonAction);
+					this.logonAction = false;
+				}
+				else {
+					EventUtil.connect(this, "onobjectClass", this, "openBusinessObjectEditor");
+					this.loadDeferredVariable("objectClass");
+				}
+			}
+			else {
+				require(["cmc/shell/ToolNotAvailableToWorkspaceTasksDialog"], function(ToolNotAvailableToWorkspaceTasksDialog) {
+					ToolNotAvailableToWorkspaceTasksDialog.Singleton.openWindow();
+				});
+			}
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.end();
+			}
+			]]>
+		</method>
+
+		<!---
+			This method opens the getting started page of Management Center.
+			If the value of {@link cmc/shell/ApplicationMenuItem#actionName actionName} contains the name of this
+			method, this method will be invoked when this item is selected from the main application menu.
+		-->
+		<method name="openGettingStarted">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenuItem", "openGettingStarted", "Launching the getting started page");
+			}
+			EventUtil.disconnectAll(this, "openGettingStarted");
+			if (this.objectClass) {
+				ToolsController.Singleton.openTool(this.id, this.objectClass, this.usage, this.availableToWorkspaceTasks);
+				if (this.logonAction) {
+					this.logonAction = false;
+					var menuItems = this.parent.menuItems;
+					for (var i = 0; i < menuItems.length; i++) {
+						if (menuItems[i].logonAction) {
+							menuItems[i].invokeAction();
+						}
+					}
+				}
+			}
+			else {
+				EventUtil.connect(this, "onobjectClass", this, "openGettingStarted");
+				this.loadDeferredVariable("objectClass");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method opens the Preferences dialog which allows the user to change preferences of
+			the application.  If the value of {@link cmc/shell/ApplicationMenuItem#actionName actionName} contains
+			the name of this method, this method will be invoked when this item is selected from the main
+			application menu.
+		-->
+		<method name="openPreference">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenuItem", "openPreference", "Opening the preference window.");
+			}
+			PreferenceManager.Singleton.loadUserPreferenceDialog();
+			]]>
+		</method>
+
+		<!---
+			This method opens the logging and tracing dialog which allows the user to enable/disable
+			logging and tracing of the application and change logging and tracing levels.  If the value of
+			{@link cmc/shell/ApplicationMenuItem#actionName actionName} contains the name of this method, this
+			method will be invoked when this item is selected from the main application menu.
+		-->
+		<method name="openLogTrace">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ApplicationMenuItem", "openLogTrace", "Opening the Logging and Tracing window.");
+			}
+			Logger.Singleton.loadLogTraceWindow();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calculate the width for this menu item.
+		-->
+		<method name="getMenuItemWidth">
+			<![CDATA[
+			return this.menuItemView.width + 30;
+			]]>
+		</method>
+
+		<Component height="1" name="separator" width="${this.parent.width}" visible="${this.parent.addSeparatorBefore}" bgcolor="#6b6b6b"/>
+		<Component name="menuItemView" height="33">
+			<TextComponent x="14" name="itemText" text="${this.classroot.displayName}" valign="middle"/>
+		</Component>
+		<AxisLayout axis="y"/>
+	</BaseListItem>
+
+</Definitions>

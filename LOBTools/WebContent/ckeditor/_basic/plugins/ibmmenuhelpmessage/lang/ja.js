@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","ja",{keystrokeForContextMenu:"「Ctrl」を押しながら右クリックすると、さらにオプションが表示されます",keystrokeForContextMenuMac:"「Cmd」を押しながら右クリックすると、さらにオプションが表示されます"});

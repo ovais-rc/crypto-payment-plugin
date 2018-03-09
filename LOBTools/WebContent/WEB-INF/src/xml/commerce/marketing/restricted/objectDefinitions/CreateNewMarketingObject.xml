@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		New object handler that creates marketing objects directly
+		bypassing the template wizard.
+		The marketing object will be populated if it has a populate new object service
+		and that service supports the objectType passed in.
+		A path to an object that is to receive the focus after open can be specified.
+	-->
+	<NewReferencedObjectHandler classDefinition="true" definitionName="cmc/marketing/NewMarketingObjectHandler">
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="LoadChildrenActionHandler" moduleName="cmc/foundation/LoadChildrenActionHandler"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+	
+		<!-- The type of object to be create by the populate service. -->
+		<variable name="objectType" type="string" value="null"/>
+		
+		<!--
+			The path to the object that is to get the focus after open.
+			Optional parameter.
+		-->
+		<variable name="focusComponentPath" type="string" value="${null}"/>
+		
+		<!--
+			The property of the focus object that is to get the focus after open.
+			Optional parameter.
+		-->
+		<variable name="focusComponentProperty" type="string" value="${null}"/>
+		
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.setFocusDel = new EventHandler.Class(this, "setFocus");
+			this.setFocusArgs = null;
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="objectDefinition, parentObject, del" name="createNewObject">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var o = objectDefinition.model.createNewObject(objectDefinition);
+			if (o) {
+				if (this.objectType != null && o.objectDefinition.populateNewObjectService != null) {
+					var name = "";
+					if (parentObject) {
+						var layoutObj = parentObject.getParentPrimaryObject("PageLayoutAlias");
+						var layoutName = "";
+						if (layoutObj) {
+							layoutName = layoutObj.getPropertyValue("name", null, true);
+						}
+						var slot = parentObject.getPropertyValue("slotIdentifier", null, true);
+						var sequence = parentObject.getPropertyValue("sequence", null, true);
+						name = marketingResources.Singleton.replaceValues("widgetGeneratedActivityName", [layoutName, slot, sequence]);
+						name = name.length > 64 ? name.substr(0, 64) : name;
+						name = this.handleDuplication(parentObject, name);
+					}
+					var objectType = this.objectType;
+					if (this.objectType == "Coremetrics") {
+						var storeConfig = ContextUtil.Singleton.findStoreConfig(o);
+						var coremetricsEnabled = ((storeConfig != null) && (storeConfig.analytics != null));
+						if (coremetricsEnabled) {
+							coremetricsEnabled = storeConfig.analytics.isEnabled == "true" && storeConfig.analytics.provider == "coremetrics";
+						}
+						if (!coremetricsEnabled) {
+							objectType = "Default";
+						}
+					}
+					o.objectDefinition.populateNewObjectService.doRequest(o, {
+						type: objectType,
+						name: name
+					});
+				}
+				o.model.oEditor.selectOpenObject(o);
+				if (this.focusComponentPath != null) {
+					var loadFocusChildrenTriggered = false;
+					var focusObjectPath = this.focusComponentPath;
+					var focusObject = o.getObject(focusObjectPath);
+					if (focusObject == null) {
+						var pathSelectors = ModelUtil.Singleton.getPathSelectors(focusObjectPath);
+						var focusObjectDefinitions = o.objectDefinition.getChildDefinitions(pathSelectors[0].type);
+						if (focusObjectDefinitions.length > 0) {
+							LoadChildrenActionHandler.Singleton.triggerAction(o, focusObjectDefinitions, this.setFocusDel, {
+								o: o,
+								focusComponentPath: this.focusComponentPath,
+								focusComponentProperty: this.focusComponentProperty
+							});
+							loadFocusChildrenTriggered = true;
+						}
+					}
+					if (!loadFocusChildrenTriggered) {
+						this.setFocus({
+							o: o,
+							focusComponentPath: this.focusComponentPath,
+							focusComponentProperty: this.focusComponentProperty
+						});
+					}
+				}
+			}
+			if (del != null) {
+				del.execute(o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="args" name="setFocus">
+			<![CDATA[
+			this.setFocusDel.disconnectAll();
+			if (!args || args.o == null || args.focusComponentPath == null) {
+				args = this.setFocusArgs;
+			}
+			if (args && args.o != null && args.focusComponentPath != null) {
+				this.setFocusArgs = args;
+				var caller = this;
+				require(["cmc/marketing/SetFocusUtility"], function(SetFocusUtility) {
+					SetFocusUtility.Singleton.setFocusOnObject(args.o, args.focusComponentPath, args.focusComponentProperty, caller.setFocusDel);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle the duplicated activity name.
+			Return a name with proper suffix/prefix.
+		-->
+		<method args="parent, name" name="handleDuplication">
+			<![CDATA[
+			var newName = name;
+			var activityNamesMap = {};
+			var activities = parent.getObjects("ActivityReferenceGroup/WebActivityGroup");
+			for (var i = 0; i < activities.length; i++) {
+				var activityName = activities[i].getPropertyValue("name");
+				if (activityName != "" && activityName.indexOf(name) != -1) {
+					activityNamesMap[activityName] = true;
+				}
+			}
+			var count = 2;
+			while (activityNamesMap[newName]) {
+				newName = marketingResources.Singleton.replaceValues("newWidgetActivityNameTemplate", [name, count++]);
+			}
+			return newName;
+			]]>
+		</method>
+	</NewReferencedObjectHandler>
+	
+	<!---
+		Enablement condition that checks if the WebActivity was created by a page composer
+		widget and the type of widget activity it is.
+		If the type does not match, it will return false.
+		Multiple types can be specified as comma separated values.
+		This enablement condition is used to control the visiblity of flow elements
+		in the activity builder. 
+	-->
+	<EnablementCondition classDefinition="true" definitionName="cmc/marketing/MatchesWidgetActivityTypeEnablementCondition">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		
+		<!-- The object types to be checked -->
+		<variable name="objectTypes" type="string" value="null"/>
+		
+		<!---					
+		    @keywords private
+			@param cmc/foundation/ModelObject o the model object that is to be enabled/disabled.
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var result = true;
+			if (o) {
+				if (o.readOnly) {
+					result = false;
+				}
+				else {
+					var parentActivity = o.getParentPrimaryObject("WebActivityGroup");
+					if (parentActivity) {
+						var viewESpot = parentActivity.getObject("path/viewEMarketingSpot");
+						if (viewESpot) {
+							var widget = viewESpot.getProperty("widgetEspot");
+							if (widget != null && widget != 0) {
+								var widgetType = viewESpot.getPropertyValue("widgetType");
+								if (widgetType != null && widgetType != '' && this.objectTypes != null) {
+									if (widgetType == "Default") {
+										result = true;
+									}
+									else {
+										result = false;
+										var types = StringUtil.Singleton.splitAndTrim(this.objectTypes, ",");
+										for (var i = 0; i < types.length; i++) {
+											if (types[i] == widgetType) {
+												result = true;
+												break;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			if (this.negate) {
+				result = !result;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the enablement changes.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			if (del) {
+				del.connect(o, "onreadOnly");
+			}
+			]]>
+		</method>
+		
+	</EnablementCondition>
+	
+	<!--- @keywords private -->
+	<Node definitionName="cmc/marketing/SetFocusUtility" singletonDefinition="true">
+		
+		<method args="o, path, property, del" name="setFocusOnObject">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			var detailsView = o.model.oEditor.getDetailsView(del);
+			if (detailsView && detailsView.o && detailsView.o == o.openGroupObject && detailsView.setFocusOnComponent) {
+				var object = o.getObject(path, false);
+				var propertyObj = null;
+				if (object != null && property != null) {
+					propertyObj = object.getProperty(property);
+				}
+				if (detailsView.panel && detailsView.panel.activeView == null) {
+					if (del) {
+						del.connect(detailsView.panel, "onactiveView");
+					}
+				}
+				else if (detailsView.panel && detailsView.panel.activeView == detailsView && detailsView.o != null && object != null) {
+					var focusSet = detailsView.setFocusOnComponent(detailsView, object, propertyObj, o);
+					if (!focusSet) {
+						detailsView.setFocusToFirstComponent();
+					}
+				}
+			}
+			]]>
+		</method>
+	</Node>
+</Definitions>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		<p>This class is the base class for a properties view of a {@link cmc/foundation/FlowElementObjectDefinition flow element object}. The properties
+		view of a flow element object is an editor that is presented to a business user within Flow Builder whenever the flow element
+		is opened or a new flow element is created. It allows a business user to edit or enter all the properties of a business object
+		as an input form.</p>
+
+		<p>Implementations of this class must have only one immediate child instance of two different types of view classes. In most cases,
+		when only one page of input widgets is required, {@link cmc/foundation/PropertyGroup} is used. For example:
+		@START_CODE
+			<FlowElementProperties definitionName="extFlowElementProperties">
+				<PropertyGroup name="container" collapsable="false">
+					...
+				</PropertyGroup>
+			</FlowElementProperties>
+		@END_CODE
+		</p>
+		
+		<p>For more detailed flow elements that might require many inputs, widgets can be split up into tabs for organization. In this case,
+		the child class must be an instance of {@link cmc/foundation/PropertyTabs}. For example: 
+		@START_CODE
+			<FlowElementProperties definitionName="extFlowElementProperties">
+				<PropertyTabs name="samplePropertyTabs">
+					<PropertyTabPane name="common" text="General Properties">
+						<PropertyGroup name="commonGroup" collapsable="false">
+							...
+						</PropertyGroup>
+					</PropertyTabPane>
+					<PropertyTabPane name="advanced" text="Advanced Options">
+						<PropertyGroup name="advancedGroup" collapsable="false">
+							...
+						</PropertyGroup>
+					</PropertyTabPane>
+				</PropertyTabs>
+			</FlowElementProperties>
+		@END_CODE
+		</p>
+		
+		<p>Implementations should not be instantiated directly. They should be specified in the
+		{@link cmc/foundation/FlowElementObjectDefinition#propertiesClass propertiesClass} attribute of a
+		{@link cmc/foundation/FlowElementObjectDefinition flow element object definition}.</p>
+		
+		@keywords abstract
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/FlowElementProperties">
+		<dependency localName="ObjectPropertiesUtil" moduleName="cmc/foundation/ObjectPropertiesUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="PropertyGroup" moduleName="cmc/foundation/PropertyGroup"/>
+		<dependency localName="PropertyPane" moduleName="cmc/foundation/PropertyPane"/>
+		<!---
+			@keywords private
+			A reference to the instance of the {@link cmc/foundation/ModelObject} whose properties are being displayed by the view.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			@keywords private
+			The icon to be displayed in the view's header. This should be the name of a resource available in the library.
+		-->
+		<variable name="headerIconResource" type="string" value=""/>
+		<!---
+			@keywords private
+			The title of the view. The default value is the empty string.
+		-->
+		<variable name="title" type="string" value=""/>
+		<!---
+			@keywords private
+			An array of enablement condition delegates that exist in any of this view's descendants. This array
+			is populated by the descendant that contains an {@link cmc/foundation/EnablementCondition enablement condition}.
+		-->
+		<variable name="enablementConditionDels" value="${[]}"/>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the {@link cmc/foundation/ModelObject} for this properties view. This method is declared as the setter for
+			{@link cmc/foundation/FlowElementProperties#o}.
+			@param cmc/foundation/ModelObject newObject The new object to set for this properties view.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.o = newObject;
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+				}
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+				}
+				if (this.enablementConditionDels) {
+					for (var i = 0; i < this.enablementConditionDels.length; i++) {
+						this.enablementConditionDels[i].execute(this.o);
+					}
+				}
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			]]>
+		</method>
+
+		<!---
+			Release the model object.
+			@keywords private
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>This method searches the object properties view looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one 
+			of an {@link cmc/foundation/ModelProperty object property} or a {@link cmc/foundation/Validator#validatorType validator type}. The matching properties component must
+			match either the specified property, or the specified object and validator type.
+			
+			<p>If a match is found, this method ensures that the {@link cmc/foundation/PropertiesComponent properties component} is visible by making
+			it and all of its ancestors visible. This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and the changing of {@link cmc/foundation/PropertyTab tabs}. The method then sets the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and returns true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or display.
+						
+			@param cmc/foundation/ModelObject errorObject the model object that contains the error
+			@param cmc/foundation/ModelProperty errorProperty the model property that contains the error
+			@param string validatorType the validator type of the validator that reported the error
+			@return boolean true if the focus was set to the specified error, false otherwise
+		-->
+		<method args="errorObject, errorProperty, validatorType" name="setFocusToError">
+			<![CDATA[
+			return ObjectPropertiesUtil.Singleton.setFocusToError(this, errorObject, errorProperty, validatorType);
+			]]>
+		</method>
+		
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method args="s, p, args" name="determinePlacement">
+			<![CDATA[
+			if (s instanceof PropertyGroup.Class) {
+				if (this.propertyPane) {
+					return this.propertyPane;
+				}
+				else {
+					return new PropertyPane.Class(this, {name: "propertyPane"});
+				}
+			}
+			else {
+				return this.inherited(arguments);
+			}
+			]]>
+		</method>
+	</Component>
+
+</Definitions>

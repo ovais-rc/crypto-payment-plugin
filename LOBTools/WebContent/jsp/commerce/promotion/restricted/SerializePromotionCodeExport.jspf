@@ -1,0 +1,105 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%@page import="java.net.URLDecoder"%>
+<fmt:setLocale value="${param.locale}" />
+<fmt:setBundle
+	basename="com.ibm.commerce.promotion.client.lobtools.properties.PromotionLOB"
+	var="resources" />
+
+<c:set var="inherited" value="" />
+<c:set var="deletable" value="deletable=\"true\"" />
+<c:if
+	test="${promotionCodeExport.storeIdentifier.uniqueID != param.storeId}">
+	<c:set var="inherited" value="Inherited" />
+	<c:set var="deletable" value="deletable=\"false\"" />
+</c:if>
+
+<c:choose>
+	<c:when test="${promotionCodeExport.processFile[0].status == 'Processing'}">
+		<c:set var="deletable" value="deletable=\"false\"" />
+		<c:set var="summary">
+			<fmt:message key="promotionCodeExport_processing" bundle="${resources}" />
+		</c:set>			
+	</c:when>
+	<c:when test="${promotionCodeExport.processFile[0].status == 'Failed'}">
+		<c:set var="summary">
+			<fmt:message key="promotionCodeExport_failed" bundle="${resources}">
+				<fmt:param value="${promotionCodeExport.processFile[0].processInfo}"/>
+			</fmt:message>
+		</c:set>			
+	</c:when>
+	<c:when test="${promotionCodeExport.processFile[0].status == 'Cancelled'}">
+		<c:set var="summary">
+			<fmt:message key="promotionCodeExport_cancelled" bundle="${resources}">
+				<fmt:param value="${promotionCodeExport.processFile[0].processInfo}"/>
+			</fmt:message>
+		</c:set>				
+	</c:when>	
+	<c:when test="${promotionCodeExport.processFile[0].status == 'Complete'}">
+		<c:set var="summary">
+			<fmt:message key="promotionCodeExport_success" bundle="${resources}" />
+		</c:set>					
+	</c:when>
+</c:choose>
+
+<c:set var="exportName">
+	<wcf:cdata data="${promotionCodeExport.uploadFile.fileInfo.fileName}" />
+</c:set>
+
+<c:set var="exportName">
+	<%= URLDecoder.decode((String) pageContext.getAttribute("exportName"), "UTF8") %>
+</c:set>
+
+<object objectType="${inherited}PromotionCodeExport" readonly="true" ${deletable}>
+	<objectStoreId readonly="true">${promotionCodeExport.storeIdentifier.uniqueID}</objectStoreId>
+	<promotionCodeExportId readonly="true">${promotionCodeExport.fileUploadJobIdentifier.uniqueID}</promotionCodeExportId>
+	<promotionExportName readonly="true">${exportName}</promotionExportName>
+	<promotionId>${promotionCodeExport.uploadFile.objectId}</promotionId> 
+	<c:forEach
+		var="property" items="${promotionCodeExport.uploadFile.properties}">
+		<c:if test="${property.key == 'promotionName'}">
+			<promotionName readonly="true">${property.value}</promotionName>
+		</c:if>
+		<c:if test="${property.key == 'includeMCMetadata'}">
+			<includeMCMetadata readonly="true">${property.value}</includeMCMetadata>
+		</c:if>
+		<c:if test="${property.key == 'campaignName'}">
+			<campaignName readonly="true">${property.value}</campaignName>
+		</c:if>
+		<c:if test="${property.key == 'startDate'}">
+			<startDate readonly="true">${property.value}</startDate>
+		</c:if>
+		<c:if test="${property.key == 'endDate'}">
+			<endDate readonly="true">${property.value}</endDate>
+		</c:if>
+	</c:forEach> 
+	<fileSize readonly="true"><wcf:cdata data="${promotionCodeExport.uploadFile.fileInfo.fileSize}" /></fileSize> 
+	<startTime readonly="true">${promotionCodeExport.processFile[0].startTime}</startTime>
+	<endTime readonly="true">${promotionCodeExport.processFile[0].endTime}</endTime>
+	<summary readonly="true">${summary}</summary> 
+	<status readonly="true">${promotionCodeExport.processFile[0].status}</status>
+
+	<c:if test="${promotionCodeExport.processFile[0].status == 'Complete'}">
+		<c:set var="downloadHistorylist"
+			value="${fn:split(promotionCodeExport.processFile[0].processInfo, '#')}" />
+		<c:forEach var="downloadHistory" items="${downloadHistorylist}">
+			<c:set var="userDetails" value="${fn:split(downloadHistory, ';')}" />
+			<object objectType="PromotionCodeExportDownloadHistory" readonly="true"> 
+				<userIdentifier readonly="true">${userDetails[0]}</userIdentifier>
+				<downloadTime readonly="true">${userDetails[1]}</downloadTime> 
+			</object>
+		</c:forEach>
+	</c:if> 
+</object>

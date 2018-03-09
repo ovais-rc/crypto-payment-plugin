@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---			
+		This service creates an object on the WebSphere Commerce
+		server by invoking the URL specified in the <code>url</code> 
+		attribute. Every property that is part of the object will be 
+		passed as a parameter to the URL.  Additional parameters can be
+		added to the request by declaring {@link cmc/foundation/ServiceParam} instances
+		as children of the cmc/foundation/CreateService instance.
+		
+		<p>This service will only be invoked when the object is a
+		new object that has not yet been persisted to the server. Objects
+		that already have a server representation will be saved using
+		{@link cmc/foundation/UpdateService}.
+	
+		<p>A create service may only be declared as a child
+		of an instance of {@link cmc/foundation/ObjectDefinition}. 
+		
+		<p>If the object is created successfully, a status message will be displayed 
+		in the message logger and any properties returned in the response
+		will be added to the cmc/foundation/ModelObject instance associated with
+		the request.  If the creation fails, the 
+		error message returned by the request will be displayed
+		in the message logger.
+
+		<p>Any validation error returned by the request will also be displayed to the
+		business user.
+
+		<p>The following example demonstrates the declaration of a create service.
+		The service includes an explicity declared service parameter that sends
+		the store identifier. The store identifier is resolved from the "storeId"
+		context value. When the service request is invoked,
+		all properties associated with the new business object will be included
+		as implicit parameters.
+		
+		@START_CODE
+		<CreateService url="/cmc/CreateMyObject">
+			<ServiceParam name="storeId"/>
+		</CreateService>
+		@END_CODE
+		
+		<p>The successful response from a create service must be an XML document
+		that has "object" as the name of the root element. If the response document includes
+		properties, then the properties will be applied to the client side representation
+		of the business object. Create services must return an updated ID property
+		value. This is required to ensure that the client side cache of business
+		objects remains consistent in the event that the newly persisted business object
+		is reloaded from the server through another operation.
+		
+		<p>The following sample demonstrates the expected format
+		for a successful response. It includes updated values for the properties named
+		"objectId" and "objectStoreId".
+
+		@START_CODE
+		<object>
+			<objectId>111</objectId>
+			<objectStoreId>10101</objectStoreId>
+		</object>
+		@END_CODE
+
+		<p>When CMC is e-site enabled, the successful response must include the <code>objectStoreId</code> property if:
+		<ul>
+			<li>The create service saves a {@link cmc/foundation/ChildObjectDefinition child object} whose store ID is
+			<b>different</b> from the parent object. For example, when you add a local offer price to an
+			inherited catalog entry.</li>
+			<li>The create service saves a {@link cmc/foundation/ReferenceObjectDefinition reference object} whose store ID is
+			different from the parent object. For example, when you add a local merchandising association to an
+			inherited catalog entry.</li>
+		</ul>
+		
+		<p>The framework uses the <code>objectStoreId</code> property to determine if the current user is authorized
+		to edit an object. If no <code>objectStoreId</code> is returned in the response, then the framework will assume that the
+		object belongs to the same store as the object's parent. If the user does not have edit authority to the parent object, then
+		he won't be able to edit the new child object either.
+		
+		<p>If the request is not successful, then the response must be an XML document
+		that has "errors" as the name of the root element. The XML document must include
+		at least one element named "validationError" or an element named "exception". Validation
+		errors should be returned if the problem can be corrected by the business user. An example
+		of a validation error is a missing required parameter. Validation errors can either be "property"
+		level validation errors or "object" level validation errors. Property level validation errors
+		include the name of the specific property that was found to be a problem. Object level validation
+		errors do not include a property name and are not mapped to a specific problem.
+		An exception should be returned if the problem cannot be corrected by the business user.
+		An example of an exception is the user does not have the required access rights to perform
+		the action.
+		
+		<p>The following sample demonstrates an error response that includes an object level validation
+		error and a property level validation error.
+		
+		@START_CODE
+		<errors>
+			<validationError propertyName="name">Name is a required property.</validationError>
+			<validationError>The product could not be saved. Refer to the message logger for more details.</validationError>
+		</errors>
+		@END_CODE
+		
+		<p>The following sample demonstrates an error response that includes an exception.
+		
+		@START_CODE
+		<errors>
+			<exception>You do not have the correct access rights to complete this save operation.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/CreateService" sendDirty="true" transactionService="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<!---
+			Send all of the object's properties as service parameters regardless of whether they
+			have been changed. The default value is "true".
+		-->
+		<variable name="sendAll" type="boolean" value="true"/>
+		<!---
+			Send properties from the default language sensitive object. The
+			default language sensitive object is a child object of the current
+			object and its "languageId" property matches the default language
+			for the current store. The default value is "false".
+		-->
+		<variable name="sendDefaultLanguageProperties" type="boolean" value="false"/>
+		<!---
+			Abort the request if the user has not made explicit changes to the 
+			object that is being created. The default value is "false".
+		-->
+		<variable name="abortEmptyTransactions" type="boolean" value="false"/>
+		<!---
+			The prefix for implicitly included property parameters. This value is only used
+			if "sendPrefix" is set to "true". The default value is "PROPERTY_".
+		-->
+		<variable name="propertyPrefix" type="string" value="PROPERTY_"/>
+		<!---
+			Add the prefix specified by the "propertyPrefix" attribute to names of all
+			of the implicitly included property parameters. The default value is "false".
+		-->
+		<variable name="sendPrefix" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Initialize the service and set the parent.createService to this
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.createService = this;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when this create service completed successfully.
+			If you want to perform additional logic after the service has completed,
+			override this method.
+			
+			@param cmc/foundation/ModelObject requestParent: the object on which this create service was performed
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			if (ServiceTransactionUtil.Singleton.isLastTransactionInGroup(requestParent.transaction) && !ServiceTransactionUtil.Singleton.transactionGroupHasError(requestParent.transaction)) {
+				var objectDisplayName = requestParent.openGroupObject.objectDisplayName;
+				var objectDefinitionDisplayName = requestParent.openGroupObject.objectDefinition.displayName;
+				var msg;
+				var messageType = "saveServiceForOpenGroupObjectSuccessful" + "_" + objectDefinitionDisplayName;
+				if (objectDisplayName == objectDefinitionDisplayName || typeof (objectDefinitionDisplayName) == 'undefined' || objectDefinitionDisplayName == null) {
+					msg = foundationResources.Singleton.replaceValues("saveServiceForSingletonObjectSuccessful", [objectDisplayName]);
+				}
+				else {
+					var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+					if (msgCount == 1) {
+						msg = foundationResources.Singleton.replaceValues("saveServiceForOpenGroupObjectSuccessful", [objectDefinitionDisplayName, objectDisplayName]);
+					}
+					else {
+						msg = foundationResources.Singleton.replaceValues("saveServiceForMultiOpenGroupObjectSuccessful", [msgCount, objectDefinitionDisplayName]);
+					}
+				}
+				ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			}
+			]]>
+		</method>
+	</Service>
+</Definitions>

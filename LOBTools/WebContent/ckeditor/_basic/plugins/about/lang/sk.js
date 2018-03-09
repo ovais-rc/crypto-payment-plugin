@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("about","sk",{copy:"Copyright &copy; $1. Všetky práva vyhradené.",dlgTitle:"Informácie o CKEditor",help:"Pomoc nájdete v $1.",moreInfo:"Informácie o licencovaní nájdete na našej webovej lokalite:",title:"Informácie o CKEditor",userGuide:"CKEditor, používateľská príručka"});

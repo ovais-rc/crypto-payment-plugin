@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		A multimap data structure that allows a key to be mapped to more than one value. Each key in this
+		multimap is a string. If a given key is not of type string, it will be converted to string by 
+		JavaScript function String(). 
+	 -->
+	<Node classDefinition="true" definitionName="cmc/foundation/MultiMap">
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<!--
+			@keywords private 
+			The internal store of all the key-value pairs. 
+		-->
+		<variable name="map" value="${{}}"/>
+		
+		<!-- 
+			Puts the key-value pair into this map. If the value exists in the multimap for the given key, it will not 
+			be added again. 
+			
+			@param String key the key to the value that is to be stored. 
+			@param Object value the value to which this key is mapped to. Only one copy of the value will be stored. 
+			@return this multimap. This allows fluent function chains. 
+		 -->
+		<method args="key, value" name="put">
+			<![CDATA[
+			var values = this.getOrCreateValues(key);
+			for (var i = 0; i < values.length; ++i) {
+				if (values[i] === value) {
+					return this;
+				}
+			}
+			values.push(value);
+			this.map[key] = values;
+			return this;
+			]]>
+		</method>
+		
+		<!-- 
+			@keywords private
+			
+			Returns an array of values that are mapped to the given key. If there is no such array, 
+			an empty one will be returned. 
+		 -->
+		<method args="key" name="getOrCreateValues">
+			<![CDATA[
+			var values = this.map[key];
+			if (values) {
+				return values;
+			}
+			return [];
+			]]>
+		</method>
+		
+		<!--  
+			Deletes the key and the given value. The value is optional. If it is not given, all values 
+			corresponding to the given key will be deleted. 
+			
+			@param String key A key in the map
+			@param Object value A value that is mapped to the key
+			@return cmc/foundation/MultiMap This map itself will be returned. This allows fluent function chaining
+			
+		 -->
+		<method args="key, value" name="remove">
+			<![CDATA[
+			if (typeof (value) == 'undefined' || value == null) {
+				delete this.map[key];
+			}
+			else {
+				this.map[key] = LangUtil.Singleton.filter(this.getOrCreateValues(key), function(v) {
+					return v !== value;
+				}, this);
+			}
+			return this;
+			]]>
+		</method>
+		
+		<!-- 
+			Returns all the values of a given key. 
+			@param String key the key used to get its values
+			@return the values mapped to the given key. 
+		 -->
+		 <method args="key" name="get">
+			<![CDATA[
+			if (typeof (key) == 'undefined' || key == null) {
+				return [];
+			}
+			var result = this.map[key];
+			if (typeof (result) == 'undefined' || result == null) {
+				return [];
+			}
+			return result;
+			]]>
+		</method>
+		 
+		 <!-- 
+		 	Returns a list of key-value pairs of a given key. Each pair is a two-element array, where
+		 	the first element is key, and the second is a value. 
+		 -->
+		 <method args="key" name="getEntries">
+			<![CDATA[
+			return LangUtil.Singleton.map(this.get(key), function(v) {
+				return [key, v];
+			}, this);
+			]]>
+		</method>
+		 
+		 <!-- 
+		 	Returns true if a given key is in the map. False otherwise. 
+		 	@param String key The key to be looked up in the map
+		  -->
+		 <method args="key" name="hasKey">
+			<![CDATA[
+			if (key == null || typeof (key) == 'undefined') {
+				return false;
+			}
+			var values = this.get(key);
+			return values && values.length > 0;
+			]]>
+		</method>
+		 
+		 <!-- 
+		 	Returns true if the map contains nothing. False otherwise. 
+		  -->
+		 <method name="isEmpty">
+			<![CDATA[
+			for (var key in this.map) {
+				return false;
+			}
+			return true;
+			]]>
+		</method>
+	</Node>
+</Definitions>

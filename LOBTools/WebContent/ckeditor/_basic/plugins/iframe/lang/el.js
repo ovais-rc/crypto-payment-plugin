@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","el",{border:"Εμφάνιση περιγράμματος πλαισίου",noUrl:"Καταχωρήστε τη διεύθυνση URL του iFrame.",scrolling:"Ενεργοποίηση γραμμών κύλισης",title:"Ιδιότητες IFrame",toolbar:"Εισαγωγή IFrame",ibm:{title:"IFrame"}});

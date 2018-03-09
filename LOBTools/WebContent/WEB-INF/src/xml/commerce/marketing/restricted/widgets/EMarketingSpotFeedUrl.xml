@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords final
+		<p>cmc/marketing/PropertyMarketingFeedURL is a text viewer that displays the Atom feed URL of an e-Marketing spot.
+		The {@link cmc/foundation/PropertyEditor#propertyName property name} provided should be the property name that
+		contains the name of the e-Marketing spot.</p>
+		
+		<p>E-Marketing spot feed URLs have the format:
+		<code>http://&lt;hostname&gt;/rest/MarketingSpotData/&lt;name&gt;?responseFormat=atom</code></p>
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/marketing/PropertyEMarketingFeedURL" sizeToAvailableWidth="true">
+		<dependency localName="EMarketingFeedURLViewer" moduleName="cmc/marketing/EMarketingFeedURLViewer"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} that will be used to derive the feed URL.
+		-->
+		<variable name="propertyName" type="string"/>		
+		<!---
+			The {@link cmc/foundation/ModelProperty} instance that this property editor is editing.
+			@type cmc/foundation/ModelProperty
+		-->
+		<variable name="property"/>
+		
+		<!---
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertiesComponent} class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new EMarketingFeedURLViewer.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this property viewer to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			this.inherited(arguments);
+			var newProperty = null;
+			if (this.o != null) {
+				newProperty = this.o.getProperty(this.propertyName);
+			}
+			this.setVariable("property", newProperty);
+			if (this.editor) {
+				this.editor.setVariable("property", newProperty);
+			}
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		This text viewer takes the e-Marketing spot name and generates the Atom feed URL for display.
+		E-Marketing spot feed URLs have the format:
+		<code>http://&lt;hostname&gt;/rest/stores/&lt;storeId&gt;/MarketingSpotData/&lt;name&gt;?responseFormat=atom</code>
+	-->
+	<TextViewer classDefinition="true" definitionName="cmc/marketing/EMarketingFeedURLViewer">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			Generates and returns the feed URL based on the properties value and sets it as the text
+			to be displayed in the viewer.
+			@param cmc/foundation/EventHandler del An optional delegate to call when a change in property value is caused by the value service.
+			@returns string: display value
+		-->
+		<method args="del" name="getDisplayValue">
+			<![CDATA[
+			var value = this.property.value;
+			var displayValue = "";
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(this.property.o, del);
+			if ((value != "") && (storeConfig != null)) {
+				var currentURL = window.location;
+				var hostname = currentURL.hostname;
+				if (typeof (storeConfig.remoteWidgets.ProductionServer) != "undefined" && storeConfig.remoteWidgets.ProductionServer != null && storeConfig.remoteWidgets.ProductionServer != "") {
+					hostname = storeConfig.remoteWidgets.ProductionServer;
+				}
+				var contextPath = "/wcs/resources";
+				if (storeConfig.remoteWidgets.restContextPath != "") {
+					contextPath = storeConfig.remoteWidgets.restContextPath;
+				}
+				var protocol = "http";
+				var port = "";
+				if (storeConfig.remoteWidgets.restNonSSLPort != "") {
+					if (storeConfig.remoteWidgets.restNonSSLPort != "80") {
+						port = ":" + storeConfig.remoteWidgets.restNonSSLPort;
+					}
+				}
+				else if (storeConfig.remoteWidgets.restSSLPort != "") {
+					protocol = "https";
+					if (storeConfig.remoteWidgets.restSSLPort != "443") {
+						port = ":" + storeConfig.remoteWidgets.restSSLPort;
+					}
+				}
+				displayValue = protocol + "://" + hostname + port + contextPath + "/stores/" + storeConfig.storeId + "/MarketingSpotData/" + encodeURIComponent(value) + "?responseFormat=atom";
+			}
+			return displayValue;
+			]]>
+		</method>
+	</TextViewer>
+</Definitions>

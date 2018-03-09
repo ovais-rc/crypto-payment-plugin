@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report reportName="biCSRIndividualRevenueReport" online="true" dataSourceName="WCA DataSource">
+    <comment></comment>
+    <SQLvalue>
+SELECT
+	USRG.LOGONID AS CSRLOGONID,
+	CONCAT(COALESCE(M.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(M.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(M.LAST_NAME,'')))) AS CSRNAME,
+	FS.REVENUE AS REVENUE,
+	(CASE
+		WHEN WCA.IS_COST_AVAIL(FS.SUBMITTER_ID, DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$)) = 1
+		THEN FS.PROFIT
+		ELSE NULL
+	END) AS PROFIT
+FROM
+	WCA.MEMBER M,
+	WCA.USERREG USRG,
+	(
+	SELECT
+		SUBMITTER_ID,
+		SUM(RPT_REVENUE) AS REVENUE,
+		SUM(RPT_PROFIT) AS PROFIT
+	FROM
+		WCA.FACT_SALES
+	WHERE
+		STORE_ID IN ({storeent_id}) AND
+		WCA.PARAM_VALUE_IN(CHAR(ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED') = 1 AND
+		WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), PER_ID) = 1
+	GROUP BY
+		SUBMITTER_ID
+	) AS FS
+WHERE
+	USRG.USERS_ID = {user_id} AND
+	M.MEMBER_ID = USRG.USERS_ID AND
+	FS.SUBMITTER_ID = M.MEMBER_ID
+ORDER BY 1 {Order}
+    </SQLvalue>
+	<display>
+		<standardInfo>
+			<resourceBundle>bi.biNLS</resourceBundle>
+			<title>biCSRRevenueReport</title>
+			<message>biCSRRevenueReport</message>
+		</standardInfo>
+		<userDefinedParameters>
+			<THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+			<TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+			<spaceBetweenColumns>25</spaceBetweenColumns>
+			<columnDefaultAttributes>
+				<displayInReport>true</displayInReport>
+				<columnWidth>0</columnWidth>
+				<maxEntryLength>999</maxEntryLength>
+				<columnType>string</columnType>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<displayInHeader>False</displayInHeader>
+			</columnDefaultAttributes>
+			<columns>
+				<columnKey>C0</columnKey>
+				<columnName>CSRIndividualRevenueReportCSRID</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C1</columnKey>
+				<columnName>CSRIndividualRevenueReportCSRName</columnName>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<columnType>string</columnType>
+			</columns>
+			<columns>
+				<columnKey>C2</columnKey>
+				<columnName>CSRIndividualRevenueReportRevenue</columnName>
+				<columnType>decimal</columnType>
+				<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			</columns>
+			<columns>
+				<columnKey>C3</columnKey>
+				<columnName>CSRIndividualRevenueReportProfit</columnName>
+				<columnType>decimal</columnType>
+				<columnDisplayIfNull>valueNotAvailable</columnDisplayIfNull>
+				<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			</columns>
+		</userDefinedParameters>
+	</display>
+  </Report>
+</Reporting>

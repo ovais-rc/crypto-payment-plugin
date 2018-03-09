@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("elementspath","th",{eleLabel:"พาธอิลิเมนต์",eleTitle:"%1 อิลิเมนต์"});

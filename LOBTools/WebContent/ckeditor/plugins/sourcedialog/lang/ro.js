@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","ro",{toolbar:"Sursă",title:"Sursă"});

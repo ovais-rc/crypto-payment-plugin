@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","th",{options:"อ็อพชันอักขระพิเศษ",title:"อักขระพิเศษ",toolbar:"แทรกอักขระพิเศษ"});

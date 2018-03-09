@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("preview","zh",{preview:"预览："});

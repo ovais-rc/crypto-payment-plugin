@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmsametimeemoticons","hu",{angel:"Angyal",angry:"Mérges",cool:"Laza",crying:"Sírós",eyebrow:"Szemöldökhúzós",frown:"Rosszalló",goofy:"Ostoba",grin:"Vigyorgó",half:"Fél",idea:"Ötlet",laughing:"Nevető",laughroll:"Nevetéstől guruló",no:"Nem",oops:"Hoppá",shy:"Szégyenlős",smile:"Mosolygó",tongue:"Nyújtott nyelvű",wink:"Kacsintó",yes:"Igen"});

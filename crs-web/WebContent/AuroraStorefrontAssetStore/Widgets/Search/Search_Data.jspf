@@ -1,0 +1,69 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%@ include file="JSTLEnvironmentSetupExtForSearch.jspf" %>
+
+<%-- 
+	Do not build full URL for SearchDisplay. When searching from HTTPS pages, search form should be submitted over HTTPS protocol.
+	If not, FF will show a warning dialog with message - Although this page is encrypted, the information you have entered is to be 
+	sent over an unencrypted connection and could easily be read by a third party. Even though the form method is "GET", firefox displays this 
+	error message. Ideally this error message should be shown only when form data is POSTED to an HTTP server from HTTPS page.
+--%>
+<c:url var="searchView" value="SearchDisplay"/>
+
+<c:url var="SearchAutoSuggestServletURL" value="SearchComponentAutoSuggestView">
+  <c:param name="langId" value="${param.langId}" />
+  <c:param name="storeId" value="${param.storeId}" />
+  <c:param name="catalogId" value="${param.catalogId}" />
+</c:url>
+
+<c:url var="CachedSuggestionsURL" value="SearchComponentCachedSuggestionsView">
+  <c:param name="langId" value="${param.langId}" />
+  <c:param name="storeId" value="${param.storeId}" />
+  <c:param name="catalogId" value="${param.catalogId}" />
+</c:url>
+
+<wcf:url var="AdvancedSearchDisplayURL" value="AdvancedSearchDisplay">
+	<wcf:param name="storeId"   value="${param.storeId}"  />
+	<wcf:param name="catalogId" value="${param.catalogId}"/>
+	<wcf:param name="langId" value="${param.langId}" />
+</wcf:url>
+
+<c:set var="key1" value="categoryview/@top"/>
+<c:set var="newcatalog" value="${cachedCategoryViewMap[key1]}"/>
+<c:if test="${empty newcatalog}">
+	<c:catch var="searchServerException">
+		<wcf:rest var="newcatalog" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/@top" >
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="responseFormat" value="json"/>		
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+		<wcf:set target = "${cachedCategoryViewMap}" key="${key1}" value="${newcatalog}"/>
+	</c:catch>
+</c:if>
+
+<wcf:useBean var="searchDropdownCategoryList" classname="java.util.ArrayList"/>
+
+<c:forEach var="topCategory" items="${newcatalog.catalogGroupView}" varStatus="status">
+	<wcf:useBean var="categoryMappingList" classname="java.util.ArrayList"/>
+
+	<wcf:set target="${categoryMappingList}" value="${topCategory.name}" />
+	<wcf:set target="${categoryMappingList}" value="${topCategory.uniqueID}" />
+	<wcf:set target="${searchDropdownCategoryList}" value="${categoryMappingList}" />
+
+	<c:remove var="categoryMappingList"/>
+</c:forEach>

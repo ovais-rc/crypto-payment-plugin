@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for a {@link cmc/promotion/PromotionPrimaryObjectDefinition Promotion} object. 
+		This ensures the following cases: 
+		<ul>
+			<li>When a promotion code is required and is designated as public code, then ensure that at least one promotion code is specified.</li>
+			<li>When a promotion code is required and is designated as basic pattern generated code, then ensure the following: 
+				<ul>
+					<li>The unique code length is greater than 0.</li>
+					<li>The pattern's length including prefix, suffix and unique code is less than or equal to 128 characters.</li>
+					<li>The number of unique codes to be generated is greater than 0.</li>
+					<li>The number of unique codes to be generated is less than or equal to the maximum possible number of unique code that can be generated based on the pattern.</li>				
+				</ul>
+			</li>
+			<li>When a promotion code is required and is designated as advanced pattern generated code, then ensure the following: 
+				<ul>
+					<li>A valid pattern is specified according to the allowed characters.</li>
+					<li>The pattern length is less than or equal to 128 characters.</li>
+					<li>The number of unique codes to be generated is greater than 0.</li>
+					<li>The number of unique codes to be generated is less than or equal to the maximum possible number of unique code that can be generated based on the pattern.</li>				
+				</ul>
+			</li>		
+			<li>When the promotion is NOT applicable all through the day, ensure that the start time and end time in a day are specified.</li>
+			<li>When a coupon is required, ensure that the number of days that the coupon expires in is specified and is greater than or equal to 1.</li>
+			<li>When maximum redemption for a promotion is selected, ensure that the redemption value is specified and is greater than or equal to 1.</li>
+			<li>When maximum redemption on an order is selected, ensure that the redemption value is specified and is greater than or equal to 1.</li>
+			<li>When maximum redemption by a customer is selected, ensure that the redemption value is specified and is greater than or equal to 1.</li>
+			<li>When the promotion is set to every day of the week, ensure that all the weekday objects are deleted.</li>
+		</ul>
+	-->
+	
+	<Validator classDefinition="true" definitionName="cmc/promotion/PromotionObjectValidator">
+		<dependency localName="CodeUtil" moduleName="cmc/promotion/CodeUtil"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+		<!--- @keywords private -->
+		<variable name="message_atleastOnePromotionCode" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOnePromotionCode.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_patternLengthExceeded" type="string" value="${promotionResources.Singleton.promotion_error_PatternLengthExceeded.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCodeCount" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyCodeCount.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_codeCountGreaterThanMaximumPossibleCodes" type="string" value="${promotionResources.Singleton.promotion_error_CodeCountGreaterThanMaximumPossibleCodes.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCodePattern" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyCodePattern.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_invalidPattern" type="string" value="${promotionResources.Singleton.promotion_error_InvalidPattern.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyCodeLength" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyCodeLength.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAStartTime" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAStartTime.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAEndTime" type="string" value="${promotionResources.Singleton.promotion_error_SpecifyAEndTime.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_atleastOneDayUntilCouponExpires" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneDayUntilCouponExpires.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_atleastOneRedemptionLimit" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneRedemptionLimit.string}"/>
+		
+		<!--- Message for Invalid code pattern -->
+		<!--- @keywords private -->
+		<variable name="message_RequireSBeforePlus" type="string" value="${promotionResources.Singleton.promotion_error_RequireSBeforePlus.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_RequireIncrement" type="string" value="${promotionResources.Singleton.promotion_error_RequireIncrement.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_InvalidIncrement" type="string" value="${promotionResources.Singleton.promotion_error_InvalidIncrement.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_StartingExceed" type="string" value="${promotionResources.Singleton.promotion_error_StartingExceed.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_ZeroIncrement" type="string" value="${promotionResources.Singleton.promotion_error_ZeroIncrement.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_InvalidStartingValue" type="string" value="${promotionResources.Singleton.promotion_error_InvalidStartingValue.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_InvalidCharInPattern" type="string" value="${promotionResources.Singleton.promotion_error_InvalidCharInPattern.string}"/>
+		
+		
+		
+		
+		
+		
+		<!--- @keywords private -->
+		<variable name="validCodePatternCharacters" type="string" value="AaXxMNSD/+0123456789"/>
+		
+		<!--- Valid values to replace the character S defined in the pattern. -->	
+		<variable name="valuesForCharacterS" type="string" value="0123456789"/>
+		
+		<!--  @keywords private -->
+		<method args="targetChar, notAcceptChars, o" name="checkNotAcceptableString">
+			<![CDATA[
+			if (notAcceptChars.indexOf(targetChar) < 0) {
+				return false;
+			}
+			else {
+				o.getProperty("codePattern").addValidationError(this, this.message_invalidPattern);
+				return true;
+			}
+			]]>
+		</method>
+		
+		<method args="sequenceString, o" name="sequenceValidator">
+			<![CDATA[
+			var startSignIndex = sequenceString.indexOf('+');
+			if (startSignIndex >= 0) {
+				var sChars = sequenceString.substring(0, startSignIndex);
+				var sequenceSize = 1;
+				for (var i = 0; i < sChars.length; i++) {
+					if (sChars.charAt(i) != "S") {
+						o.getProperty("codePattern").addValidationError(this, this.message_RequireSBeforePlus);
+						return false;
+					}
+					sequenceSize = sequenceSize * this.valuesForCharacterS.length;
+				}
+				if (startSignIndex + 1 < sequenceString.length) {
+					var remainChars = sequenceString.substring(startSignIndex + 1);
+					if (remainChars.indexOf('/') >= 0) {
+						var startChars = remainChars.substring(0, remainChars.indexOf('/'));
+						if (remainChars.indexOf('/') + 1 <= remainChars.length) {
+							var stepChars = remainChars.substring(remainChars.indexOf('/') + 1);
+							if (stepChars == "") {
+								o.getProperty("codePattern").addValidationError(this, this.message_RequireIncrement);
+								return false;
+							}
+							if (isNaN(stepChars)) {
+								o.getProperty("codePattern").addValidationError(this, this.message_InvalidIncrement);
+								return false;
+							}
+							if (Number(stepChars) == 0) {
+								o.getProperty("codePattern").addValidationError(this, this.message_ZeroIncrement);
+								return false;
+							}
+						}
+						else {
+							o.getProperty("codePattern").addValidationError(this, this.message_RequireIncrement);
+							return false;
+						}
+						if (startChars != "" && isNaN(startChars)) {
+							o.getProperty("codePattern").addValidationError(this, this.message_InvalidStartingValue);
+							return false;
+						}
+						else {
+							if (startChars != "") {
+								var startNumber = Number(startChars);
+								if (sequenceSize < startNumber) {
+									o.getProperty("codePattern").addValidationError(this, this.message_StartingExceed);
+									return false;
+								}
+							}
+						}
+					}
+					else {
+						if (isNaN(remainChars)) {
+							o.getProperty("codePattern").addValidationError(this, this.message_InvalidCharInPattern);
+							return false;
+						}
+						else {
+							var startNumber = Number(remainChars);
+							if (sequenceSize < startNumber) {
+								o.getProperty("codePattern").addValidationError(this, this.message_StartingExceed);
+								return false;
+							}
+						}
+					}
+				}
+			}
+			else {
+				var stepSignIndex = sequenceString.indexOf('/');
+				if (stepSignIndex >= 0) {
+					var sChars = sequenceString.substring(0, stepSignIndex);
+					for (var i = 0; i < sChars.length; i++) {
+						if (sChars.charAt(i) != "S") {
+							o.getProperty("codePattern").addValidationError(this, this.message_InvalidCharInPattern);
+							return false;
+						}
+					}
+				}
+				else {
+					for (var i = 0; i < sequenceString.length; i++) {
+						if (sequenceString.charAt(i) != "S") {
+							o.getProperty("codePattern").addValidationError(this, this.message_InvalidCharInPattern);
+							return false;
+						}
+					}
+				}
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!--  @keywords private -->
+		<method args="targetCode, o" name="patternValidator">
+			<![CDATA[
+			var validChar = "DAaXxMNS+/1234567890";
+			var validSequenceChar = "S+/1234567890";
+			for (var i = 0; i < targetCode.length; i++) {
+				var sequenceIndex = validChar.indexOf(targetCode.charAt(i));
+				if (sequenceIndex < 0) {
+					o.getProperty("codePattern").addValidationError(this, this.message_InvalidCharInPattern);
+					return false;
+				}
+				if (targetCode.charAt(i) == "S") {
+					var sequenceBoundChars = "DAaXxMN";
+					var startIndex = i;
+					i++;
+					while (sequenceBoundChars.indexOf(targetCode.charAt(i)) < 0) {
+						i++;
+					}
+					var endIndex = i;
+					var sequenceString = targetCode.substring(startIndex, endIndex);
+					if (!this.sequenceValidator(sequenceString, o)) {
+						return false;
+					}
+					i++;
+				}
+				var inValidCharWithoutSequence = "1234567890+/";
+				if (i < targetCode.length && inValidCharWithoutSequence.indexOf(targetCode.charAt(i)) >= 0) {
+					o.getProperty("codePattern").addValidationError(this, this.message_InvalidCharInPattern);
+					return false;
+				}
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			o.clearValidationError(this);
+			o.getProperty("codeCount").clearValidationError(this);
+			o.getProperty("codePattern").clearValidationError(this);
+			o.getProperty("startTime").clearValidationError(this);
+			o.getProperty("endTime").clearValidationError(this);
+			o.getProperty("daysCouponExpires").clearValidationError(this);
+			o.getProperty("maxRedemptionInTotal").clearValidationError(this);
+			o.getProperty("maxRedemptionPerOrder").clearValidationError(this);
+			o.getProperty("maxRedemptionPerCustomer").clearValidationError(this);
+			var promoCodeRequired = o.getPropertyValue("promotionCodeRequired");
+			var promoCodeCreation = o.getPropertyValue("promotionCodeCreation");
+			var codePatterns = new Array();
+			var isNeedPatternValidate = false;
+			var isInvalidCharError = false;
+			if (promoCodeRequired == "true" && promoCodeCreation == "PublicCode") {
+				var objectTypes = new Array('PromotionCodeImportReference', 'InheritedPromotionCodeImportReference');
+				for (var j = 0; j < objectTypes.length; j++) {
+					var objectsToDelete = o.getObjects(objectTypes[j]);
+					for (var k = 0; k < objectsToDelete.length; k++) {
+						objectsToDelete[k].deleteObject();
+					}
+				}
+				var childObjects = o.getObjects("PromotionCode");
+				if (childObjects == null || childObjects.length <= 0) {
+					o.addValidationError(this, this.message_atleastOnePromotionCode);
+				}
+			}
+			else if (promoCodeRequired == "true" && promoCodeCreation == "GeneratedCode") {
+				var objectTypes = new Array('PromotionCode', 'PromotionCodeImportReference', 'InheritedPromotionCodeImportReference');
+				for (var j = 0; j < objectTypes.length; j++) {
+					var objectsToDelete = o.getObjects(objectTypes[j]);
+					for (var k = 0; k < objectsToDelete.length; k++) {
+						objectsToDelete[k].deleteObject();
+					}
+				}
+				var promoCodeGeneration = o.getPropertyValue("promotionCodeGeneration");
+				if (promoCodeGeneration == "BasicGeneratedCode") {
+					var pattern = o.getPropertyValue("codePattern");
+					if (pattern == null || pattern == "" || pattern.indexOf("[") < 0 || (pattern.indexOf("[") + 1) == pattern.indexOf("]")) {
+						o.addValidationError(this, this.message_specifyCodeLength);
+					}
+					var patternLength = Number(pattern.length);
+					if (patternLength > 128) {
+						o.addValidationError(this, this.message_patternLengthExceeded);
+					}
+					var count = o.getPropertyValue("codeCount");
+					var possibleNumberOfCodes = Number(CodeUtil.Singleton.getNoOfPossibleCodes(pattern));
+					if (count == null || count == "" || count < 1) {
+						o.getProperty("codeCount").addValidationError(this, this.message_specifyCodeCount);
+					}
+					else if (count > possibleNumberOfCodes) {
+						o.getProperty("codeCount").addValidationError(this, this.message_codeCountGreaterThanMaximumPossibleCodes);
+					}
+				}
+				else if (promoCodeGeneration == "AdvancedGeneratedCode") {
+					var pattern = o.getPropertyValue("codePattern");
+					var patternLength = Number(pattern.length);
+					if (pattern == null || pattern == "") {
+						o.getProperty("codePattern").addValidationError(this, this.message_specifyCodePattern);
+					}
+					else if (patternLength > 128) {
+						o.getProperty("codePattern").addValidationError(this, this.message_patternLengthExceeded);
+					}
+					var mask = false;
+					var indexOfOpenBracket = -1;
+					var indexOfCloseBracket = -1;
+					for (var i = 0; i < pattern.length; i++) {
+						if (pattern.charAt(i) == "[") {
+							if (mask) {
+								o.getProperty("codePattern").addValidationError(this, this.message_invalidPattern);
+								break;
+							}
+							mask = true;
+							indexOfOpenBracket = i;
+						}
+						else if (pattern.charAt(i) == "]") {
+							if (!mask) {
+								o.getProperty("codePattern").addValidationError(this, this.message_invalidPattern);
+								break;
+							}
+							isNeedPatternValidate = true;
+							mask = false;
+							indexOfCloseBracket = i;
+							if (indexOfCloseBracket > indexOfOpenBracket) {
+								var patternPart = pattern.substring(indexOfOpenBracket + 1, indexOfCloseBracket);
+								codePatterns.push(patternPart);
+							}
+						}
+						else if (mask && this.validCodePatternCharacters.indexOf(pattern.charAt(i)) < 0) {
+							o.getProperty("codePattern").addValidationError(this, this.message_InvalidCharInPattern);
+							isInvalidCharError = true;
+							break;
+						}
+						if (indexOfOpenBracket + 1 == indexOfCloseBracket) {
+							o.getProperty("codePattern").addValidationError(this, this.message_invalidPattern);
+						}
+					}
+					if (indexOfOpenBracket < 0 || indexOfCloseBracket < 0 || mask) {
+						if (!isInvalidCharError) {
+							o.getProperty("codePattern").addValidationError(this, this.message_invalidPattern);
+						}
+					}
+					if (!mask && isNeedPatternValidate) {
+						if (codePatterns.length > 0) {
+							for (var j = 0; j < codePatterns.length; j++) {
+								if (!this.patternValidator(codePatterns[j], o)) {
+									break;
+								}
+							}
+						}
+					}
+					var count = o.getPropertyValue("codeCount");
+					var possibleNumberOfCodes = CodeUtil.Singleton.getNoOfPossibleCodes(pattern);
+					if (count == null || count == "" || count < 1) {
+						o.getProperty("codeCount").addValidationError(this, this.message_specifyCodeCount);
+					}
+					else if (count > possibleNumberOfCodes) {
+						o.getProperty("codeCount").addValidationError(this, this.message_codeCountGreaterThanMaximumPossibleCodes);
+					}
+				}
+			}
+			else if (promoCodeRequired == "true" && promoCodeCreation == "ImportedCode") {
+				var objectsToDelete = o.getObjects('PromotionCode');
+				for (var j = 0; j < objectsToDelete.length; j++) {
+					objectsToDelete[j].deleteObject();
+				}
+			}
+			if (o.getPropertyValue("isAllThroughTheDay") == "false") {
+				var startTime = o.getPropertyValue("startTime");
+				if (startTime == null || startTime == "") {
+					o.getProperty("startTime").addValidationError(this, this.message_specifyAStartTime);
+				}
+				var endTime = o.getPropertyValue("endTime");
+				if (endTime == null || endTime == "") {
+					o.getProperty("endTime").addValidationError(this, this.message_specifyAEndTime);
+				}
+			}
+			if (o.getPropertyValue("couponRequired") == "true") {
+				var couponDays = o.getPropertyValue("daysCouponExpires");
+				if (couponDays == null || couponDays == "" || couponDays < 1) {
+					o.getProperty("daysCouponExpires").addValidationError(this, this.message_atleastOneDayUntilCouponExpires);
+				}
+			}
+			if (o.getPropertyValue("isLimitedInTotal") == "true") {
+				var limitedInTotal = o.getPropertyValue("maxRedemptionInTotal");
+				if (limitedInTotal == null || limitedInTotal == "" || limitedInTotal < 1) {
+					o.getProperty("maxRedemptionInTotal").addValidationError(this, this.message_atleastOneRedemptionLimit);
+				}
+			}
+			if (o.getPropertyValue("isLimitedPerOrder") == "true") {
+				var limitedInOrder = o.getPropertyValue("maxRedemptionPerOrder");
+				if (limitedInOrder == null || limitedInOrder == "" || limitedInOrder < 1) {
+					o.getProperty("maxRedemptionPerOrder").addValidationError(this, this.message_atleastOneRedemptionLimit);
+				}
+			}
+			if (o.getPropertyValue("isLimitedPerCustomer") == "true") {
+				var limitedPerCustomer = o.getPropertyValue("maxRedemptionPerCustomer");
+				if (limitedPerCustomer == null || limitedPerCustomer == "" || limitedPerCustomer < 1) {
+					o.getProperty("maxRedemptionPerCustomer").addValidationError(this, this.message_atleastOneRedemptionLimit);
+				}
+			}
+			if (o.getPropertyValue("isEveryDayOfTheWeek") == "true") {
+				var days = o.getObjects("WeekDay");
+				for (var i = 0; i < days.length; i++) {
+					if (days[i] != o) {
+						days[i].deleteObject();
+					}
+				}
+			}
+			]]>
+		</method>
+	</Validator>
+</Definitions>

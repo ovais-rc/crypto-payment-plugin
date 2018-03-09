@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","nb",{button:"Maler",emptyListMsg:"(Ingen maler definert)",insertOption:"Erstatt faktisk innhold",options:"Malalternativer",selectPromptMsg:"Velg mal som skal åpnes i redigeringsprogrammet",title:"Innholdsmaler"});

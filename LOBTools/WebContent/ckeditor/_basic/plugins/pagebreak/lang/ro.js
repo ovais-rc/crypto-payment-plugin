@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","ro",{alt:"Sfârşit de pagină",toolbar:"Inserare sfârşit de pagină"});

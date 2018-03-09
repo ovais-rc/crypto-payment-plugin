@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("about","ko",{copy:"Copyright &copy; $1. All rights reserved.",dlgTitle:"CKEditor 정보",help:"도움말을 보려면 $1을(를) 선택하십시오.",moreInfo:"라이센스 정보를 보려면 웹 사이트에 방문해 주십시오.",title:"CKEditor 정보",userGuide:"CKEditor 사용자 안내서"});

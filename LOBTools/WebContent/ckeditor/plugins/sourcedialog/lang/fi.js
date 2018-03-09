@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","fi",{toolbar:"Lähdekoodi",title:"Lähdekoodi"});

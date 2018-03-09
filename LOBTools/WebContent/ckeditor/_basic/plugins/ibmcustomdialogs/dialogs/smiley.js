@@ -1,0 +1,1 @@
+﻿CKEDITOR.tools.extend(CKEDITOR.ibm.dialogs,{smiley:function(){}});

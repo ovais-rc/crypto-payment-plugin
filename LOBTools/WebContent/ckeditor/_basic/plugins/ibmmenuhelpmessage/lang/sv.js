@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","sv",{keystrokeForContextMenu:"Ctrl-högerklicka om du vill visa fler alternativ",keystrokeForContextMenuMac:"Kommando-högerklicka om du vill visa fler alternativ"});

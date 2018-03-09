@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","sk",{bulletedlist:"Zoznam s odrážkami",numberedlist:"Očíslovaný zoznam",ibm:{numberedTitle:"Očíslovaný zoznam",bulletedTitle:"Zoznam s odrážkami",description:"Nastavenia sa použijú na aktuálnu úroveň zoznamu",fontsize:"Veľkosť textu:"}});

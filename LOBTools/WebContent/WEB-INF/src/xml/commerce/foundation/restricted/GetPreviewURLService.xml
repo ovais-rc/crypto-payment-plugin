@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		A service that will get the SEO URL of a business object. A get preview URL service may only be declared
+		as an immediate child of an instance of cmc/foundation/ObjectDefinition. A get preview URL service must return the SEO
+		URL of the object from the server.
+		
+		<p> When the store preview action is triggered by the user, the framework will issue the get preview URL
+		service. 
+		
+		<p>Get preview URL services can expect an implicit parameter named "storeId". The service must return
+		URLs that match the specified store.
+		
+		<p>Get preview URL services can expect an implicit parameter named "dataLanguageIds". This value of "dataLanguageIds"
+		is a comma separated list of language IDs. If the get preview URL service returns language specific URLs,
+		then it must return all of the existing language URLs that match the specified language IDs. If there are no URLs that match the
+		specified list of languages, then the service must return the URL that matches the default language of the store.
+		
+		<p>The following example demonstrates the declaration of a get Preview URL service
+		that gets the SEO URL of the catalog group object.
+		
+		@START_CODE
+		<GetPreviewURLService url="/cmc/GetPreviewURL">
+			<ServiceParam name="catgroupId" propertyName="catgroupId" />
+		</GetPreviewURLService>
+		@END_CODE
+				
+		<p>The following sample demonstrates the expected format
+		for a successful response. It includes URL property values
+		
+		@START_CODE
+		<objects>
+			
+			<object>
+					<alias>Aurora - table</alias>
+					<url>http://samplestore.com/shop/en/electronics</url>
+			</object>
+		
+		</objects>
+		@END_CODE
+		
+		<p>If an exception occurs while processing a get preview URL service, the response must be an XML document that
+		has a root element named "errors". The "errors" element must include one child element named "exception".
+		The "exception" element includes a message suitable for display to the user. The following example demonstrates
+		a valid error response for a refresh service.
+
+		@START_CODE
+		<errors>
+			<exception>You do not have the required access rights to perform this operation.</exception>
+		</errors>
+		@END_CODE
+		
+		<p>A single instance of {@link cmc/foundation/EnablementCondition} can be declared as a child of a get preview URL service. If
+		the enablement condition evaluates to false, the service will not be invoked and the Save and Preview button will be
+		disabled.</p>
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/GetPreviewURLService" getService="true" retryOnError="true" sendInputLanguageIds="true">
+		<dependency localName="StorePreviewDialog" moduleName="cmc/foundation/StorePreviewDialog"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="StoreSearchUrlResultDisplayDialog" moduleName="cmc/foundation/StoreSearchUrlResultDisplayDialog"/>
+		<!---
+			Maximum number of items to return.
+		-->
+	 	<ServiceParam name="maxItems" value="${ConfigProperties.Singleton.maximumStoresInList}"/>
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.getPreviewURLService = this;
+			]]>
+		</method>
+		
+		<!---
+			Parse the store objects.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			var objectURLList = [];
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var e = dataElement.childNodes[i];
+				if (e.nodeName == "object") {
+					var url = {};
+					for (var j = 0; j < e.childNodes.length; j++) {
+						var childElement = e.childNodes[j];
+						if (childElement.nodeName == "url") {
+							url.text = StringUtil.Singleton.trim(XMLUtil.getNodeValue(childElement), StringUtil.Singleton.trimWhiteSpaceAndLineFeed);
+						}
+						else if (childElement.nodeName == "alias") {
+							url.alias = XMLUtil.getNodeValue(childElement);
+						}
+					}
+					objectURLList.push(url);
+				}
+			}
+			if (StoreSearchUrlResultDisplayDialog.Singleton.storeUrlDisplayDialogActive) {
+				StoreSearchUrlResultDisplayDialog.Singleton.addUrl(objectURLList);
+			}
+			else if (StorePreviewDialog.Singleton.storePreviewDialogActive) {
+				StorePreviewDialog.Singleton.populateObjectURLList(objectURLList);
+			}
+			else {
+				if (objectURLList.length == 1) {
+					var startDate = null;
+					for (var i = 0; i < this.serviceParams.length; i++) {
+						if (this.serviceParams[i].parameterName == "previewStartDate") {
+							startDate = this.serviceParams[i].value;
+						}
+					}
+					require(["cmc/foundation/StorePreviewUtil"], function(StorePreviewUtil) {
+						StorePreviewUtil.Singleton.launchStorePreview(objectURLList[0].text, requestParent.model.oEditor.localContext, {
+							start: startDate
+						});
+					});
+				}
+				else {
+					requestParent.model.oEditor.openStorePreviewDialog();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if this get preview URL service is enabled for the specified
+			model object by evaluating the associated {@link cmc/foundation/EnablementCondition} object.
+			
+			@param cmc/foundation/ModelObject o: the model object against which the enablement condition will be evaluated
+			@param cmc/foundation/EventHandler del: optional delegate
+			@return boolean: true if the service is enabled
+		-->
+		<method args="o, del" name="isEnabled">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var enabled = true;
+			if (this.enablementCondition) {
+				if (del != null) {
+					this.enablementCondition.registerDelegate(o, del);
+				}
+				enabled = this.enablementCondition.isEnabled(o);
+			}
+			return enabled;
+			]]>
+		</method>
+	</Service>
+</Definitions>

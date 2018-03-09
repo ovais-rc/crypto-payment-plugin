@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","id",{bulletedlist:"Daftar Berpoin",numberedlist:"Daftar Bernomor",ibm:{numberedTitle:"Daftar Bernomor",bulletedTitle:"Daftar Berpoin",description:"Pengaturan akan berlaku pada level daftar terkini",fontsize:"Ukuran huruf:"}});

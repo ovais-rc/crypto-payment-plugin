@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","sv",{closed:"Aviseringen är stängd."});

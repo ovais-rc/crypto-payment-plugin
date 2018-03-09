@@ -1,0 +1,3315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		The object model.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/Model">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="SearchDefinitionRegistry" moduleName="cmc/foundation/SearchDefinitionRegistry"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ModelSearchResults" moduleName="cmc/foundation/ModelSearchResults"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ObjectDefinitionRegistry" moduleName="cmc/foundation/ObjectDefinitionRegistry"/>
+		<dependency localName="ModelObjectList" moduleName="cmc/foundation/ModelObjectList"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Business object editor instance.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			A map of all of the objects in the model.
+		-->
+		<variable name="objectMap" value="${{}}"/>
+		<!---
+			An array of test model object instances.
+		-->
+		<variable name="testObjects" value="${[]}"/>
+		<!---
+			A map of the latest search results for each search type.
+		-->
+		<variable name="searchResultsMap" value="${{}}"/>
+		<!---
+			Indicates that all of the initialization services have been loaded.
+		-->
+		<variable name="initServices" value="${[]}"/>
+		<!---
+			Whether or not this model is fully initialized
+		-->
+		<variable name="modelInitialized" type="boolean" value="false"/>
+		<!---
+			A map of the object definitions. The keys are the object types.
+		-->
+		<variable name="objectDefinitions"/>
+		<!---
+			An array of the search definitions.
+		-->
+		<variable name="searchDefinitions" value="${[]}"/>
+		<!---
+			The default search definition.
+		-->
+		<variable name="defaultSearchDefinition" value="${null}"/>
+
+		<!--- @keywords private -->
+		<variable name="newObjectCount" type="number" value="0"/>
+
+		<!---
+			A list of the open objects.
+		-->
+		<variable name="openObjects" value="${[]}"/>
+		<!---
+			Array of model object lists that are tied to the list of open objects.
+		-->
+		<variable name="openObjectLists" value="${[]}"/>
+		<!---
+			The list of the clipboard objects.
+		-->
+		<variable name="clipboardObjects" value="${[]}"/>
+		<!---
+			A map of all organizational objects in the model.
+		-->
+		<variable name="organizationalObjectMap" value="${{}}"/>
+		<!---
+			The view that has the active selection.
+		-->
+		<variable name="activeSelectionView" value="${null}"/>
+		<!---
+			The active selection view in the main work area.
+		-->
+		<variable name="workAreaActiveSelectionView" value="${null}"/>
+		<!---
+			Interval to schedule next run of the task to remove objects that are not being referenced.
+		-->
+		<variable name="removeNotReferencedObjectsInterval" type="number" value="${this.getIntervalValue()}"/>
+		<!---
+			A non-zero value indicates that the model is locked. Updates will not be trigged until the
+			model is unlocked.
+		-->
+		<variable name="lockCount" type="number" value="0"/>
+		<!---
+			@keywords private
+			Current model object count for this model.
+		-->
+		<variable name="objectCount" type="number" value="0"/>
+		<!---
+			@keywords private
+			The current initialization identifier, when the model is refreshed this value is updated
+		-->
+		<variable name="initializationIdentifier" type="number" value="1"/>
+		<!---
+			@keywords private
+			This model's top object
+		-->
+		<variable name="topObject" value="${null}"/>
+		<!---
+			@keywords private
+			Current model property count for this model.
+		-->
+		<variable name="propertyCount" type="number" value="0"/>
+		<!---
+			Maximum number of open objects that have not been changed for this model.
+		-->
+		<variable name="maximumNotDirtyOpenObjects" type="number" value="${this.getMaximumNotDirtyOpenObjects()}"/>
+		<!---
+			Maximum number of objects that will be saved by the save all action before control is returned to the flash player.
+			Any remaining objects will be saved in batches not exceeding the limit as deferred jobs.
+		-->
+		<variable name="maximumSaveObjects" type="number" value="${this.getMaximumSaveObjects()}"/>
+		<!--- @keywords private
+			The number of calls to be made to the method updateOpenObjectLists.
+		-->
+		<variable name="updateOpenObjectListsCallbackCount" type="number" value="0"/>
+		<!--- @keywords private -->
+		<variable name="isModel" type="boolean" value="true"/>
+		<!--- @keywords private -->
+		<variable name="parseObjectArgs" value="${[]}"/>
+		
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.objectDefinitions = [];
+			this.doParseObjectsBatchDel = new EventHandler.Class(this, "doParseObjectsBatch");
+			this.updateOpenObjectListsDel = new EventHandler.Class(this, "updateOpenObjectLists");
+			]]>
+		</handler>
+
+		<!---
+			Get the interval value for next run of the task to remove objects that are not being referenced.
+			The value of "removeObjectsInterval" URL parameter will be returned if it is a valid positive integer in sec. Otherwise,
+			the default value of defaultRemoveNotReferencedObjectsInterval attribute (in sec) set in the configProperties
+			instance will be used.
+			@return number: the interval value in millisec
+		-->
+		<method name="getIntervalValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getIntervalValue");
+			}
+			var value = cmcConfig['removeObjectsInterval'];
+			if ((typeof value != "undefined") && (value != null) && (value != "")) {
+				value = Number(value);
+				if (isNaN(value) || value == 0) {
+					value = ConfigProperties.Singleton.defaultRemoveNotReferencedObjectsInterval;
+				}
+			}
+			else {
+				value = ConfigProperties.Singleton.defaultRemoveNotReferencedObjectsInterval;
+			}
+			value = value * 1000;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getIntervalValue", value);
+			}
+			return value;
+			]]>
+		</method>
+		
+		<!---
+			Get the maximum number of open objects that have not been changed.
+			The value of "maximumNotDirtyOpenObjects" URL parameter will be returned if it is a valid positive integer.
+			Otherwise, the default value of defaultMaximumNotDirtyOpenObjects attribute set in the configProperties
+			instance will be used.
+			@return number: the maximum number of open objects that have not been changed
+		-->
+		<method name="getMaximumNotDirtyOpenObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getMaximumNotDirtyOpenObjects");
+			}
+			var value = cmcConfig['maximumNotDirtyOpenObjects'];
+			if ((typeof value != "undefined") && (value != null) && (value != "")) {
+				value = Number(value);
+				if (isNaN(value) || value == 0) {
+					value = ConfigProperties.Singleton.defaultMaximumNotDirtyOpenObjects;
+				}
+			}
+			else {
+				value = ConfigProperties.Singleton.defaultMaximumNotDirtyOpenObjects;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getMaximumNotDirtyOpenObjects", value);
+			}
+			return value;
+			]]>
+		</method>
+		
+		<!---
+			Get the maximum number of objects that can be saved immediately by cmc/foundation/Model.deferredSaveObjects method.
+			Objects over the limit will be added to a deferred job to be saved in next idle.
+			@return number: the maximum number of objects can be saved immediately by cmc/foundation/Model.deferredSaveObjects method
+		-->
+		<method name="getMaximumSaveObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getMaximumSaveObjects");
+			}
+			var value = cmcConfig['maximumSaveObjects'];
+			if ((typeof value != "undefined") && (value != null) && (value != "")) {
+				value = Number(value);
+				if (isNaN(value) || value == 0) {
+					value = ConfigProperties.Singleton.defaultMaximumSaveObjects;
+				}
+			}
+			else {
+				value = ConfigProperties.Singleton.defaultMaximumSaveObjects;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getMaximumSaveObjects", value);
+			}
+			return value;
+			]]>
+		</method>
+
+		<!---
+			Initialize the model.
+		-->
+		<method args="boe" name="initializeModel">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "initializeModel(boe)", [boe]);
+			}
+			this.setVariable("modelInitialized", false);
+			this.oEditor = boe;
+			this.removeObjectFromClipboardDel = new EventHandler.Class(this, "removeObjectFromClipboard");
+			this.doParseObjectDel = new EventHandler.Class(this, "doParseObject");
+			this.visibleParentDel = new EventHandler.Class(this, "checkActiveViewVisible");
+			this.workAreaVisibleParentDel = new EventHandler.Class(this, "checkWorkAreaActiveViewVisible");
+			this.removeNotReferencedObjectsDel = new EventHandler.Class(this, "removeNotReferencedObjects");
+			Timer.addTimer(this.removeNotReferencedObjectsDel, this.removeNotReferencedObjectsInterval);
+			this.setVariable("modelInitialized", true);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "initializeModel(boe)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Reinitialize model
+		-->
+		<method name="reinitializeModel">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "reinitializeModel");
+			}
+			this.setVariable("modelInitialized", false);
+			for (var i = 0; i < this.testObjects.length; i++) {
+				ModelUtil.Singleton.releaseModelObject(this.testObjects[i]);
+			}
+			this.testObjects = [];
+			this.parseObjectArgs = [];
+			this.doParseObjectDel.disconnectAll();
+			this.refreshAll(false);
+			this.setVariable("modelInitialized", true);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "reinitializeModel");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Destroy the model.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "destroy");
+			}
+			this.removeObjectFromClipboardDel.disconnectAll();
+			delete this.removeObjectFromClipboardDel;
+			this.visibleParentDel.disconnectAll();
+			this.workAreaVisibleParentDel.disconnectAll();
+			delete this.visibleParentDel;
+			delete this.doParseObjectDel;
+			delete this.doParseObjectsBatchDel;
+			delete this.workAreaVisibleParentDel;
+			if (this.updateOpenObjectListsCallbackCount > 0) {
+				CallbackUtil.Singleton.cancelCallback(this.updateOpenObjectListsDel);
+			}
+			delete this.updateOpenObjectListsDel;
+			if (this.updateChildrenLoadedDel) {
+				this.updateChildrenLoadedDel.unregisterAll();
+				delete this.updateChildrenLoadedDel;
+			}
+			if (this.updateChildrenLoadErrorDel) {
+				this.updateChildrenLoadErrorDel.unregisterAll();
+				delete this.updateChildrenLoadErrorDel;
+			}
+			if (this.deferredSaveOpenObjectsDel) {
+				CallbackUtil.Singleton.cancelCallback(this.deferredSaveOpenObjectsDel);
+				this.deferredSaveOpenObjectsDel.disconnectAll();
+				delete this.deferredSaveOpenObjectsDel;
+			}
+			this.removeNotReferencedObjectsDel.disconnectAll();
+			delete this.removeNotReferencedObjectsDel;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "destroy");
+			}
+			]]>
+		</method>
+		
+		<method args="v" name="checkActiveViewVisible">
+			<![CDATA[
+			this.setVariable('activeSelectionView', null);
+			]]>
+		</method>	
+		
+		<method args="v" name="checkWorkAreaActiveViewVisible">
+			<![CDATA[
+			this.setVariable("workAreaActiveSelectionView", null);
+			]]>
+		</method>
+		
+		<method args="v" name="registerActiveViewVisible">
+			<![CDATA[
+			this.visibleParentDel.connect(v, "onvisible");
+			if (v.immediateParent != this.oEditor && v.immediateParent != RootComponent.Singleton) {
+				this.registerActiveViewVisible(v.immediateParent);
+			}
+			]]>
+		</method>
+		
+		<method args="v" name="registerWorkAreaActiveViewVisible">
+			<![CDATA[
+			this.workAreaVisibleParentDel.connect(v, "onvisible");
+			if (v.immediateParent != this.oEditor.workAreaContainer && v.immediateParent != RootComponent.Singleton) {
+				this.registerWorkAreaActiveViewVisible(v.immediateParent);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the active selection view.
+		-->
+		<method args="v" name="setActiveSelectionView">
+			<![CDATA[
+			if (!this.activeSelectionView) {
+				this.activeSelectionView = null;
+			}
+			if (this.activeSelectionView != v) {
+				this.visibleParentDel.disconnectAll();
+				this.activeSelectionView = v;
+				if (v != null) {
+					this.registerActiveViewVisible(this.activeSelectionView);
+				}
+				EventUtil.trigger(this, "onactiveSelectionView", v);
+				if (v != null && ViewUtil.Singleton.containsView(this.oEditor.workAreaContainer, v)) {
+					this.setVariable("workAreaActiveSelectionView", v);
+				}
+			}
+			]]>
+		</method>
+		
+		<method args="v" name="setWorkAreaActiveSelectionView">
+			<![CDATA[
+			if (!this.workAreaActiveSelectionView) {
+				this.workAreaActiveSelectionView = null;
+			}
+			if (this.workAreaActiveSelectionView != v) {
+				this.workAreaVisibleParentDel.disconnectAll();
+				this.workAreaActiveSelectionView = v;
+				if (v != null) {
+					this.registerWorkAreaActiveViewVisible(v);
+				}
+				EventUtil.trigger(this, "onworkAreaActiveSelectionView", v);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the search definition for the specified search type.
+			@param string searchType: the search type
+			@return cmc/foundation/SearchDefinition: the search definition.
+		-->
+		<method args="searchType, del" name="getSearchDefinition">
+			<![CDATA[
+			var sd = null;
+			for (var i = 0; i < this.searchDefinitions.length; i++) {
+				if (this.searchDefinitions[i].searchType == searchType) {
+					sd = this.searchDefinitions[i];
+					break;
+				}
+			}
+			if (!sd && SearchDefinitionRegistry[searchType]) {
+				var registryEntry = SearchDefinitionRegistry[searchType];
+				if (typeof registryEntry.module == "undefined") {
+					if (del) {
+						del.connect(registryEntry, "onmodule");
+						if (!registryEntry.requested) {
+							registryEntry.requested = true;
+							require([registryEntry.moduleName]);
+						}
+					}
+				}
+				else {
+					sd = DefinitionUtil.createDefinitionInstance(registryEntry.module, this.oEditor, {
+						searchType: searchType,
+						listClass_moduleName: null,
+						listDefinition_moduleName: null,
+						showInUtilitiesView: false,
+						isDefault: false
+					});
+				}
+			}
+			return sd;
+			]]>
+		</method>
+		
+		<!---
+			Get the object definition for the specified object type.
+			@param cmc/foundation/ModelObject parentObject: the parent object
+			@param string objectPath: the object path to the object
+			@param boolean strict: indicates that object group matches will be ignored
+			@param del event handler: used as callback when the definition is loaded
+			@return cmc/foundation/ObjectDefinition: the object definition
+		-->
+		<method args="parentObject, objectPath, strict, del" name="getObjectDefinition">
+			<![CDATA[
+			if (typeof(strict) == "undefined") strict = false;
+			var od;
+			var parentObjectDefinition = null;
+			if (parentObject) {
+				parentObjectDefinition = parentObject.objectDefinition;
+			}
+			var types = objectPath.split("/");
+			var partialObjectPath = null;
+			for (var i = 0; i < types.length; i++) {
+				var type = types[i];
+				if (partialObjectPath != null) {
+					partialObjectPath += "/" + type;
+				}
+				else {
+					partialObjectPath = type;
+				}
+				var index = type.indexOf("[");
+				if (index != -1) {
+					type = type.substring(0, index);
+				}
+				if (parentObjectDefinition != null) {
+					od = parentObjectDefinition.getChildDefinition(type);
+				}
+				if (typeof (od) == "undefined") {
+					for (var j = 0; j < this.objectDefinitions.length; j++) {
+						if (this.objectDefinitions[j].objectType == type) {
+							od = this.objectDefinitions[j].objectDefinition;
+							break;
+						}
+					}
+					if (od) {
+						od.initializeDefinition(this);
+					}
+					else if (ObjectDefinitionRegistry[type]) {
+						var registryEntry = ObjectDefinitionRegistry[type];
+						if (typeof registryEntry.module == "undefined") {
+							if (del) {
+								del.connect(registryEntry, "onmodule");
+								if (!registryEntry.requested) {
+									registryEntry.requested = true;
+									require([registryEntry.moduleName]);
+								}
+							}
+						}
+						else {
+							od = DefinitionUtil.createDefinitionInstance(ObjectDefinitionRegistry[type].module, this, {
+								objectType: type,
+								creatable: false
+							});
+							if (od) {
+								od.initializeDefinition(this);
+							}
+						}
+					}
+				}
+				if (!strict && parentObjectDefinition != null && (od == null || typeof (od) == "undefined")) {
+					var ods = parentObjectDefinition.getChildDefinitions(type);
+					if (ods.length == 1) {
+						od = ods[0];
+					}
+					else {
+						var resolvedObject = parentObject.getObject(partialObjectPath);
+						if (resolvedObject != null) {
+							od = resolvedObject.objectDefinition;
+						}
+					}
+				}
+				parentObjectDefinition = od;
+			}
+			return od;
+			]]>
+		</method>
+		
+		<!---
+			Get the key used to uniquely identify an object with the specified
+			parent object, object type and object ID.
+			@param cmc/foundation/ObjectDefinition objectDefinition: the object definition
+			@param string objectId: the unique object identifier
+			@param string objectVersionId: the unique version identifier of the object
+			@param cmc/foundation/BaseContext context: the context for this object
+			@return string: the unique object key
+		-->
+		<method args="objectDefinition, objectId, objectVersionId, context" name="getObjectKey">
+			<![CDATA[
+			if (typeof(objectVersionId) == "undefined") objectVersionId = '';
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getObjectKey(objectDefinition, objectId, objectVersionId, context)", [objectDefinition, objectId, objectVersionId, context]);
+			}
+			var objectKey;
+			if (objectDefinition.primary || objectDefinition.organizational) {
+				objectKey = "" + this.initializationIdentifier + objectDefinition.objectType + objectId;
+			}
+			else if (objectDefinition.singleInstance) {
+				objectKey = objectDefinition.objectType + "SingleInstance";
+			}
+			else {
+				objectKey = objectDefinition.objectType + objectId;
+			}
+			objectKey = objectKey + objectVersionId;
+			if (context && context != this.oEditor.localContext) {
+				objectKey = objectKey + context.key;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getObjectKey", objectKey);
+			}
+			return objectKey;
+			]]>
+		</method>
+		
+		<!---
+			Find the object with the specified object type and object identifier.
+			@param cmc/foundation/ModelObject parentObject: the parent object
+			@param string objectDefinition: the object definition
+			@param string objectId: the unique object identifier
+			@param string objectVersionId: the unique version identifier of the object
+			@param cmc/foundation/BaseContext context: the context for this object
+			@return cmc/foundation/ModelObject: the model object
+		-->
+		<method args="parentObject, objectDefinition, objectId, objectVersionId, context" name="findObject">
+			<![CDATA[
+			if (typeof(objectVersionId) == "undefined") objectVersionId = '';
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "findObject(parentObject, objectDefinition, objectId, objectVersionId, context)", [parentObject, objectDefinition, objectId, objectVersionId, context]);
+			}
+			var o;
+			if (!context && parentObject != null) {
+				context = parentObject.localContext;
+			}
+			var key = this.getObjectKey(objectDefinition, objectId, objectVersionId, context);
+			o = this.objectMap[key];
+			if (typeof (o) == "undefined" && parentObject) {
+				o = parentObject.childObjectMap[key];
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "findObject(parentObject, objectDefinition, objectId, objectVersionId, context)", o);
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Load the object with the specified object type and object identifier.
+			@param cmc/foundation/ModelObject parentObject: the parent object
+			@param string objectDefinition: the object definition
+			@param string objectId: the unique object identifier
+			@param string objectVersionId: the unique version identifier of the object
+			@param cmc/foundation/BaseContext context: the context for this object
+			@return cmc/foundation/ModelObject: the model object
+		-->
+		<method args="parentObject, objectDefinition, objectId, objectVersionId, context" name="loadObject">
+			<![CDATA[
+			if (typeof(objectVersionId) == "undefined") objectVersionId = '';
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "loadObject(parentObject, objectDefinition, objectId, objectVersionId, context)", [parentObject, objectDefinition, objectId, objectVersionId, context]);
+			}
+			var o = this.findObject(parentObject, objectDefinition, objectId, objectVersionId, context);
+			if (typeof (o) == "undefined") {
+				o = this.createObject(parentObject, objectDefinition, objectId, (parentObject && parentObject.newObject && !objectDefinition.primary), false, false, objectVersionId, context);
+			}
+			else if (parentObject) {
+				parentObject.addChild(o, false);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "loadObject(parentObject, objectDefinition, objectId, objectVersionId, context)", o);
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Finds the object with the given object identifier and child of the specified object type.
+			@param cmc/foundation/ModelObject ancestorObject: the ancestor object to search from
+			@param childObjectType string: the object type of the child added
+			@param string objectId: the id of the object to find
+			@return cmc/foundation/ModelObject: the model object
+		-->
+		<method args="ancestorObject, childObjectType, objectId" name="findParent">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "findParent(ancestorObject, childObjectType, objectId)", [ancestorObject, childObjectType, objectId]);
+			}
+			var o = null;
+			if (ancestorObject.getPropertyValue(ancestorObject.objectDefinition.idProperty) == objectId && ancestorObject.objectDefinition.getChildDefinition(childObjectType)) {
+				o = ancestorObject;
+			}
+			if (o == null) {
+				for (var key in ancestorObject.childObjectMap) {
+					var co = ancestorObject.childObjectMap[key];
+					if (!co.objectDefinition.primary) {
+						var parentObject = this.findParent(co, childObjectType, objectId);
+						if (parentObject) {
+							o = parentObject;
+							break;
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "findParent(ancestorObject, childObjectType, objectId)", o);
+			}
+			return o;
+			]]>
+		</method>
+	
+		<!---
+			Get all the child objects that match the specified given parameters.
+			@param cmc/foundation/ModelObject parentObject: The parent object from which to lookup children
+			@param object pathSelector: a path selector with the object type or group and an array of selectors to match child objects
+			@param cmc/foundation/ModelObject descendant optional object instance used to choose between multiple possible objects paths. The resulting object must be an ancestor of this decendant if it is not null.
+			@param boolean defaultLanguage: if true, if the child object is not language sensitive, and if there are no selectors in the path selector,
+											then the default language child object is returned
+			@return array: an array of cmc/foundation/ModelObject instances that match the given parameters
+		-->
+		<method args="parentObject, pathSelector, descendant, defaultLanguage" name="getObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getObjects(parentObject, pathSelector, descendant, defaultLanguage)", [parentObject, pathSelector, descendant, defaultLanguage]);
+			}
+			parentObject.checkParsedData();
+			var matchingObjects = [];
+			if (descendant) {
+				var parentO = descendant.parentObject ? descendant.parentObject : descendant.getParentPrimaryObject();
+				while (parentO != null && parentO != parentObject) {
+					descendant = parentO;
+					parentO = descendant.parentObject ? descendant.parentObject : descendant.getParentPrimaryObject();
+				}
+				if (parentO != null && ModelUtil.Singleton.matchesPathSelector(descendant, pathSelector)) {
+					matchingObjects.push(descendant);
+				}
+			}
+			else {
+				var isParentVersionObject = parentObject.getIsVersionObject();
+				for (var i = 0; i < parentObject.orderedChildObjectKeys.length; i++) {
+					var key = parentObject.orderedChildObjectKeys[i];
+					var childObject = parentObject.childObjectMap[key];
+					if (childObject && !childObject.pendingDelete && (isParentVersionObject || !childObject.getIsVersionObject() || (!isParentVersionObject && parentObject.objectDefinition.reference)) && ModelUtil.Singleton.matchesPathSelector(childObject, pathSelector)) {
+						var match = false;
+						if (defaultLanguage && childObject.objectDefinition.languageSensitive && pathSelector.selectors.length == 0) {
+							if (childObject.getPropertyValue("languageId") == ContextUtil.Singleton.findContextValue(childObject, "defaultLanguageId").value) {
+								match = true;
+							}
+						}
+						else {
+							match = true;
+						}
+						if (match) {
+							matchingObjects.push(childObject);
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "getObjects(parentObject, pathSelector, descendant, defaultLanguage)", matchingObjects);
+			}
+			return matchingObjects;
+			]]>
+		</method>
+		
+		<!---
+			Create a new model object with the specified object type and object identifier.
+			@param cmc/foundation/ModelObject parentObject: the parent object
+			@param cmc/foundation/ObjectDefinition objectDefinition: the object definition
+			@param string objectId: the unique object identifier
+			@param boolean newObject: mark this new object as a new, unsaved object
+			@param boolean implicitNewObject: true if impicitly created new object
+			@param boolean testObject: true if the object is a testObject
+			@param string objectVersionId: the unique version identifier of the object
+			@param cmc/foundation/BaseContext context: the context for this object
+			@return cmc/foundation/ModelObject: the new model object
+		-->
+		<method args="parentObject, objectDefinition, objectId, newObject, implicitNewObject, testObject, objectVersionId, context" name="createObject">
+			<![CDATA[
+			if (typeof(implicitNewObject) == "undefined") implicitNewObject = false;
+			if (typeof(testObject) == "undefined") testObject = false;
+			if (typeof(objectVersionId) == "undefined") objectVersionId = '';
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "createObject(parentObject, objectDefinition, objectId, newObject, implicitNewObject, testObject, objectVersionId, context)", [parentObject, objectDefinition, objectId, newObject, implicitNewObject, testObject, objectVersionId, context]);
+			}
+			if (!context && parentObject != null) {
+				context = parentObject.localContext;
+			}
+			var objectKey = this.getObjectKey(objectDefinition, objectId, objectVersionId, context);
+			if (objectDefinition) {
+				var o = ModelUtil.Singleton.createModelObject({
+					model: this,
+					objectType: objectDefinition.objectType,
+					objectId: objectId,
+					objectVersionId: objectVersionId,
+					objectKey: objectKey,
+					objectDefinition: objectDefinition,
+					newObject: newObject ? true : false,
+					implicitNewObject: implicitNewObject ? true : false,
+					testObject: testObject ? true : (parentObject ? parentObject.testObject : false),
+					localContext: context
+				});
+				if (o.objectDefinition.primary || o.objectDefinition.organizational) {
+					if (o.testObject) {
+						this.testObjects.push(o);
+					}
+					else if (o.objectDefinition.objectType == "Top") {
+						this.topObject = o;
+					}
+					else {
+						this.objectMap[o.objectKey] = o;
+						o.modelInitializationIdentifier = this.initializationIdentifier;
+					}
+				}
+				else {
+					o.modelInitializationIdentifier = this.initializationIdentifier;
+				}
+				if (parentObject) {
+					parentObject.addChild(o, false);
+				}
+			}
+			else {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "WARNING", "cmc/foundation/Model", "createObject", "no object definition found for " + objectDefinition.objectType);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "createObject(parentObject, objectDefinition, objectId, newObject, implicitNewObject, testObject, objectVersionId, context)", o);
+			}
+			return o;
+			]]>
+		</method>
+
+		<!---
+			Create a new model object with the specified object type.
+			@param cmc/foundation/ObjectDefinition objectDefinition: the object definition
+			@param cmc/foundation/ModelObject parentObject: optional parent object
+			@param boolean update: trigger update. The default is "true".
+			@param cmc/foundation/ModelObject templateObject: optional template object.
+			@param boolean implicitNewObject: true if impicitly created
+			@param boolean testObject: true if the object is a testObject
+			@param cmc/foundation/BaseContext context: the context for this object
+			@return cmc/foundation/ModelObject: the new model object
+		-->
+		<method args="objectDefinition, parentObject, update, templateObject, implicitNewObject, testObject, context" name="createNewObject">
+			<![CDATA[
+			if (typeof(parentObject) == "undefined") parentObject = null;
+			if (typeof(update) == "undefined") update = true;
+			if (typeof(templateObject) == "undefined") templateObject = null;
+			if (typeof(implicitNewObject) == "undefined") implicitNewObject = false;
+			if (typeof(testObject) == "undefined") testObject = false;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "createNewObject(objectDefinition, parentObject, update, templateObject, implicitNewObject, testObject, context)", [objectDefinition, parentObject, update, templateObject, implicitNewObject, testObject, context]);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "createNewObject(objectDefinition, parentObject, update, templateObject, implicitNewObject, testObject, context)", [objectDefinition, parentObject, update, templateObject, implicitNewObject, testObject, context]);
+			}
+			if (objectDefinition == null && templateObject) {
+				objectDefinition = this.getObjectDefinition(parentObject, templateObject.objectType);
+			}
+			var objectId = "new" + ++this.newObjectCount;
+			var o = this.createObject(parentObject, objectDefinition, objectId, true, implicitNewObject, testObject, '', context);
+			if (templateObject) {
+				o.initFromTemplate(templateObject, true);
+			}
+			if (parentObject && update) {
+				parentObject.updateChildObjects();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "createNewObject(objectDefinition, parentObject, update, templateObject, implicitNewObject, testObject)", o);
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Add the specified object to the list of open objects.
+			@param cmc/foundation/ModelObject o: the object to open
+		-->
+		<method args="o" name="addOpenObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "addOpenObject(o)", [o]);
+			}
+			var index = this.openObjects.indexOf(o);
+			if (index == -1) {
+				this.checkOpenObjectsLimit();
+				this.openObjects.push(o);
+				this.updateOpenObjects();
+				var activeWorkTree = this.oEditor.navigationTree.activeWorkTree;
+				if (!activeWorkTree.open) {
+					activeWorkTree.setVariable("open", true);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "addOpenObject(o)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Remove the specified object from the list of open objects.
+			@param cmc/foundation/ModelObject o: the object to remove from the open list
+		-->
+		<method args="o" name="removeOpenObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "removeOpenObject(o)", [o]);
+			}
+			var index = this.openObjects.indexOf(o);
+			if (index != -1) {
+				this.openObjects.splice(index, 1);
+				this.updateOpenObjects();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "removeOpenObject(o)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update open object list.
+		-->
+		<method args="immediate" name="updateOpenObjects">
+			<![CDATA[
+			if (typeof(immediate) == "undefined") immediate = false;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "updateOpenObjects");
+			}
+			if (this.lockCount == 0) {
+				if (this.updateOpenObjectListsCallbackCount > 0) {
+					CallbackUtil.Singleton.cancelCallback(this.updateOpenObjectListsDel);
+					this.updateOpenObjectListsCallbackCount--;
+				}
+				this.updateOpenObjectListsCallbackCount++;
+				if (immediate) {
+					this.updateOpenObjectLists();
+				}
+				else {
+					CallbackUtil.Singleton.addDeferredCallback(this.updateOpenObjectListsDel);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "updateOpenObjects");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update open object list.
+		-->
+		<method args="e" name="updateOpenObjectLists">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "updateOpenObjectLists");
+			}
+			this.updateOpenObjectListsCallbackCount--;
+			var lists = this.openObjectLists;
+			for (var i = 0; i < lists.length; i++) {
+				lists[i].setVariable("modelObjects", this.openObjects);
+			}
+			EventUtil.trigger(this, "openObjectsUpdated");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "updateOpenObjectLists");
+			}
+			]]>
+		</method>
+				
+		<!---
+			Check if there is still room to add 1 more open object. Remove least viewed open objects that have no
+			unsaved changes if the limit is met.
+		-->
+		<method name="checkOpenObjectsLimit">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "checkOpenObjectsLimit");
+			}
+			var sortedNotDirtyOpenObjects = this.sortNotDirtyOpenObjectsByLastViewedTimeOrder();
+			var closeCount = sortedNotDirtyOpenObjects.length + 1 - this.maximumNotDirtyOpenObjects;
+			if (closeCount > 0) {
+				this.lock();
+				for (var i = 0; i < closeCount; i++) {
+					sortedNotDirtyOpenObjects[i].closeObject();
+				}
+				this.unlock();
+			}
+			if (Logger.Singleton.enabled) {
+				if (closeCount > 0) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINE", "cmc/foundation/Model", "checkOpenObjectsLimit", "Number of open objects to be removed: " + closeCount);
+				}
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "checkOpenObjectsLimit");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Sort the list of open objects that have no unsaved changes in the order that
+			they are last viewed.
+			@return array: an array of sorted open objects that have no unsaved changes
+		-->
+		<method name="sortNotDirtyOpenObjectsByLastViewedTimeOrder">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "sortNotDirtyOpenObjectsByLastViewedTimeOrder");
+			}
+			var sortedObjects = [];
+			for (var i = 0; i < this.openObjects.length; i++) {
+				if (!this.openObjects[i].openGroupObject.openGroupDirty && !this.openObjects[i].isOpenInCompareView) {
+					sortedObjects.push(this.openObjects[i]);
+				}
+			}
+			var compareObjectsByLastViewedOrder = function(o1, o2) {
+				if (o1.lastViewedTime < o2.lastViewedTime) {
+					return -1;
+				}
+				else if (o1.lastViewedTime > o2.lastViewedTime) {
+					return 1;
+				}
+				else {
+					return 0;
+				}
+			};
+			sortedObjects.sort(compareObjectsByLastViewedOrder);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "sortNotDirtyOpenObjectsByLastViewedTimeOrder", sortedObjects.length);
+			}
+			return sortedObjects;
+			]]>
+		</method>
+		
+		<!---
+			Increment the lock count on this object
+		-->
+		<method name="lock">
+			<![CDATA[
+			this.lockCount++;
+			]]>
+		</method>
+		
+		<!---
+			Decrement the lock count on this object.
+			@param boolean immediateUpdate: true to immediately update the children and references
+		-->
+		<method args="immediateUpdate" name="unlock">
+			<![CDATA[
+			if (typeof(immediateUpdate) == "undefined") immediateUpdate = false;
+			if (this.lockCount > 0) {
+				this.lockCount--;
+				if (this.lockCount == 0) {
+					this.updateOpenObjects(immediateUpdate);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Bind the specified view to list of open objects.
+			@param view v: the view
+		-->
+		<method args="v" name="bindViewToOpenObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "bindViewToOpenObjects(v)", [v]);
+			}
+			var list = v.oList;
+			if (list) {
+				list.setVariable("modelObjects", this.openObjects);
+			}
+			else {
+				list = new ModelObjectList.Class(v, {
+					v: v,
+					modelObjects: this.openObjects
+				});
+			}
+			this.openObjectLists.push(list);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "bindViewToOpenObjects(v)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Find the latest search results for the specified search type.
+			@param string searchType: the search type
+			@param cmc/foundation/BaseContext context: the context
+			@return cmc/foundation/ModelSearchResults: the search results object
+		-->
+		<method args="searchType, context" name="findSearchResults">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "findSearchResults(searchType)", [searchType]);
+			}
+			var key = searchType;
+			if (context && context != this.oEditor.localContext) {
+				key += context.key;
+			}
+			var s = this.searchResultsMap[key];
+			if (typeof (s) == "undefined") {
+				s = new ModelSearchResults.Class(this, {
+					model: this,
+					searchType: searchType,
+					searchDefinition: this.getSearchDefinition(searchType),
+					localContext: context
+				});
+				this.searchResultsMap[key] = s;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "findSearchResults(searchType)", s);
+			}
+			return s;
+			]]>
+		</method>
+		
+		<!---
+			Bind the specified view to the search results object with the specified search type.
+			@param view v: the view
+			@param string searchType: the search type
+			@return cmc/foundation/ModelSearchResults: the search results instance
+		-->
+		<method args="v, searchType" name="bindViewToSearchResults">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "bindViewToSearchResults(v, searchType)", [v, searchType]);
+			}
+			var s = null;
+			if (searchType) {
+				s = this.findSearchResults(searchType);
+				s.bindView(v);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "bindViewToSearchResults(v, searchType)", s);
+			}
+			return s;
+			]]>
+		</method>
+		
+		<!---
+			Perform a search of the specified search type.
+			@param string searchType: the search type
+			@param Object searchOptions: search options
+		-->
+		<method args="searchType, searchOptions" name="doSearch">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "doSearch(searchType, searchOptions)", [searchType, searchOptions]);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "doSearch(searchType, searchOptions)", [searchType, searchOptions]);
+			}
+			var s = this.findSearchResults(searchType);
+			if (s) {
+				s.doSearch(searchOptions);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "doSearch(searchType, searchOptions)");
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "END ", "doSearch(searchType, searchOptions)" + [searchType, searchOptions]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Save any changed model objects.
+		-->
+		<method args="prompt" name="save">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "save");
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "do save", "number of objects: " + this.openObjects.length);
+			}
+			if (typeof (prompt) == "undefined") {
+				prompt = true;
+			}
+			if (prompt) {
+				var hasError = false;
+				for (var i = 0; i < this.openObjects.length; i++) {
+					var o = this.openObjects[i];
+					if (o.hasErrors(true) && o.openGroupDirty) {
+						hasError = true;
+						break;
+					}
+				}
+				if (hasError) {
+					var caller = this;
+					require(["cmc/foundation/SaveOpenObjectsWithErrorDialog"], function(SaveOpenObjectsWithErrorDialog) {
+						SaveOpenObjectsWithErrorDialog.Singleton.openSaveOpenObjectsWithErrorDialog(caller);
+					});
+				}
+				else {
+					this.save(false);
+				}
+			}
+			else {
+				this.saveOpenObjects(this.openObjects);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "END do save", "number of objects: " + this.openObjects.length);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "save");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Save open objects in batches not exceeding maximumSaveObjects.
+		-->				
+		<method args="args" name="deferredSaveOpenObjects">
+			<![CDATA[
+			var saveObjects = args.saveObjects;
+			var numToSave = Math.min(this.maximumSaveObjects, saveObjects.length);
+			var saveList = saveObjects.slice(0, numToSave);
+			saveObjects.splice(0, numToSave);
+			var eventId = null;
+			if (args.eventId) {
+				eventId = args.eventId;
+				ServiceTransactionUtil.Singleton.activeTransactionEventId = eventId;
+			}
+			this.lock();
+			for (var i = 0; i < saveList.length; i++) {
+				saveList[i].saveObject(false, false);
+			}
+			this.unlock();
+			if (eventId == null) {
+				eventId = ServiceTransactionUtil.Singleton.transactionEventCount;
+			}
+			ServiceTransactionUtil.Singleton.activeTransactionEventId = null;
+			if (saveObjects.length > 0) {
+				CallbackUtil.Singleton.addDeferredCallback(this.deferredSaveOpenObjectsDel, {
+					saveObjects: saveObjects,
+					eventId: eventId
+				}, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			]]>
+		</method>
+		<!---
+			Save objects in the order of parent first
+			@param array saveObjects: objects to be saved
+		-->	
+		<method args="saveObjects" name="saveOpenObjects">
+			<![CDATA[
+			saveObjects = saveObjects.slice(0);
+			ModelUtil.Singleton.sortObjectsBySaveOrder(saveObjects);
+			if (!this.deferredSaveOpenObjectsDel) {
+				this.deferredSaveOpenObjectsDel = new EventHandler.Class(this, "deferredSaveOpenObjects");
+			}
+			CallbackUtil.Singleton.addDeferredCallback(this.deferredSaveOpenObjectsDel, {
+				saveObjects: saveObjects
+			}, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			]]>
+		</method>
+		
+		<!---
+			Parse the object data element and construct the model object and its children.
+
+			@param XML e: the object data element
+			@param cmc/foundation/ModelObject parentObject: optional parent object
+			@param boolean lazyParse: if true do lazy parsing
+			@param boolean createAsNew: If true created the parsed objects as new objects
+			@param string objectVersionId: the unique version identifier of the object
+			@param cmc/foundation/BaseContext context: the context for this object
+			@param cmc/foundation/EventHandler del a handler to be called after the object definition module has been loaded
+			@return cmc/foundation/ModelObject: the model object
+		-->
+		<method args="e, parentObject, lazyParse, createAsNew, objectVersionId, context, del" name="parseObject">
+			<![CDATA[
+			if (typeof(parentObject) == "undefined") parentObject = null;
+			if (typeof(lazyParse) == "undefined") lazyParse = false;
+			if (typeof(createAsNew) == "undefined") createAsNew = false;
+			if (typeof(objectVersionId) == "undefined") objectVersionId = '';
+			var deferParse = false;
+			var o = null;
+			var objectType = e.getAttribute("objectType");
+			var objectPath = e.getAttribute("objectPath");
+			if (!context && parentObject != null) {
+				context = parentObject.localContext;
+			}
+			if (objectPath && parentObject != null) {
+				o = parentObject.getObject(objectPath);
+				if (o != null) {
+					o.parseDataElement(e, lazyParse);
+				}
+			}
+			else if (objectType) {
+				var parentElement = XMLUtil.getFirstElement(e, "parent");
+				var isParsedInParentObject = false;
+				if (parentElement != null) {
+					var parentObjectDataElement = XMLUtil.getFirstElement(parentElement, "object");
+					var parentObjectObjectType = parentObjectDataElement.getAttribute("objectType");
+					if (parentObjectObjectType) {
+						parentObject = this.parseObject(parentObjectDataElement, null, false, false, '', context);
+						isParsedInParentObject = true;
+					}
+					else {
+						var parentObjectObjectId = parentObjectDataElement.getAttribute("objectId");
+						var parentObjectObjectPath = parentObjectDataElement.getAttribute("objectPath");
+						if (parentObjectObjectId || parentObjectObjectPath) {
+							var eParentObject = parentObjectObjectId ? this.findParent(parentObject, objectType, parentObjectObjectId) : parentObject.getObject(parentObjectObjectPath);
+							if (eParentObject && !eParentObject.implicitNewObject) {
+								parentObject = eParentObject;
+								isParsedInParentObject = true;
+							}
+							else {
+								deferParse = true;
+								var parentPrimaryObject = parentObject.objectDefinition.primary ? parentObject : parentObject.getParentPrimaryObject();
+								if (parentPrimaryObject.deferredElements != null) {
+									parentPrimaryObject.deferredElements.push(e);
+								}
+							}
+						}
+					}
+				}
+				if (!deferParse) {
+					var objectDefinition = this.getObjectDefinition(parentObject, objectType, true, del);
+					if (objectDefinition) {
+						var objectId = null;
+						if (objectDefinition.idProperty) {
+							var idName = objectDefinition.idProperty;
+							var nodes = e.childNodes;
+							for (var j = 0; j < nodes.length; j++) {
+								if (nodes[j].nodeName == idName) {
+									var textNode = nodes[j].firstChild;
+									if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+										objectId = textNode.nodeValue;
+									}
+									break;
+								}
+							}
+						}
+						if (objectDefinition.singleInstance && !objectId) {
+							objectId = "SingleInstance";
+						}
+						if (objectId && !createAsNew) {
+							var versionId = "";
+							if (objectDefinition.primary) {
+								var nodes = e.childNodes;
+								for (var j = 0; j < nodes.length; j++) {
+									if (nodes[j].nodeName == "objectVersionId") {
+										var textNode = nodes[j].firstChild;
+										if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+											versionId = textNode.nodeValue;
+										}
+										break;
+									}
+								}
+							}
+							else if (objectDefinition.reference) {
+								versionId = objectVersionId;
+							}
+							o = this.loadObject(parentObject, objectDefinition, objectId, versionId, context);
+							if (o.implicitNewObject) {
+								o.setVariable("newObject", false);
+								o.setVariable("implicitNewObject", false);
+								o.openGroupObject.checkUnsavedChanges();
+							}
+							if (isParsedInParentObject) {
+								parentObject.updateChildObjects();
+							}
+							o.parseDataElement(e, lazyParse);
+							o.updateDisplayName();
+						}
+						else if (objectDefinition.organizational || (parentObject && parentObject.newObject) || createAsNew) {
+							o = this.createNewObject(objectDefinition, parentObject, false, null, false, false, context);
+							o.parseDataElement(e, lazyParse);
+						}
+						if (parentObject) {
+							var parentPrimaryObject = parentObject.objectDefinition.primary ? parentObject : parentObject.getParentPrimaryObject();
+							if (parentPrimaryObject && parentPrimaryObject.deferredElements != null && parentPrimaryObject.deferredElements.length > 0) {
+								var deferredElements = parentPrimaryObject.deferredElements;
+								parentPrimaryObject.deferredElements = null;
+								for (var i = 0; i < deferredElements.length; i++) {
+									var deferredElementObject = this.parseObject(deferredElements[i], parentPrimaryObject, lazyParse, createAsNew, '', context);
+									if (deferredElementObject != null) {
+										deferredElements.splice(i, 1);
+										i = -1;
+									}
+								}
+								parentPrimaryObject.deferredElements = deferredElements;
+							}
+						}
+					}
+					else {
+						if (Logger.Singleton.enabled) {
+							var msg = "No object definition for object type: " + objectType + ".";
+							if (parentObject) {
+								msg += " Parent object: " + parentObject.objectDefinition.objectType;
+							}
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "WARNING", "cmc/foundation/Model", "parseObject", msg);
+						}
+					}
+				}
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse a data element and construct model objects for each child data element that represents an object.
+
+			@param XML dataElement: the parent data element
+			@param cmc/foundation/ModelObject parentObject: optional parent object
+			@param cmc/foundation/EventHandler del: an optional callback delegate
+			@param object delArgs: an optional set of arguments invoked with the callback delegate
+			@param boolean stoppable: an optional paramater indicating whether the deferred parse is stoppable
+			@param cmc/foundation/EventHandler stopDel: an optional callback delegate, invoked when this deferred callback is stopped, it can only be invoked if stoppable is true
+			@param object stopDelArgs: an optional set of arguments invoked with the stop callback delegate
+			@param cmc/foundation/GetChildrenService getChildrenService: an optional cmc/foundation/GetChildrenService object. If provided, the types of the parsed objects will be checked against the expected {@link cmc/foundation/GetChildrenService#objectTypes objectTypes} specified for the service.
+			@param cmc/foundation/BaseContext context: the context for this object
+		-->
+		<method args="dataElement, parentObject, del, delArgs, stoppable, stopDel, stopDelArgs, getChildrenService, context" name="doDeferredParseObjects">
+			<![CDATA[
+			if (typeof(stopDel) == "undefined") stopDel = null;
+			if (typeof(stopDelArgs) == "undefined") stopDelArgs = null;
+			if (typeof(getChildrenService) == "undefined") getChildrenService = null;
+			CallbackUtil.Singleton.addDeferredCallback(this.doParseObjectsBatchDel, {
+				dataElement: dataElement,
+				parentObject: parentObject,
+				del: del,
+				delArgs: delArgs,
+				getChildrenService: getChildrenService,
+				context: context
+			}, CallbackUtil.Singleton.PRIORITY_BACKGROUND, stoppable, stopDel, stopDelArgs);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse a data element and construct model objects for each child data element that represents an object.  This method
+			adds a batch of parse objects onto the deferred call back individually.
+
+			@param Object args: The arguments for adding all the deferred callbacks.  The data element, parent object, callback delegate, and callback delegate arguments.
+		-->
+		<method args="args" name="doParseObjectsBatch">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "doParseObjectsBatch(args)");
+			}
+			var dataElement = args.dataElement;
+			var parentObject = args.parentObject;
+			var del = args.del;
+			var delArgs = args.delArgs;
+			var getChildrenService = args.getChildrenService;
+			var context = args.context;
+			var objects = [];
+			var childDelArgs = null;
+			if (del){
+				delArgs.objects = objects;
+				childDelArgs = args;
+				childDelArgs.count = 0;
+			}		
+			while (dataElement.childNodes.length > 0) {
+				var e = dataElement.childNodes[0];
+				e.parentNode.removeChild(e);
+				if (childDelArgs){
+					childDelArgs.count++;
+				}
+				CallbackUtil.Singleton.addDeferredCallback(this.doParseObjectDel, {
+					e: e,
+					parentObject: parentObject,
+					objects: objects,
+					getChildrenService: getChildrenService,
+					context: context, 
+					childDelArgs: childDelArgs
+				}, CallbackUtil.Singleton.PRIORITY_BACKGROUND_IMMEDIATE);
+			}
+			if (del && childDelArgs.count == 0) {
+				CallbackUtil.Singleton.addDeferredCallback(del, delArgs, CallbackUtil.Singleton.PRIORITY_BACKGROUND_IMMEDIATE);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "doParseObjectsBatch(args)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Parses the object for the given args.
+		-->
+		<method args="args" name="doParseObject">
+			<![CDATA[
+			if (typeof(args) == "undefined" || typeof(args.module) != "undefined") {
+				if (this.parseObjectArgs.length > 0) {
+					this.doParseObjectDel.disconnectAll();
+					args = this.parseObjectArgs.shift();
+				}
+				else {
+					args == undefined;
+				}
+			}
+			else if (this.parseObjectArgs.length > 0) {
+				this.parseObjectArgs.push(args);
+				args = undefined;
+			}
+			while (args) {
+				var e = args.e;
+				var nodeName = e.nodeName;
+				var requiredRegistryEntry;
+				if (nodeName == "object") {
+					var objectType = e.getAttribute("objectType");
+					var registryEntry = ObjectDefinitionRegistry[objectType];
+					if (registryEntry != null && typeof(registryEntry.module) == "undefined") {
+						if (!registryEntry.requested) {
+							registryEntry.requested = true;
+							require([registryEntry.moduleName]);
+						}
+						requiredRegistryEntry = registryEntry;
+					}
+				}
+				var objectElements = e.getElementsByTagName("object");
+				for (var i = 0; i < objectElements.length; i++) {
+					var objectType = objectElements[i].getAttribute("objectType");
+					var registryEntry = ObjectDefinitionRegistry[objectType];
+					if (registryEntry != null && typeof(registryEntry.module) == "undefined") {
+						if (!registryEntry.requested) {
+							registryEntry.requested = true;
+							require([registryEntry.moduleName]);
+						}
+						requiredRegistryEntry = registryEntry;
+					}
+				}
+				if (requiredRegistryEntry != null) {
+					this.parseObjectArgs.unshift(args);
+					this.doParseObjectDel.connect(requiredRegistryEntry, "onmodule");
+					args = undefined;
+				}
+				else {
+					var parentObject = args.parentObject;
+					var objects = args.objects;
+					var getChildrenService = args.getChildrenService;
+					var context = args.context;
+					if (nodeName == "object") {
+						if (getChildrenService && parentObject && parentObject.implicitNewObject) {
+							parentObject.setVariable("newObject", false);
+							parentObject.setVariable("implicitNewObject", false);
+						}
+						var o = this.parseObject(e, parentObject, true, false, '', context);
+						if (o != null) {
+							objects.push(o);
+							if (getChildrenService) {
+								getChildrenService.checkReturnedObject(o);
+								if (parentObject) {
+									parentObject.addLoadedChild(getChildrenService, o);
+								}
+							}
+						}
+					}
+					else if (nodeName == "reference") {
+						e = XMLUtil.getFirstElement(e, "object");
+						e.parentNode.removeChild(e);
+						var o = this.parseObject(e, parentObject, false, false, parentObject.objectVersionId, context);
+						if (o == null) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "SEVERE", "cmc/foundation/Model", "doParseObject", "Error parsing reference " + e);
+							console.log(e);
+						}
+						else {
+							o.addChild(parentObject);
+						}
+					}
+					if (args.childDelArgs) {
+						args.childDelArgs.count--;
+						if (args.childDelArgs.count == 0){
+							CallbackUtil.Singleton.addDeferredCallback(args.childDelArgs.del, args.childDelArgs.delArgs, CallbackUtil.Singleton.PRIORITY_BACKGROUND_IMMEDIATE);
+						}
+					}
+					args = this.parseObjectArgs.length > 0 ? this.parseObjectArgs.shift() : undefined;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Parses a comma separated list of object types and returns an
+			array of object definitions.
+			@param cmc/foundation/ModelObject parentObject: model object
+			@param string types: comma separated list of object types
+			@param del: a handler to be called after the object definition module has been loaded
+			@returns [cmc/foundation/ObjectDefinition]: an array of object definitions
+		-->
+		<method args="parentObject, types, del" name="getObjectDefinitions">
+			<![CDATA[
+			var definitions = [];
+			if (types) {
+				types = StringUtil.Singleton.splitAndTrim(types, ",");
+				for (var i = 0; i < types.length; i++) {
+					var oDef = this.getObjectDefinition(parentObject, types[i], false, del);
+					if (!oDef) {
+						if (!ObjectDefinitionRegistry[types[i]]) {
+							var msg = "Unable to resolve object type: " + types[i];
+							if (parentObject != null) {
+								msg += " Parent object type: " + parentObject.objectType;
+							}
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "SEVERE", "cmc/foundation/Model", "getObjectDefinitions", msg);
+						}
+						else {
+							definitions.push(null);
+						}
+					}
+					else {
+						definitions.push(oDef);
+					}
+				}
+			}
+			return definitions;
+			]]>
+		</method>
+		
+		<!---
+			Parses a comma separated list of object types and returns an array of object selectors.
+			An object selector is a map with two fields:
+			<ul>
+				<li>An instance of cmc/foundation/ObjectDefinition accessed by the objectDefinition key.
+				<li>An array of selectors accessed by the selectors key.  This is an array of maps with keys: propertyName, propertyValue.
+			</ul>
+			
+			@param cmc/foundation/ModelObject parentObject: model object
+			@param string types: comma separated list of object types
+			@returns Object: an array of object selectors
+		-->
+		<method args="parentObject, types, del" name="getObjectSelectors">
+			<![CDATA[
+			var objectSelectors = [];
+			if (types) {
+				types = StringUtil.Singleton.splitAndTrim(types, ",");
+				for (var i = 0; i < types.length; i++) {
+					var type = types[i];
+					var index = type.indexOf("[");
+					var selectors = [];
+					if (index != -1) {
+						var objSelectors = type.substring(index + 1, type.lastIndexOf("]")).split("][");
+						for (var j = 0; j < objSelectors.length; j++) {
+							var selector = objSelectors[j].split("=");
+							selectors.push({
+								propertyName: selector[0],
+								propertyValue: selector[1]
+							});
+						}
+						type = type.substring(0, index);
+					}
+					var oDef = this.getObjectDefinition(parentObject, type, true, del);
+					if (oDef != null) {
+						objectSelectors.push({
+							objectDefinition: oDef,
+							selectors: selectors
+						});
+					}
+					else if (parentObject && parentObject.objectDefinition) {
+						var parentObjectDefinition = parentObject.objectDefinition;
+						var childObjectDefinitions = parentObjectDefinition.getChildDefinitions(type);
+						for (var j = 0; j < childObjectDefinitions.length; j++) {
+							objectSelectors.push({
+								objectDefinition: childObjectDefinitions[j],
+								selectors: selectors
+							});
+						}
+					}
+				}
+			}
+			return objectSelectors;
+			]]>
+		</method>
+
+		<!---
+			Set the clipboard to the set of specified objects.
+			@param array objects: the array of cmc/foundation/ModelObject objects
+		-->
+		<method args="objects" name="setClipboardObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "setClipboardObjects(objects)", [objects]);
+			}
+			if (this.clipboardObjects) {
+				for (var i = 0; i < this.clipboardObjects.length; i++) {
+					var obj = this.clipboardObjects[i];
+					obj = obj.getReferencedObject();
+					obj.referenceCount--;
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/Model", "setClipboardObjects(objects)", "Old clipboard objects: Object key=" + this.clipboardObjects[i].objectKey + ". Decrement counter for: Object key=" + obj.objectKey + ", new reference count=" + obj.referenceCount);
+					}
+				}
+			}
+			this.removeObjectFromClipboardDel.disconnectAll();
+			if (typeof (objects) != "undefined" && objects != null) {
+				var newObjects = [];
+				for (var i = 0; i < objects.length; i++) {
+					this.removeObjectFromClipboardDel.connect(objects[i], "beingDestroyed");
+					newObjects.push(objects[i]);
+					var obj = objects[i];
+					obj = obj.getReferencedObject();
+					obj.referenceCount++;
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/Model", "setClipboardObjects(objects)", "New clipboard objects: Object key=" + objects[i].objectKey + ". Increment counter for: Object key=" + obj.objectKey + ", new reference count=" + obj.referenceCount);
+					}
+				}
+				this.clipboardObjects = newObjects;
+			}
+			else {
+				this.clipboardObjects = null;
+			}
+			EventUtil.trigger(this, "onclipboardObjects", this.clipboardObjects);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "setClipboardObjects(objects)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Remove the specified object from the clipboard. This method is
+			registered to the "beingDestroyed" event for all the objects
+			in the clipboard.
+		-->
+		<method args="o" name="removeObjectFromClipboard">
+			<![CDATA[
+			var index = this.clipboardObjects.indexOf(o);
+			if (index >= 0) {
+				this.clipboardObjects.splice(index, 1);
+				o = o.getReferencedObject();
+				o.referenceCount--;
+				this.removeObjectFromClipboardDel.disconnectAll();
+				var objects = this.clipboardObjects;
+				for (var i = 0; i < objects.length; i++) {
+					this.removeObjectFromClipboardDel.connect(objects[i], "beingDestroyed");
+				}
+				if (objects.length == 0) {
+					EventUtil.trigger(this, "onclipboardObjects", objects);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Close all open objects.
+			@param boolean prompt: Display prompt if there are unsaved changes. The default is false.
+		-->
+		<method args="prompt" name="closeOpenObjects">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = false;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "closeOpenObjects(prompt)", [prompt]);
+			}
+			if (prompt) {
+				var unsavedChanges = false;
+				for (var i = 0; i < this.openObjects.length; i++) {
+					var o = this.openObjects[i];
+					if (o.openGroupObject.openGroupDirty) {
+						unsavedChanges = true;
+						break;
+					}
+				}
+				if (unsavedChanges) {
+					var caller = this;
+					require(["cmc/foundation/SaveOpenObjectsDialog"], function(SaveOpenObjectsDialog) {
+						SaveOpenObjectsDialog.Singleton.openSaveOpenObjectsDialog(caller);
+					});
+				}
+				else {
+					this.closeOpenObjects();
+				}
+			}
+			else {
+				var objects = [];
+				for (var i = 0; i < this.openObjects.length; i++) {
+					objects.push(this.openObjects[i]);
+				}
+				this.lock();
+				for (var i = 0; i < objects.length; i++) {
+					objects[i].closeObject();
+				}
+				this.unlock();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "closeOpenObjects(prompt)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Returns an array of model objects that are open and unsaved.
+			@return array An array of cmc/foundation/ModelObject that are open and unsaved. Returns an empty array if there are no unsaved open objects.
+		-->
+		<method name="getUnsavedOpenObjects">
+			<![CDATA[
+			var unsavedObjects = [];
+			for (var i = 0; i < this.openObjects.length; i++) {
+				var o = this.openObjects[i];
+				if (o.openGroupObject.openGroupDirty) {
+					unsavedObjects.push(o);
+				}
+			}
+			return unsavedObjects;
+			]]>
+		</method>
+		
+		<!---
+			Refresh all primary objects. This method will send the "beingDestroyed" event on the
+			objects being destroyed at refresh time.
+			@param boolean prompt: Display prompt if there are unsaved changes. The default is false.
+		-->
+		<method args="prompt" name="refreshAll">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = false;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "refreshAll(prompt)", [prompt]);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "refreshAll(prompt)", [prompt]);
+			}
+			var numOfObjectsDestroyed = 0;
+			if (prompt) {
+				if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+					require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+						TransactionProgressDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					var unsavedObjects = [];
+					for (var i = 0; i < this.openObjects.length; i++) {
+						var o = this.openObjects[i];
+						if (o.openGroupObject.openGroupDirty) {
+							unsavedObjects.push(o);
+						}
+					}
+					if (unsavedObjects.length > 0) {
+						var caller = this;
+						require(["cmc/foundation/RefreshAllConfirmationDialog"], function(RefreshAllConfirmationDialog) {
+							RefreshAllConfirmationDialog.Singleton.openRefreshAllConfirmationDialog(caller, unsavedObjects);
+						});
+					}
+					else {
+						this.refreshAll();
+					}
+				}
+			}
+			else {
+				ModelUtil.Singleton.doStop(this);
+				this.oEditor.resetNavigationHistory();
+				for (var key in this.searchResultsMap) {
+					this.searchResultsMap[key].reset(true);
+				}
+				this.initializationIdentifier++;
+				var objectMapList = [];
+				for (var key in this.objectMap) {
+					objectMapList.push(this.objectMap[key]);
+				}
+				numOfObjectsDestroyed = 0;
+				while (objectMapList.length > 0) {
+					var obj = objectMapList.shift();
+					if (obj.open) {
+						obj.setVariable("open", false);
+					}
+					if (obj.objectDefinition.organizational) {
+						ModelUtil.Singleton.releaseModelObject(obj);
+						numOfObjectsDestroyed++;
+					}
+					else {
+						EventUtil.trigger(obj, "beingDestroyed", obj);
+					}
+				}
+				this.setClipboardObjects([]);
+				this.closeOpenObjects(false);
+				this.topObject.updateChildObjects(true);
+				var topObjectTemplate = this.topObject.objectDefinition.getTemplate();
+				if (topObjectTemplate) {
+					this.topObject.parseDataElement(topObjectTemplate);
+				}
+				this.topObject.refreshChildren();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/Model", "END refreshAll(prompt)", "Number of primary objects to be removed=" + numOfObjectsDestroyed);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "refreshAll(prompt)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Refresh the specified object and all of its descendants.
+			@param cmc/foundation/ModelObject refreshObject: The object below which all objects will be updated.
+			@param boolean prompt: Display prompt if there are unsaved changes. The default is false.
+			@param [cmc/foundation/ObjectDefinition] oDefs: optional array of object definitions to reload
+			@param number pageNum: The page number to be loaded.
+		-->
+		<method args="refreshObject, prompt, oDefs, pageNum" name="refreshDescendants">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = false;
+			if (typeof(oDefs) == "undefined") oDefs = null;
+			if (typeof(pageNum) == "undefined") pageNum = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "refreshDescendants(refreshObject, prompt)", [refreshObject, prompt]);
+			}
+			if (prompt) {
+				if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+					require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+						TransactionProgressDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					var unsavedObjects = [];
+					for (var i = 0; i < this.openObjects.length; i++) {
+						var o = this.openObjects[i];
+						if (refreshObject.isDescendant(o) && o.openGroupObject.openGroupDirty) {
+							unsavedObjects.push(o);
+						}
+					}
+					if (unsavedObjects.length > 0) {
+						var caller = this;
+						require(["cmc/foundation/RefreshAllConfirmationDialog"], function(RefreshAllConfirmationDialog) {
+							RefreshAllConfirmationDialog.Singleton.openRefreshAllConfirmationDialog(caller, unsavedObjects, refreshObject, oDefs, pageNum);
+						});
+					}
+					else {
+						this.refreshDescendants(refreshObject, false, oDefs, pageNum);
+					}
+				}
+			}
+			else {
+				var refreshObjects = [];
+				for (var i = 0; i < this.openObjects.length; i++) {
+					var o = this.openObjects[i];
+					if (refreshObject.isDescendant(o) && o.openGroupObject.openGroupDirty) {
+						if (!o.objectDefinition.primary) {
+							o = o.getParentPrimaryObject();
+						}
+						refreshObjects.push(o);
+					}
+				}
+				while (refreshObjects.length > 0) {
+					var o = refreshObjects.shift();
+					if (o.newObject) {
+						ModelUtil.Singleton.releaseModelObject(o);
+					}
+					else {
+						o.refreshObject();
+					}
+				}
+				if (pageNum == null) {
+					if (refreshObject.objectDefinition.refreshService != null) {
+						refreshObject.objectDefinition.refreshService.doRequest(refreshObject);
+					}
+				}
+				refreshObject.refreshChildren(oDefs, pageNum);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "refreshDescendants(refreshObject, prompt)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Remove objects in the model that are not being referenced.
+			@param Object args: arguments
+		-->
+		<method args="args" name="removeNotReferencedObjects">
+			<![CDATA[
+			if (typeof(args) == "undefined") args = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "removeNotReferencedObjects");
+			}
+			Timer.removeTimer(this.removeNotReferencedObjectsDel);
+			var immediate = (args == null) || "deferredCallback" in args || CallbackUtil.Singleton.deferredCallbacks.length == 0;
+			var numOfObjects = 0;
+			var numOfObjectsDestroyed = 0;
+			var moreObjectsToRelease = false;
+			if (immediate) {
+				for (var key in this.objectMap) {
+					var obj = this.objectMap[key];
+					if (Logger.Singleton.enabled) {
+						numOfObjects++;
+					}
+					if (numOfObjectsDestroyed > 100) {
+						moreObjectsToRelease = true;
+						break;
+					}
+					if (obj.objectDefinition.primary && obj.openChildCount == 0 && !obj.open) {
+						var canRemoveObject = obj.modelInitializationIdentifier != this.initializationIdentifier;
+						if (!canRemoveObject && obj.referenceCount == 0) {
+							canRemoveObject = true;
+							for (var referenceKey in obj.referenceMap) {
+								var ref = obj.referenceMap[referenceKey];
+								var refDef = ref.objectDefinition;
+								if (!refDef.organizational) {
+									var parentPrimaryObject = ref.getParentPrimaryObject();
+									if ((!refDef.parentReference && parentPrimaryObject.referenceCount > 0) || parentPrimaryObject.isGetChildrenServicesLoading() || ref.hasUnsavedChanges()) {
+										if (Logger.Singleton.enabled && parentPrimaryObject != null) {
+											Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/Model", "removeNotReferencedObjects", "Model object key=" + obj.objectKey + " with reference count=" + obj.referenceCount + " is still being referenced by object with key=" + ref.getParentPrimaryObject().objectKey);
+										}
+										canRemoveObject = false;
+										break;
+									}
+								}
+							}
+						}
+						if (canRemoveObject) {
+							if (Logger.Singleton.enabled) {
+								Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/Model", "removeNotReferencedObjects", "Model object key=" + obj.objectKey + " will be destroyed");
+							}
+							numOfObjectsDestroyed++;
+							delete this.objectMap[obj.objectKey];
+							for (var referenceKey in obj.referenceMap) {
+								var referenceObj = obj.referenceMap[referenceKey];
+								if (referenceObj.getReferencedObject() == obj) {
+									var referenceObjParentObject = referenceObj.getParentPrimaryObject();
+									referenceObjParentObject.setGetChildrenServicesStale(referenceObj.objectDefinition);
+									ModelUtil.Singleton.releaseModelObject(referenceObj);
+								}
+								else {
+									referenceObj.setGetChildrenServicesStale(obj.objectDefinition);
+									referenceObj.removeChild(obj);
+								}
+							}
+							ModelUtil.Singleton.releaseModelObject(obj);
+						}
+						else if (obj.hasReleasableChildren && !obj.hasTransaction() && !obj.isGetChildrenServicesLoading()) {
+							obj.releaseReleasableChildren();
+							obj.hasReleasableChildren = false;
+							obj.releaseReleasableProperties();
+							numOfObjectsDestroyed++;
+						}
+						else if (obj.releaseReleasableProperties()) {
+							numOfObjectsDestroyed++;
+						}
+					}
+				}
+			}
+			if (immediate && !moreObjectsToRelease) {
+				Timer.resetTimer(this.removeNotReferencedObjectsDel, this.removeNotReferencedObjectsInterval);
+			}
+			else {
+				CallbackUtil.Singleton.addDeferredCallback(this.removeNotReferencedObjectsDel, {
+					deferredCallback: true
+				}, (args != null && ("deferredCallback" in args) && args.deferredCallback) ? CallbackUtil.Singleton.PRIORITY_IMMEDIATE : CallbackUtil.Singleton.PRIORITY_BACKGROUND_IMMEDIATE);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINE", "cmc/foundation/Model", "removeNotReferencedObjects", "Number Of objects before removal=" + numOfObjects);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINE", "cmc/foundation/Model", "removeNotReferencedObjects", "Number Of primary objects being destroyed=" + numOfObjectsDestroyed);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/Model", "removeNotReferencedObjects");
+			}
+			]]>
+		</method>
+	
+		<!---
+			Capture statistics on the current state of the model and log them.
+		-->
+		<method name="logModel">
+			<![CDATA[
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "--- " + this.oEditor.name + " ---");
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "object count " + this.objectCount);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "released object count " + ModelUtil.Singleton.availableModelObjects.length);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "property count " + this.propertyCount);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "released property count " + ModelUtil.Singleton.availableModelProperties.length);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "deferred callback count " + CallbackUtil.Singleton.deferredCallbacks.length);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "service dataset count " + ServiceUtil.Singleton.activeServiceDatasetCount);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "released service dataset count " + ServiceUtil.Singleton.availableServiceDatasets.length);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "service transaction count " + ServiceTransactionUtil.Singleton.activeServiceTransactionCount);
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/Model", "logModel", "released object stores count " + ModelUtil.Singleton.availableObjectStores.length);
+			Logger.Singleton.flush();
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="activeSelectionView" name="set_activeSelectionView">
+			<![CDATA[
+			this.setActiveSelectionView(activeSelectionView);
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="workAreaActiveSelectionView" name="set_workAreaActiveSelectionView">
+			<![CDATA[
+			this.setWorkAreaActiveSelectionView(workAreaActiveSelectionView);
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		
+		A search results object.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ModelSearchResults">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ModelObjectList" moduleName="cmc/foundation/ModelObjectList"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Reference to the parent model.
+		-->
+		<variable name="model" value="${null}"/>
+		<!---
+			Reference to search definition.
+		-->
+		<variable name="searchDefinition" value="${null}"/>
+		<!---
+			Indicate if the result status message contain errors
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		<!---
+			Array of search results objects.
+		-->
+		<variable name="searchResultObjects" value="${[]}"/>
+		<!---
+			Array of model object lists that are tied to this list of search results.
+		-->
+		<variable name="modelObjectLists" value="${[]}"/>
+		
+		<!---
+			Current search options.
+		-->
+		<variable name="searchOptions" value="${null}"/>
+		
+		<!--- Status message telling a state of the object. It is displayed in the panel title message area. -->
+		<variable name="statusMessage" type="string" value=""/>
+		<!---
+			@keywords private
+			The start index of the current page of search results.
+		-->
+		<variable name="startIndex" type="number" value="0"/>
+		<!---
+			@keywords private
+			The total number of records from the search result.
+		-->
+		<variable name="totalRecords" type="number" value="0"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="currPageNum" type="number" value="0"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="lastPageNum" type="number" value="0"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="deleteCount" type="number" value="0"/>
+		<!---
+			@keywords private
+			The instance implemented doLoadPage which can be called by the page control.
+		-->
+		<variable initialValue="${this}" name="pageController"/>
+		<!---
+			@keywords private
+			The context associated with this search results object.
+		-->
+		<variable name="localContext"/>
+
+		
+		<!--- Search complete event. -->
+		
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.objectDestroyedDel = new EventHandler.Class(this, "objectDestroyed");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.objectDestroyedDel.disconnectAll();
+			delete this.objectDestroyedDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Bind the specified view to these search results.
+			@param view v: the view
+		-->
+		<method args="v" name="bindView">
+			<![CDATA[
+			var lists = this.modelObjectLists;
+			var alreadyBound = false;
+			for (var i = 0; i < lists.length; i++) {
+				if (lists[i].v == v) {
+					alreadyBound = true;
+					break;
+				}
+			}
+			if (!alreadyBound) {
+				var list = v.oList;
+				if (list) {
+					list.setVariable("modelObjects", this.searchResultObjects);
+					list.setVariable("statusObject", this);
+				}
+				else {
+					list = new ModelObjectList.Class(v, {
+						v: v,
+						modelObjects: this.searchResultObjects,
+						statusObject: this
+					});
+				}
+				lists.push(list);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Release the specified view from this object.
+			@param view v: the view
+		-->
+		<method args="v" name="releaseView">
+			<![CDATA[
+			var lists = this.modelObjectLists;
+			for (var i = 0; i < lists.length; i++) {
+				if (lists[i].v == v) {
+					lists[i].setVariable("modelObjects", []);
+					lists[i].setVariable("statusObject", null);
+					lists.splice(i, 1);
+					if (lists.length == 0) {
+						this.searchResultObjects = [];
+						this.hasError = false;
+						this.statusMessage = "";
+						this.searchOptions = null;
+						this.startIndex = 0;
+						this.totalRecords = 0;
+						this.currPageNum = 0;
+						this.lastPageNum = 0;
+						this.deleteCount = 0;
+					}
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Invoke the search with the specified search options.
+			@param Object searchOptions: Search options that will be
+				sent to the search service.
+			@param number startIndex: Start index for the search.
+		-->
+		<method args="searchOptions, startIndex" name="doSearch">
+			<![CDATA[
+			if (typeof(startIndex) == "undefined") startIndex = 0;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelSearchResults", "doSearch(searchOptions, startIndex)", [searchOptions, startIndex]);
+			}
+			this.reset(startIndex == 0);
+			this.searchOptions = searchOptions;
+			this.totalRecords = 0;
+			this.deleteCount = 0;
+			for (var i in searchOptions) {
+				searchOptions[i] = StringUtil.Singleton.trim(searchOptions[i]);
+			}
+			if (typeof (searchOptions.searchText) != "undefined" && searchOptions.searchText == "") {
+				this.hasError = true;
+				this.setVariable("statusMessage", foundationResources.Singleton.searchResultsNoCriteriaMsg.string);
+			}
+			else {
+				this.startIndex = startIndex;
+				this.triggerSearch();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelSearchResults", "doSearch(searchOptions, startIndex)");
+			}
+			]]>
+		</method>
+
+		<!---
+			Load the page.
+		-->
+		<method args="args" name="doLoadPage">
+			<![CDATA[
+			this.loadByPageNum(args.pageNum);
+			]]>
+		</method>
+		<!---
+			Load the page of search result by page number. The current set of search results is discarded.
+		-->
+		<method args="pageNum" name="loadByPageNum">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelSearchResults", "loadByPageNum");
+			}
+			var maxRecordSetTotal = this.searchDefinition.searchService.getMaxRecordSetTotal();
+			if (this.currPageNum < pageNum) {
+				var maxItems = this.searchDefinition.searchService.getMaxItems();
+				this.startIndex = this.startIndex + (maxRecordSetTotal * (pageNum - this.currPageNum)) - Math.ceil(this.deleteCount / maxItems) * maxItems;
+			}
+			else {
+				this.startIndex = maxRecordSetTotal * (pageNum - 1);
+			}
+			this.doSearch(this.searchOptions, this.startIndex);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelSearchResults", "loadByPageNum");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Invoke the reset the search list
+		-->
+		<method args="clearOptions" name="reset">
+			<![CDATA[
+			if (typeof(clearOptions) == "undefined") clearOptions = false;
+			this.objectDestroyedDel.disconnectAll();
+			this.searchResultObjects = [];
+			if (clearOptions) {
+				this.searchOptions = null;
+				this.startIndex = 0;
+				this.totalRecords = 0;
+				this.currPageNum = 0;
+				this.lastPageNum = 0;
+				this.deleteCount = 0;
+			}
+			this.updateModelObjectLists(true);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="reset" name="updateModelObjectLists">
+			<![CDATA[
+			if (typeof(reset) == "undefined") reset = false;
+			if (this.searchResultObjects && this.modelObjectLists) {
+				var lists = this.modelObjectLists;
+				for (var i = 0; i < lists.length; i++) {
+					lists[i].setVariable("modelObjects", this.searchResultObjects);
+					lists[i].setVariable("statusObject", this);
+					if (reset) {
+						EventUtil.trigger(lists[i], "onreset");
+					}
+				}
+				if (reset) {
+					this.hasError = false;
+					this.setVariable("statusMessage", "");
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o" name="objectDestroyed">
+			<![CDATA[
+			var i = this.searchResultObjects.indexOf(o);
+			if (i != -1) {
+				this.searchResultObjects.splice(i, 1);
+				this.deleteCount++;
+				this.totalRecords--;
+			}
+			this.updateModelObjectLists();
+			]]>
+		</method>
+		<method name="triggerSearch">
+			<![CDATA[
+			if (!this.triggerSearchDel) {
+				this.triggerSearchDel = new EventHandler.Class(this, "triggerSearch");
+			}
+			else {
+				this.triggerSearchDel.disconnectAll();
+			}
+			if (this.searchDefinition == null) {
+				this.searchDefinition = this.model.getSearchDefinition(this.searchType, this.triggerSearchDefinitionDel);
+			}
+			if (this.searchDefinition != null) {
+				var service = this.searchDefinition.searchService;
+				service.doRequest(this, this.searchOptions, {
+					startIndex: this.startIndex
+				});
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/ModelUtil" singletonDefinition="true">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ObjectSaveOrderComparator" moduleName="cmc/foundation/ObjectSaveOrderComparator"/>
+		<dependency localName="ModelProperty" moduleName="cmc/foundation/ModelProperty"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="NavigationHistoryEntry" moduleName="cmc/foundation/NavigationHistoryEntry"/>
+		<dependency localName="ModelObject" moduleName="cmc/foundation/ModelObject"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="ObjectStore" moduleName="cmc/foundation/ObjectStore"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			An array of available model property instances. Model properties are reused.
+		-->
+		<variable name="availableModelProperties" value="${[]}"/>
+		<!---
+			An array of available model object instances. Model objects are reused.
+		-->
+		<variable name="availableModelObjects" value="${[]}"/>
+		<!---
+			An array of available navigation history entry instances. Navigation history entries are reused.
+		-->
+		<variable name="availableNavigationHistoryEntries" value="${[]}"/>
+		<!---
+			An array of available object store instances. Object store objects are reused.
+		-->
+		<variable name="availableObjectStores" value="${[]}"/>
+		<!---
+			Interval to schedule next run of the task to detect unsaved objects.
+		-->
+		<variable name="detectUnsavedObjectsInterval" type="number" value="${this.getDetectUnsavedObjectsIntervalValue()}"/>
+		<!---
+			Path selector cache.
+		-->
+		<variable name="pathSelectorsCache" value="${{}}"/>
+		<!--- 
+			@keywords private
+			Map of all of object stores that have been encountered. A key in this map must be a <code>storeId</code> concatenated with 
+			<code>usage</code>, and the value referred to by this key must be an object store object that owns 
+			the same <code>storeId</code>. 
+		-->
+		<variable name="objectStoreMap" value="${{}}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.detectUnsavedObjectsDel = new EventHandler.Class(this, "detectUnsavedObjects");
+			Timer.addTimer(this.detectUnsavedObjectsDel, this.detectUnsavedObjectsInterval);
+			]]>
+		</method>
+		
+		<!---
+			Get the interval value for next run of the task to detect unsaved objects.
+			The value of "detectUnsavedObjectsInterval" URL parameter will be returned if it is a valid positive integer in minute. Otherwise,
+			the default value of defaultDetectUnsavedObjectsInterval attribute (in minute) set in the configProperties
+			instance will be used.
+			@return number: the interval value in millisec
+		-->
+		<method name="getDetectUnsavedObjectsIntervalValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelUtil", "getDetectUnsavedObjectsIntervalValue");
+			}
+			var value = cmcConfig['detectUnsavedObjectsInterval'];
+			if ((typeof value != "undefined") && (value != null) && (value != "")) {
+				value = Number(value);
+				if (isNaN(value) || value == 0) {
+					value = ConfigProperties.Singleton.defaultDetectUnsavedObjectsInterval;
+				}
+			}
+			else {
+				value = ConfigProperties.Singleton.defaultDetectUnsavedObjectsInterval;
+			}
+			value = value * 60000;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelUtil", "getDetectUnsavedObjectsIntervalValue", value);
+			}
+			return value;
+			]]>
+		</method>
+		
+		<!---
+			Utility method used to find the model object by searching the view hierarchy
+			until a view with an attribute named "o" is found.
+			@START_CODE
+			ModelUtil.findObjectForView(v);
+			@END_CODE
+
+			@param view v: the view from which to start the search
+			@param cmc/foundation/EventHandler del: optional delegate to call when the object changes
+			@returns cmc/foundation/ModelObject: the model object
+		-->
+		<method args="v, del" name="findObjectForView">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var o = null;
+			v = this.findObjectView(v);
+			if (v != null) {
+				o = v.o;
+				if (del) {
+					del.connect(v, "ono");
+				}
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Utility method used to find the closest ancestor view in the view hierarchy
+			that has an "o" attribute.
+			@START_CODE
+			ModelUtil.findObjectView(v);
+			@END_CODE
+
+			@param view v: the view from which to start the search
+			@returns view: the view that has the object
+		-->
+		<method args="v, objName" name="findObjectView">
+			<![CDATA[
+			if (typeof(objName) == "undefined") objName = 'o';
+			do {
+				if (typeof (v[objName]) != "undefined") {
+					break;
+				}
+				if (v.parent && v != v.parent) {
+					v = v.parent;
+				}
+				else {
+					v = null;
+				}
+			}
+			while (v);
+			return v;
+			]]>
+		</method>
+		
+		<!---
+			Utility method used to find the model by searching the view hierarchy
+			until a view with an attribute named "model" is found.
+			@START_CODE
+			ModelUtil.findModelForView(v);
+			@END_CODE
+
+			@param view v: the view from which to start the search
+			@returns cmc/foundation/ModelObject: the model object
+		-->
+		<method args="v" name="findModelForView">
+			<![CDATA[
+			var o = null;
+			var model = null;
+			do {
+				if (v.model) {
+					model = v.model;
+					break;
+				}
+				if (v.parent && v != v.parent) {
+					v = v.parent;
+				}
+				else {
+					v = null;
+				}
+			}
+			while (v);
+			return model;
+			]]>
+		</method>
+ 		
+		<!---
+			Utility method used to find the model object list by searching the view hierarchy
+			until a view with an attribute named "oList" is found.
+			@START_CODE
+			ModelUtil.findObjectListForView(v);
+			@END_CODE
+
+			@param view v: the view from which to start the search
+			@returns cmc/foundation/ModelObjectList: the model object list
+		-->
+		<method args="v" name="findObjectListForView">
+			<![CDATA[
+			var oList = null;
+			do {
+				if (v.oList) {
+					oList = v.oList;
+					break;
+				}
+				if (v.parent && v != v.parent) {
+					v = v.parent;
+				}
+				else {
+					v = null;
+				}
+			}
+			while (v);
+			return oList;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object {@link cmc/foundation/ModelObject} and a path selector this method determines whether the object
+			matches	the path selector.  An object matches a path selector if the object's object type matches
+			the	path selector's type attribute and the properties specified in the path selector's selectors
+			attribute match the properties in the object.  The object type and path selector type match if the
+			path selector type is the object type of the object or an object group that applies to the object.
+			The path selector selector's match when all the propertyName, propertyValue pairs are set in
+			the object.
+			
+			@param cmc/foundation/ModelObject o: the given object
+			@param object pathSelector: the given path selector
+			@returns boolean: true if the given object matches the path selector
+		-->
+		<method args="o, pathSelector" name="matchesPathSelector">
+			<![CDATA[
+			var match = false;
+			if (o.objectDefinition.matchesType(pathSelector.type)) {
+				match = true;
+				for (var i = 0; i < pathSelector.selectors.length; i++) {
+					var propName = pathSelector.selectors[i].propertyName;
+					var propValue = pathSelector.selectors[i].propertyValue;
+					if (o.getPropertyValue(propName) != propValue) {
+						match = false;
+						break;
+					}
+				}
+			}
+			return match;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object path this method returns an array of path selectors.  A path selector
+			is an object with two attributes, type, selectors.  Attribute type can be an object
+			type or an object group as used in an object path.  Attribute selectors is an array of
+			propertyName, propertyValue pairs.
+			
+			@param string objectPath: the object path, with which to construct the path selectors
+			@returns Array: an array of path selectors
+		-->
+		<method args="objectPath" name="getPathSelectors">
+			<![CDATA[
+			var pathSelectors = this.pathSelectorsCache[objectPath];
+			if (typeof (pathSelectors) == "undefined") {
+				pathSelectors = [];
+				this.pathSelectorsCache[objectPath] = pathSelectors;
+				var types = objectPath.split("/");
+				for (var i = 0; i < types.length; i++) {
+					var type = types[i];
+					var selectors = [];
+					var index = type.indexOf("[");
+					if (index != -1) {
+						var objSelectors = type.substring(index + 1, type.lastIndexOf("]")).split("][");
+						for (var j = 0; j < objSelectors.length; j++) {
+							var equalsIndex = objSelectors[j].indexOf("=");
+							var propName = objSelectors[j].substring(0, equalsIndex);
+							var propValue = objSelectors[j].substring(equalsIndex + 1, objSelectors[j].length);
+							selectors.push({
+								propertyName: propName,
+								propertyValue: propValue
+							});
+						}
+						type = type.substring(0, index);
+					}
+					pathSelectors.push({
+						type: type,
+						selectors: selectors
+					});
+				}
+			}
+			return pathSelectors;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object {@link cmc/foundation/ModelObject} and selectors this method applies all the
+			selectors' propertyName, propertyValue pairs to the object.  That is it will set all the
+			property's on the object with their corresponding values as specified in the selectors.
+			
+			@param cmc/foundation/ModelObject o: the given object
+			@param Array selectors: the given selectors
+		-->
+		<method args="o, selectors" name="applySelectors">
+			<![CDATA[
+			for (var i = 0; i < selectors.length; i++) {
+				var propName = selectors[i].propertyName;
+				var propValue = selectors[i].propertyValue;
+				var property = o.getProperty(propName);
+				property.setVariable("value", propValue);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object {@link cmc/foundation/ModelObject}, selectors, and a delegate this method registers all the
+			object's properties for the selectors propertyNames with the given delegate for when the properties'
+			values have changed.
+			
+			@param cmc/foundation/ModelObject o: the given object
+			@param Array selectors: the given selectors
+			@param cmc/foundation/EventHandler del: the given delegate
+		-->
+		<method args="o, selectors, del" name="registerDelegateSelectors">
+			<![CDATA[
+			for (var j = 0; j < selectors.length; j++) {
+				del.connect(o.getProperty(selectors[j].propertyName), "onvalue");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object {@link cmc/foundation/ModelObject}, object selectors, and a delegate this method finds the object
+			selectors that that have the object definition of the given object and registers the corresponding
+			object selectors' selectors	to the given delegate.
+			
+			@param cmc/foundation/ModelObject o: the given object
+			@param Array objectSelectors: the object selectors
+			@param cmc/foundation/EventHandler del: the given delegate
+		-->
+		<method args="o, objectSelectors, del" name="objectSelectorsRegisterDelegate">
+			<![CDATA[
+			if (objectSelectors) {
+				for (var i = 0; i < objectSelectors.length; i++) {
+					var objectSelector = objectSelectors[i];
+					if (objectSelector && objectSelector.objectDefinition == o.objectDefinition) {
+						this.registerDelegateSelectors(o, objectSelector.selectors, del);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object {@link cmc/foundation/ModelObject} and object selectors this method determines whether the given
+			object matches all the given object selectors.
+			
+			@param cmc/foundation/ModelObject o: the given object
+			@param Array objectSelectors: the object selectors
+		-->
+		<method args="o, objectSelectors" name="matchesObjectSelectors">
+			<![CDATA[
+			var match = true;
+			if (objectSelectors) {
+				match = false;
+				for (var i = 0; i < objectSelectors.length; i++) {
+					match = this.matchesObjectSelector(o, objectSelectors[i]);
+					if (match) {
+						break;
+					}
+				}
+			}
+			return match;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an object {@link cmc/foundation/ModelObject} and an object selector this method determines whether the object
+			matches	the object selector.  An object matches an object selector if the object's object definition is
+			equal to object selector's object definition attribute and the properties specified in the object selector's
+			selectors attribute match the properties in the object. The object selector selector's match when all the
+			propertyName, propertyValue pairs are set in the object.
+			
+			@param cmc/foundation/ModelObject o: the given object
+			@param object objectSelector: the given path selector
+			@returns boolean: true if the given object matches the path selector
+		-->
+		<method args="o, objectSelector" name="matchesObjectSelector">
+			<![CDATA[
+			var match = false;
+			if (o && objectSelector && objectSelector.objectDefinition == o.objectDefinition) {
+				match = true;
+				for (var i = 0; i < objectSelector.selectors.length; i++) {
+					var propName = objectSelector.selectors[i].propertyName;
+					var propValue = objectSelector.selectors[i].propertyValue;
+					if (o.getPropertyValue(propName) != propValue) {
+						match = false;
+						break;
+					}
+				}
+			}
+			return match;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="event" name="logEvent">
+			<![CDATA[
+			var eventTimeLapse = 0;
+			if (this.lastEvent) {
+				eventTimeLapse = (new Date).getTime() - this.lastEvent;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/ModelUtil", "logEvent", event + " " + eventTimeLapse);
+			}
+			this.lastEvent = (new Date).getTime();
+			]]>
+		</method>
+		
+		<!---
+			Returns a model property instance primed with the specified arguments. This may
+			be a new or recycled instance.
+			@param cmc/foundation/ModelObject o: the new parent model object
+			@param string propertyName: the property name
+			@return cmc/foundation/ModelProperty: the model property
+		-->
+		<method args="o, propertyName" name="createModelProperty">
+			<![CDATA[
+			var prop = null;
+			var propertyPoolLength = this.availableModelProperties.length;
+			var i = 0;
+			while (i < propertyPoolLength) {
+				prop = this.availableModelProperties.shift();
+				if (!prop.isReleaseCandidate()) {
+					this.availableModelProperties.push(prop);
+					prop = null;
+					i++;
+				}
+				else {
+					break;
+				}
+			}
+			if (prop == null) {
+				prop = new ModelProperty.Class(this);
+			}
+			prop.initializeProperty(o, propertyName);
+			o.model.propertyCount++;
+			return prop;
+			]]>
+		</method>
+		
+		<!---
+			Release the specified model property.
+			@param cmc/foundation/ModelProperty prop: the model property to release
+		-->
+		<method args="prop" name="releaseModelProperty">
+			<![CDATA[
+			prop.o.model.propertyCount--;
+			prop.release();
+			this.availableModelProperties.push(prop);
+			]]>
+		</method>
+		
+		<!---
+			Returns a model object instance primed with the specified arguments. This may
+			be a new or recycled instance.
+			@param {} args: The initialization arguments
+			@return cmc/foundation/ModelObject: the model object
+		-->
+		<method args="args" name="createModelObject">
+			<![CDATA[
+			var o;
+			if (this.availableModelObjects.length > 0) {
+				o = this.availableModelObjects.pop();
+			}
+			else {
+				o = new ModelObject.Class(this);
+			}
+			o.initializeObject(args);
+			o.model.objectCount++;
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Release the specified model object.
+			@param cmc/foundation/ModelObject o: the model object to release
+		-->
+		<method args="o" name="releaseModelObject">
+			<![CDATA[
+			o.model.objectCount--;
+			o.release();
+			this.availableModelObjects.push(o);
+			]]>
+		</method>
+		
+		<!---
+			Returns a test object for the given object definition
+			@param cmc/foundation/ObjectDefinition objectDefinition: the object definition for the test object
+			@param cmc/foundation/BaseContext context: the context for this object
+		-->
+		<method args="objectDefinition, context" name="createTestObject">
+			<![CDATA[
+			var o = null;
+			for (var i = 0; i < objectDefinition.model.testObjects.length; i++) {
+				if (objectDefinition == objectDefinition.model.testObjects[i].objectDefinition) {
+					o = objectDefinition.model.testObjects[i];
+				}
+			}
+			if (o == null) {
+				o = objectDefinition.model.createNewObject(objectDefinition, null, true, null, false, true, context);
+			}
+			return o;
+			]]>
+		</method>
+
+		<!---
+			Returns a navigation history entry primed with the specified arguments. This may
+			be a new or recycled instance.
+			@param {} args: The initialization arguments
+			@return cmc/foundation/NavigationHistoryEntry: the navigation history entry
+		-->
+		<method args="args" name="createNavigationHistoryEntry">
+			<![CDATA[
+			var o;
+			if (this.availableNavigationHistoryEntries.length > 0) {
+				o = this.availableNavigationHistoryEntries.pop();
+			}
+			else {
+				o = new NavigationHistoryEntry.Class(this);
+			}
+			o.initializeEntry(args);
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Release the navigation history entry.
+			@param cmc/foundation/NavigationHistoryEntry o: the navigation history entry to release
+		-->
+		<method args="o" name="releaseNavigationHistoryEntry">
+			<![CDATA[
+			this.availableNavigationHistoryEntries.push(o);
+			]]>
+		</method>
+		
+		<!---
+			True if parse is required for this object
+			@param cmc/foundation/ModelObject o: the model object to check
+		-->
+		<method args="o" name="isParseRequired">
+			<![CDATA[
+			if (o.forceParseData || o.isViewed()) {
+				return true;
+			}
+			var obj = o.getReferencedObject();
+			if (obj == null) {
+				return true;
+			}
+			while (obj) {
+				if (obj.forceParseData || obj.isViewed()) {
+					return true;
+				}
+				obj = obj.parentObject;
+			}
+			return false;
+			]]>
+		</method>
+		
+		<!---
+			Stop all long running activities.
+			@param cmc/foundation/Model model: object model instance
+		-->
+		<method args="model" name="doStop">
+			<![CDATA[
+			if (typeof(model) == "undefined") model = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/ModelUtil", "doStop(model)", "model=" + model);
+				if (model) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/ModelUtil", "doStop(model)", "model.oEditor=" + model.oEditor);
+				}
+			}
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.stopActions(model);
+			});
+			ServiceTransactionUtil.Singleton.stopPendingTransactions(model);
+			ServiceUtil.Singleton.stopServiceRequests(model);
+			CallbackUtil.Singleton.cancelStoppableCallbacks(model);
+			]]>
+		</method>
+		
+		<!---
+			Detect objects in the model that are not saved yet.
+			@param Object args: arguments
+		-->
+		<method args="e" name="detectUnsavedObjects">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelUtil", "detectUnsavedObjects", [this.detectUnsavedObjectsInterval]);
+			}
+			if (typeof (ToolsController.Singleton) != 'undefined') {
+				var unsavedObjects = [];
+				var unsavedInterval = 0;
+				var currentTime = (new Date()).getTime();
+				for (var i = 0; i < ToolsController.Singleton.toolList.length; i++) {
+					var tool = SingletonRegistry.toolPanesWidget.childComponents[SingletonRegistry.toolPanesWidget.findPane(ToolsController.Singleton.toolList[i])];
+					if (tool.model) {
+						for (var j = 0; j < tool.model.openObjects.length; j++) {
+							var o = tool.model.openObjects[j];
+							if (o.openGroupObject.openGroupDirty) {
+								unsavedObjects.push(o);
+								if (unsavedInterval < this.detectUnsavedObjectsInterval) {
+									var interval = currentTime - o.changeToDirtyTime;
+									if (interval > unsavedInterval) {
+										unsavedInterval = interval;
+									}
+								}
+								if (Logger.Singleton.enabled) {
+									Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/ModelUtil", "detectUnsavedObjects", "Model object key=" + o.objectKey + ", unsavedInterval=" + unsavedInterval);
+								}
+							}
+						}
+					}
+				}
+				var resetInterval = null;
+				if (unsavedInterval >= this.detectUnsavedObjectsInterval) {
+					if (!RootComponent.Singleton.modalContext) {
+						require(["cmc/foundation/SaveDetectedUnsavedObjectsDialog"], function(SaveDetectedUnsavedObjectsDialog) {
+							SaveDetectedUnsavedObjectsDialog.Singleton.openSaveDetectedUnsavedObjectsDialog(unsavedObjects);
+						});
+					}
+					else {
+						resetInterval = Math.min(120000, this.detectUnsavedObjectsInterval);
+					}
+				}
+				else {
+					resetInterval = this.detectUnsavedObjectsInterval - unsavedInterval;
+				}
+				if (resetInterval != null) {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/ModelUtil", "detectUnsavedObjects", "Reset interval to " + resetInterval);
+					}
+					Timer.resetTimer(this.detectUnsavedObjectsDel, resetInterval);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.model", "cmc/foundation/ModelUtil", "detectUnsavedObjects");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Sort the list of objects to the order in the order that they should be
+			saved. Ancestor objects should be saved before descendant objects.
+			Sibling objects will be saved based on save priority.
+			@param array objects: objects to be sorted
+		-->		
+		<method args="unsortedObjects" name="sortObjectsBySaveOrder">
+			<![CDATA[
+			require(["cmc/foundation/SortUtil"], function(SortUtil) {
+				SortUtil.Singleton.sort(unsortedObjects, ObjectSaveOrderComparator.Singleton);
+			});
+			]]>
+		</method>
+			
+		<!---
+			Returns a object store instance primed with the specified arguments. This may
+			be a new or recycled instance.
+			@param {} args: The initialization arguments
+			@return cmc/foundation/ObjectStore: the object store
+		-->
+		<method args="args" name="createObjectStore">
+			<![CDATA[
+			var o;
+			if (this.availableObjectStores.length > 0) {
+				o = this.availableObjectStores.pop();
+			}
+			else {
+				o = new ObjectStore.Class(this);
+			}
+			o.initializeObjectStore(args);
+			return o;
+			]]>
+		</method>
+		
+		<!---
+			Release the specified object store.
+			@param cmc/foundation/ObjectStore o: the object store to release
+		-->
+		<method args="o" name="releaseObjectStore">
+			<![CDATA[
+			this.availableObjectStores.push(o);
+			]]>
+		</method>
+		
+		<!---
+			Clear the object store map.
+		-->
+		<method name="clearObjectStoreMap">
+			<![CDATA[
+			for (var key in this.objectStoreMap) {
+				this.objectStoreMap[key].release();
+			}
+			this.objectStoreMap = {};
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		
+		Callback utility methods.
+	-->
+	<Node definitionName="cmc/foundation/CallbackUtil" singletonDefinition="true">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<variable name="PRIORITY_IMMEDIATE" type="number" value="1"/>
+		<variable name="PRIORITY_FOREGROUND" type="number" value="2"/>
+		<variable name="PRIORITY_BACKGROUND_IMMEDIATE" type="number" value="3"/>
+		<variable name="PRIORITY_BACKGROUND" type="number" value="4"/>
+		<variable name="deferredCallbacks" value="${[]}"/>
+		<variable name="progressIndicatorStarted" type="boolean" value="false"/>
+		<variable name="processingCallbacks" type="boolean" value="false"/>
+		<variable name="callbackScheduled" type="boolean" value="false"/>
+		
+		<!--- @keywords private  -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.invokeCallbacksDel = new EventHandler.Class(this, "invokeCallbacks");
+			]]>
+		</method>
+		
+		<!---
+			Add a delegate to the list of deferred calbacks. Callbacks
+			will be called one at a time on idle events.
+		-->
+		<method args="del, args, priority, stoppable, stopDel, stopDelArgs, model" name="addDeferredCallback">
+			<![CDATA[
+			if (typeof(args) == "undefined") args = null;
+			if (typeof(priority) == "undefined") priority = false;
+			if (typeof(stoppable) == "undefined") stoppable = false;
+			if (typeof(stopDel) == "undefined") stopDel = null;
+			if (typeof(stopDelArgs) == "undefined") stopDelArgs = null;
+			if (typeof(model) == "undefined") model = null;
+			if (!priority) {
+				priority = this.PRIORITY_BACKGROUND;
+			}
+			var index = this.deferredCallbacks.length;
+			while (index > 0 && priority < this.deferredCallbacks[index - 1].priority) {
+				index--;
+			}
+			var job = {
+				del: del,
+				args: args,
+				priority: priority,
+				stoppable: (stoppable ? true : false),
+				stopDel: (stopDel ? stopDel : null),
+				stopDelArgs: (stopDelArgs ? stopDelArgs : null),
+				model: (model ? model : null)
+			};
+			if (EventTimer.Singleton.enabled) job.eventId = EventTimer.Singleton.currentEventId;
+			this.deferredCallbacks.splice(index, 0, job);
+			if (!this.processingCallbacks && !this.callbackScheduled) {
+				this.callbackScheduled = true;
+				Timer.addTimer(this.invokeCallbacksDel, 33);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Returns the index in the deferred callback array for the given delegate
+			@param cmc/foundation/EventHandler del: callback delegate
+		-->
+		<method args="del" name="indexOfDeferredCallback">
+			<![CDATA[
+			for (var i = 0; i < this.deferredCallbacks.length; i++) {
+				if (this.deferredCallbacks[i].del == del) {
+					return i;
+				}
+			}
+			return -1;
+			]]>
+		</method>
+		
+		<!---
+			Remove all instances of the specified delegate from the list of callbacks.
+			@param cmc/foundation/EventHandler del: callback delegate
+		-->
+		<method args="del" name="cancelCallback">
+			<![CDATA[
+			var index = this.indexOfDeferredCallback(del);
+			while (index != -1) {
+				this.deferredCallbacks.splice(index, 1);
+				index = this.indexOfDeferredCallback(del);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Return the arguments of the first callback that matches the specified delegate.
+			@param cmc/foundation/EventHandler del: callback delegate
+			@return the callback args
+		-->
+		<method args="del" name="getCallbackArguments">
+			<![CDATA[
+			var args = null;
+			var index = this.indexOfDeferredCallback(del);
+			if (index != -1) {
+				args = this.deferredCallbacks[index].args;
+			}
+			return args;
+			]]>
+		</method>
+		
+		<!---
+			Returns the index in the deferred callback array for the first stoppable callback
+			@param cmc/foundation/Model model: object model instance
+		-->
+		<method args="model" name="indexOfStoppableCallback">
+			<![CDATA[
+			for (var i = 0; i < this.deferredCallbacks.length; i++) {
+				if (this.deferredCallbacks[i].stoppable && (typeof (model) == "undefined" || model == null || this.deferredCallbacks[i].model == model)) {
+					return i;
+				}
+			}
+			return -1;
+			]]>
+		</method>
+		
+		<!---
+			Remove stoppable deferred callbacks.
+			@param cmc/foundation/Model model: object model instance
+		-->
+		<method args="model" name="cancelStoppableCallbacks">
+			<![CDATA[
+			var index = this.indexOfStoppableCallback(model);
+			while (index != -1) {
+				var callback = this.deferredCallbacks.splice(index, 1)[0];
+				if (callback.stopDel != null) {
+					this.addDeferredCallback(callback.stopDel, callback.stopDelArgs, this.PRIORITY_BACKGROUND, false, null, null, callback.model);
+				}
+				index = this.indexOfStoppableCallback(model);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the next deferred callback.
+		-->
+		<method name="getNextCallback">
+			<![CDATA[
+			var callback = null;
+			if (this.deferredCallbacks.length >= 0) {
+				callback = this.deferredCallbacks.shift();
+			}
+			return callback;
+			]]>
+		</method>
+		
+		<!---
+			Process deferred callbacks
+		-->
+		<method name="invokeCallbacks">
+			<![CDATA[
+			this.callbackScheduled = false;
+			this.processingCallbacks = true;
+			if (this.deferredCallbacks.length > 0) {
+				var startTime = (new Date()).getTime();
+				var callback = this.getNextCallback();
+				var timeThreshold = 100;
+				while (callback != null) {
+					if (EventTimer.Singleton.enabled && callback.eventId) EventTimer.Singleton.restart(callback.eventId);
+					this.invokeCallback(callback.del, callback.args ? callback.args : null);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					var currentTime = (new Date()).getTime();
+					var callbackTime = currentTime - startTime;
+					if (callbackTime > timeThreshold) {
+						break;
+					}
+					callback = this.getNextCallback();
+				}
+			}
+			if (!this.progressIndicatorStarted && this.deferredCallbacks.length > 0) {
+				var onlyForeground = true;
+				for (var i = 0; i < this.deferredCallbacks.length; i++) {
+					if (this.deferredCallbacks[i].priority > this.PRIORITY_FOREGROUND) {
+						onlyForeground = false;
+						break;
+					}
+				}
+				if (!onlyForeground) {
+					this.progressIndicatorStarted = true;
+					SingletonRegistry.progressIndicator.startAnimation();
+				}
+			}
+			else if (this.progressIndicatorStarted && this.deferredCallbacks.length == 0) {
+				SingletonRegistry.progressIndicator.stopAnimation();
+				this.progressIndicatorStarted = false;
+			}
+			if (this.deferredCallbacks.length > 0) {
+				this.callbackScheduled = true;
+				Timer.addTimer(this.invokeCallbacksDel, 33);
+			}
+			this.processingCallbacks = false;
+			]]>
+		</method>
+		
+		<!---
+			Process callback.
+		-->
+		<method name="invokeCallback" args="del,args">
+			<![CDATA[
+			try {
+				del.execute(args);
+			}
+			catch (e) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "SEVERE", "cmc/foundation/CallbackUtil", "invokeCallback", "invokeCallback failed, exception thrown: " + e.toString() + "; callback delegate: " + del);
+				console.log(e);
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/ObjectSaveOrderComparator" singletonDefinition="true">		
+		<!---
+			@keywords private
+			Compare objects by save order
+		-->	
+		<method args="o1, o2" name="compare">
+			<![CDATA[
+			var result = 0;
+			if (o1.isSibling(o2)) {
+				if (o1.pendingDelete && !o2.pendingDelete) {
+					result = -1;
+				}
+				else if (!o1.pendingDelete && o2.pendingDelete) {
+					result = 1;
+				}
+				else {
+					var savePriority1 = o1.objectDefinition.savePriority;
+					var savePriority2 = o2.objectDefinition.savePriority;
+					if (savePriority1 != null && savePriority2 != null) {
+						result = savePriority1 - savePriority2;
+					}
+					else if (savePriority1 != null) {
+						result = -1;
+					}
+					else if (savePriority2 != null) {
+						result = 1;
+					}
+					if (result == 0) {
+						if (o1.newObject && !o2.newObject) {
+							result = 1;
+						}
+						else if (!o1.newObject && o2.newObject) {
+							result = -1;
+						}
+					}
+				}
+			}
+			else {
+				result = o1.isAncestor(o2) ? 1 : -1;
+			}
+			return result;
+			]]>
+		</method>
+	</Node>
+	
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/SortUtil" singletonDefinition="true">
+		<!---
+			@keywords private
+			Sort the specified list of objects.
+			@param objects: array of objects to sort
+			@param Object comparator: the comparator object that has the compare(o1, o2) method
+		-->	
+		<method args="objects, comparator" name="sort">
+			<![CDATA[
+			this.mergeSort(comparator, objects.slice(0), objects, 0, objects.length);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Merge sort.
+		-->	
+		<method args="comparator, src, dest, low, high" name="mergeSort">
+			<![CDATA[
+			if (high - low < 7) {
+				for (var i = low; i < high; i++) {
+					for (var j = i; j > low && comparator.compare(dest[j - 1], dest[j]) > 0; j--) {
+						var t = dest[j];
+						dest[j] = dest[j - 1];
+						dest[j - 1] = t;
+					}
+				}
+				return;
+			}
+			var mid = (low + high) >> 1;
+			this.mergeSort(comparator, dest, src, low, mid);
+			this.mergeSort(comparator, dest, src, mid, high);
+			if (comparator.compare(src[mid - 1], src[mid]) <= 0) {
+				for (var i = low; i < high; i++) {
+					dest[i] = src[i];
+				}
+				return;
+			}
+			for (var i = low, p = low, q = mid; i < high; i++) {
+				if (q >= high || p < mid && comparator.compare(src[p], src[q]) <= 0) {
+					dest[i] = src[p++];
+				}
+				else {
+					dest[i] = src[q++];
+				}
+			}
+			]]>
+		</method>
+	</Node>
+</Definitions>

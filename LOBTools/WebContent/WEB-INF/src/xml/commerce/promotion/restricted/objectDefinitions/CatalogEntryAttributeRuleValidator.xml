@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+<!---
+		Validator for a {@link cmc/promotion/CatalogEntryAttributeRuleObjectDefinition CatalogEntryAttributeRule} object. 
+		This ensures the following cases: 
+		<ul>
+			<li>Validation to ensure that at least one attribute value is provided.</li>
+			<li>Validation to ensure that the matching type selected is valid for the data type.</li>
+			<li>Validation to ensure that multiples values are not allowed for matching types GreaterThan, GraterThanOrEqualTo, LessThan, LessThanOrEqualTo</li>
+			<li>Validation to ensure that duplicate values are not allowed.</li>
+			<li>Validation to ensure that a numeric value is entered when the data type is Number.</li>
+		</ul>
+-->	
+	<Validator classDefinition="true" definitionName="cmc/promotion/CatalogEntryAttributeRuleValidator">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+		<!--- @keywords private -->
+		<variable name="message_invalidMatchingType" type="string" value="${promotionResources.Singleton.promotion_error_Invalid_MatchingType.string}"/>
+		<!--- @keywords private -->	
+		<variable name="message_invalidNumberOfValues" type="string" value="${promotionResources.Singleton.promotion_error_Invalid_Number_Of_Values.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_duplicateAttributeValues" type="string" value="${promotionResources.Singleton.promotion_error_Duplicate_Attribute_Values.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_noAttributeValues" type="string" value="${promotionResources.Singleton.promotion_error_AtLeastOneAttributeValue.string}"/>
+		
+		<!--- @keywords private -->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			var attributeDataType = o.getPropertyValue("DataType");
+			var attributeMatchingType = o.getPropertyValue("MatchingType");
+			o.clearValidationError(this);
+			o.getProperty("MatchingType").clearValidationError(this);
+			o.getProperty("DataType").clearValidationError(this);
+			var childObjects = o.getObjects("AttributeValue");
+			for (var i = 0; i < childObjects.length; i++) {
+				var aValue = childObjects[i].getProperty("Value");
+				aValue.clearValidationError(this);
+			}
+			if (childObjects == null || childObjects.length <= 0) {
+				o.addValidationError(this, this.message_noAttributeValues);
+			}
+			if (attributeDataType == "Text") {
+				if (attributeMatchingType == "GreaterThan" || attributeMatchingType == "GreaterThanOrEqualTo" || attributeMatchingType == "LessThan" || attributeMatchingType == "LessThanOrEqualTo") {
+					o.getProperty("MatchingType").addValidationError(this, this.message_invalidMatchingType);
+					o.addValidationError(this, this.message_invalidMatchingType);
+				}
+			}
+			else if (attributeDataType == "Number") {
+				for (var i = 0; i < childObjects.length; i++) {
+					var aValue = childObjects[i].getProperty("Value");
+					if (attributeMatchingType == "GreaterThan" || attributeMatchingType == "GreaterThanOrEqualTo" || attributeMatchingType == "LessThan" || attributeMatchingType == "LessThanOrEqualTo") {
+						if (childObjects.length > 1) {
+							aValue.addValidationError(this, this.message_invalidNumberOfValues);
+							o.addValidationError(this, this.message_invalidNumberOfValues);
+						}
+					}
+					if (!StringUtil.Singleton.isNumber(aValue.value)) {
+						aValue.addValidationError(this, this.getErrorMessage("invalidNumber", [aValue.propertyDefinition.getDisplayName()]));
+						o.addValidationError(this, this.getErrorMessage("invalidNumber", [aValue.propertyDefinition.getDisplayName()]));
+					}
+				}
+			}
+			if (attributeMatchingType == "EqualTo" || attributeMatchingType == "NotEqualTo") {
+				for (var i = 0; i < childObjects.length - 1; i++) {
+					var aValue = childObjects[i].getProperty("Value");
+					for (var j = i + 1; j < childObjects.length; j++) {
+						var bValue = childObjects[j].getProperty("Value");
+						if (aValue.value == bValue.value) {
+							aValue.addValidationError(this, this.message_duplicateAttributeValues);
+							bValue.addValidationError(this, this.message_duplicateAttributeValues);
+							o.addValidationError(this, this.message_duplicateAttributeValues);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+	</Validator>		
+			
+</Definitions>

@@ -1,0 +1,103 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<!-- BEGIN OrderDetail_Summary_Data.jsp -->
+
+<%@ include file="/Widgets_701/Common/OrderDetail_Data.jspf" %>
+
+<c:set var="formattedTimeZone" value="${fn:replace(cookie.WC_timeoffset.value, '%2B', '+')}"/>
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.75', ':45')}"/>
+<c:set var="formattedTimeZone" value="${fn:replace(formattedTimeZone, '.5', ':30')}"/>
+
+<%-- 1. Ordered by --%> 
+<wcf:rest var="orderMemberDetails" url="store/{storeId}/person/{memberId}" scope="request">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:var name="memberId" value="${order.buyerId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="profileName" value="IBM_User_Registration_Details"/>
+</wcf:rest>
+
+<c:choose>
+	<c:when test="${orderMemberDetails.registerType eq 'G'}">
+		<wcst:message bundle="${widgetText}" key="ORDERED_BY_GUEST_SHOPPER" var="orderedBy" scope="request"/>
+	</c:when>
+	<c:otherwise>
+		<wcst:message bundle="${widgetText}" key="ORDERED_BY" var="orderedBy" scope="request">
+			<wcst:param><c:out value="${orderMemberDetails.address['firstName']}"/></wcst:param>
+			<wcst:param><c:out value="${orderMemberDetails.address['middleName']}"/></wcst:param>
+			<wcst:param><c:out value="${orderMemberDetails.address['lastName']}"/></wcst:param>
+		</wcst:message>
+	</c:otherwise>
+</c:choose>
+
+<%-- 2. Ordered on date --%>
+<c:catch>
+	<fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+</c:catch>
+<c:if test="${empty orderDate}">
+	<c:catch>
+		<fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+	</c:catch>
+</c:if>
+<c:if test="${empty orderDate}">
+	<c:catch>
+		<fmt:parseDate parseLocale="${dateLocale}" var="orderDate" value="${order.placedDate}" pattern="yyyy-MM-dd'T'HH:mm" timeZone="GMT"/>
+	</c:catch>
+</c:if>					
+<c:if test="${!empty orderDate}">
+	<fmt:formatDate var="orderDate" value="${orderDate}" dateStyle="long" timeZone="${formattedTimeZone}"/>				
+</c:if>
+
+<c:if test="${empty orderDate}">
+	<wcst:message var="orderDate" bundle="${widgetText}" key="ORDER_INFO_NOT_AVL" />
+	<c:if test = "${order.orderStatus eq 'P'}">
+		<wcst:message var="orderDate" bundle="${widgetText}" key="ORDER_NOT_YET_PLACED" />
+	</c:if>
+</c:if>
+
+
+<%-- 3. Last update --%>
+<c:catch>
+	<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT"/>
+</c:catch>
+<c:if test="${empty lastUpdateDate}">
+	<c:catch>
+		<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT"/>
+	</c:catch>
+</c:if>
+<c:if test="${empty lastUpdateDate}">
+	<c:catch>
+		<fmt:parseDate parseLocale="${dateLocale}" var="lastUpdateDate" value="${order.lastUpdateDate}" pattern="yyyy-MM-dd'T'HH:mm" timeZone="GMT"/>
+	</c:catch>
+</c:if>					
+<c:if test="${!empty lastUpdateDate}">
+	<fmt:formatDate var="lastUpdateDate" value="${lastUpdateDate}" dateStyle="long" timeZone="${formattedTimeZone}"/>				
+</c:if>
+<c:if test="${empty lastUpdateDate}">
+	<wcst:message var="lastUpdateDate" bundle="${widgetText}" key="ORDER_INFO_NOT_AVL" />
+</c:if>
+
+
+<%-- 4. Order status --%> 
+<wcst:message bundle="${widgetText}" key="MO_NOT_AVAILABLE" var="orderStatusMsg"/>
+<c:if test="${!empty order.orderStatus}">
+	<c:set var="ordStatus" value="${order.orderStatus }"/>
+	<flow:ifEnabled feature="SideBySideIntegration">
+		<c:if test="${ordStatus eq 'H' }">
+			<c:set var="ordStatus" value="M"/>
+		</c:if>
+	</flow:ifEnabled>
+	<wcst:message bundle="${widgetText}" key="MO_OrderStatus_${ordStatus}" var="orderStatusMsg"/>
+</c:if>
+
+<!-- END OrderDetail_Summary_Data.jsp -->

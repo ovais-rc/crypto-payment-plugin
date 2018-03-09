@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","id",{clear:"Kosongkan",highlight:"Soroti",options:"Opsi Warna",selected:"Warna terpilih",title:"Pilih Semua",ibm:{currentColor:"Warna terkini"}});

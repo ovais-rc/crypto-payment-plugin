@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","he",{error:"הדבקת תמונות אינה נתמכת כרגע. השתמשו באפשרות סרגל הכלים 'הוספת תמונה' במקום זאת."});

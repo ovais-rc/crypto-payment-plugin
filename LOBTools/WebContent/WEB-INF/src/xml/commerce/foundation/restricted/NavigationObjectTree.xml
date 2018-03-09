@@ -1,0 +1,2465 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+    <!---
+    	Search results navigation tree node.
+		@keywords private
+    -->
+	<Tree classDefinition="true" definitionName="cmc/foundation/SearchResultsTree" icon="searchResultsTreeIcon" isTreeLeaf="true" text="${foundationResources.Singleton.searchResultsTree.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="SearchResultTreeMenu" moduleName="cmc/foundation/SearchResultTreeMenu"/>
+		<dependency localName="SearchResultsMenu" moduleName="cmc/foundation/SearchResultsMenu"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			@keywords private
+		-->
+		<variable deferLoad="true" name="searchResultsListClass" type="module" value="cmc/foundation/SearchResultsList"/>
+		<!---
+			Reference to the business object editor.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			Cache of search results views.
+		-->
+		<variable name="searchResultsViewCache" value="${{}}"/>
+		<!---
+			The current search definition.
+		-->
+		<variable name="searchDefinition" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "init");
+			}
+			this.inherited(arguments);
+			this.showDetailsViewDel = new EventHandler.Class(this, "showDetailsView");
+			new SearchResultTreeMenu.Class(this, {
+				name: "menu",
+				tree: this,
+				searchDefinitions: this.oEditor.searchWidget.searchDefinitions
+			});
+			this.menu.addView(this.item.contextMenuArea);
+			this.setVariable("searchDefinition", this.oEditor.searchWidget.defaultDefinition);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "init");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.showDetailsViewDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler args="isSelected" name="onselected">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "onselected(isSelected)", [isSelected]);
+			}
+			if (isSelected) {
+				CallbackUtil.Singleton.addDeferredCallback(this.showDetailsViewDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "onselected(isSelected)");
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Get the details view for this node. If "searchDefinition" is not "null",
+			then the corresponding search view will be returned.
+			@return view: the search view
+		-->
+		<method args="del" name="getDetailsView">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "getDetailsView");
+			}
+			var v = null;
+			if (this.searchDefinition != null) {
+				if (this.searchDefinition.listClass) {
+					if (this.searchResultsListClass) {
+						v = this.searchResultsViewCache[this.searchDefinition.searchType];
+						if (v == null) {
+							var s = this.oEditor.model.findSearchResults(this.searchDefinition.searchType);
+							v = new this.searchResultsListClass.Class(this.oEditor.workAreaContainer, {
+								oEditor: this.oEditor,
+								searchResults: s,
+								rowMenuClass: SearchResultsMenu
+							});
+							v.setVariable("searchResults", s);
+							this.searchResultsViewCache[this.searchDefinition.searchType] = v;
+						}
+						this.oEditor.model.bindViewToSearchResults(v.list, this.searchDefinition.searchType);
+					}
+					else if (del) {
+						del.connect(this, "onsearchResultsListClass");
+						this.loadDeferredVariable("searchResultsListClass");
+					}
+				}
+				else if (del) {
+					del.connect(this.searchDefinition, "onlistClass");
+					this.searchDefinition.loadDeferredVariable("listClass");
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "getDetailsView", v);
+			}
+			return v;
+			]]>
+		</method>
+
+		<!---
+			Show the details view for this node.
+		-->
+		<method args="e" name="showDetailsView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/SearchResultsTree", "showDetailsView", "Start update UI");
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "showDetailsView");
+			}
+			this.showDetailsViewDel.disconnectAll();
+			if (this.selected) {
+				var detailsView = this.getDetailsView(this.showDetailsViewDel);
+				if (detailsView != this.oEditor.workAreaContainer.activeView) {
+					this.oEditor.workAreaContainer.setActiveView(detailsView, true);
+					var s = this.oEditor.model.findSearchResults(this.searchDefinition.searchType);
+					if (this.oEditor.searchWidget != null && s.searchOptions != null && s.searchOptions.searchText) {
+						this.oEditor.searchWidget.searchTextArea.searchText.setVariable("text", s.searchOptions.searchText);
+					}
+					else if (this.oEditor.searchWidget != null) {
+						this.oEditor.searchWidget.searchTextArea.searchText.setVariable("text", "");
+					}
+				}
+				if (detailsView != null) {
+					var currentHistoryEntry = this.oEditor.currentNavigationHistoryEntry;
+					if (currentHistoryEntry == null || !currentHistoryEntry.matchesTreeNode(this)) {
+						ModelUtil.Singleton.createNavigationHistoryEntry({
+							oEditor: this.oEditor,
+							navigationTreeNode: this
+						});
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "showDetailsView");
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/SearchResultsTree", "showDetailsView", "End update UI");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the current search definition.
+			@param cmc/foundation/SearchDefinition def: the new search definition
+		-->
+		<method args="def" name="setSearchDefinition">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "setSearchDefinition(def)", [def]);
+			}
+			if (def !== this.searchDefinition) {
+				if (this.searchDefinition != null) {
+					var v = this.searchResultsViewCache[this.searchDefinition.searchType];
+					if (v) {
+						this.oEditor.model.findSearchResults(this.searchDefinition.searchType).releaseView(v.list);
+					}
+				}
+				this.searchDefinition = def;
+				if (this.selected) {
+					CallbackUtil.Singleton.addDeferredCallback(this.showDetailsViewDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchResultsTree", "setSearchDefinition(def)");
+			}
+			]]>
+		</method>
+	<method args="searchDefinition" name="set_searchDefinition">
+			<![CDATA[
+			this.setSearchDefinition(searchDefinition);
+			]]>
+		</method></Tree>
+	
+	<!---
+		Base class for tree nodes that represent model objects.
+		@keywords private
+	-->
+	<Tree classDefinition="true" definitionName="cmc/foundation/ObjectTree">
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!--- Business object editor instance. -->
+		<variable name="oEditor" value="${null}"/>
+		<!--- Indicates that this table should not be loaded recursively. -->
+		<variable name="recurse" value="false"/>
+		<!--- Indicates that this is a leaf node. -->
+		<variable name="isTreeLeaf" type="boolean" value="true"/>
+		<!--- The instance of cmc/foundation/ModelObject associated with this object. -->
+		<variable name="o" value="${null}"/>
+		<!--- The resolved referenced object. -->
+		<variable name="referencedObject" value="${null}"/>
+		<!--- The current navigation list definition. -->
+		<variable name="navigationListDefinition" value="${null}"/>
+		<!---
+			@keywords private
+			Array of client actions available for this tree node
+		-->
+		<variable name="clientActions" value="${[]}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.oEditor == null) {
+				this.oEditor = this.immediateParent.parent.oEditor;
+			}
+			this.updateDisplayNameDel = new EventHandler.Class(this, "updateDisplayName");
+			this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			this.showDetailsViewDel = new EventHandler.Class(this, "showDetailsView");
+			this.updateReferencedObjectDel = new EventHandler.Class(this, "updateReferencedObject");
+			this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.o) {
+				this.oList = null;
+				this.referencedObject = null;
+				this.o = null;
+			}
+			this.updateDisplayNameDel.disconnectAll();
+			delete this.updateDisplayNameDel;
+			this.updateDisplayNameStyleDel.disconnectAll();
+			delete this.updateDisplayNameStyleDel;
+			delete this.showDetailsViewDel;
+			this.updateReferencedObjectDel.disconnectAll();
+			delete this.updateReferencedObjectDel;
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "setModelObject(newObject)", [newObject]);
+			}
+			if (this.o != newObject) {
+				this.releaseModelObjectDel.disconnectAll();
+				this.updateDisplayNameDel.disconnectAll();
+				this.updateDisplayNameStyleDel.disconnectAll();
+				if (this.o) {
+					var viewState = null;
+					if (this.parentOList && this.parentOList.getViewState(this.o)) {
+						viewState = this.parentOList.getViewState(this.o);
+						this.parentOList.setViewState(this.o, null);
+					}
+					if (this.selected) {
+						this.setVariable("selected", false);
+						if (viewState == null && this.getRoot().getSelectedObjectViewState(this) == null) {
+							this.oEditor.workAreaContainer.setActiveView(null);
+						}
+					}
+					if (this.open) {
+						this.setVariable("open", false);
+					}
+					this.referencedObject = null;
+					if (this.navigationListDefinition != null) {
+						this.setVariable("navigationListDefinition", null);
+					}
+					if (this.parentOList && viewState != null) {
+						this.parentOList.setViewState(this.o, viewState);
+						if (viewState.selected) {
+							this.getRoot().saveSelectedObjectViewState(this);
+						}
+					}
+					this.clientActions = [];
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					if (this.o.getIcon() != null) {
+						this.setVariable("icon", this.o.getIcon());
+					}
+					if (this.o.objectDisplayName != null) {
+						this.setVariable("text", this.o.objectDisplayName);
+					}
+					this.updateDisplayNameDel.connect(this.o, "onobjectDisplayName");
+					if (this.o.openGroupObject) {
+						this.updateDisplayNameDel.connect(this.o.openGroupObject, "onerrorInOpenGroup");
+						this.updateDisplayNameDel.connect(this.o.openGroupObject, "onopenGroupDirty");
+					}
+					this.updateDisplayName();
+					this.referencedObject = this.o.getReferencedObject();
+					if (this.referencedObject == null) {
+						this.updateReferencedObjectDel.connect(this.o, "onchildObjects");
+					}
+					else {
+						this.updateReferencedObject();
+					}
+					if (this.parentOList) {
+						var viewState = this.getRoot().getSelectedObjectViewState(this);
+						if (viewState != null) {
+							this.parentOList.setViewState(this.o, viewState);
+						}
+						else {
+							viewState = this.parentOList.getViewState(this.o);
+						}
+						if (viewState) {
+							if (this.navigationListDefinition != viewState.navigationListDefinition) {
+								this.setVariable("navigationListDefinition", viewState.navigationListDefinition);
+							}
+							if (viewState.selected) {
+								if (this.getRoot().selectedObjectViewState == viewState) {
+									this.setVariable("selected", true);
+									this.getRoot().clearSelectedObjectViewState();
+								}
+								else {
+									viewState.selected = false;
+								}
+							}
+						}
+						else {
+							viewState = {
+								navigationListDefinition: this.navigationListDefinition,
+								selected: false,
+								open: this.getRoot().isAncestorOfSelectedObject(this)
+							};
+							this.parentOList.setViewState(this.o, viewState);
+						}
+						if (viewState.open) {
+							this.setVariable("open", true);
+						}
+					}
+					this.updateDisplayNameStyleDel.connect(this.o, "ondisplayNameStyle");
+					this.updateDisplayNameStyle();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "setModelObject(newObject)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method releases the {@link cmc/foundation/ModelObject model object} from this tree node.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.parentOList && this.parentOList.getViewState(this.o)) {
+				this.parentOList.setViewState(this.o, null);
+			}
+			this.setVariable("o", null);
+			]]>
+		</method>
+		
+		<!---
+			Update the referenced object.
+		-->
+		<method args="e" name="updateReferencedObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o) {
+				this.referencedObject = this.o.getReferencedObject();
+				if (this.referencedObject != null) {
+					var clientActions = this.referencedObject.objectDefinition.clientActions;
+					for (var i = 0; i < clientActions.length; i++) {
+						if (clientActions[i].availableFromExplorerView) {
+							this.clientActions.push(clientActions[i]);
+						}
+					}
+				}
+			}
+			if (this.selected) {
+				CallbackUtil.Singleton.addDeferredCallback(this.showDetailsViewDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the tree node display name.
+		-->
+		<method args="e" name="updateDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o.objectDisplayName != null && this.o.objectDisplayName != this.text) {
+				this.setVariable("text", this.o.objectDisplayName);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the tree node display name style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newTextColor = this.style.textcolor;
+			var newTextStyle = "plain";
+			var style = this.o.displayNameStyle;
+			if (style != null) {
+				newTextColor = style.color;
+				if (style.bold && style.italic) {
+					newTextStyle = "bolditalic";
+				}
+				else if (style.bold) {
+					newTextStyle = "bold";
+				}
+				else if (style.italic) {
+					newTextStyle = "italic";
+				}
+			}
+			if (this.textColor != newTextColor) {
+				this.setVariable("textColor", newTextColor);
+			}
+			if (this.textStyle != newTextStyle) {
+				this.setVariable("textStyle", newTextStyle);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method args="s" name="_applystyle">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			Handle the "onselected" event.
+			@param boolean isSelected: indicates that this node is being selected
+		-->
+		<handler args="isSelected" name="onselected">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "onselected(isSelected)");
+			}
+			if (this.o && this.parentOList) {
+				var viewState = this.parentOList.getViewState(this.o);
+				if (viewState && viewState.selected != this.selected) {
+					viewState.selected = this.selected;
+				}
+			}
+			if (isSelected) {
+				CallbackUtil.Singleton.addDeferredCallback(this.showDetailsViewDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "onselected(isSelected)");
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->		
+		<handler name="onactivate">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "onactivate");
+			}
+			this.referencedObject.doOpen();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "onactivate");
+			}
+			]]>
+		</handler>
+
+		<!---
+			Show the details view for this node.
+		-->
+		<method args="e" name="showDetailsView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ObjectTree", "showDetailsView", "Start update UI");
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "showDetailsView");
+			}
+			this.showDetailsViewDel.disconnectAll();
+			if (this.selected) {
+				var detailsView = this.getDetailsView(this.showDetailsViewDel);
+				if (detailsView == null && this.o.objectDefinition.helpPage != null) {
+					this.oEditor.workAreaContainer.setActiveView(this.oEditor.workAreaContainer.addHelpPage(this.o.objectDefinition.helpPage), true);
+				}
+				else if (detailsView != this.oEditor.workAreaContainer.activeView) {
+					this.oEditor.workAreaContainer.setActiveView(detailsView);
+				}
+				if (detailsView != null) {
+					var currentHistoryEntry = this.oEditor.currentNavigationHistoryEntry;
+					if (currentHistoryEntry == null || !currentHistoryEntry.matchesTreeNode(this)) {
+						ModelUtil.Singleton.createNavigationHistoryEntry({
+							oEditor: this.oEditor,
+							navigationTreeNode: this,
+							navigationListDefinition: this.navigationListDefinition
+						});
+					}
+					MessageLogger.Singleton.clearStatusMessage();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "showDetailsView");
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ObjectTree", "showDetailsView", "End update UI");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the details view for this node. If "navigationListDefinition" is not "null",
+			then the corresponding navigation list view will be displayed.
+		-->
+		<method args="del" name="getDetailsView">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "getDetailsView");
+			}
+			var v = null;
+			if (this.navigationListDefinition != null && this.referencedObject != null) {
+				v = this.navigationListDefinition.getListView(this.referencedObject, del);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "getDetailsView", v);
+			}
+			return v;
+			]]>
+		</method>
+		
+		<!---
+			Set the current navigation list definition.
+			@param cmc/foundation/NavigationListDefinition def: the new navigation list definition
+		-->
+		<method args="def" name="setNavigationListDefinition">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "setNavigationListDefinition(def)", [def]);
+			}
+			if (def !== this.navigationListDefinition) {
+				if (this.o && this.parentOList) {
+					var viewState = this.parentOList.getViewState(this.o);
+					if (viewState && viewState.navigationListDefinition != def) {
+						viewState.navigationListDefinition = def;
+					}
+				}
+				this.navigationListDefinition = def;
+				EventUtil.trigger(this, "onnavigationListDefinition");
+				if (this.selected) {
+					CallbackUtil.Singleton.addDeferredCallback(this.showDetailsViewDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ObjectTree", "setNavigationListDefinition(def)");
+			}
+			]]>
+		</method>
+
+		<DragSource dragAndDropManager="${DndManager.Singleton}" placement="dragtreeitem" targetKeys="${['element']}"/>
+	<method args="navigationListDefinition" name="set_navigationListDefinition">
+			<![CDATA[
+			this.setNavigationListDefinition(navigationListDefinition);
+			]]>
+		</method><method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Tree>
+	
+	<!---
+		@keywords private
+		
+		Browse object tree node. Instances of this class represent objects in the
+		navigation view that can be found by browsing from parent objects to child objects.
+	-->
+	<ObjectTree classDefinition="true" definitionName="cmc/foundation/BrowseObjectTree" isTreeLeaf="false" maxObjectViews="20">
+		<dependency localName="MoveAction" moduleName="cmc/foundation/MoveAction"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="ActionUtil" moduleName="cmc/foundation/ActionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="CopyAction" moduleName="cmc/foundation/CopyAction"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="AddToCollectionAction" moduleName="cmc/foundation/AddToCollectionAction"/>
+		<dependency localName="BrowseObjectTreeMenu" moduleName="cmc/foundation/BrowseObjectTreeMenu"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="BrowseObjectTree" moduleName="cmc/foundation/BrowseObjectTree"/>
+		<!---
+			The class used to create child nodes.
+		-->
+		<variable name="objectClass" type="module" value="${BrowseObjectTree}"/>
+		<!---
+			An array of the filtered child object selectors for this node. Only
+			child object selectors that will be visible in the navigation view
+			will be included in this array.
+		-->
+		<variable name="objectSelectors" value="${null}"/>
+		<!---
+			Indicates that the child tree nodes have been created.
+		-->
+		<variable name="childrenCreated" type="boolean" value="false"/>
+		<!---
+			Indicates that this tree node can be used to navigate to the child objects.
+			Navigating to child objects is allowed for primary, organizational, parent reference,
+			and collection reference objects.
+		-->
+		<variable name="navigationEnabled" type="boolean" value="true"/>
+		<!--- @keywords private
+		
+			  Indicates if reference object is moveable
+		-->
+		<variable name="referenceMoveable" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "init");
+			}
+			this.inherited(arguments);
+			this.updateFilterDel = new EventHandler.Class(this, "updateFilter");
+			if (this != this.getRoot()) {
+				this.updateFilterDel.connect(this.getRoot(), "onfilter");
+			}
+			if (this.item) {
+				new BrowseObjectTreeMenu.Class(this, {
+					name: "menu",
+					tree: this
+				});
+				this.menu.addView(this.item.contextMenuArea);
+			}
+			this.checkStatusMessageDel = new EventHandler.Class(this, "checkStatusMessage");
+			this.checkLeafDel = new EventHandler.Class(this, "checkLeaf");
+			this.updateExpandedTreesDel = new EventHandler.Class(this, "updateExpandedTrees");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "init");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "destroy");
+			}
+			this.releaseChildObjectTree();
+			this.updateFilterDel.disconnectAll();
+			delete this.updateFilterDel;
+			this.checkStatusMessageDel.disconnectAll();
+			delete this.checkStatusMessageDel;
+			this.checkLeafDel.disconnectAll();
+			delete this.checkLeafDel;
+			this.updateExpandedTreesDel.disconnectAll();
+			delete this.updateExpandedTreesDel;
+			if (this.updateObjectSelectorsDel) {
+				this.updateObjectSelectorsDel.disconnectAll();
+				delete this.updateObjectSelectorsDel;
+			}
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "destroy");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			When the oList is updated, we listen to the objectViewsUpdated event to trigger an update.
+		-->		
+		<handler name="onoList">
+			<![CDATA[
+			this.updateExpandedTreesDel.disconnectAll();
+			if (this.oList) {
+				this.updateExpandedTreesDel.connect(this.oList, "objectViewsUpdated");
+			}
+			this.updateExpandedTrees();
+			]]>
+		</handler>
+		
+		<!---
+			Update the navigation list nodes to match the current filter.
+		-->
+		<method args="e" name="updateFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "updateFilter");
+			}
+			if (this.oList) {
+				var newFilter = this.getRoot().filter;
+				if (this.oList.baseFilter != newFilter) {
+					if (this.oList.getViewsLength() > 0) {
+						this.oList.setVariable("baseFilter", newFilter);
+					}
+					else if (this.open) {
+						this.setVariable("open", false);
+					}
+				}
+			}
+			this.updateObjectSelectors();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "updateFilter");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the array of child object selectors that match
+			the current filter.
+		-->
+		<method name="updateObjectSelectors">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "updateObjectSelectors");
+			}
+			if (!this.updateObjectSelectorsDel) {
+				this.updateObjectSelectorsDel = new EventHandler.Class(this, "updateObjectSelectors");
+			}
+			else {
+				this.updateObjectSelectorsDel.disconnectAll();
+			}
+			if (this.referencedObject != null) {
+				this.objectSelectors = [];
+				if (this.navigationEnabled) {
+					var filter = this.getRoot().filter;
+					if (filter != null) {
+						var oDef = this.referencedObject.objectDefinition;
+						var defs = oDef.organizational ? oDef.getOrganizedObjectDefinitions(this.updateObjectSelectorsDel) : oDef.getReferenceObjectDefinitions(this.updateObjectSelectorsDel);
+						if (defs != null) {
+							for (var i = 0; i < defs.length; i++) {
+								var childDef = defs[i];
+								if (childDef != null && filter.objectTypeMatchesFilter(childDef.objectType)) {
+									this.objectSelectors.push({
+										objectDefinition: childDef,
+										selectors: []
+									});
+								}
+							}
+						}
+					}
+				}
+				this.checkLeaf();
+			}
+			else {
+				this.objectSelectors = null;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "updateObjectSelectors");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="checkLeaf">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkLeafDel.disconnectAll();
+			var leaf = false;
+			if (this.navigationEnabled) {
+				this.checkLeafDel.connect(this, "onstatusMessage");
+				if (this.statusMessage == "" && this.objectSelectors != null) {
+					var oDef = this.referencedObject.objectDefinition;
+					if (oDef.organizational) {
+						leaf = this.objectSelectors.length == 0 && oDef.getOrganizedObjectDefinitions(this.checkLeafDel) != null && oDef.getOrganizedObjectDefinitions().length > 0;
+					}
+					else {
+						leaf = this.objectSelectors.length == 0;
+					}
+					if (!leaf && this.childrenCreated && this.children.height == 0) {
+						this.checkLeafDel.connect(this.children, "onheight");
+						leaf = true;
+					}
+				}
+			}
+			else {
+				leaf = true;
+			}
+			if (leaf != this.isTreeLeaf) {
+				this.setVariable("isTreeLeaf", leaf);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="createChildObjectTree">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "createChildObjectTree");
+			}
+			if (!this.childrenCreated && this.navigationEnabled) {
+				this.childrenCreated = true;
+				this.referencedObject.bindViewToChildren(this, this.getRoot().filter, null, this);
+				MessageLogger.Singleton.clearStatusMessage();
+				this.checkStatusMessage();
+				this.checkLeaf();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "createChildObjectTree");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="releaseChildObjectTree">
+			<![CDATA[
+			if (this.childrenCreated) {
+				this.childrenCreated = false;
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var v = this.children.childComponents[i];
+					if (v.releaseChildObjectTree) {
+						v.releaseChildObjectTree();
+					}
+				}
+				this.referencedObject.releaseViewFromChildren(this);
+				this.checkStatusMessage();
+				this.checkLeaf();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o1, o2, sortAscending" name="compare">
+			<![CDATA[
+			var currentFilter = this.getRoot().filter;
+			if (currentFilter != null) {
+				return currentFilter.objectCompare(o1, o2);
+			}
+			else {
+				return null;
+			}
+			]]>
+		</method>			
+		
+		<!---
+			Set a new model object for this tree node.
+			@param cmc/foundation/ModelObject newObject: the new model object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "setModelObject(newObject)" + [newObject]);
+			}
+			if (this.o != newObject) {
+				var selectionSaved = false;
+				if (!this.selected && this.o && this.parentOList && this.parentOList.getViewState(this.o) && this.getRoot().getSelection() != null) {
+					selectionSaved = this.getRoot().saveSelectedObjectViewState(this.getRoot().getSelection());
+				}
+				this.releaseChildObjectTree();
+				if (selectionSaved && this.getRoot().getSelection() != null) {
+					this.getRoot().clearSelectedObjectViewState();
+				}
+				if (newObject != null) {
+					var oDef = newObject.objectDefinition;
+					this.navigationEnabled = oDef.primary || oDef.organizational || oDef.parentReference || oDef.collectionReference;
+				}
+				this.inherited(arguments);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "setModelObject(newObject)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the referenced object.
+		-->
+		<method args="e" name="updateReferencedObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "updateReferencedObject");
+			}
+			this.inherited(arguments);
+			if (this.referencedObject != null) {
+				if (this.navigationEnabled) {
+					this.setVariable("navigationListDefinition", this.referencedObject.objectDefinition.defaultNavigationList);
+					if (this.open) {
+						this.createChildObjectTree();
+					}
+				}
+				this.updateObjectSelectors();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "updateReferencedObject");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle the expand event. If this is the first time the
+			object's children have been expanded, then the child nodes will
+			be created.
+		-->
+		<handler name="onopen">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "onopen");
+			}
+			if (this.o && this.parentOList) {
+				var viewState = this.parentOList.getViewState(this.o);
+				if (viewState && viewState.open != this.open) {
+					viewState.open = this.open;
+				}
+				if (this.open) {
+					this.createChildObjectTree();
+				}
+				else {
+					this.releaseChildObjectTree();
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "onopen");
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			When this tree is expanded, we store the time it was expanded with it and its parents.  We also close any other tree nodes
+			in the browse tree when we have more than the maximinum number of tree nodes expanded.
+		-->
+		<method args="e" name="updateExpandedTrees">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.open && this.oList && this.oList.getViewsLength() > 0) {
+				if (!this.__expandedTime) {
+					var rootObjectTree = this.getRootObjectTree();
+					var expandedTime = (new Date()).getTime();
+					var tree = this;
+					tree.__expandedTime = expandedTime;
+					while (tree && !tree.isRoot() && tree != rootObjectTree) {
+						tree = tree.parent;
+						tree.__expandedTime = expandedTime;
+					}
+					if (rootObjectTree) {
+						rootObjectTree.closeChildrenTreesLeastRecent();
+					}
+				}
+			}
+			else {
+				this.__expandedTime = null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the root object tree, the first tree under the "Top" tree node.
+		-->
+		<method name="getRootObjectTree">
+			<![CDATA[
+			var tree = null;
+			if (this.o && this.o.objectDefinition.objectType != "Top") {
+				tree = this;
+				while (tree && !tree.isRoot() && !tree.parent.o.objectDefinition.objectType != "Top") {
+					tree = tree.parent;
+				}
+			}
+			return tree;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calculates the ordered expanded times and updates the given array.  Iterating through the children of this tree, this method checks
+			the expanded time for expanded child tree nodes and updates the given expandedTimes array by inserting each expanded time in the appropriate
+			ordered position in the array.  This method recurses to this tree's leaf nodes.
+			@param Array expandedTimes: An ordered array of expanded times. The array is ordered in ascending order and does not have duplicate entries.
+		-->
+		<method args="expandedTimes" name="calculateOrderedExpandedTimes">
+			<![CDATA[
+			for (var i = 0; i < this.children.childComponents.length; i++) {
+				var child = this.children.childComponents[i];
+				if (child instanceof exports.Class && child.__expandedTime) {
+					var insertIdx = expandedTimes.length;
+					for (var j = 0; j < expandedTimes.length; j++) {
+						if (child.__expandedTime == expandedTimes[j]) {
+							insertIdx = -1;
+							break;
+						}
+						if (child.__expandedTime < expandedTimes[j]) {
+							insertIdx = j;
+							break;
+						}
+					}
+					if (insertIdx > -1) {
+						expandedTimes.splice(insertIdx, 0, child.__expandedTime);
+					}
+					child.calculateOrderedExpandedTimes(expandedTimes);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method closes all the children trees least recently expanded.  Closing trees will occur when we have a number expanded greater than the maximum number
+			of browse tree nodes expanded, the maxBrowseTreesExpanded context value.
+		-->
+		<method name="closeChildrenTreesLeastRecent">
+			<![CDATA[
+			var contextValue = ContextUtil.Singleton.findContextValue(null, "maxBrowseTreesExpanded");
+			if (contextValue) {
+				var maxBrowseTreesExpanded = contextValue.value;
+				if (maxBrowseTreesExpanded && maxBrowseTreesExpanded > 1) {
+					var time = null;
+					var expandedTimes = [];
+					this.calculateOrderedExpandedTimes(expandedTimes);
+					if (expandedTimes.length >= maxBrowseTreesExpanded) {
+						time = expandedTimes[expandedTimes.length - maxBrowseTreesExpanded];
+					}
+					if (time) {
+						this.closeChildrenTreesBeforeTime(time);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method closes all the children trees that were expanded before the given time.
+			@param number time: The given time.
+		-->
+		<method args="time" name="closeChildrenTreesBeforeTime">
+			<![CDATA[
+			if (time) {
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var child = this.children.childComponents[i];
+					if (child instanceof exports.Class && child.__expandedTime) {
+						child.closeChildrenTreesBeforeTime(time);
+						if (child.__expandedTime < time) {
+							child.setVariable("open", false);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+				
+		<!---
+			Update the over limit status message.
+		-->
+		<method args="e" name="checkStatusMessage">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkStatusMessageDel.disconnectAll();
+			var newMessage = "";
+			if (this.open && this.oList && this.navigationEnabled) {
+				this.checkStatusMessageDel.connect(this.oList, "onstatusObject");
+				this.checkStatusMessageDel.connect(this, "onopen");
+				if (this.oList.statusObject != null) {
+					if (this.oList.statusObject.messageForTree) {
+						newMessage = this.oList.statusObject.messageForTree;
+					}
+					else {
+						newMessage = this.oList.statusObject.message;
+					}
+				}
+			}
+			if (this.statusMessage != newMessage) {
+				this.setVariable("statusMessage", newMessage);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if drop is enabled.
+			@param array sources: array of drag sources
+		-->
+		<method args="sources" name="isDropEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "isDropEnabled(sources)", [objects]);
+			}
+			var dropEnabled = false;
+			if (this.navigationEnabled && this.referencedObject != null && sources.length > 0) {
+				var objects = [];
+				for (var i = 0; i < sources.length; i++) {
+					objects.push(ModelUtil.Singleton.findObjectForView(sources[i]));
+				}
+				dropEnabled = this.getAddActions(objects).length > 0;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "isDropEnabled(sources)", dropEnabled);
+			}
+			return dropEnabled;
+			]]>
+		</method>
+		
+		<!---
+			Add the dragged objects as children of this node.
+			@param array sources: array of drag sources
+		-->
+		<method args="sources" name="droppedInTarget">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "droppedInTarget(sources)", [sources]);
+			}
+			var objects = [];
+			for (var i = 0; i < sources.length; i++) {
+				objects.push(ModelUtil.Singleton.findObjectForView(sources[i]));
+			}
+			this.addObjects(objects);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "droppedInTarget(sources)");
+			}
+			]]>
+		</method>
+
+		<!---
+			Check if all of the objects currently in the clipboard can be added as children of the object
+			represented by this node.
+			@return boolean: true if the objects can be pasted
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "isPasteEnabled");
+			}
+			var pasteEnabled = false;
+			if (this.navigationEnabled && this.referencedObject != null) {
+				var objects = this.oEditor.model.clipboardObjects;
+				pasteEnabled = this.getAddActions(objects).length > 0;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "isPasteEnabled(sources)", pasteEnabled);
+			}
+			return pasteEnabled;
+			]]>
+		</method>
+
+		<!---
+			Paste the objects in the clipboard into this list.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "doPaste");
+			}
+			var pasteObjects = this.oEditor.model.clipboardObjects;
+			this.addObjects(pasteObjects);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "doPaste");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the list of add actions that are available for the specified list of source objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to check
+			@return array: array of object definitions
+		-->
+		<method args="objects" name="getAddActions">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "getAddActions", [objects]);
+			}
+			var actions = [];
+			if (this.navigationEnabled) {
+				if (ActionUtil.Singleton.isMoveActionEnabled(objects, this.referencedObject, this.objectSelectors, this.referenceMoveable)) {
+					actions.push(MoveAction.Singleton);
+				}
+				if (ActionUtil.Singleton.isCopyActionEnabled(objects, this.referencedObject, this.objectSelectors)) {
+					actions.push(CopyAction.Singleton);
+				}
+				if (ActionUtil.Singleton.isAddToCollectionActionEnabled(objects, this.referencedObject, this.objectSelectors)) {
+					actions.push(AddToCollectionAction.Singleton);
+				}
+				for (var i = 0; i < this.objectSelectors.length; i++) {
+					var oDef = this.objectSelectors[i].objectDefinition;
+					if (!oDef.parentReference && !oDef.collectionReference && oDef.getReferencedDefinitions() != null && ActionUtil.Singleton.isAddReferenceActionEnabled(objects, this.referencedObject, this.objectSelectors, oDef)) {
+						actions.push({
+							displayName: oDef.displayName,
+							targetDefinition: oDef,
+							primaryDefinition: null,
+							childDefinition: null
+						});
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "getAddActions", actions);
+			}
+			return actions;
+			]]>
+		</method>
+
+		<!---
+			Perform the add action for the specified list of objects.
+			@param Object action: the action
+			@param array objects: array of objects
+		-->
+		<method args="action, objects" name="doAddAction">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/BrowserObjectTree " + (action.displayName ? action.displayName : "doAddAction") + ": " + this.o.objectDisplayName + " #objects=" + objects.length);
+			if (!this.open) {
+				this.setVariable("open", true);
+			}
+			if (action == MoveAction.Singleton) {
+				ActionUtil.Singleton.triggerMove(objects, this.referencedObject, this.objectSelectors);
+			}
+			else if (action == CopyAction.Singleton) {
+				ActionUtil.Singleton.triggerCopy(objects, this.referencedObject, this.objectSelectors);
+			}
+			else if (action == AddToCollectionAction.Singleton) {
+				ActionUtil.Singleton.triggerAddToCollection(objects, this.referencedObject);
+			}
+			else {
+				ActionUtil.Singleton.triggerAddReference(action, objects, this.referencedObject);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+
+		<!---
+			Add the specified source objects to the list. If there are multiple ways that the objects may be
+			added to the list, then a pop-up dialog will be presented to the user with the list of options.
+			@param array objects: array of source objects
+		-->
+		<method args="objects" name="addObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "addObjects(objects)", [objects]);
+			}
+			var actions = this.getAddActions(objects);
+			if (actions.length > 1 || (!this.o.objectDefinition.organizational && actions.length == 1 && actions[0] == CopyAction.Singleton)) {
+				if (actions.length > 4) {
+					var caller = this;
+					require(["cmc/foundation/AddActionPopUp"], function(AddActionPopUp) {
+						AddActionPopUp.Singleton.open(caller, actions, objects);
+					});
+				}
+				else {
+					var caller = this;
+					require(["cmc/foundation/AddActionDialog"], function(AddActionDialog) {
+						AddActionDialog.Singleton.openAddActionDialog(caller, actions, objects);
+					});
+				}
+			}
+			else if (actions.length == 1) {
+				this.doAddAction(actions[0], objects);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "addObjects");
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the visibility of the statusMessage.
+		-->
+		<method name="updateStatusMessageVisibility">
+			<![CDATA[
+			if (this.item && this.children) {
+				if (this.treeitem.statusMessage.text != "") {
+					this.item.setVariable("y", 0);
+					this.treeitem.statusMessage.setVariable("y", this.item.height + 1);
+					this.children.setVariable("y", this.treeitem.statusMessage.y + this.treeitem.statusMessage.height + 1);
+				}
+				else {
+					this.item.setVariable("y", 0);
+					this.children.setVariable("y", this.item.height + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the details view for this tree node. If "navigationListDefinition" is
+			not null, then the corresponding navigation list view will be displayed. Otherwise,
+			the properties view will be displayed.
+			@return view: the details view
+		-->
+		<method args="del" name="getDetailsView">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "getDetailsView");
+			}
+			var v = null;
+			if (this.navigationListDefinition == null && this.referencedObject != null && this.navigationEnabled) {
+				var oDef = this.referencedObject.objectDefinition;
+				v = oDef.getPropertiesView(this.oEditor.workAreaContainer, this.referencedObject, true, del);
+			}
+			else {
+				v = this.inherited(arguments);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/BrowseObjectTree", "getDetailsView", v);
+			}
+			return v;
+			]]>
+		</method>
+
+		<DropTarget dragAndDropManager="${DndManager.Singleton}" placement="dragtreeitem" targetKey="${'browseElement'}">
+			<handler args="sources" name="ondroppedintarget">
+				<![CDATA[
+				this.classroot.droppedInTarget(sources);
+				]]>
+			</handler>
+
+			<method args="currentDragSource" name="isEnabled">
+				<![CDATA[
+				return this.classroot.isDropEnabled(currentDragSource);
+				]]>
+			</method>
+
+			<!---
+				A source object is dragged out of the drag object.
+			-->
+			<method args="e" name="sourceDraggedOut">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				CursorUtil.setCursorGlobal("no-drop");
+				this.classroot.updateBGColor();
+				]]>
+			</method>
+		</DropTarget>
+	</ObjectTree>
+
+	<!---
+		@keywords private
+		
+		Open object tree node. Open object tree nodes represent open objects. They appear as children
+		of the "Active Work" tree node.
+	-->
+	<ObjectTree classDefinition="true" definitionName="cmc/foundation/OpenObjectTree">
+		<dependency localName="OpenObjectTreeMenu" moduleName="cmc/foundation/OpenObjectTreeMenu"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+	
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/OpenObjectTree", "init");
+			}
+			this.inherited(arguments);
+			new OpenObjectTreeMenu.Class(this, {
+				name: "menu",
+				tree: this
+			});
+			this.menu.addView(this.item.contextMenuArea);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/OpenObjectTree", "init");
+			}
+			]]>
+		</method>
+
+		<!---
+			Get the details view for this tree node. If "navigationListDefinition" is
+			not null, then the corresponding navigation list view will be displayed. Otherwise,
+			the properties view will be displayed.
+			@return view: the details view
+		-->
+		<method args="del" name="getDetailsView">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/OpenObjectTree", "getDetailsView");
+			}
+			var v = null;
+			if (this.navigationListDefinition == null && this.referencedObject != null) {
+				var oDef = this.referencedObject.objectDefinition;
+				v = oDef.getPropertiesView(this.oEditor.workAreaContainer, this.referencedObject, false, del);
+			}
+			else {
+				v = this.inherited(arguments);
+			}
+			if (this.referencedObject != null) {
+				this.referencedObject.viewed = true;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/OpenObjectTree", "getDetailsView", v);
+			}
+			return v;
+			]]>
+		</method>
+		
+		<!---
+			Update the tree node display name.
+		-->
+		<method args="e" name="updateDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var displayName = "";
+			if (this.o.objectDisplayName != null) {
+				displayName = this.o.objectDisplayName;
+			}
+			if (this.o.openGroupObject && this.o.openGroupObject.openGroupDirty) {
+				displayName = "*" + displayName;
+			}
+			if (displayName != this.text) {
+				this.setVariable("text", displayName);
+			}
+			var newHasError = this.o.openGroupObject != null && this.o.openGroupObject.errorInOpenGroup;
+			if (newHasError != this.hasError) {
+				this.setVariable("hasError", newHasError);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle the "onselected" event.
+			@param boolean isSelected: indicates that this node is being selected
+		-->
+		<handler args="isSelected" name="onselected">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/OpenObjectTree", "onselected(isSelected)", [isSelected]);
+			}
+			if (isSelected && this.o) {
+				this.o.lastViewedTime = (new Date()).getTime();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/OpenObjectTree", "onselected(isSelected)");
+			}
+			]]>
+		</handler>
+		
+	</ObjectTree>
+
+	<!---
+		@keywords private
+		
+		Active work tree node. The active work tree node is the parent for the
+		list of open objects.
+	-->
+	<Tree classDefinition="true" definitionName="cmc/foundation/ActiveWorkTree" icon="activeWorkTreeIcon" maxObjectViews="20">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ActiveWorkTreeMenu" moduleName="cmc/foundation/ActiveWorkTreeMenu"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="OpenObjectTree" moduleName="cmc/foundation/OpenObjectTree"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!--- Tree node text. -->
+		<variable name="text" value="${foundationResources.Singleton.activeWorkTree.string}"/>
+		<!--- Reference to the business object editor instance. -->
+		<variable name="oEditor" value="${null}"/>
+		<!--- Child object class. -->
+		<variable name="objectClass" type="module" value="${OpenObjectTree}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActiveWorkTree", "init");
+			}
+			this.inherited(arguments);
+			this.oEditor.model.bindViewToOpenObjects(this);
+			new ActiveWorkTreeMenu.Class(this, {
+				name: "menu",
+				tree: this
+			});
+			this.menu.addView(this.item.contextMenuArea);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActiveWorkTree", "init");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler args="isSelected" name="onselected">
+			<![CDATA[
+			if (isSelected) {
+				this.oEditor.workAreaContainer.setActiveView(null);
+				this.oEditor.checkNavigationHistory();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Check if paste is enabled.
+			@return boolean: true if paste is allowed
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActiveWorkTree", "isPasteEnabled");
+			}
+			var objects = this.oEditor.model.clipboardObjects;
+			var pasteEnabled = objects.length > 0;
+			for (var i = 0; i < objects.length; i++) {
+				if (!objects[i].isOpenEnabled()) {
+					pasteEnabled = false;
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActiveWorkTree", "isPasteEnabled", pasteEnabled);
+			}
+			return pasteEnabled;
+			]]>
+		</method>
+
+		<!---
+			Open the objects in the clipboard.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			var objects = this.oEditor.model.clipboardObjects;
+			var o = null;
+			for (var i = 0; i < objects.length; i++) {
+				objects[i].doOpen(i == objects.length - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if drop is enabled.
+			@param array sources: array of source views
+			@return boolean: true if drop is allowed
+		-->
+		<method args="sources" name="isDropEnabled">
+			<![CDATA[
+			var dropEnabled = sources.length > 0;
+			for (var i = 0; i < sources.length; i++) {
+				var o = ModelUtil.Singleton.findObjectForView(sources[i]).getReferencedObject();
+				if ((sources[i].parent && sources[i].parent.parent == this) || !o.isOpenEnabled()) {
+					dropEnabled = false;
+					break;
+				}
+			}
+			return dropEnabled;
+			]]>
+		</method>
+		
+		<!---
+			Open the dropped objects.
+			@param array sources: array of source views
+		-->
+		<method args="sources" name="droppedInTarget">
+			<![CDATA[
+			var o = null;
+			for (var i = 0; i < sources.length; i++) {
+				var o = ModelUtil.Singleton.findObjectForView(sources[i]);
+				o.doOpen(i == sources.length - 1);
+			}
+			]]>
+		</method>
+		
+		<DropTarget dragAndDropManager="${DndManager.Singleton}" placement="dragtreegroup" targetKey="${'element'}">
+			
+			<handler args="sources" name="ondroppedintarget">
+				<![CDATA[
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/ActiveWorkTree ondroppedintarget: " + this.parent.text + " #objects=" + sources.length);
+				this.classroot.droppedInTarget(sources);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				]]>
+			</handler>
+
+			<method args="currentDragSource" name="isEnabled">
+				<![CDATA[
+				return this.classroot.isDropEnabled(currentDragSource);
+				]]>
+			</method>
+		</DropTarget>
+	</Tree>
+	
+	<!---
+		@keywords private
+		
+		Root navigation tree.
+	-->
+	<BrowseObjectTree classDefinition="true" definitionName="cmc/foundation/NavigationObjectTree" maxObjectViews="${null}" showroot="false" visible="true">
+		<dependency localName="SearchResultsTree" moduleName="cmc/foundation/SearchResultsTree"/>
+		<dependency localName="CompareViewTree" moduleName="cmc/foundation/CompareViewTree"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ActiveWorkTree" moduleName="cmc/foundation/ActiveWorkTree"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Currently selected filter.
+		-->
+		<variable name="filter" value="${null}"/>
+		<!---
+			An array of objects that identify the object that is currently selected in the explorer view. The
+			first object is the selected object and the rest of the object's in the array are the ancestor
+			objects.
+			This is only set for the selected object if it is does not have an assigned object view.
+			This can happen if the selected object is scrolled out of the visible views.
+		-->
+		<variable name="selectedObjectHierarchy" value="${null}"/>
+		<!---
+			The view state of the selected object.
+		-->
+		<variable name="selectedObjectViewState" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationObjectTree", "init");
+			}
+			this.inherited(arguments);
+			this.clearSelectedObjectViewStateDel = new EventHandler.Class(this, "clearSelectedObjectViewState");
+			this.checkSelectedObjectDel = new EventHandler.Class(this, "checkSelectedObject");
+			this.filter = this.parent.filterSelector.selectedValue;
+			this.updateFilterDel.connect(this.parent.filterSelector, "onselectedValue");
+			if (this.oEditor.searchWidget != null) {
+				new SearchResultsTree.Class(this, {
+					name: "searchResultsTree",
+					oEditor: this.oEditor
+				});
+			}
+			if (this.oEditor.showCompareView) {
+				new CompareViewTree.Class(this, {
+					name: "compareViewTree",
+					oEditor: this.oEditor
+				});
+			}
+			new ActiveWorkTree.Class(this, {
+				name: "activeWorkTree",
+				oEditor: this.oEditor
+			});
+			this.oEditor.model.setVariable("activeSelectionView", this);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationObjectTree", "init");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.clearSelectedObjectViewStateDel.disconnectAll();
+			delete this.clearSelectedObjectViewStateDel;
+			this.checkSelectedObjectDel.disconnectAll();
+			delete this.checkSelectedObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Returns an array of the currently selected objects.
+		-->
+		<method name="getSelectedObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationObjectTree", "getSelectedObjects");
+			}
+			var s = this.getSelection();
+			var selectedObjects = [];
+			if (s && s.o) {
+				selectedObjects.push(s.o);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationObjectTree", "getSelectedObjects", selectedObjects);
+			}
+			return selectedObjects;
+			]]>
+		</method>
+		
+		<!---
+			Check if the paste action is enabled.
+			@return boolean: true if paste is allowed
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			var pasteEnabled = false;
+			var s = this.getSelection();
+			return s != null && s.isPasteEnabled != undefined && s.isPasteEnabled();
+			]]>
+		</method>
+		
+		<!---
+			Handle paste action.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			var s = this.getSelection();
+			if (s != null && s.doPaste) {
+				s.doPaste();
+			}
+			]]>
+		</method>
+
+		<!---
+			Check if delete is enabled.
+			@return boolean: true if delete is allowed
+		-->
+		<method name="isDeleteEnabled">
+			<![CDATA[
+			var deleteEnabled = false;
+			var s = this.getSelection();
+			if (s != null && s.o && !s.o.objectDefinition.organizational) {
+				var o = s.o;
+				if (o.objectDefinition.parentReference) {
+					deleteEnabled = o.getReferencedObject().isDeletable();
+				}
+				else if (o.objectDefinition.collectionReference) {
+					deleteEnabled = o.getReferencedObject().isDeletable() || o.isDeletable();
+				}
+				else {
+					deleteEnabled = o.isDeletable();
+				}
+			}
+			return deleteEnabled;
+			]]>
+		</method>
+
+		<!---
+			Handle delete action.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			var s = this.getSelection();
+			if (s != null && s.o && !s.o.objectDefinition.organizational) {
+				var o = s.o;
+				if (o.objectDefinition.parentReference) {
+					if (o.getReferencedObject().isDeletable()) {
+						o.getReferencedObject().deleteObject(true);
+					}
+				}
+				else if (o.objectDefinition.collectionReference) {
+					if (o.getReferencedObject().isDeletable() && o.isDeletable()) {
+						require(["cmc/foundation/CollectionReferenceObjectDeleteConfirmationDialog"], function(CollectionReferenceObjectDeleteConfirmationDialog) {
+							CollectionReferenceObjectDeleteConfirmationDialog.Singleton.openCollectionReferenceObjectDeleteConfirmationDialog(o);
+						});
+					}
+					else if (o.getReferencedObject().isDeletable()) {
+						o.getReferencedObject().deleteObject(true);
+					}
+					else if (o.isDeletable()) {
+						require(["cmc/foundation/CollectionReferenceObjectRemoveConfirmationDialog"], function(CollectionReferenceObjectRemoveConfirmationDialog) {
+							CollectionReferenceObjectRemoveConfirmationDialog.Singleton.openCollectionReferenceObjectRemoveConfirmationDialog(o);
+						});
+					}
+				}
+				else if (o.isDeletable()) {
+					o.deleteObject(true);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Get the custom services available for the currently selected object.
+		-->
+		<method name="getCustomServices">
+			<![CDATA[
+			var customServices;
+			var s = this.getSelection();
+			if (s && s.o) {
+				customServices = s.o.getReferencedObject().objectDefinition.customServices;
+			}
+			else {
+				customServices = [];
+			}
+			return customServices;
+			]]>
+		</method>
+
+		<!---
+			Get the client actions available for the currently selected object.
+		-->
+		<method name="getClientActions">
+			<![CDATA[
+			var clientActions;
+			var s = this.getSelection();
+			if (s && s.clientActions) {
+				clientActions = s.clientActions;
+			}
+			else {
+				clientActions = [];
+			}
+			return clientActions;
+			]]>
+		</method>
+
+		<!---
+			Update the filter.
+		-->
+		<method args="e" name="updateFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationObjectTree", "updateFilter");
+			}
+			var newFilter = this.parent.filterSelector.selectedValue;
+			if (newFilter != this.filter) {
+				this.setVariable("filter", newFilter);
+				if (this.oList) {
+					this.oList.setVariable("baseFilter", newFilter);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationObjectTree", "updateFilter");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.oEditor.restoreFocus();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler eventSource="this.oEditor.model" name="onactiveSelectionView">
+			<![CDATA[
+			this.setVariable("activated", this.oEditor.model.activeSelectionView == this);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onselect">
+			<![CDATA[
+			if (this.selectedObjectViewState != null && this.getSelection() != null) {
+				this.clearSelectedObjectViewState();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Save the selected object.
+			@param cmc/foundation/ObjectTree treeNode: the selected tree node
+			@return boolean true if the view state can be saved
+		-->
+		<method args="treeNode" name="saveSelectedObjectViewState">
+			<![CDATA[
+			if (this.selectedObjectViewState != null) {
+				this.clearSelectedObjectViewState();
+			}
+			if (treeNode != null && treeNode.o && treeNode.parentOList) {
+				var viewState = treeNode.parentOList.getViewState(treeNode.o);
+				if (viewState) {
+					this.clearSelectedObjectViewStateDel.disconnectAll();
+					this.clearSelectedObjectViewStateDel.connect(this, "onfilter");
+					this.selectedObjectViewState = viewState;
+					this.selectedObjectHierarchy = [];
+					if (treeNode.parent == this.activeWorkTree) {
+						this.checkSelectedObjectDel.connect(treeNode.o.model, "openObjectsUpdated");
+					}
+					for (var v = treeNode; v && v.o; v = v.parent) {
+						this.clearSelectedObjectViewStateDel.connect(v.o, "beingDestroyed");
+						this.clearSelectedObjectViewStateDel.connect(v.o, "onpendingDelete");
+						this.selectedObjectHierarchy.push(v.o);
+					}
+				}
+			}
+			return this.selectedObjectViewState != null;
+			]]>
+		</method>
+
+		<!---
+			Check the saved selected object to see if it is still open. If it is not open, then clear the saved selection.
+		-->
+		<method args="e" name="checkSelectedObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.selectedObjectHierarchy[0].open) {
+				this.clearSelectedObjectViewState();
+			}
+			]]>
+		</method>
+				
+		<!---
+			Clear the selected object.
+		-->
+		<method args="e" name="clearSelectedObjectViewState">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.clearSelectedObjectViewStateDel.disconnectAll();
+			this.checkSelectedObjectDel.disconnectAll();
+			this.selectedObjectViewState = null;
+			this.selecteObjectHierarchy = null;
+			if (this.getSelection() == null) {
+				this.oEditor.workAreaContainer.setActiveView(null);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the saved view state for the selected object.
+			@param cmc/foundation/ObjectTree treeNode: the candidate tree node
+		-->
+		<method args="treeNode" name="getSelectedObjectViewState">
+			<![CDATA[
+			var viewState = null;
+			if (this.selectedObjectViewState != null) {
+				viewState = this.selectedObjectViewState;
+				var v = treeNode;
+				for (var i = 0; i < this.selectedObjectHierarchy.length; i++) {
+					if (v == null || v.o != this.selectedObjectHierarchy[i]) {
+						viewState = null;
+						break;
+					}
+					v = v.parent;
+				}
+			}
+			return viewState;
+			]]>
+		</method>
+		
+		<!---
+			Returns true if the specified tree node is an ancestor of the saved
+			selected object.
+			@param cmc/foundation/ObjectTree treeNode: the candidate tree node
+		-->
+		<method args="treeNode" name="isAncestorOfSelectedObject">
+			<![CDATA[
+			var isAncestor = false;
+			if (this.selectedObjectViewState != null) {
+				var v = treeNode;
+				for (var i = 1; i < this.selectedObjectHierarchy.length; i++) {
+					if (isAncestor) {
+						v = v.parent;
+						if (v == null || v.o != this.selectedObjectHierarchy[i]) {
+							isAncestor = false;
+							break;
+						}
+					}
+					else if (this.selectedObjectHierarchy[i] == v.o) {
+						isAncestor = true;
+					}
+				}
+			}
+			return isAncestor;
+			]]>
+		</method>
+	</BrowseObjectTree>
+
+	<!---
+		@keywords private
+		
+		Navigation history entry.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/NavigationHistoryEntry">
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Business object editor instance.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			The tree node associated with this navigation history entry. This attribute
+			is null if the tree node is managed by a model object list.
+		-->
+		<variable name="treeNode" value="${null}"/>
+		<!---
+			The model object list instance that contains the navigation tree node.
+			This attribute is null if the tree node is not managed by a model object list.
+		-->
+		<variable name="oList" value="${null}"/>
+		<!---
+			The model object associated with the navigation tree node.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			The navigation list definition associated with this navigation history entry.
+		-->
+		<variable name="navigationListDefinition" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationHistoryEntry", "init");
+			}
+			this.inherited(arguments);
+			this.checkEntryDel = new EventHandler.Class(this, "checkEntry");
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationHistoryEntry", "init");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.checkEntryDel.disconnectAll();
+			delete this.checkEntryDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Initialize the navigation history entry with the specified arguments.
+		-->
+		<method args="args" name="initializeEntry">
+			<![CDATA[
+			this.oEditor = args.oEditor;
+			var treeNode = args.navigationTreeNode;
+			this.oList = treeNode.parentOList ? treeNode.parentOList : null;
+			this.treeNode = this.oList == null ? treeNode : null;
+			this.o = treeNode.o ? treeNode.o : null;
+			this.navigationListDefinition = treeNode.navigationListDefinition ? treeNode.navigationListDefinition : null;
+			if (this.oList != null) {
+				this.checkEntryDel.connect(this.oList, "objectViewsUpdated");
+			}
+			for (var i = 0; i < this.oEditor.navigationHistoryEntries.length; i++) {
+				var entry = this.oEditor.navigationHistoryEntries[i];
+				if (this.treeNode == entry.treeNode && this.oList == entry.oList && this.o == entry.o && this.navigationListDefinition == entry.navigationListDefinition) {
+					this.oEditor.navigationHistoryEntries.splice(i, 1);
+					entry.release();
+					break;
+				}
+			}
+			this.oEditor.addNavigationHistoryEntry(this);
+			]]>
+		</method>
+		
+		<!---
+			Release this entry and make it available for re-use.
+		-->
+		<method name="release">
+			<![CDATA[
+			this.checkEntryDel.disconnectAll();
+			var index = this.oEditor.navigationHistoryEntries.indexOf(this);
+			if (index != -1) {
+				this.oEditor.navigationHistoryEntries.splice(index, 1);
+			}
+			if (this.oEditor.currentNavigationHistoryEntry == this) {
+				this.oEditor.currentNavigationHistoryEntry = null;
+				this.oEditor.checkNavigationHistory();
+			}
+			this.oEditor = null;
+			this.oList = null;
+			this.treeNode = null;
+			this.o = null;
+			this.navigationListDefinition = null;
+			ModelUtil.Singleton.releaseNavigationHistoryEntry(this);
+			]]>
+		</method>
+
+		<!---
+			Check if the navigation tree node has been released.
+		-->
+		<method args="e" name="checkEntry">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var view = this.oList.getObjectView(this.o);
+			var viewState = this.oList.getViewState(this.o);
+			if (!view && !viewState) {
+				var previousEntry = null;
+				if (this.oEditor.currentNavigationHistoryEntry == this && this.oList != null && this.oList.parent == this.oEditor.navigationTree.activeWorkTree && this.oEditor.navigationHistoryEntries.length > 1) {
+					previousEntry = this.oEditor.navigationHistoryEntries[this.oEditor.navigationHistoryEntries.length - 2];
+				}
+				this.release();
+				if (previousEntry != null) {
+					previousEntry.show();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Show the view associated with this navigation history entry.
+		-->
+		<method name="show">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationHistoryEntry", "show");
+			}
+			var treeNode = this.treeNode;
+			if (this.oList != null) {
+				this.oList.showObjectInView(this.o);
+				treeNode = this.oList.getObjectView(this.o);
+			}
+			if (treeNode != null) {
+				this.oEditor.currentNavigationHistoryEntry = this;
+				treeNode.setVariable("navigationListDefinition", this.navigationListDefinition);
+				treeNode.setVariable("selected", true);
+				this.oEditor.checkNavigationHistory();
+				treeNode.changeFocus(null);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/NavigationHistoryEntry", "show");
+			}
+			]]>
+		</method>
+
+		<!---
+			Returns true if the specified tree node matches this navigation history entry.
+		-->
+		<method args="treeNode" name="matchesTreeNode">
+			<![CDATA[
+			return ((this.treeNode != null && treeNode == this.treeNode) || (this.oList != null && this.oList == treeNode.parentOList)) && this.o == treeNode.o && this.navigationListDefinition == treeNode.navigationListDefinition;
+			]]>
+		</method>
+	</Node>
+	
+    <!---
+    	Compare view navigation tree node.
+		@keywords private
+    -->
+	<Tree classDefinition="true" definitionName="cmc/foundation/CompareViewTree" icon="compareViewTreeIcon" isTreeLeaf="true" text="${foundationResources.Singleton.compareViewTree.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="CompareViewTreeMenu" moduleName="cmc/foundation/CompareViewTreeMenu"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Reference to the business object editor.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			Cache of model object associated with the compare area 1.
+		-->
+		<variable name="compareObject1Cache" value="${null}"/>
+		<!---
+			Cache of model object associated with the compare area 2.
+		-->
+		<variable name="compareObject2Cache" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "init");
+			}
+			this.inherited(arguments);
+			this.showDetailsViewDel = new EventHandler.Class(this, "showDetailsView");
+			new CompareViewTreeMenu.Class(this, {
+				name: "menu",
+				tree: this
+			});
+			this.menu.addView(this.item.contextMenuArea);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "init");
+			}
+			]]>
+		</method>
+
+		 <!--- @keywords private --> 
+		 <method name="destroy">
+			<![CDATA[
+			delete this.showDetailsViewDel;
+			this.inherited(arguments);
+			]]>
+		</method> 
+                
+		<!--- @keywords private -->
+		<handler args="isSelected" name="onselected">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "onselected(isSelected)");
+			}
+			this.oEditor.setVariable("compareViewVisible", this.selected);
+			if (isSelected) {
+				CallbackUtil.Singleton.addDeferredCallback(this.showDetailsViewDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "onselected(isSelected)");
+			}
+			]]>
+		</handler>
+
+		<!--
+			Show the details view for this node.
+		-->
+		<method args="e" name="showDetailsView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "showDetailsView");
+			}
+			if (this.selected) {
+				var detailsView = this.oEditor.workAreaContainer.compareAreaSplit;
+				if (detailsView != this.oEditor.workAreaContainer.activeView) {
+					this.oEditor.workAreaContainer.setActiveView(detailsView, true);
+				}
+				var currentHistoryEntry = this.oEditor.currentNavigationHistoryEntry;
+				if (currentHistoryEntry == null || !currentHistoryEntry.matchesTreeNode(this)) {
+					ModelUtil.Singleton.createNavigationHistoryEntry({
+						oEditor: this.oEditor,
+						navigationTreeNode: this
+					});
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "showDetailsView");
+			}
+			]]>
+		</method> 
+		
+		<!---
+			@keywords private
+			
+			Update the compare area 1.
+		-->
+		<handler name="oncompareObject1Cache">
+			<![CDATA[
+			this.showCompareObject1();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			
+			Update the compare area 2.
+		-->
+		<handler name="oncompareObject2Cache">
+			<![CDATA[
+			this.showCompareObject2();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This method releases the {@link cmc/foundation/ModelObject model object} for the compare area 1.
+		-->
+		<method args="e" name="releaseCompareObject1">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.compareObject1Cache != null && !this.compareObject1Cache.openGroupObject.open) {
+				if (this.releaseCompareObject1Del) {
+					this.releaseCompareObject1Del.disconnectAll();
+				}
+				this.setVariable("compareObject1Cache", null);
+				if (this.oEditor.compareArea1Container.activeView != null) {
+					this.oEditor.compareArea1Container.setActiveView(null, true);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the {@link cmc/foundation/ModelObject model object} for the compare area 2.
+		-->
+		<method args="e" name="releaseCompareObject2">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.compareObject2Cache != null && !this.compareObject2Cache.openGroupObject.open) {
+				if (this.releaseCompareObject2Del) {
+					this.releaseCompareObject2Del.disconnectAll();
+				}
+				this.setVariable("compareObject2Cache", null);
+				if (this.oEditor.compareArea2Container.activeView != null) {
+					this.oEditor.compareArea2Container.setActiveView(null, true);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if paste is enabled.
+			@return boolean: true if paste is allowed
+		-->
+		<method name="isPasteEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "isPasteEnabled");
+			}
+			var objects = this.oEditor.model.clipboardObjects;
+			var pasteEnabled = objects.length > 0 && objects.length < 3;
+			for (var i = 0; i < objects.length; i++) {
+				if (!objects[i].isOpenInCompareViewEnabled()) {
+					pasteEnabled = false;
+					break;
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/CompareViewTree", "isPasteEnabled", pasteEnabled);
+			}
+			return pasteEnabled;
+			]]>
+		</method>
+
+		<!---
+			Open the objects in the compare view.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			var objects = this.oEditor.model.clipboardObjects;
+			if (objects.length == 1 || objects.length == 2) {
+				var o1 = objects[0];
+				o1 = o1.getReferencedObject();
+				var o2 = null;
+				if (objects.length == 2) {
+					o2 = objects[1];
+					o2 = o2.getReferencedObject();
+				}
+				this.oEditor.openObjectsInCompareView(o1, o2);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check if drop is enabled.
+			@param array sources: array of source views
+			@return boolean: true if drop is allowed
+		-->
+		<method args="sources" name="isDropEnabled">
+			<![CDATA[
+			var dropEnabled = sources.length > 0 && sources.length < 3;
+			for (var i = 0; i < sources.length; i++) {
+				var o = ModelUtil.Singleton.findObjectForView(sources[i]);
+				if (o) {
+					if (!o.isOpenInCompareViewEnabled()) {
+						dropEnabled = false;
+						break;
+					}
+				}
+				else {
+					dropEnabled = false;
+					break;
+				}
+			}
+			return dropEnabled;
+			]]>
+		</method>
+		
+		<!---
+			Open the dropped objects.
+			@param array sources: array of source views
+		-->
+		<method args="sources" name="droppedInTarget">
+			<![CDATA[
+			if (sources.length == 1 || sources.length == 2) {
+				var o1 = ModelUtil.Singleton.findObjectForView(sources[0]);
+				o1 = o1.getReferencedObject();
+				var o2 = null;
+				if (sources.length == 2) {
+					o2 = ModelUtil.Singleton.findObjectForView(sources[1]);
+					o2 = o2.getReferencedObject();
+				}
+				this.oEditor.openObjectsInCompareView(o1, o2);
+			}
+			]]>
+		</method>
+		
+		<DropTarget dragAndDropManager="${DndManager.Singleton}" placement="dragtreegroup" targetKey="${'element'}">
+			
+			<handler args="sources" name="ondroppedintarget">
+				<![CDATA[
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/CompareViewTree ondroppedintarget: " + this.parent.text + " #objects=" + sources.length);
+				this.classroot.droppedInTarget(sources);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				]]>
+			</handler>
+
+			<method args="currentDragSource" name="isEnabled">
+				<![CDATA[
+				return this.classroot.isDropEnabled(currentDragSource);
+				]]>
+			</method>
+		</DropTarget>
+
+	<method name="showCompareObject2">
+			<![CDATA[
+			if (this.showCompareObject2Del) {
+				this.showCompareObject2Del.disconnectAll();
+			}
+			else {
+				this.showCompareObject2Del = new EventHandler.Class(this, "showCompareObject2");
+			}
+			if (this.releaseCompareObject2Del) {
+				this.releaseCompareObject2Del.disconnectAll();
+			}
+			else {
+				this.releaseCompareObject2Del = new EventHandler.Class(this, "releaseCompareObject2");
+			}
+			var parentView = this.oEditor.compareArea2Container;
+			if (parentView.activeView != null && parentView.activeView.o && parentView.activeView.o != this.compareObject2Cache) {
+				if (parentView.activeView.o.openGroupObject.open && !parentView.activeView.o.viewed) {
+					parentView.activeView.o.closeObject();
+				}
+				if (parentView.activeView.o != this.compareObject1Cache) {
+					parentView.activeView.o.setVariable("isOpenInCompareView", false);
+				}
+			}
+			if (this.compareObject2Cache != null) {
+				if (!this.compareObject2Cache.openGroupObject.open) {
+					this.compareObject2Cache.openGroupObject.setVariable("open", true);
+				}
+				var v = this.compareObject2Cache.objectDefinition.getPropertiesView(parentView, this.compareObject2Cache, false, this.showCompareObject2Del);
+				if (!this.compareObject2Cache.isOpenInCompareView) {
+					this.compareObject2Cache.setVariable("isOpenInCompareView", true);
+				}
+				parentView.setActiveView(v);
+				this.releaseCompareObject2Del.connect(this.compareObject2Cache, "onopen");
+			}
+			else if (parentView.activeView != null) {
+				parentView.setActiveView(null, true);
+			}
+			]]>
+		</method><method name="showCompareObject1">
+			<![CDATA[
+			if (this.showCompareObject1Del) {
+				this.showCompareObject1Del.disconnectAll();
+			}
+			else {
+				this.showCompareObject1Del = new EventHandler.Class(this, "showCompareObject1");
+			}
+			if (this.releaseCompareObject1Del) {
+				this.releaseCompareObject1Del.disconnectAll();
+			}
+			else {
+				this.releaseCompareObject1Del = new EventHandler.Class(this, "releaseCompareObject1");
+			}
+			var parentView = this.oEditor.compareArea1Container;
+			if (parentView.activeView != null && parentView.activeView.o && parentView.activeView.o != this.compareObject1Cache) {
+				if (parentView.activeView.o.openGroupObject.open && !parentView.activeView.o.viewed) {
+					parentView.activeView.o.closeObject();
+				}
+				if (parentView.activeView.o != this.compareObject2Cache) {
+					parentView.activeView.o.setVariable("isOpenInCompareView", false);
+				}
+			}
+			if (this.compareObject1Cache != null) {
+				if (!this.compareObject1Cache.openGroupObject.open) {
+					this.compareObject1Cache.openGroupObject.setVariable("open", true);
+				}
+				var v = this.compareObject1Cache.objectDefinition.getPropertiesView(parentView, this.compareObject1Cache, false, this.showCompareObject1Del);
+				if (!this.compareObject1Cache.isOpenInCompareView) {
+					this.compareObject1Cache.setVariable("isOpenInCompareView", true);
+				}
+				parentView.setActiveView(v);
+				this.releaseCompareObject1Del.connect(this.compareObject1Cache, "onopen");
+			}
+			else if (parentView.activeView != null) {
+				parentView.setActiveView(null, true);
+			}
+			]]>
+		</method></Tree>
+
+</Definitions>

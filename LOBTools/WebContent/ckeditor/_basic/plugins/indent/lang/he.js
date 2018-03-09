@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","he",{indent:"הגדלת כניסה",outdent:"הקטנת כניסה"});

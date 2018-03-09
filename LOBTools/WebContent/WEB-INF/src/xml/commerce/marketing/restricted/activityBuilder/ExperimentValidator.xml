@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for an {@link cmc/marketing/ExperimentElementObject Experiment} or {@link cmc/marketing/BranchElementObject Branch} element. This validator ensures that:<ol>
+		<li>the given percentages total 100% if the experiment is a random experiment</li>
+		<li>the provided path names are unique and not empty within the experiment</li>
+		<li>if the element is an Experiment, at least one of the ending conditions - maximum number of customers or an end date - is specified</li>
+		</ol>
+	-->
+	<Validator classDefinition="true" definitionName="cmc/marketing/ExperimentValidator">
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!--- Warning message to show when the ending conditions are not specified. -->
+		<variable name="endConditionErrorMessage" type="string" value="${marketingResources.Singleton.experimentEndConditionRequired.string}"/>
+
+		<!--- Warning message to show when path percentages are not correct. -->
+		<variable name="percentagesIncorrectMessage" type="string" value="${marketingResources.Singleton.experimentPercentagesIncorrect.string}"/>
+
+		<!--- Warning message to show when path names are duplicated or empty. -->
+		<variable name="duplicateNameErrorMessage" type="string" value="${marketingResources.Singleton.experimentDuplicateNames.string}"/>
+
+		<!--- @keywords private -->
+		<variable name="uniqueCustomerPropertyName" type="string" value="uniqueCustomerCount"/>
+
+		<!--- @keywords private -->		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			var countProp = o.getProperty(this.uniqueCustomerPropertyName);
+			if (countProp.propertyReadOnly != "true") {
+				countProp.setVariable("propertyReadOnly", "true");
+			}
+			var maxCustomers = o.getPropertyValue("maxCustomers");
+			var endDate = o.getPropertyValue("endDate");
+			var isRandomBranch = (o.getPropertyValue("branchtype") == "random");
+			var pathPercentError = false;
+			var totalPercent = 0;
+			var pathNameError = false;
+			var pathNameMap = {};
+			var childPaths = o.getObjects("path");
+			for (var i = 0; i < childPaths.length; i++) {
+				var percent = childPaths[i].getPropertyValue("pctg");
+				if (percent == "") {
+					pathPercentError = isRandomBranch;
+				}
+				else if (StringUtil.Singleton.isNumber(percent)) {
+					totalPercent += Number(percent);
+				}
+				var name = childPaths[i].getPropertyValue("name");
+				if (name != "") {
+					if (pathNameMap[name]) {
+						pathNameError = true;
+					}
+					else {
+						pathNameMap[name] = true;
+					}
+				}
+				else {
+					pathNameError = true;
+				}
+			}
+			if (isRandomBranch) {
+				pathPercentError = pathPercentError || (totalPercent != 100);
+			}
+			o.clearValidationError(this);
+			if ((maxCustomers == "") && (endDate == "") && (o.objectType == "branch")) {
+				o.addValidationError(this, this.endConditionErrorMessage);
+			}
+			else if (pathNameError) {
+				o.addValidationError(this, this.duplicateNameErrorMessage);
+			}
+			else if (pathPercentError) {
+				o.addValidationError(this, this.percentagesIncorrectMessage);
+			}
+			]]>
+		</method>
+	</Validator>
+</Definitions>

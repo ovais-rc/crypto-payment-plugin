@@ -1,0 +1,105 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+	Process all the navigational references to add them to the collection of references for the object.
+	We do not need to process the ParentCatalogGroupIdnetifier as all references are covered in the navigational references and that reference may not be present.
+	An empty navigational reference indicates the reference is to a sales catalog.
+	All navigational references belong to the sales catalog searched on.
+--%>
+
+<%-- Setup parameters for parent catalog reference --%>
+<c:set var="parentCatalogType" value="SalesCatalog"/>
+<c:if test="${param.storeId != catalogStoreId}" >
+	<c:set var="parentCatalogType" value="InheritedSalesCatalog"/>
+</c:if>
+<c:set var="inherited" value=""/>
+<c:set var="dynamic" value=""/>
+<c:if test="${param.storeId != catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}">
+	<c:set var="inherited" value="Inherited"/>
+</c:if>
+<c:if test="${catalogGroup.dynamicCatalogGroup == '1'}">
+	<c:set var="dynamic" value="Dynamic"/>
+</c:if>
+
+<c:forEach var="parentCategory" items="${catalogGroup.navigationRelationship}" varStatus="item">
+	<c:set var="childObjectStoreId"  value="${param.storeId}" />
+	<%-- Check for empty navigational reference, which indicates the reference is to a catalog --%>
+	<c:set var="forSalesCatalog" value=""/>
+	<c:set var="topCategory" value="false"/>
+	<c:if test="${parentCategory.catalogGroupReference == null}">
+		<c:set var="topCategory" value="true"/>
+		<c:set var="forSalesCatalog" value="ForSalesCatalog"/>
+	</c:if>
+	<c:set var="parentCategoryType" value="SalesCatalogGroup"/>
+	<c:if test="${param.storeId != parentCategory.catalogGroupReference.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}">
+		<c:set var="parentCategoryType" value="InheritedSalesCatalogGroup"/>
+	</c:if>
+	<c:set var="childType" value="Child${inherited}${dynamic}SalesCatalogGroup${forSalesCatalog}"/>
+	<c:set var="childTypeLocked" value=''/>
+
+	<reference>
+		<c:choose>
+			<c:when test="${topCategory}">
+				<%-- Check if it is an inherited sales catalog to an inherited sales category relationship --%>
+				<c:if test="${(inherited == 'Inherited') && (parentCatalogType == 'InheritedSalesCatalog')}">
+					<c:set var="childTypeLocked" value='readonly="true"'/>
+					<c:set var="childObjectStoreId" value="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+				</c:if>
+				<object objectType="${childType}"  ${childTypeLocked}>
+					<childCatalogGroupId>${catalog}_${catalogGroup.catalogGroupIdentifier.uniqueID}</childCatalogGroupId>
+					<objectStoreId>${childObjectStoreId}</objectStoreId>
+					<dynamicCatalogGroup>${catalogGroup.dynamicCatalogGroup}</dynamicCatalogGroup>
+					<c:set var="showVerb" value="${showVerb}" scope="request"/>
+					<c:set var="businessObject" value="${parentCategory}" scope="request"/>
+					<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+					<sequence><fmt:formatNumber type="number" value="${parentCategory.displaySequence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></sequence>
+					<parent>
+						<object objectType="${parentCatalogType}">
+							<catalogId>${catalog}</catalogId>
+							<identifier><wcf:cdata data="${parentCatalogIdentifier}"/></identifier>
+							<objectStoreId>${catalogStoreId}</objectStoreId>
+						</object>
+					</parent>
+				</object>
+			</c:when>
+			<c:otherwise>
+				<%-- Check if it is an inherited sales category to an inherited sales category relationship --%>
+				<c:if test="${(inherited == 'Inherited') && (parentCategoryType == 'InheritedSalesCatalogGroup')}">
+					<c:set var="childTypeLocked" value='readonly="true"'/>
+					<c:set var="childObjectStoreId" value="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+				</c:if>
+				<object objectType="${childType}" ${childTypeLocked}>
+					<childCatalogGroupId>${parentCategory.catalogGroupReference.catalogGroupIdentifier.uniqueID}_${catalogGroup.catalogGroupIdentifier.uniqueID}</childCatalogGroupId>
+					<objectStoreId>${childObjectStoreId}</objectStoreId>
+					<dynamicCatalogGroup>${catalogGroup.dynamicCatalogGroup}</dynamicCatalogGroup>
+					<c:set var="showVerb" value="${showVerb}" scope="request"/>
+					<c:set var="businessObject" value="${parentCategory}" scope="request"/>
+					<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+					<sequence><fmt:formatNumber type="number" value="${parentCategory.displaySequence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></sequence>
+					<parent>
+						<object objectType="${parentCategoryType}">
+							<catgroupId>${parentCategory.catalogGroupReference.catalogGroupIdentifier.uniqueID}</catgroupId>
+							<identifier><wcf:cdata data="${parentCategory.catalogGroupReference.catalogGroupIdentifier.externalIdentifier.groupIdentifier}"/></identifier>
+							<objectStoreId>${parentCategory.catalogGroupReference.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+							<owningCatalog>${owningCatalog}</owningCatalog>
+							<owningCatalogIdentifier><wcf:cdata data="${owningCatalogIdentifier}"/></owningCatalogIdentifier>
+							<owningCatalogStoreId>${catalogStoreId}</owningCatalogStoreId>
+						</object>
+					</parent>
+				</object>
+			</c:otherwise>
+		</c:choose>
+	</reference>
+</c:forEach>

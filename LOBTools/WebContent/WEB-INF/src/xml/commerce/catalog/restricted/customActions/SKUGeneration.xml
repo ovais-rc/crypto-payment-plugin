@@ -1,0 +1,833 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+
+	<!---
+		@keywords private
+		This class is used to generate SKUs for a product.
+		The number of SKUs created is based on all possible combinations of the
+		product's defining attributes up to a customizable maximum.
+		If the product has no defining attributes, a single SKU is created with no defining attributes.
+		All properties from the product are copied to the SKU with the exception
+		of merchandising associations.
+		A code for each SKU is created based on the product code and the ordinal of the generated SKU. 
+	-->
+	<ClientAction addToEditMenu="false" allowMultipleSelection="false" classDefinition="true" definitionName="cmc/catalog/GenerateProductSKUClientAction" displayName="${catalogResources.Singleton.generateSKUs.string}" toolbarIcon="generateSKUsToolbarIcon">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+
+		<!---
+			@keywords private
+			This method is invoked by the framework when the client action to generate SKUs
+			is selected from the edit menu, utilities menu or tool bar.
+			@param cmc/foundation/ModelObject objects: The array of selected model objects. Always one in this case.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (objects) {
+				require(["cmc/catalog/GenerateSKUsActionHandler"], function(GenerateSKUsActionHandler) {
+					GenerateSKUsActionHandler.Singleton.triggerAction(objects[0]);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if the following conditions are true.
+			This client action is enabled for the product by evaluating
+			the associated {@link cmc/foundation/EnablementCondition} object.
+			The user has access to the product.
+			The workspace is not read only.
+			This method is only used to determine if this action is visible to the user.
+			It is not invoked from the {@link cmc/foundation/ClientAction#doClientAction} method.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (enabled && o.model.oEditor.respectWorkspaceContext) {
+				var readOnlyModeContextValue = ContextUtil.Singleton.findContextValue(null, "readOnlyMode");
+				enabled = (readOnlyModeContextValue.value != "true");
+			}
+			if (enabled && o.isContextReadOnly()) {
+				enabled = false;
+			}
+			return enabled;
+			]]>
+		</method>
+	</ClientAction>
+	
+	<!---
+		@keywords private
+		This action handler is used to generate the SKUs for a product.
+		The handler will first load all the product children. Then all SKU combination
+		will be calculated and then the new SKUs will be generated.
+	-->
+	<Node definitionName="cmc/catalog/GenerateSKUsActionHandler" singletonDefinition="true">
+		<dependency localName="CreateSKUActionHandler" moduleName="cmc/catalog/CreateSKUActionHandler"/>
+		<dependency localName="GenerateSKUsUtil" moduleName="cmc/catalog/GenerateSKUsUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			Current generate action. A generate action must be deferred until the product children have loaded.
+		-->
+		<variable name="currentAction" value="${null}"/>
+
+		<!---
+			@keywords private
+			Setup call backs.
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.checkChildrenLoadedDel = new EventHandler.Class(this, "checkChildrenLoaded");
+			this.checkChildrenErrorDel = new EventHandler.Class(this, "checkChildrenError");
+			this.checkAttributeChildrenLoadedDel = new EventHandler.Class(this, "checkAttributeChildrenLoaded");
+			this.checkAttributeChildrenErrorDel = new EventHandler.Class(this, "checkAttributeChildrenError");
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Cleanup objects.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.checkChildrenLoadedDel) {
+				this.checkChildrenLoadedDel.disconnectAll();
+				delete this.checkChildrenLoadedDel;
+			}
+			if (this.checkChildrenErrorDel) {
+				this.checkChildrenErrorDel.disconnectAll();
+				delete this.checkChildrenErrorDel;
+			}
+			if (this.checkAttributeChildrenLoadedDel) {
+				this.checkAttributeChildrenLoadedDel.disconnectAll();
+				delete this.checkAttributeChildrenLoadedDel;
+			}
+			if (this.checkAttributeChildrenErrorDel) {
+				this.checkAttributeChildrenErrorDel.disconnectAll();
+				delete this.checkAttributeChildrenErrorDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets up the action to prepare to generate the SKUs.
+			@param cmc/foundation/ModelObject object: The product object for which the SKUs will be generated.
+		-->
+		<method args="object" name="triggerAction">
+			<![CDATA[
+			if (object.openGroupDirty) {
+					MessageLogger.Singleton.logException(null, catalogResources.Singleton.productIsNotSavedPrompt.string);
+			} else {
+				object.incrementReferenceCount();
+				var action = {
+					actionHandler: this,
+					object: object,
+					attributes: null,
+					model: object.model
+				};
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.addAction(action);
+				});
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Release the specified action.
+			@param Object action: The action instance.
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			if (action.object != null) {
+				action.object.decrementReferenceCount();
+			}
+			if (action.attributes != null) {
+				for (var i = 0; i < action.attributes.length; i++) {
+					action.attributes[i].decrementReferenceCount();
+				}
+			}
+			if (action == this.currentAction) {
+				this.checkChildrenLoadedDel.disconnectAll();
+				this.checkChildrenErrorDel.disconnectAll();
+				this.checkAttributeChildrenLoadedDel.disconnectAll();
+				this.checkAttributeChildrenErrorDel.disconnectAll();
+				this.currentAction = null;
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Handle the call back and perform the action to create the new SKUs.
+			@param Object action: The action instance.
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			var oDefLocal = action.object.objectDefinition.getChildDefinition("CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+			var oDefInherited = action.object.objectDefinition.getChildDefinition("CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues");
+			var defArray = [];
+			defArray.push(oDefLocal);
+			defArray.push(oDefInherited);
+			this.currentAction = action;
+			this.checkChildrenLoadedDel.connect(action.object, "onGetChildrenServiceCompleted");
+			this.checkChildrenErrorDel.connect(action.object, "onGetChildrenServiceError");
+			action.object.checkParsedData();
+			action.object.forceParseData = true;
+			action.object.setHasReleasableChildren();
+			action.object.setGetChildrenServicesStale(oDefLocal, false);
+			action.object.setGetChildrenServicesStale(oDefInherited, false);
+			action.object.loadChildren(GenerateSKUsUtil.Singleton.getProductChildObjectDefinitions(action.object.objectDefinition), true);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns an array of all the attribute values for all the attributes of a product which are from the attribute dictionary.
+			@param object attributes: The attribute to find the values of.
+			@param boolean isInherited: True if the attributes are inherited, false otherwise. The default value is false.
+		-->
+		<method args="attributes, isInherited" name="getADAttributeValues">
+			<![CDATA[
+			if (typeof(isInherited) == "undefined") isInherited = false;
+			for (var i = 0; i < attributes.length; i++) {
+				if (attributes[i].getPropertyValue("attrId") == "") {
+					MessageLogger.Singleton.logException(null, catalogResources.Singleton.productIsNotSaved.string);
+					return null;
+				}
+			}
+			var prefix = "";
+			if (isInherited) {
+				prefix = "Inherited";
+			}
+			var total = 1;
+			var allValues = new Array(attributes.length);
+			var attributeCount = 0;
+			for (var i = 0; i < attributes.length; i++) {
+				var attribute = attributes[i];
+				var attributeId = attribute.getPropertyValue("attrId");
+				var attributeDataType = attribute.getPropertyValue("attrDataType", prefix + "AttributeDictionaryAttributeWithAllowedValues");
+				var definingAttributeAllowedValues = attribute.getObjects(prefix + "AttributeDictionaryAttributeWithAllowedValues/" + prefix + "AttributeDictionaryAttribute" + attributeDataType + "Value");
+				var inheritedDefiningAttributeLocalAllowedValues;
+				var tempValueCount = 0;
+				var attributeAllowedValuePropertyName = "value";
+				tempValueCount = definingAttributeAllowedValues.length;
+				if (isInherited) {
+					inheritedDefiningAttributeLocalAllowedValues = attribute.getObjects(prefix + "AttributeDictionaryAttributeWithAllowedValues/AttributeDictionaryAttribute" + attributeDataType + "Value");
+					tempValueCount += inheritedDefiningAttributeLocalAllowedValues.length;
+				}
+				var allowedValues = new Array(tempValueCount);
+				var valueCount = 0;
+				for (var j = 0; j < definingAttributeAllowedValues.length; j++) {
+					var allowedValue = definingAttributeAllowedValues[j];
+					var value = allowedValue.getPropertyValue(attributeAllowedValuePropertyName, "AttributeDictionaryAttributeValueDescription");
+					var valueId = allowedValue.getPropertyValue("attrValId");
+					if (value != null && value != "") {
+						allowedValues[valueCount++] = {
+							attributeId: attributeId,
+							value: value,
+							valueId: valueId,
+							isInherited: isInherited
+						};
+					}
+				}
+				if (isInherited) {
+					for (var j = 0; j < inheritedDefiningAttributeLocalAllowedValues.length; j++) {
+						var allowedValue = inheritedDefiningAttributeLocalAllowedValues[j];
+						var value = allowedValue.getPropertyValue(attributeAllowedValuePropertyName, "AttributeDictionaryAttributeValueDescription");
+						var valueId = allowedValue.getPropertyValue("attrValId");
+						if (value != null && value != "") {
+							allowedValues[valueCount++] = {
+								attributeId: attributeId,
+								value: value,
+								valueId: valueId,
+								isInherited: true
+							};
+						}
+					}
+				}
+				if (valueCount > 0) {
+					total = total * valueCount;
+					allowedValues.length = valueCount;
+					allValues[attributeCount++] = allowedValues;
+				}
+			}
+			allValues.length = attributeCount;
+			return allValues;
+			]]>
+		</method>
+		
+		
+			<!---
+			@keywords private
+			This method returns an array of all the attribute values for all the classic attributes for a product.
+			@param object attributes: The attribute to find the values of.
+			@param boolean isInherited: True if the attributes are inherited, false otherwise. The default value is false.
+		-->
+		<method args="attributes" name="getAttributeValues">
+			<![CDATA[
+			for (var i = 0; i < attributes.length; i++) {
+				if (attributes[i].getPropertyValue("xdata_attrId") == "") {
+					MessageLogger.Singleton.logException(null, catalogResources.Singleton.productIsNotSaved.string);
+					return null;
+				}
+			}
+			var allValues = new Array(attributes.length);
+			var attributeCount = 0;
+			for (var i = 0; i < attributes.length; i++) {
+				var attribute = attributes[i];
+				var attributeId = attribute.getPropertyValue("xdata_attrId");
+				var attributeDataType = attribute.getPropertyValue("attrDataType");
+				var definingAttributeAllowedValues = attribute.getObjects("CatalogEntry" + attributeDataType + "DefiningAttributeAllowedValue");
+				var attributeAllowedValuePropertyName = "allowedAttrVal" + attributeDataType + "Value";
+				var allowedValues = new Array(definingAttributeAllowedValues.length);
+				var valueCount = 0;
+				for (var j = 0; j < definingAttributeAllowedValues.length; j++) {
+					var allowedValue = definingAttributeAllowedValues[j];
+					var value = allowedValue.getPropertyValue(attributeAllowedValuePropertyName, "AttributeAllowedValueLanguageSensitiveObject");
+					if (value != null && value != "") {
+						allowedValues[valueCount++] = {
+							attributeId: attributeId,
+							value: value
+						};
+					}
+				}
+				if (valueCount > 0) {
+					allowedValues.length = valueCount;
+					allValues[attributeCount++] = allowedValues;
+				}
+			}
+			allValues.length = attributeCount;
+			return allValues;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns a count of the number of skus that can be created given an array of attribute values. You must pass in an array of attributes which in turn has an array of values for each of those attributes.
+			@param array allValues: The array of attributes which in turn is an array of attribute values for each of those attributes. 
+		-->
+		<method args="allValues" name="getSKUCount">
+			<![CDATA[
+			var total = 0;
+			if (allValues.length > 0) {
+				for (var i = 0; i < allValues.length; i++) {
+					if (total == 0) {
+						total = allValues[i].length;
+					}
+					else {
+						total = total * allValues[i].length;
+					}
+				}
+			}
+			return total;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method generates the SKUs for the product.
+			@param object action: The action instance.
+		-->
+		<method args="action" name="generateSKUsAction">
+			<![CDATA[
+			var product = action.object;
+			var productCode = product.getPropertyValue("partnumber");
+			var definingAttributes = product.getObjects("CatalogEntryDefiningAttribute");
+			var attrDictDefiningAttributes = product.getObjects("CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+			var attrDictInheritedDefiningAttributes = product.getObjects("CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues");
+			var isAttributeDictionary = false;
+			var attributeCount = 0;
+			var allValues;
+			var allInheritedValues;
+			var total;
+			if ((attrDictDefiningAttributes != null && attrDictDefiningAttributes.length > 0) || (attrDictInheritedDefiningAttributes != null && attrDictInheritedDefiningAttributes.length > 0)) {
+				isAttributeDictionary = true;
+			}
+			if (isAttributeDictionary) {
+				allValues = this.getADAttributeValues(attrDictDefiningAttributes);
+				if (allValues == null) {
+					return;
+				}
+				allInheritedValues = this.getADAttributeValues(attrDictInheritedDefiningAttributes, true);
+				if (allInheritedValues == null) {
+					return;
+				}
+				allValues = allValues.concat(allInheritedValues);
+			}
+			else {
+				allValues = this.getAttributeValues(definingAttributes);
+				if (allValues == null) {
+					return;
+				}
+			}
+			total = this.getSKUCount(allValues);
+			attributeCount = allValues.length;
+			var maxSKUs = 500;
+			if (total > maxSKUs) {
+				MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("limitExceeded", [maxSKUs, GlobalizationUtil.Singleton.formatNumberToDisplayFormat(total, 0), productCode]));
+				total = maxSKUs;
+			}
+			else {
+				if (total == 0) {
+					MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("generatingSKU", [total, productCode]));
+				}
+				else {
+					MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("generatingSKUs", [total, productCode]));
+				}
+			}
+			var skuValues = null;
+			if (attributeCount != 0) {
+				skuValues = new Array(total);
+				for (var i = 0; i < total; i++) {
+					skuValues[i] = new Array(attributeCount);
+				}
+				var repeatTotal = 1;
+				for (var i = 0; i < attributeCount; i++) {
+					var skuIndex = 0;
+					var allowedValues = allValues[i];
+					var allowedValueTotal = allowedValues.length;
+					var allowedValueIndex = 0;
+					var value = allowedValues[0];
+					var repeatCount = 0;
+					for (var j = 0; j < total; j++) {
+						if (repeatCount == repeatTotal) {
+							allowedValueIndex++;
+							if (allowedValueIndex == allowedValueTotal) {
+								allowedValueIndex = 0;
+							}
+							value = allowedValues[allowedValueIndex];
+							repeatCount = 0;
+						}
+						skuValues[j][i] = value;
+						repeatCount++;
+					}
+					repeatTotal *= allowedValueTotal;
+				}
+			}
+			if (skuValues == null || skuValues.length == 1) {
+				if (isAttributeDictionary) {
+					GenerateSKUsUtil.Singleton.createADSKUObject(product, null, skuValues != null ? skuValues[0] : null, true);
+				}
+				else {
+					GenerateSKUsUtil.Singleton.createSKUObject(product, null, skuValues != null ? skuValues[0] : null, true);
+				}
+			}
+			else {
+				for (var i = 0; i < skuValues.length; i++) {
+					if (isAttributeDictionary) {
+						CreateSKUActionHandler.Singleton.triggerAction(product, action.attributes, i + 1, skuValues[i], i == (skuValues.length - 1), true);
+					}
+					else {
+						CreateSKUActionHandler.Singleton.triggerAction(product, null, i + 1, skuValues[i], i == (skuValues.length - 1), false);
+					}
+				}
+			}
+			for (var i = 0; i < product.objectDefinition.navigationListDefinitions.length; i++) {
+				if (product.objectDefinition.navigationListDefinitions[i].name == "ProductChildSKUList") {
+					product.setVariable("open", true);
+					product.model.oEditor.selectOpenObject(product, product.objectDefinition.navigationListDefinitions[i]);
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check to see if the product's children have been loaded.
+			After loading, check if AD defining attributes are used and load values,
+			otherwise do the SKU generation.
+		-->
+		<method args="e" name="checkChildrenLoaded">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var action = this.currentAction;
+			if (action.object.isGetChildrenServicesLoaded(GenerateSKUsUtil.Singleton.getProductChildObjectDefinitions(action.object.objectDefinition), true)) {
+				var attrDictDefiningAttributes = action.object.getObjects("CatalogEntryReferenceDefiningAttributeDictionaryAttributeWithAllowedValues/AttributeDictionaryAttributeWithAllowedValues");
+				var attrDictInheritedDefiningAttributes = action.object.getObjects("CatalogEntryReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues/InheritedAttributeDictionaryAttributeWithAllowedValues");
+				action.attributes = attrDictDefiningAttributes.concat(attrDictInheritedDefiningAttributes);
+				if (action.attributes.length > 0) {
+					action.object.forceParseData = false;
+					this.checkChildrenLoadedDel.disconnectAll();
+					this.checkChildrenErrorDel.disconnectAll();
+					for (var i = 0; i < action.attributes.length; i++) {
+						action.attributes[i].incrementReferenceCount();
+						this.checkAttributeChildrenLoadedDel.connect(action.attributes[i], "onGetChildrenServiceCompleted");
+						this.checkAttributeChildrenErrorDel.connect(action.attributes[i], "onGetChildrenServiceError");
+						action.attributes[i].loadChildren(null, true);
+					}
+				}
+				else {
+					this.generateSKUsAction(action);
+					this.loadComplete();
+				}
+			}
+			else if (!action.object.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check to see if the Attibute's children have been loaded.
+			When loaded, do the SKU generation.
+		-->
+		<method args="e" name="checkAttributeChildrenLoaded">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var action = this.currentAction;
+			var allDone = true;
+			for (var i = 0; i < action.attributes.length; i++) {
+				if (!action.attributes[i].isGetChildrenServicesLoaded(null, true)) {
+					if (!action.attributes[i].isGetChildrenServicesLoading()) {
+						this.loadAttributesComplete();
+					}
+					allDone = false;
+					break;
+				}
+			}
+			if (allDone) {
+				this.generateSKUsAction(action);
+				this.loadAttributesComplete();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private		
+			Check current action to see if the object's get children requests have an error.
+			If there was an error loading the children, then the action will be aborted.
+		-->
+		<method args="service" name="checkChildrenError">
+			<![CDATA[
+			var action = this.currentAction;
+			if (service.matchesObjectDefinitions(action.object.objectDefinition, GenerateSKUsUtil.Singleton.getProductChildObjectDefinitions(action.object.objectDefinition)) || !action.object.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private		
+			Check current action to see if the Attribute's get children requests have an error.
+			If there was an error loading the children, then the action will be aborted.
+		-->
+		<method args="service" name="checkAttributeChildrenError">
+			<![CDATA[
+			var action = this.currentAction;
+			for (var i = 0; i < action.attributes.length; i++) {
+				if (!action.attributes[i].isGetChildrenServicesLoading()) {
+					this.loadAttributesComplete();
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Called when the load is complete to clean up the action handler. This is called in both the
+			success and error case.
+		-->
+		<method name="loadComplete">
+			<![CDATA[
+			var action = this.currentAction;
+			action.object.forceParseData = false;
+			this.checkChildrenLoadedDel.disconnectAll();
+			this.checkChildrenErrorDel.disconnectAll();
+			this.currentAction = null;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Called when the attribute load is complete to clean up the action handler. This is called in both the
+			success and error case.
+		-->
+		<method name="loadAttributesComplete">
+			<![CDATA[
+			var action = this.currentAction;
+			this.checkAttributeChildrenLoadedDel.disconnectAll();
+			this.checkAttributeChildrenErrorDel.disconnectAll();
+			this.currentAction = null;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		This action handler is used to generate one SKU for the product.
+	-->
+	<Node definitionName="cmc/catalog/CreateSKUActionHandler" singletonDefinition="true">
+		<dependency localName="GenerateSKUsUtil" moduleName="cmc/catalog/GenerateSKUsUtil"/>
+		<!---
+			Trigger the action.
+			@param cmc/foundation/ModelObject product: The product object.
+			@param cmc/foundation/ModelObject attributes[]: Array of AD defining attribute objects. May be null.
+			@param Integer indexSKU: The i'th SKU to be created.
+			@param Array attributeValues: An array of attribute values for this SKU.
+			@param boolean last: If true, indicates this is the last SKU generated.
+		-->
+		<method args="product, attributes, indexSKU, attributeValues, last, isAttributeDictionary" name="triggerAction">
+			<![CDATA[
+			if (typeof(isAttributeDictionary) == "undefined") isAttributeDictionary = false;
+			product.incrementReferenceCount();
+			if (attributes != null) {
+				for (var i = 0; i < attributes.length; i++) {
+					attributes[i].incrementReferenceCount();
+				}
+			}
+			var action = {
+				actionHandler: this,
+				product: product,
+				attributes: attributes,
+				indexSKU: indexSKU,
+				attributeValues: attributeValues,
+				model: product.model,
+				last: last,
+				isAttributeDictionary: isAttributeDictionary
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the action.
+			@param Object action: The action instance.
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.product.decrementReferenceCount();
+			if (action.attributes != null) {
+				for (var i = 0; i < action.attributes.length; i++) {
+					action.attributes[i].decrementReferenceCount();
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Perform the create action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			if (action.isAttributeDictionary) {
+				GenerateSKUsUtil.Singleton.createADSKUObject(action.product, action.indexSKU, action.attributeValues, action.last);
+			}
+			else {
+				GenerateSKUsUtil.Singleton.createSKUObject(action.product, action.indexSKU, action.attributeValues, action.last);
+			}
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		Utility methods used for SKU creation.
+	-->
+	<Node definitionName="cmc/catalog/GenerateSKUsUtil" singletonDefinition="true">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			@keywords private
+			This method creates a SKU for a product based on the selected combination where the attributes are from the attribute dictionary.
+			of defining attributes. 
+			@param cmc/foundation/ModelObject product: The product object.
+			@param Integer indexSKU: The i'th SKU to be created.
+			@param Array attributeValues: Array of attribute values for this SKU.
+			@param boolean last: If true, indicates this is the last SKU generated.
+		-->
+		<method args="product, indexSKU, attributeValues, last" name="createADSKUObject">
+			<![CDATA[
+			if (typeof(indexSKU) == "undefined") indexSKU = null;
+			if (typeof(attributeValues) == "undefined") attributeValues = null;
+			if (typeof(last) == "undefined") last = false;
+			var oDef = product.model.getObjectDefinition(null, "ProductSKU");
+			var sku = product.model.createNewObject(oDef, null, true, product);
+			var extraObjects = product.getObjects("CatalogEntryOffer");
+			oDef = product.model.getObjectDefinition(sku, "CatalogEntryOffer");
+			for (var i = 0; i < extraObjects.length; i++) {
+				product.model.createNewObject(oDef, sku, true, extraObjects[i]);
+			}
+			if (attributeValues != null) {
+				for (var i = 0; i < attributeValues.length; i++) {
+					var newObject;
+					if (attributeValues[i].isInherited) {
+						newObject = sku.getObject("ProductSKUReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues[attrId=" + attributeValues[i].attributeId + "]", true);
+					}
+					else {
+						newObject = sku.getObject("ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues[attrId=" + attributeValues[i].attributeId + "]", true);
+					}
+					newObject.setPropertyValue("attrValId", null, attributeValues[i].valueId);
+				}
+			}
+			oDef = product.objectDefinition.getChildDefinition("ProductChildSKU");
+			var ro = product.model.createNewObject(oDef, product);
+			ro.addChild(sku);
+			var skuCode = this.createSKUCode(product.getPropertyValue("partnumber"), indexSKU);
+			sku.setPropertyValue("partnumber", null, skuCode);
+			if (last) {
+				if (indexSKU == null) {
+					MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("generatingSKUDone", [product.getPropertyValue("partnumber")]));
+				}
+				else {
+					MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("generatingSKUsDone", [indexSKU, product.getPropertyValue("partnumber")]));
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method creates a SKU for a product based on the selected combination
+			of defining attributes. 
+			@param cmc/foundation/ModelObject product: The product object.
+			@param Integer indexSKU: The i'th SKU to be created.
+			@param Array attributeValues: Array of attribute values for this SKU.
+			@param boolean last: If true, indicates this is the last SKU generated.
+		-->
+		<method args="product, indexSKU, attributeValues, last" name="createSKUObject">
+			<![CDATA[
+			if (typeof(indexSKU) == "undefined") indexSKU = null;
+			if (typeof(attributeValues) == "undefined") attributeValues = null;
+			if (typeof(last) == "undefined") last = false;
+			var oDef = product.model.getObjectDefinition(null, "ProductSKU");
+			var sku = product.model.createNewObject(oDef, null, true, product);
+			var extraObjects = product.getObjects("CatalogEntryOffer");
+			oDef = product.model.getObjectDefinition(sku, "CatalogEntryOffer");
+			for (var i = 0; i < extraObjects.length; i++) {
+				product.model.createNewObject(oDef, sku, true, extraObjects[i]);
+			}
+			if (attributeValues != null) {
+				for (var i = 0; i < attributeValues.length; i++) {
+					var newObject = sku.getObject("SKUDefiningAttribute[xdata_attrId=" + attributeValues[i].attributeId + "]", true);
+					newObject.setPropertyValue("attrValValue", null, attributeValues[i].value);
+				}
+			}
+			oDef = product.objectDefinition.getChildDefinition("ProductChildSKU");
+			var ro = product.model.createNewObject(oDef, product);
+			ro.addChild(sku);
+			var skuCode = this.createSKUCode(product.getPropertyValue("partnumber"), indexSKU);
+			sku.setPropertyValue("partnumber", null, skuCode);
+			if (last) {
+				if (indexSKU == null) {
+					MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("generatingSKUDone", [product.getPropertyValue("partnumber")]));
+				}
+				else {
+					MessageLogger.Singleton.logStatus(catalogResources.Singleton.replaceValues("generatingSKUsDone", [indexSKU, product.getPropertyValue("partnumber")]));
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the product child object definitions necessary to generate SKUs.
+			@param cmc/foundation/ObjectDefinition objectDefinition: The product object definition.
+		-->
+		<method args="objectDefinition" name="getProductChildObjectDefinitions">
+			<![CDATA[
+			var definitions = objectDefinition.getCopyObjectDefinitions();
+			definitions.push(objectDefinition.getChildDefinition("CatalogEntryOffer"));
+			definitions.push(objectDefinition.getChildDefinition("CatalogEntryDefiningAttribute"));
+			return definitions;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method creates the SKU code based on the product code.
+			If the product code has not been set, the SKU code will be an empty string.
+			@param String productCode: The product code.
+			@param int index: The index of the SKU being created. Index starts at 1 if not null.
+			@return String The new display name/code for the SKU object.
+		-->
+		<method args="productCode, index" name="createSKUCode">
+			<![CDATA[
+			if (typeof(index) == "undefined") index = null;
+			var trimmedCode = StringUtil.Singleton.trim(productCode);
+			if (trimmedCode.length == 0) {
+				return "";
+			}
+			var indexPart = "_SKU";
+			if (index != null) {
+				indexPart = "_SKU_" + index;
+			}
+			var code = productCode + indexPart;
+			if (code.length > 64) {
+				code = productCode.slice(0, 64 - indexPart.length) + indexPart;
+			}
+			return code;
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private 
+		This action performs the SKU generation client action on the specified object.
+		This action accepts the following parameter:
+		<ul>
+		<li>object - The name of the object. This name must match the <code>objectKey</code>
+		parameter of a previous action that created or located the object. 
+		This parameter is required.</li>
+		</ul>
+	-->
+	<Node definitionName="cmc/catalog/AutoRunClientAction" singletonDefinition="true">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<method args="action" name="execute">
+			<![CDATA[
+			var params = AutomationUtil.Singleton.parseParameters(action);
+			if (params.object) {
+				var o = AutomationUtil.Singleton.getObject(params.object);
+				require(["cmc/catalog/GenerateSKUsActionHandler"], function(GenerateSKUsActionHandler) {
+					GenerateSKUsActionHandler.Singleton.triggerAction(o);
+				});
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/catalog/AutoRunClientAction", "execute", "Missing 'object' parameter.");
+				AutomationUtil.Singleton.abort();
+			}
+			]]>
+		</method>
+	</Node>
+	
+</Definitions>

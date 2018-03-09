@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp.  2016. All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<_config:DIHPreProcessConfig xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../../xsd/wc-dataimport-preprocess.xsd">
+
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  batchSize="500">
+		<_config:table definition="CREATE TABLE TI_CATGRPREL_#INDEX_SCOPE_TAG#_#lang_tag# (CATGROUP_ID BIGINT NOT NULL, SEQUENCE VARCHAR(10240), PRIMARY KEY (CATGROUP_ID))" name="TI_CATGRPREL_#INDEX_SCOPE_TAG#_#lang_tag#"/>
+		<_config:query sql="(
+		SELECT CATGRPREL.CATGROUP_ID_CHILD CATGROUP_ID, rtrim(cast(CATGRPREL.CATALOG_ID as char(23))) ||'_'|| rtrim(cast(CATGRPREL.CATGROUP_ID_PARENT as char(23))) ||'_'|| rtrim(cast(cast(CATGRPREL.SEQUENCE as decimal(20,5)) as char(26))) SEQUENCE 
+			FROM CATGRPREL, TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# CG, TI_GCGPUB_#INDEX_SCOPE_TAG# CD
+			WHERE CATGRPREL.CATGROUP_ID_CHILD=CG.CATGROUP_ID AND CG.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?unpublished?, ?published?)
+		) UNION (
+		SELECT CATTOGRP.CATGROUP_ID CATGROUP_ID, rtrim(cast(CATTOGRP.CATALOG_ID as char(23))) ||'_'||'-1'||'_'|| rtrim(cast(cast(CATTOGRP.SEQUENCE as decimal(20,5)) as char(26))) SEQUENCE 
+			FROM CATTOGRP, TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# CG, TI_GCGPUB_#INDEX_SCOPE_TAG# CD
+			WHERE CATTOGRP.CATGROUP_ID=CG.CATGROUP_ID AND CG.CATGROUP_ID = CD.CATGROUP_ID AND CD.PUBLISHED IN (?unpublished?, ?published?)
+		) 
+		ORDER BY CATGROUP_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATGROUP_ID" tableColumn="CATGROUP_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="SEQUENCE" tableColumn="SEQUENCE" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+	</_config:data-processing-config>
+   
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  batchSize="500">
+		<_config:table definition="CREATE TABLE TI_GDPGROUP_#INDEX_SCOPE_TAG#_#lang_tag# (CATGROUP_ID BIGINT NOT NULL, CATGROUP VARCHAR(10240), PRIMARY KEY (CATGROUP_ID))" name="TI_GDPGROUP_#INDEX_SCOPE_TAG#_#lang_tag#"/>
+		<_config:query sql="(
+		SELECT CATGRPREL.CATGROUP_ID_CHILD CATGROUP_ID, rtrim(cast(CATGRPREL.CATALOG_ID as char(23))) ||'_'|| rtrim(cast(CATGRPREL.CATGROUP_ID_PARENT as char(23))) CATGROUP
+			FROM CATGRPREL, TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# CG, TI_GCGPUB_#INDEX_SCOPE_TAG# CD
+			WHERE CATGRPREL.CATGROUP_ID_CHILD=CG.CATGROUP_ID AND CATGRPREL.CATGROUP_ID_PARENT = CD.CATGROUP_ID AND CD.PUBLISHED IN (?unpublished?, ?published?)
+		)	UNION (
+		SELECT CATTOGRP.CATGROUP_ID CATGROUP_ID, rtrim(cast(CATTOGRP.CATALOG_ID as char(23))) ||'_'|| '-1' CATGROUP
+			FROM CATTOGRP, TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# CG
+			WHERE CATTOGRP.CATGROUP_ID=CG.CATGROUP_ID
+		)
+		ORDER BY CATGROUP_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATGROUP_ID" tableColumn="CATGROUP_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="CATGROUP" tableColumn="CATGROUP" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+	</_config:data-processing-config>
+   
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  batchSize="500">
+		<_config:table definition="CREATE TABLE TI_CGSEOURL_#INDEX_SCOPE_TAG#_#lang_tag# (CATGROUP_ID BIGINT NOT NULL, SEO_TOKEN VARCHAR(256), PRIMARY KEY (CATGROUP_ID))" name="TI_CGSEOURL_#INDEX_SCOPE_TAG#_#lang_tag#"/>
+		<_config:query sql="SELECT CG.CATGROUP_ID, SEOURLKEYWORD.URLKEYWORD SEO_TOKEN
+				  FROM SEOURL, SEOURLKEYWORD, TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# CG
+				 WHERE char(CG.CATGROUP_ID) = SEOURL.TOKENVALUE
+				 AND SEOURL.SEOURL_ID = SEOURLKEYWORD.SEOURL_ID
+				 AND SEOURL.TOKENNAME = 'CategoryToken'
+			   AND SEOURLKEYWORD.LANGUAGE_ID = ?language_id?
+			   AND SEOURLKEYWORD.STATUS = 1
+			 ORDER BY CATGROUP_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATGROUP_ID" tableColumn="CATGROUP_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="SEO_TOKEN" tableColumn="SEO_TOKEN" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+	</_config:data-processing-config>
+  
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  batchSize="500">
+		<_config:table definition="CREATE TABLE TI_DCCATGRP_#INDEX_SCOPE_TAG#_#lang_tag# (CATGROUP_ID BIGINT NOT NULL, DCCATGRP VARCHAR(10240), PRIMARY KEY (CATGROUP_ID))" name="TI_DCCATGRP_#INDEX_SCOPE_TAG#_#lang_tag#"/>
+		<_config:query sql="SELECT CATGRPREL.CATGROUP_ID_PARENT CATGROUP_ID, rtrim(cast(CATGRPREL.CATALOG_ID as char(23))) ||'_'|| 
+							rtrim(cast(CATGRPREL.CATGROUP_ID_CHILD as char(23))) DCCATGRP 
+							FROM CATGRPREL, TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# CG, TI_GCGPUB_#INDEX_SCOPE_TAG# CD
+							WHERE CATGRPREL.CATGROUP_ID_PARENT=CG.CATGROUP_ID AND CATGRPREL.CATGROUP_ID_CHILD = CD.CATGROUP_ID AND CD.PUBLISHED IN (?unpublished?, ?published?)
+							ORDER BY CATGRPREL.CATGROUP_ID_PARENT, CATGRPREL.CATALOG_ID, CATGRPREL.SEQUENCE, CATGRPREL.CATGROUP_ID_CHILD"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATGROUP_ID" tableColumn="CATGROUP_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="DCCATGRP" tableColumn="DCCATGRP" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+	</_config:data-processing-config>
+  
+	<_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor"  batchSize="500">
+		<_config:table definition="CREATE TABLE TI_CATGRP_#INDEX_SCOPE_TAG#_#lang_tag# (CATGROUP_ID BIGINT NOT NULL, CATALOGGROUP VARCHAR(10240), PRIMARY KEY (CATGROUP_ID))" name="TI_CATGRP_#INDEX_SCOPE_TAG#_#lang_tag#"/>
+		<_config:query sql="(SELECT CATGRPREL.CATGROUP_ID_CHILD CATGROUP_ID, 
+							rtrim(cast(CATGRPREL.CATALOG_ID as char(23))) ||'_'|| rtrim(cast(CATGRPREL.CATGROUP_ID_CHILD as char(23))) CATALOGGROUP
+						FROM CATGRPREL
+						INNER JOIN TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# ON (CATGRPREL.CATGROUP_ID_CHILD=TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag#.CATGROUP_ID)
+						) UNION (
+						SELECT CATTOGRP.CATGROUP_ID CATGROUP_ID, 
+						rtrim(cast(CATTOGRP.CATALOG_ID as char(23))) ||'_'|| rtrim(cast(CATTOGRP.CATGROUP_ID as char(23))) CATALOGGROUP
+							FROM CATTOGRP
+							INNER JOIN TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag# ON (CATTOGRP.CATGROUP_ID=TI_CGCATALOG_#INDEX_SCOPE_TAG#_#lang_tag#.CATGROUP_ID)
+						)
+						ORDER BY CATGROUP_ID"/>
+		<_config:mapping>
+		  <_config:key queryColumn="CATGROUP_ID" tableColumn="CATGROUP_ID"/>
+		  <_config:column-mapping>
+			<_config:column-column-mapping>
+				<_config:column-column queryColumn="CATALOGGROUP" tableColumn="CATALOGGROUP" />
+			</_config:column-column-mapping>
+			</_config:column-mapping>
+		</_config:mapping>
+	</_config:data-processing-config>
+
+</_config:DIHPreProcessConfig>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","de",{fontSize:{label:"Größe",voiceLabel:"Schriftgröße",panelTitle:"Schriftgröße"},label:"Schriftart",panelTitle:"Schriftartname",voiceLabel:"Schriftart"});

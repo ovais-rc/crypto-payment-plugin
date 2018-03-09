@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<BaseListComponent classDefinition="true" definitionName="cmc/foundation/BaseTabSlider">
+		<dependency localName="BaseTabElement" moduleName="cmc/foundation/BaseTabElement"/>
+		<variable name="spacing" value="0" type="number"/>
+		<variable name="slideDuration" type="number" value="300"/>
+		<variable name="minTabHeight" type="number" value="22"/>
+		<variable name="totalminheight" type="number" value="0"/>
+		<variable name="availableheight" type="number" value="0"/>
+
+		<method name="init">
+			<![CDATA[
+			this.calcAvailableHeight();
+			this.inherited(arguments);
+			]]>
+		</method>
+
+        <method name="resetHeight"/>
+
+		<method name="set_height" args="value">
+			<![CDATA[
+			if (value != height) {
+				this.inherited(arguments);
+				this.resetHeight();
+			}
+			]]>
+		</method>
+
+		<handler name="onaddChildComponent" args="c">
+			<![CDATA[
+			if (typeof(c.minheight) == "undefined") {
+				if (c instanceof BaseTabElement.Class) {
+					c.setVariable("minheight", this.minTabHeight);
+				}
+			}
+			this.calcAvailableHeight();
+			]]>
+		</handler>
+
+		<method name="openTab" args="tabelement"/>
+
+		<method name="openNext"/>
+
+        <method name="calcAvailableHeight"/>
+	</BaseListComponent>
+	
+	<BaseListItem classDefinition="true" definitionName="cmc/foundation/BaseTabElement" width="${this.parent.width}" focusable="true" clickable="false">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Animator" moduleName="cmc/foundation/Animator"/>
+        <variable name="contentvisible" initialValue="${this.hideOnClose}"/>
+		<variable name="minheight" value="22" type="number"/>
+		<variable name="height" initialValue="${this.minheight}"/>
+		<variable name="openAnimator" value="null" type="expression"/>
+		<variable name="closeAnimator" value="null" type="expression"/>
+
+        <event name="onopenstart"/>
+		<event name="onopenstop"/>
+		<event name="onclosestart"/>
+		<event name="onclosestop"/>
+
+		<method name="open" args="h,d,withAnimation">
+			<![CDATA[ 
+			this.setVariable("contentvisible", true);
+			EventUtil.trigger(this, "onopenstart");
+			if (this.closeAnimator != null) {
+				this.closeAnimator.doStop();
+			}
+			if (this.resizeAnimator != null) {
+				this.resizeAnimator.doStop();
+			}
+			if (withAnimation) {
+				if (this.openAnimator == null) {
+					this.openAnimator = new Animator.Class(this, {
+						variable: "height",
+						to: h,
+						duration: d,
+						start: false
+					});
+					EventUtil.connect(this.openAnimator, "onstop", this, "opened");
+				}
+				this.openAnimator.to = h;
+				this.openAnimator.duration = d;
+				this.openAnimator.doStart();
+			}
+			else {
+				this.setVariable("height", h + this.minheight);
+				this.opened(null);
+			}
+			this.setVariable("focusable", false);
+			]]>
+		</method>
+
+		<method name="close" args="h,d">
+			<![CDATA[
+			if (this.openAnimator != null) {
+				this.openAnimator.doStop();
+			}
+			if (this.resizeAnimator != null) {
+				this.resizeAnimator.doStop();
+			}
+			EventUtil.trigger(this, "onclosestart");
+			if (this.closeAnimator == null) {
+				this.closeAnimator = new Animator.Class(this, {
+					variable: "height",
+					to: h,
+					duration: d,
+					start: false
+				});
+				EventUtil.connect(this.closeAnimator, "onstop", this, "closed");
+			}
+			this.closeAnimator.to = h;
+			this.closeAnimator.duration = d;
+			this.closeAnimator.doStart();
+			this.setVariable("focusable", true);
+			]]>
+		</method>
+
+		<method name="resize" args="h,d">
+			<![CDATA[
+			if (this.openAnimator != null) {
+				this.openAnimator.doStop();
+			}
+			if (this.closeAnimator != null) {
+				this.closeAnimator.doStop();
+			}
+			if (this.resizeAnimator == null) {
+				this.resizeAnimator = new Animator.Class(this, {
+					variable: "height",
+					to: h,
+					duration: d,
+					start: false
+				});
+			}
+			this.resizeAnimator.to = h;
+			this.resizeAnimator.duration = d;
+			this.resizeAnimator.doStart();
+			]]>
+		</method>
+
+<!--
+		<method name="setSelected" args="isSelected">
+			<![CDATA[
+            this.inherited(arguments);
+			if (parent._initcomplete) {
+				if (isSelected) {
+					this.open(this.height + this.parent.availableheight, this.parent.slideduration, true);
+				}
+				else {
+					this.close(this.height - this.parent.availableheight, this.parent.slideduration);
+				}
+			}
+			]]>
+		</method>
+-->
+
+		<method name="doSpaceUp">
+			<![CDATA[
+			this.setVariable("selected", true);
+			]]>
+		</method>
+
+		<method name="opened" args="animator">
+			<![CDATA[
+			EventUtil.trigger(this, "onopenstop");
+			]]>
+		</method>
+
+		<method name="closed">
+			<![CDATA[
+			EventUtil.trigger(this, "onclosestop");
+			this.setVariable("contentvisible", false);
+			]]>
+		</method>
+	</BaseListItem>
+</Definitions>

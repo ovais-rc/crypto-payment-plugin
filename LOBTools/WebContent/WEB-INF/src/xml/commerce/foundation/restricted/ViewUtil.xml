@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		View utility methods.
+	-->
+	<Node definitionName="cmc/foundation/ViewUtil" singletonDefinition="true">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Last recorded mouse "x" position.
+		-->
+		<variable name="mouseX" value="${null}"/>
+		<!---
+			Last recorded mouse "y" position.
+		-->
+		<variable name="mouseY" value="${null}"/>
+		<!---
+			Last time the mouse move was detected.
+		-->
+		<variable name="lastMouseMove" type="number" value="0"/>
+		<!---
+			Last view that fired the mouse over event
+		-->
+		<variable name="mouseOverView" value="${null}"/>
+		<!---
+			Indicates that the mouse is currently down.
+		-->
+		<variable name="mouseDown" type="boolean" value="false"/>
+		<!---
+			Last time a keyboard action was detected.
+		-->
+		<variable name="lastKeyStroke" type="number" value="0"/>
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkMouseMoveDel = new EventHandler.Class(this, "checkMouseMove");
+			Timer.addTimer(this.checkMouseMoveDel, 50);
+			]]>
+		</method>
+		
+		<!---
+			Utility method used to release all the layouts for a view.
+			@START_CODE
+			ViewUtil.releaseLayouts(v);
+			@END_CODE
+
+			@param view v: the view to destroy
+		-->
+		<method args="v" name="releaseLayouts">
+			<![CDATA[
+			if (v.layouts) {
+				var layouts = v.layouts;
+				while (layouts.length > 0) {
+					layouts[0].releaseLayout();
+				}
+			}
+			for (var i = 0; i < v.childComponents.length; i++) {
+				this.releaseLayouts(v.childComponents[i]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Utility method used to check if the first view is an ancestor
+			of the second view.
+			@param view v1: the anscestor view to check
+			@param view v2: the descendant view to check
+		-->
+		<method args="v1, v2" name="checkDescendant">
+			<![CDATA[
+			var found = false;
+			var v = v2;
+			do {
+				if (v == v1) {
+					found = true;
+					break;
+				}
+				if (v.immediateParent && v != v.immediateParent) {
+					v = v.immediateParent;
+				}
+				else {
+					v = null;
+				}
+			}
+			while (v);
+			return found;
+			]]>
+		</method>
+		
+		<!---
+			Locate the closest ancestor view that has an "availableHeight" attribute.
+		-->
+		<method args="v" name="getAvailableHeightView">
+			<![CDATA[
+			var availableHeightView = null;
+			while (v != null && v != RootComponent.Singleton) {
+				v = v.immediateParent;
+				if (typeof v.availableHeight != "undefined") {
+					availableHeightView = v;
+					break;
+				}
+			}
+			return availableHeightView;
+			]]>
+		</method>
+		
+		<!---
+			Locate the closest ancestor view that has an "availableWidth" attribute.
+		-->
+		<method args="v" name="getAvailableWidthView">
+			<![CDATA[
+			var availableWidthView = null;
+			while (v != null && v != RootComponent.Singleton) {
+				v = v.immediateParent;
+				if (typeof v.availableWidth != "undefined") {
+					availableWidthView = v;
+					break;
+				}
+			}
+			return availableWidthView;
+			]]>
+		</method>
+		
+		<!---
+			Locate the closest ancestor view that has the "visible" attribute set to false.
+			@param view v: the view
+		-->
+		<method args="v" name="getInvisibleAncestor">
+			<![CDATA[
+			var invisibleView = null;
+			while (v != null && v != RootComponent.Singleton) {
+				v = v.immediateParent;
+				if (!v.visible) {
+					invisibleView = v;
+					break;
+				}
+			}
+			return invisibleView;
+			]]>
+		</method>
+		
+		<!---
+			Register delegate to listen to the "onvisible" event for the specified view and all ancestors.
+			@param view v: the view
+		-->
+		<method args="v, del" name="registerVisibilityDelegate">
+			<![CDATA[
+			while (v != null && v != RootComponent.Singleton) {
+				del.connect(v, "onvisible");
+				v = v.immediateParent;
+			}
+			]]>
+		</method>
+
+		<!---
+			Check if the specified view is contained in the active modal view or there is no active modal view.
+			@param view v: the child view
+		-->
+		<method args="v" name="containedInModalView">
+			<![CDATA[
+			var modal = ModalUtil.getModalComponent();
+			return modal == null || this.containsView(modal, v);
+			]]>
+		</method>
+				
+		<!---
+			Check if the specified view contains the view.
+			@param view containerView: the container view
+			@param view v: the child view
+		-->
+		<method args="containerView, v" name="containsView">
+			<![CDATA[
+			var result = false;
+			while (v != null && v != RootComponent.Singleton) {
+				if (v == containerView) {
+					result = true;
+					break;
+				}
+				v = v.immediateParent;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Utility method that will return the number of milliseconds since the last time the mouse moved.
+		-->
+		<method name="getLastMouseMove">
+			<![CDATA[
+			this.checkMouseMove();
+			this._now = new Date();
+			var result = this._now.getTime() - this.lastMouseMove;
+			delete this._now;
+			return result;
+			]]>
+		</method>
+		
+		<method args="v" name="isMouseOver">
+			<![CDATA[
+			if (this.getInvisibleAncestor(v) == null && v.visible) return v.containsPt(v.getMouse("x"), v.getMouse("y"));
+			else return false;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+		-->
+		<handler args="who" eventSource="MouseUtil" name="onmouseover">
+			<![CDATA[
+			this.mouseOverView = who;
+			]]>
+		</handler>
+
+		<handler args="who" eventSource="MouseUtil" name="onmousedown">
+			<![CDATA[
+			this.setVariable("mouseDown", true);
+			]]>
+		</handler>
+
+		<handler args="who" eventSource="MouseUtil" name="onmouseup">
+			<![CDATA[
+			this.setVariable("mouseDown", false);
+			]]>
+		</handler>
+
+		<!---
+			Watch the mouse and record the last mouse move.
+		-->
+		<method name="checkMouseMove">
+			<![CDATA[
+			var newMouseX = RootComponent.Singleton.getMouse("x");
+			var newMouseY = RootComponent.Singleton.getMouse("y");
+			if (this.mouseX != newMouseX || this.mouseY != newMouseY) {
+				this.mouseX = newMouseX;
+				this.mouseY = newMouseY;
+				this._now = new Date();
+				this.lastMouseMove = this._now.getTime();
+				delete this._now;
+			}
+			Timer.resetTimer(this.checkMouseMoveDel, 50);
+			]]>
+		</method>
+		
+		<!---
+			Utility method that will return the number of milliseconds since the last time the keyboard action
+			was detected
+		-->
+		<method name="getLastKeyStroke">
+			<![CDATA[
+			this._now = new Date();
+			var result = this._now.getTime() - this.lastKeyStroke;
+			delete this._now;
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Listen to the onkeydown method and record the time that the keyboard action was last detected
+		-->
+		<handler eventSource="KeyUtil" name="onkeydown">
+			<![CDATA[
+			this._now = new Date();
+			this.lastKeyStroke = this._now.getTime();
+			delete this._now;
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Log a message when the modal view changes.
+		-->
+		<handler args="m" eventSource="ModalUtil" name="onmode">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "INFO", "cmc/foundation/ViewUtil", "onmode", "New modal view: " + m);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Get the default font size.
+			@param cmc/foundation/EventHandler del: a delegate that will be registered to events that affect the default font size
+		-->
+		<method args="del" name="getDefaultFontSize">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var localeValue = ContextUtil.Singleton.findContextValue(null, "locale", del);
+			var defaultFontSize = ConfigProperties.Singleton.localeDefaultFontSizes[localeValue.value];
+			if (typeof (defaultFontSize) == "undefined") {
+				defaultFontSize = ConfigProperties.Singleton.defaultFontSize;
+			}
+			return defaultFontSize;
+			]]>
+		</method>
+	</Node>
+</Definitions>

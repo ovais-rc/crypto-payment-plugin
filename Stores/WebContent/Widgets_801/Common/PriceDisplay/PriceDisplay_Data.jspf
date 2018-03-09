@@ -1,0 +1,586 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%-- LinkedHashMap to retain order --%>
+<wcf:useBean var="localizedQuantityPriceMap" classname="java.util.LinkedHashMap"/>
+
+<c:set var="productId" value="${WCParam.productId}" />
+
+<c:if test="${empty catalogEntryDetails}" >
+	<c:if test="${!empty productId}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}"  >
+				<wcf:param name="langId" value="${langId}" />
+				<wcf:param name="currency" value="${env_currencyCode}" />
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+			</wcf:rest>
+		</c:catch>
+	</c:if>
+	<c:if test="${empty productId && !empty WCParam.partNumber}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/${WCParam.partNumber}" >
+				<wcf:param name="langId" value="${langId}" />
+				<wcf:param name="currency" value="${env_currencyCode}" />
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+			</wcf:rest>
+		</c:catch>
+	</c:if>
+	<c:if test="${!empty catalogNavigationView && !empty catalogNavigationView.catalogEntryView[0]}">
+		<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+		<c:set property="productId" value="${catalogEntryDetails.uniqueID}" target="${WCParam}"/>
+		<c:set var="productId" value="${WCParam.productId}" />
+	</c:if>
+</c:if>
+
+<c:set var="minimumPrice" value=""/>
+<c:set var="maximumPrice" value=""/>
+
+<c:set var="emptyPriceString" value=""/>
+<c:set var="priceString" value=""/>
+<c:remove var="indexedPrice"/>
+<c:remove var="listPrice"/>
+<c:remove var="calculatedPrice"/>
+<c:remove var="minimumPriceString"/>
+<c:remove var="maximumPriceString"/>
+<c:set var="dataBean" value="true"/>
+<c:remove var="rangePrice" />
+
+<c:set var="catalogEntryID" value="${catalogEntryDetails.uniqueID}"/>
+<c:set var="listPriced" value="false"/>
+<c:forEach var="price" items="${catalogEntryDetails.price}" >
+	<c:choose>
+		<c:when test="${price.usage == 'Display'}">
+			<c:set var="displayPrice" value="${price.value}" />
+			<c:set var="listPrice" value="${price}" />
+			<c:set var="listPriced" value="true"/>
+		</c:when>
+		<c:when test="${price.usage == 'Offer'}">
+			<c:set var="calculatedPrice" value="${price}" />
+		</c:when>
+	</c:choose>
+</c:forEach>
+
+<wcst:alias name="StoreHelper" var="priceMode">
+	<wcf:param name="parameter" value=""/>
+	<wcf:param name="parameter" value="${storeId}"/>
+</wcst:alias>
+
+<c:if test="${empty calculatedPriceFlag}">
+	<c:choose>
+		<c:when test="${priceMode == '0'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+		<c:when test="${priceMode == '1'}">
+			<c:set var="calculatedPriceFlag" value="false"/>
+		</c:when>
+		<c:when test="${priceMode == '2'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+	</c:choose>
+</c:if>
+
+<!--  If leverage price rule to get the price, get the contract unit price. -->
+<c:choose>
+ <c:when test="${calculatedPriceFlag == 'true'}">
+ 	
+	<c:set var="numberOfSKUs" value="${catalogEntryDetails.numberOfSKUs}"/>
+	<c:set var="entitledItems" value="${catalogEntryDetails.sKUs}"/>
+
+	<c:set var="minimumPrice" value=""  />
+	<c:set var="maximumPrice" value=""  />
+	
+	<c:set var="defaultDisplayPriceRuleName" value="List price rule"/>
+
+	<wcf:rest var="displayPriceResult" url="/store/{storeId}/display_price">
+		<wcf:var name="storeId" value="${WCParam.storeId}" />
+		<wcf:param name="q" value="byCatalogEntryIdsAndPriceRuleName"/>
+		<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}"/>
+		<wcf:param name="priceRuleName" value="${defaultDisplayPriceRuleName}"/>
+	</wcf:rest>
+	<c:set var="displayPriceType" value="${displayPriceResult.resultList[0]}"  />
+	
+	<c:if test="${null!=displayPriceType}">
+		<c:forEach var="aUnitPrice" items="${displayPriceType.unitPrice}" begin="0" end="0">
+			<c:set var="listPriced" value="true"/>
+			<c:set var="listPrice" value="${aUnitPrice.price}"/>
+		</c:forEach>
+	</c:if>
+	<c:choose>
+		<c:when test="${type eq 'product' && !empty numberOfSKUs}">
+		<!--  Get all the price of the SKU and get the maximum and minimum price. -->
+		<c:catch>
+			<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+				<wcf:var name="storeId" value="${WCParam.storeId}" />
+				<wcf:param name="q" value="byCatalogEntryIds"/>
+				<c:forEach var="entitledItem" items="${entitledItems}">
+					<wcf:param name="catalogEntryId" value="${entitledItem.uniqueID}"/>
+				</c:forEach>
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="checkEntitlement" value="false"/>
+			</wcf:rest>
+			<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+			<c:if test="${displayPriceRange eq 'true'}">
+				<wcf:rest var="rangePricesResult" url="/store/{storeId}/price">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="q" value="byCatalogEntryIds"/>
+					<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="checkEntitlement" value="false"/>
+					<wcf:param name="profileName" value="IBM_Store_EntitledPrice_RangePrice_All"/>
+				</wcf:rest>
+				<c:set var="rangePrices" value="${rangePricesResult.EntitledPrice}"  />
+				
+			</c:if>
+		</c:catch>
+	 	<c:if test="${null!=entitledPrices}">
+			<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+				<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+				   <c:if test="${idx.index == 0}">
+				   		<c:set var="maximumPrice" value="${unitPrice.price.value}" />
+				   		<c:set var="minimumPrice" value="${unitPrice.price.value}" />
+				   </c:if>
+				   <c:if test="${!empty unitPrice.price.value && unitPrice.price.value > maximumPrice}">
+				   		<c:set var="maximumPrice" value="${unitPrice.price.value}" />
+				   </c:if>
+				   <c:if test="${!empty unitPrice.price.value && unitPrice.price.value < minimumPrice}">
+				   		<c:set var="minimumPrice" value="${unitPrice.price.value}" />
+				   </c:if>
+				</c:forEach>
+			</c:forEach>
+		</c:if>
+		<c:if test="${empty minimumPrice}">
+			<c:set var="minimumPriceString">
+				<fmt:formatNumber value="${minimumPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+		</c:set>
+		</c:if>
+		<c:if test="${empty maximumPrice}">
+			<c:set var="maximumPriceString">
+				<fmt:formatNumber value="${maximumPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+		</c:if>
+		
+		<c:if test="${minimumPrice == maximumPrice && !empty minimumPrice && !empty maximumPrice}">
+			<c:set var="offerPrice" value="${minimumPrice}"/>
+		</c:if>
+		
+		<c:forEach var="eachRangePrice" items="${rangePrices}" varStatus="idx">
+					<c:if test="${!empty eachRangePrice.RangePrice}">
+						<c:set var="rangePrice" value="${eachRangePrice.RangePrice}"/>
+					</c:if>
+		</c:forEach>
+			
+		</c:when>
+		<c:when test="${type eq 'bundle'}">
+			<c:set var="components" value="${catalogEntryDetails.components}"/>
+			<c:set var="bundlePrice" value="0"/>
+			<c:if test="${components == null}">
+				<c:catch var="searchServerException">
+					<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${catalogEntryDetails.uniqueID}"  >
+						<wcf:param name="langId" value="${langId}" />
+						<wcf:param name="currency" value="${env_currencyCode}" />
+						<wcf:param name="responseFormat" value="json" />
+						<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+					</wcf:rest>
+					<c:set var="components" value="${catalogNavigationView.catalogEntryView[0].components}"/>
+				</c:catch>
+			</c:if>
+
+			<c:catch>
+			<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+				<wcf:var name="storeId" value="${WCParam.storeId}" />
+				<wcf:param name="q" value="byCatalogEntryIds"/>
+				<c:forEach var="component" items="${components}">
+					<wcf:param name="catalogEntryId" value="${component.uniqueID}"/>
+				</c:forEach>
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="checkEntitlement" value="false"/>
+			</wcf:rest>
+			<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+			
+			</c:catch>
+			
+			<c:if test="${null!=entitledPrices}">
+				<c:forEach var="component" items="${components}">
+					<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:if test="${component.partNumber == entitledPrice.partNumber}">
+							<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+								<c:if test="${!empty entitledPrice.UnitPrice}">
+									<c:set var="bundlePrice" value="${bundlePrice + (unitPrice.price.value * component.quantity)}"/>
+								</c:if>
+							</c:forEach>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:if>
+
+			<c:if test="${!empty bundlePrice && bundlePrice gt 0}">
+				<c:set var="offerPrice" value="${bundlePrice}"/>
+			</c:if>
+		</c:when>
+		<%-- In grid mode, no child SKU will be retrieved, only display the offer price of the product. --%>
+		<c:when test="${type eq 'package' || type eq 'item' || (type eq 'product' && empty catalogEntryDetails.numberOfSKUs)}">
+		<c:catch>
+			<c:choose>
+				<c:when test="${displayPriceRange eq 'true' }">
+					<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+						<wcf:var name="storeId" value="${WCParam.storeId}" />
+						<wcf:param name="q" value="byCatalogEntryIds"/>
+						<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+						<wcf:param name="currency" value="${env_currencyCode}"/>
+						<wcf:param name="checkEntitlement" value="false"/>
+						<wcf:param name="profileName" value="IBM_Store_EntitledPrice_RangePrice_All"/>
+					</wcf:rest>
+					<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+				</c:when>
+				<c:otherwise>
+					<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+						<wcf:var name="storeId" value="${WCParam.storeId}" />
+						<wcf:param name="q" value="byCatalogEntryIds"/>
+						<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+						<wcf:param name="currency" value="${env_currencyCode}"/>
+						<wcf:param name="checkEntitlement" value="false"/>
+					</wcf:rest>
+					<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:catch>
+		
+			<c:if test="${null!=entitledPrices}">
+				<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+						<c:if test="${!empty entitledPrice.UnitPrice}">
+							<c:set var="offerPrice" value="${unitPrice.price.value}"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:if>
+			<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:if test="${!empty entitledPrice.RangePrice}">
+						<c:set var="rangePrice" value="${entitledPrice.RangePrice}"/>
+					</c:if>
+			</c:forEach>
+			
+		</c:when>
+		
+		<c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'PredDynaKitBean'}">
+		<c:catch>
+			<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+				<wcf:var name="storeId" value="${WCParam.storeId}" />
+				<wcf:param name="q" value="byCatalogEntryIds"/>
+				<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="checkEntitlement" value="false"/>
+				<wcf:param name="dynamicKitAsItem" value="false"/>
+			</wcf:rest>
+			<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+		</c:catch>
+			
+			<c:if test="${null!=entitledPrices}">
+				<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+						<c:if test="${!empty entitledPrice.UnitPrice}">
+							<c:set var="offerPrice" value="${unitPrice.price.value}"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:if>
+		</c:when>
+		
+	</c:choose>
+
+	<c:remove var="strikedPriceString"/>
+
+
+<c:if test="${!empty minimumPrice}">
+	<c:set var="minimumPriceString">
+			<fmt:formatNumber value="${minimumPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+	</c:set>
+</c:if>	
+<c:if test="${!empty maximumPrice}">
+		<c:set var="maximumPriceString">
+			<fmt:formatNumber value="${maximumPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+		</c:set>
+</c:if>
+<c:choose>
+<c:when test="${!empty minimumPriceString && !empty maximumPriceString && !(minimumPriceString eq maximumPriceString)}">
+		<c:set var="priceString" value="${minimumPriceString} - ${maximumPriceString}"/>
+</c:when>
+<c:otherwise>
+
+	<c:if test="${!empty listPrice && listPrice.value gt offerPrice}" >
+		<c:set var="strikedPriceString">
+			<fmt:formatNumber value="${listPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+		</c:set>
+	</c:if>
+		<c:set var="priceString">
+				<fmt:formatNumber value="${offerPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+		</c:set>
+		</c:otherwise>
+</c:choose>
+
+ </c:when>
+ <c:otherwise>
+ 	<c:set var="minimumPrice" value="${calculatedPrice.minimumValue}"  />
+	<c:set var="maximumPrice" value="${calculatedPrice.maximumValue}"  />
+	<c:set var="minimumPriceString" value="${calculatedPrice.minimumValue.value}"  />
+	<c:set var="maximumPriceString" value="${calculatedPrice.maximumValue.value}"  />
+	
+	<c:set var="offerPrice" value="${minimumPriceString}"/>
+	<%-- If minimum price is empty, means all SKUs has the same offer price. Get the offer price from first SKU--%>
+	<c:if test="${empty offerPrice}">
+		<c:if test="${!empty catalogEntryDetails.SKUs[0].price}">
+			<c:forEach var="price" items="${catalogEntryDetails.SKUs[0].price}" >
+				<c:if test="${price.usage == 'Offer'}">
+					<c:set var="offerPrice" value="${price.value}" />
+				</c:if>
+			</c:forEach>
+		</c:if>
+	<%-- If offer price is still empty, use product's offer price--%>
+		<c:if test="${empty offerPrice}">
+			<c:set var="offerPrice" value="${calculatedPrice.value}"/>
+		</c:if>
+	</c:if>
+
+
+<c:if test="${catalogEntryDetails.catalogEntryTypeCode eq 'PredDynaKitBean'}">
+	<c:set var="dataBean" value="false"/>
+	<c:set var="dynamicKitprice" value="${catalogEntryDetails.price[0]}"/>
+</c:if>
+
+<c:choose>
+	<%--
+	***
+	*	If there is no price, then get a message indicating there 
+	*	is no available price. This rule applies only to Dynamic Kits.
+	***
+	--%>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'DynamicKitBean' && empty catalogEntryDetails.price}">
+		<wcst:message var="emptyPriceString" key="NO_DK_PRICE_AVAILABLE" bundle="${widgetText}" />
+	</c:when>
+	
+	<%-- 
+	***
+	*	This rule applies only to Dynamic Kits.
+	*	Dynamic Kits do not have a price range. Only the best price is displayed.
+	***
+	--%>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'PredDynaKitBean' && !empty dynamicKitprice}">
+		<c:choose>
+			<c:when test="${dynamicKitprice.description == 'I'}">
+				<c:set var="indexedPrice" value="${dynamicKitprice}" />
+			</c:when>
+			<c:when test="${dynamicKitprice.description == 'L'}">
+				<c:set var="listPrice" value="${dynamicKitprice}" />
+			</c:when>
+			<c:when test="${dynamicKitprice.description == 'O'}">
+				<c:set var="calculatedPrice" value="${dynamicKitprice}" />
+			</c:when>
+		</c:choose>
+		
+
+		<c:if test="${not empty indexedPrice}" >
+			<c:if test="${not empty listPrice && listPrice.value gt indexedPrice.value}" >
+				<c:set var="strikedPriceString" value="${listPrice.value}"/>
+			</c:if>
+			<c:set var="priceString" value="${indexedPrice.value}"/>
+		</c:if>
+		<c:if test="${not empty calculatedPrice}" >
+			<c:remove var="strikedPriceString"/>
+			<c:set var="minimumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.minimumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+			<c:set var="maximumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.maximumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+			<c:choose>
+				<c:when test="${not empty minimumPriceString && not empty maximumPriceString}">
+					<c:set var="priceString" value="${minimumPriceString} - ${maximumPriceString}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${not empty listPrice && listPrice.value gt calculatedPrice.value}" >
+						<c:set var="strikedPriceString">
+							<fmt:formatNumber value="${listPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+						</c:set>
+					</c:if>
+					<c:set var="priceString">
+						<fmt:formatNumber value="${calculatedPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+					</c:set>
+				</c:otherwise>
+			</c:choose>
+		</c:if>
+	</c:when>
+
+	<c:when test="${type eq 'individualContractPrice' && empty catalogEntryDetails.price}">
+	    <c:choose>
+	        <c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'DynamicKitBean'}">
+					<wcst:message var="emptyPriceString" key="NO_DK_PRICE_AVAILABLE" bundle="${widgetText}" />
+			</c:when>
+			<c:otherwise>
+					<wcst:message var="emptyPriceString" key="NO_PRICE_AVAILABLE" bundle="${widgetText}" />
+			</c:otherwise>
+		</c:choose>
+	</c:when>
+
+	<c:when test="${type eq 'individualContractPrice' && !empty catalogEntryPrice}">
+		<c:choose>
+			<c:when test="${catalogEntryPrice.description == 'I'}">
+				<c:set var="indexedPrice" value="${catalogEntryPrice}" />
+			</c:when>
+			<c:when test="${catalogEntryPrice.description == 'L'}">
+				<c:set var="listPrice" value="${catalogEntryPrice}" />
+			</c:when>
+			<c:when test="${catalogEntryPrice.description == 'O'}">
+				<c:set var="calculatedPrice" value="${catalogEntryPrice}" />
+			</c:when>
+		</c:choose>
+		<c:if test="${not empty indexedPrice}" >
+			<c:if test="${not empty listPrice && listPrice.value gt indexedPrice.value}" >
+				<c:set var="strikedPriceString" value="${listPrice.value}"/>
+			</c:if>
+			<c:set var="priceString" value="${indexedPrice.value}"/>
+		</c:if>
+		<c:if test="${not empty calculatedPrice}" >
+			<c:remove var="strikedPriceString"/>
+			<c:set var="minimumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.minimumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+			<c:set var="maximumPriceString">
+				<fmt:formatNumber value="${calculatedPrice.maximumValue.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+			<c:choose>
+				<c:when test="${not empty minimumPriceString && not empty maximumPriceString}">
+					<c:set var="priceString" value="${minimumPriceString} - ${maximumPriceString}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${not empty listPrice && listPrice.value gt calculatedPrice.value}" >
+						<c:set var="strikedPriceString">
+							<fmt:formatNumber value="${listPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+						</c:set>
+					</c:if>
+					<c:set var="priceString">
+						<fmt:formatNumber value="${calculatedPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+					</c:set>
+				</c:otherwise>
+			</c:choose>
+		</c:if>
+	</c:when>
+	</c:choose>
+	
+	<c:if test="${!empty minimumPrice}">
+		<c:set var="minimumPrice" value="${minimumPrice.value}"/>
+	</c:if>
+	
+	<c:if test="${!empty maximumPrice}">
+		<c:set var="maximumPrice" value="${maximumPrice.value}"/>
+	</c:if>
+ </c:otherwise>
+</c:choose>
+
+
+<c:choose>
+
+	<%--
+	***
+	*	If there is no calculated contract price or range, then get a message 
+	*   indicating there is no available price. This rule applies to
+	*	any type of a catalog entry.
+	*
+	--%>
+	<c:when test="${ empty offerPrice && empty minimumPrice }">
+	    <c:choose>
+		    <c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'DynamicKitBean'}">
+					<wcst:message var="emptyPriceString" key="NO_DK_PRICE_AVAILABLE" bundle="${widgetText}" />
+			</c:when>
+		    <c:otherwise>
+					<wcst:message var="emptyPriceString" key="NO_PRICE_AVAILABLE" bundle="${widgetText}" />
+		    </c:otherwise>
+		</c:choose>
+	</c:when>
+
+
+	<%-- 
+	***
+	*	If there is a price range, then make the range the price to 
+	*	be displayed.
+	***
+	--%>
+	<c:when test="${!empty minimumPrice && !empty maximumPrice && (minimumPrice != maximumPrice)}">
+		<c:set var="minimumPriceString">
+			<fmt:formatNumber value="${minimumPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+		</c:set>
+		<c:set var="maximumPriceString">
+			<fmt:formatNumber value="${maximumPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+		</c:set>
+	 	<wcst:message var="priceString" key="PRICE_RANGE" bundle="${widgetText}" >
+			<wcst:param>${minimumPriceString}</wcst:param>
+			<wcst:param>${maximumPriceString}</wcst:param>
+		 </wcst:message>
+	</c:when>
+	
+	<c:otherwise>
+		<c:if test="${!empty listPrice && listPrice.value gt offerPrice}" >
+			<c:set var="strikedPriceString">
+				<fmt:formatNumber value="${listPrice.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+		</c:if>
+			<c:set var="priceString">
+				<fmt:formatNumber value="${offerPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+			</c:set>
+	</c:otherwise>
+</c:choose>
+
+<c:if test="${!empty offerPrice}">
+	<c:set var="offerPriceString">
+		<fmt:formatNumber value="${offerPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+	</c:set>
+</c:if>
+
+<c:if test="${!empty displayPrice}">
+	<c:set var="displayPriceString">
+		<fmt:formatNumber value="${displayPrice}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+	</c:set>
+</c:if>
+
+<c:if test="${!empty rangePrice}">
+	<c:forEach var="priceRange" items="${rangePrice}" varStatus="priceRangeCounter">
+					<c:if test="${not empty priceRange.maximumQuantity or priceRangeCounter.index ne '0'}">
+						<!-- For each contract price range -->
+						<c:choose>
+							<c:when test="${!empty priceRange.maximumQuantity and (priceRange.minimumQuantity.value eq priceRange.maximumQuantity.value)}">
+								<wcst:message var="localizedPriceString" key="PQ_PRICE_{0}" bundle="${widgetText}" >
+									<wcst:param value="${priceRange.minimumQuantity.value}" />
+								</wcst:message>
+							</c:when>
+							<c:when test="${!empty priceRange.maximumQuantity}">
+								<wcst:message var="localizedPriceString" key="PQ_PRICE_{0}_TO_{1}" bundle="${widgetText}" >
+									<wcst:param value="${priceRange.minimumQuantity.value}" />
+									<wcst:param value="${priceRange.maximumQuantity.value}" />
+								</wcst:message>
+							</c:when>
+							<c:otherwise>										
+								<wcst:message var="localizedPriceString" key="PQ_PRICE_{0}_OR_MORE" bundle="${widgetText}" >
+									<wcst:param value="${priceRange.minimumQuantity.value}" />
+								</wcst:message>
+							</c:otherwise>
+						</c:choose>
+						
+						<fmt:formatNumber var="localizedPrice" value="${priceRange.priceInRange.value}" type="currency" currencySymbol="${env_CurrencySymbolToFormat}" maxFractionDigits="${env_currencyDecimal}"/>
+						<wcf:set target="${localizedQuantityPriceMap}" key="${localizedPriceString}" value="${localizedPrice}"/>
+					</c:if>
+	</c:forEach>
+	
+	<wcf:set target = "${cachedRangePriceMap}" key="${catalogEntryDetails.uniqueID}" value="${rangePrice}"/>
+</c:if>
+

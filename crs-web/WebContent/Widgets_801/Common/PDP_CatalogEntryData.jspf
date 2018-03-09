@@ -1,0 +1,415 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:choose>
+	<c:when test="${!empty param.productId}">
+		<c:set var="productId" value="${param.productId}" />
+	</c:when>
+	<c:when test="${!empty WCParam.productId}">
+		<c:set var="productId" value="${WCParam.productId}" />
+	</c:when>
+</c:choose>
+
+<c:if test="${!empty parentCatEntryId}" >
+	<c:set var="productId" value="${parentCatEntryId}" />		
+</c:if>
+
+<%-- Check if catalogEntryDetails is already available. If not fetch it from internal hashMap or from Server --%>
+<c:if test="${empty catalogEntryDetails || catalogEntryDetails.uniqueID != productId}">
+	<%-- Try to get it from our internal hashMap --%>
+	<c:set var="key1" value="${productId}+getCatalogEntryViewAllByID"/>
+	<c:set var="catalogEntryDetails" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+	<c:if test="${empty catalogEntryDetails}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}" >	
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			</wcf:rest>
+			<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			<wcf:set target = "${cachedCatalogEntryDetailsMap}" key="${key1}" value="${catalogNavigationView.catalogEntryView[0]}"/>
+		</c:catch>
+	</c:if>
+
+	<c:set var="productWithoutDefiningAttribute" value="true"/>
+
+	<c:if test="${!empty catalogEntryDetails.attributes}">
+		<c:forEach var="attribute" items="${catalogEntryDetails.attributes}">
+			<c:if test="${attribute.usage eq 'Defining'}">
+				<c:set var="productWithoutDefiningAttribute" value="false"/>
+			</c:if>
+		</c:forEach>
+	</c:if>
+
+	<c:if test="${productWithoutDefiningAttribute && catalogEntryDetails.numberOfSKUs eq 1 && !empty catalogEntryDetails.singleSKUCatalogEntryID && displaySKUContextData eq 'true'}">
+		<c:set var="productId" value="${catalogEntryDetails.singleSKUCatalogEntryID}" />
+	</c:if>
+</c:if>
+<c:if test="${!empty productId}">
+	<%-- Check if catalogEntryDetails is already available. If not fetch it from internal hashMap or from Server --%>
+	<c:if test="${empty catalogEntryDetails || catalogEntryDetails.uniqueID != productId}">
+		<%-- Try to get it from our internal hashMap --%>
+		<c:set var="key1" value="${productId}+getCatalogEntryViewAllByID"/>
+		<c:set var="catalogEntryDetails" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+		<c:if test="${empty catalogEntryDetails}">
+			<c:catch var="searchServerException">
+				<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}" >	
+					<wcf:param name="langId" value="${langId}"/>
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="responseFormat" value="json"/>		
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+					<c:forEach var="contractId" items="${env_activeContractIds}">
+						<wcf:param name="contractId" value="${contractId}"/>
+					</c:forEach>
+				</wcf:rest>
+				<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+				<wcf:set target = "${cachedCatalogEntryDetailsMap}" key="${key1}" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			</c:catch>
+		</c:if>
+	</c:if>
+	<c:if test="${empty fullImageAltDescription}">
+		<wcf:rest var="queryPageResult" url="store/{storeId}/page">
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="q" value="byCatalogEntryIds"/>
+			<wcf:param name="catalogEntryId" value="${productId}"/>
+		</wcf:rest>
+		<c:set var="page" value="${queryPageResult.resultList[0]}"/>
+		<c:set var="fullImageAltDescription" value="${page.fullImageAltDescription}" scope="request"/>
+	</c:if>
+</c:if>
+
+<c:if test="${empty productId && !empty WCParam.partNumber}">
+	<c:set var="key1" value="${WCParam.partNumber}+getCatalogEntryViewAllByPartnumber"/>
+	<c:set var="catalogEntryDetails" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+	<c:if test="${empty catalogEntryDetails}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/${WCParam.partNumber}" >	
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="currency" value="${env_currencyCode}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<c:forEach var="contractId" items="${env_activeContractIds}">
+					<wcf:param name="contractId" value="${contractId}"/>
+				</c:forEach>
+			</wcf:rest>
+			<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			<wcf:set target = "${cachedCatalogEntryDetailsMap}" key="${key1}" value="${catalogNavigationView.catalogEntryView[0]}"/>
+		</c:catch>
+	</c:if>
+	<c:if test="${empty fullImageAltDescription}">
+		<wcf:rest var="queryPageResult" url="store/{storeId}/page">
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="q" value="byCatalogEntryIds"/>
+			<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}"/>
+		</wcf:rest>
+		<c:set var="page" value="${queryPageResult.resultList[0]}"/>
+		<c:set var="fullImageAltDescription" value="${page.fullImageAltDescription}" scope="request"/>
+	</c:if>
+</c:if>
+
+<c:set var="type" value="${fn:toLowerCase(catalogEntryDetails.catalogEntryTypeCode)}" />
+<c:set var="type" value="${fn:replace(type,'bean','')}" />
+<c:set var="catalogEntryID" value="${catalogEntryDetails.uniqueID}" />
+<c:set var="entitledItems" value="${catalogEntryDetails.sKUs}"/>
+<c:set var="numberOfSKUs" value="${catalogEntryDetails.numberOfSKUs}"/>
+<c:set var="attributes" value="${catalogEntryDetails.attributes}"/>
+<c:set var="dynamicKitConfigurable" value="${catalogEntryDetails.dynamicKitConfigurable}"/>
+<c:set var="parentDynamicKitConfigurable" value="${catalogEntryDetails.parentDynamicKitConfigurable}"/>
+<c:if test="${parentDynamicKitConfigurable eq '0' }">
+    <c:set var="dynamicKitConfigurable" value="0"/>
+</c:if>
+<c:choose>
+    <c:when test="${dynamicKitConfigurable eq '1'}">
+        <c:set var="dynamicKitConfigurable" value="true"/>
+    </c:when>
+    <c:otherwise>
+        <c:set var="dynamicKitConfigurable" value="false"/>
+    </c:otherwise>
+</c:choose>
+<wcf:useBean var="swatchImagesList" classname="java.util.ArrayList"/>
+<c:forEach items="${catalogEntryDetails.attachments}" var="attachment">
+	<c:if test="${attachment.usage == 'SWATCH_IMAGE'}">
+		<c:set var="attchName" value="${attachment.name}" />
+		<c:set var="attchIdentifier" value="${attachment.identifier}" />
+		<jsp:useBean id="swatchDetails" class="java.util.HashMap" type="java.util.Map"/>
+		<c:set target="${swatchDetails}" property="name" value="${attchName}"/>
+		<c:set target="${swatchDetails}" property="identifier" value="${attchIdentifier}"/>
+		<c:set target="${swatchDetails}" property="assetPath" value="${attachment.attachmentAssetPath}"/>
+		<wcf:set target="${swatchImagesList}" value="${swatchDetails}"/>
+		<c:remove var="swatchDetails"/>
+	</c:if>
+</c:forEach>
+
+<%-- Find out all the subscription related attributes if any --%>
+<c:set var="isRecurrable" value="true"/>
+<c:if test="${catalogEntryDetails.disallowRecurringOrder == '1'}">
+	<c:set var="isRecurrable" value="false"/>
+</c:if>
+<c:set var="isSubscription" value="false"/>
+<c:if test="${!empty catalogEntryDetails.subscriptionTypeCode && catalogEntryDetails.subscriptionTypeCode != 'NONE'}">
+	<c:set var="isSubscription" value="true"/>
+</c:if>
+
+<c:set var="displayPriceRange" value="true" />
+
+<c:if test="${numberOfSKUs > 0}">
+	<c:set var="firstItemID" value="${entitledItems[0].uniqueID}"/>
+</c:if>
+
+
+<wcst:alias name="StoreHelper" var="priceMode">
+	<wcf:param name="parameter" value=""/>
+	<wcf:param name="parameter" value="${storeId}"/>
+</wcst:alias>
+
+<c:if test="${empty calculatedPriceFlag}">
+	<c:choose>
+		<c:when test="${priceMode == '0'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+		<c:when test="${priceMode == '1'}">
+			<c:set var="calculatedPriceFlag" value="false"/>
+		</c:when>
+		<c:when test="${priceMode == '2'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+	</c:choose>
+</c:if>
+<c:choose>
+ <c:when test="${calculatedPriceFlag == 'true'}">
+ 		<c:set var="minimumPrice" value=""  />
+		<c:set var="maximumPrice" value=""  />
+		
+ 		
+ 		<c:set var="catentrykey1" value="${catalogEntryID}"/>
+		<c:set var="maximumItemPrice" value="${cachedEntitledPriceMap[catentrykey1]}"/>
+		<c:if test="${empty maximumItemPrice}">
+			<c:set var="maximumPrice" value=""  />
+			<c:choose>
+				<c:when test="${type eq 'product'}">
+				 	<c:catch>
+						<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+							<wcf:var name="storeId" value="${WCParam.storeId}" />
+							<wcf:param name="q" value="byCatalogEntryIds"/>
+							<c:forEach var="entitledItem" items="${entitledItems}">
+								<wcf:param name="catalogEntryId" value="${entitledItem.uniqueID}"/>
+							</c:forEach>
+							<wcf:param name="currency" value="${env_currencyCode}"/>
+							<wcf:param name="checkEntitlement" value="false"/>
+						</wcf:rest>
+						<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>						
+					</c:catch>
+					<c:if test="${null!=entitledPrices}">
+						<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+					  		<c:if test="${idx.index == 0}">
+				   				<c:set var="maximumPrice" value="${unitPrice.price.value}" />
+				   	  		</c:if>
+				   	 		 <c:if test="${!empty unitPrice.price.value && unitPrice.price.value > maximumPrice}">
+				   				<c:set var="maximumPrice" value="${unitPrice.price.value}" />
+				   	  		</c:if>
+						</c:forEach>
+						</c:forEach>
+					</c:if>
+				</c:when>
+				<c:when test="${type eq 'bundle'}">
+					<c:set var="components" value="${catalogEntryDetails.components}"/>
+					<c:set var="bundlePrice" value="0"/>
+					<c:catch>
+						<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+							<wcf:var name="storeId" value="${WCParam.storeId}" />
+							<wcf:param name="q" value="byCatalogEntryIds"/>
+							<c:forEach var="component" items="${components}">
+								<wcf:param name="catalogEntryId" value="${component.uniqueID}"/>
+							</c:forEach>
+							<wcf:param name="currency" value="${env_currencyCode}"/>
+							<wcf:param name="checkEntitlement" value="false"/>
+						</wcf:rest>
+						<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+					</c:catch>
+					
+					<c:if test="${null!=entitledPrices}">
+						<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+							<c:if test="${!empty entitledPrice.UnitPrice}">
+								<c:set var="bundlePrice" value="${bundlePrice + unitPrice.price.value}"/>
+							</c:if>
+						</c:forEach>
+						</c:forEach>
+					</c:if>
+					<c:set var="maximumPrice" value="${bundlePrice}" />
+				</c:when>
+			
+			
+			<c:when test="${type eq 'package' || type eq 'item'}">
+				<c:catch>
+					<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+						<wcf:var name="storeId" value="${WCParam.storeId}" />
+						<wcf:param name="q" value="byCatalogEntryIds"/>
+						<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+						<wcf:param name="currency" value="${env_currencyCode}"/>
+						<wcf:param name="checkEntitlement" value="false"/>
+					</wcf:rest>
+					<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+				</c:catch>
+					<c:if test="${null!=entitledPrices}">
+					<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+							<c:if test="${!empty entitledPrice.UnitPrice}">
+								<c:set var="maximumPrice" value="${unitPrice.price.value}"/>
+							</c:if>
+						</c:forEach>
+					</c:forEach>
+					
+					<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:if test="${!empty entitledPrice.RangePrice and fn:length(rangePrice)>1}">
+							<c:set var="rangePrice" value="${entitledPrice.RangePrice}"/>
+						</c:if>
+					</c:forEach>
+					</c:if>
+					
+					
+			</c:when>
+			
+			<c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'DynamicKitBean'}">
+			<c:catch>
+				<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="q" value="byCatalogEntryIds"/>
+					<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="checkEntitlement" value="false"/>
+					<wcf:param name="dynamicKitAsItem" value="false"/>
+				</wcf:rest>
+				<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+			</c:catch>
+			
+			<c:if test="${null!=entitledPrices}">
+				<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+						<c:if test="${!empty entitledPrice.UnitPrice}">
+							<c:set var="maximumPrice" value="${unitPrice.price.value}"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:if>
+		</c:when>
+		</c:choose>
+		<c:if test="${!empty maximumPrice}">
+				<c:set var="maximumItemPrice" value="${maximumPrice}"/>
+				<wcf:set target = "${cachedEntitledPriceMap}" key="${catalogEntryID}" value="${maximumItemPrice}"/>
+		</c:if>
+		<c:if test="${!empty rangePrice}">
+			<wcf:set target = "${cachedRangePriceMap}" key="${catalogEntryID}" value="${rangePrice}"/>
+		</c:if>
+	</c:if>
+		
+ </c:when>
+ <c:otherwise>
+ 	<c:forEach var="prices" items="${catalogEntryDetails.price}">
+		<c:if test="${prices.usage == 'Offer'}">
+			<c:set var="maximumItemPrice" value="${prices.maximumValue.value}"/>
+			<c:if test="${empty maximumItemPrice}">						
+				<c:set var="maximumItemPrice" value="${prices.value}"/>
+			</c:if>
+		</c:if>
+	</c:forEach>
+ </c:otherwise>
+ </c:choose>
+
+<%-- 
+	Loop through all the SKUs and see if any one of them is marked 'buyable'. 
+	Even if one of them is buyable, we show Add to Cart button.. Buyable flag set at product level is ignored 
+--%>
+<c:if test="${empty requestScope.bundleId and empty requestScope.packageId}">
+	<c:set var="bundleKitAvailable" value="false" scope="request"/> <%-- set default value to false --%>
+</c:if>
+<c:set var="productAvailable" value="false"/> <%-- set default value to false --%>
+<c:set var="dynamicKitAvailable" value="false" scope="request"/> <%-- set default value to false --%>
+<c:if test="${!empty maximumItemPrice}">
+	<%-- We have price... Continue with other checks --%>
+	<c:choose>
+		<c:when test="${type eq 'bundle' or type eq 'package'}">
+			<%--For bundle and package check the buyable flag at the bundle or pacakge level instead of looping through each individual components --%>
+			<c:set var="bundleKitAvailable" value="${catalogEntryDetails.buyable}" scope="request"/>
+		</c:when>
+		<c:when test="${type eq 'dynamickit' or type eq 'preddynakit'}">
+			<%-- For dynamic kit, check the buyable flag directly at the details level instead of looping through each individual components --%>
+			<c:set var="dynamicKitAvailable" value="${catalogEntryDetails.buyable}"/>
+
+		</c:when>
+		<c:otherwise>
+			<%-- It is not a Subscription item OR Subscription products with the well known 3 attributes set properly --%>
+			<c:if test="${!isSubscription || (fulfillmentFrequency != '' && paymentFrequency != '' && aValidTimePeriod != '')}" >
+				<c:choose>
+					<%-- If it is a product iterate through all its SKUs --%>
+					<c:when test="${type eq 'product'}">
+						<c:forEach var="entitledItem" items="${entitledItems}">
+							<c:if test = "${entitledItem.buyable eq 'true'}">
+								<c:set var="productAvailable" value="true"/> <%-- We have one item which is marked as buyable..Show AddToCart button --%>
+							</c:if>
+						</c:forEach>
+					</c:when>
+					<c:otherwise>
+						<%-- Since it is an item, pick from buyable field --%>
+						<c:set var="productAvailable" value="${catalogEntryDetails.buyable}"/>
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<%-- For dynamic kit, check the buyable flag directly at the details level instead of looping through each individual components --%>
+<c:if test="${type eq 'dynamickit' or type eq 'preddynakit'}">
+	<c:set var="dynamicKitAvailable" value="${catalogEntryDetails.buyable}" scope="request"/>	            
+</c:if>
+
+<c:set var="buyable" value="${catalogEntryDetails.buyable}"/>
+
+<c:set var="singleSKU" value="false"/>
+<c:choose>
+	<c:when test="${type == 'bundle'}">
+		<c:set var="singleSKU" value="${catalogEntryDetails.hasSingleSKU}"/>
+	</c:when>
+	<c:when test="${type == 'product'}">
+		<c:set var="singleSKU" value="${catalogEntryDetails.hasSingleSKU}"/>
+	</c:when>
+	<c:when test="${type == 'dynamickit' or type == 'preddynakit'}">
+		<c:set var="singleSKU" value="false"/>
+ 
+ 	<!--  set it false by default. Enable only when it meets following conditions -->
+	<c:set var="isDKConfigurable" value="false" /> 
+
+	<!--  Check sterling configurator has been turned on or off. If it is on, check other condition -->
+     <c:if test="${sc}"> 
+	
+			<!--  Check dynamickit model reference. If it is not empty and configurable property of dynakit is true, then only enable dynamic kit configuration. -->
+			<c:if test="${!empty catalogEntryDetails.dynamicKitModelReference && dynamicKitConfigurable}"> 
+		                       <c:set var="isDKConfigurable" value="true" />
+			</c:if>
+	 </c:if>
+	
+		<c:if test="${empty isDKPreConfigured}">
+			<%-- determine if the kit is pre-configured or not --%>
+			<c:set var="isDKPreConfigured" value="${catalogEntryDetails.dynamicKitDefaultConfigurationComplete}"/>
+			<c:if test="${isDKPreConfigured == 1}">
+				<c:set var="isDKPreConfigured" value="true"/>
+			</c:if>
+		</c:if>
+	</c:when>
+</c:choose>

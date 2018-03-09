@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>	
+	<!---
+		The class cmc/foundation/BaseComboBox implements a basic combobox.  Use cmc/foundation/BaseComboBox when implementing a basic
+		combobox that has WebSphere Commerce's look and feel.
+		
+		@START_CODE	
+		<BaseComboBox name="colorSelector" width="235">
+			<node value="blue" text="${resourceBundle.blue.string}">
+				<handler name="oninit">
+					parent.addItem(this.text, this.value);
+					parent.selectItem(this.value);
+				</handler>
+			</node>
+			<node value="red" text="${resourceBundle.red.string}">
+				<handler name="oninit">
+					parent.addItem(this.text, this.value);
+				</handler>
+			</node>
+		</BaseComboBox>
+		@END_CODE	
+	-->
+    <BaseValueSelector classDefinition="true" definitionName="cmc/foundation/BaseComboBox" padding="${this.useCompactPadding ? 5 : 8}" bgcolor="#ffffff">
+    	<!--- @keywords private -->
+ 		<variable name="dropDownResource" type="string" value="comboxBoxButton"/>
+ 		<!---
+ 			@keywords private
+ 		 -->
+		<variable name="height" value="${this.useCompactPadding ? 26 : 30}"/>
+		<!---
+			@keywords private
+			The default width used for combobox in forms
+		-->
+		<variable name="width" value="230"/>
+		<!--- @keywords private -->
+		<variable name="useCompactPadding" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The border color used when the combo box is disabled.
+		-->
+		<variable name="disabledBorderColor" type="string" value="#b1b1b1"/>
+		<!---
+			@keywords private
+			The border color used when the combo box is enabled.
+		-->
+		<variable name="enabledBorderColor" type="string" value="#959595"/>
+		<!---
+			@keywords private
+			The borderColor attribute indicates which color to use as the border for the combo box field.
+		-->
+		<variable name="borderColor" type="string" value="${this._enabled ? this.enabledBorderColor : this.disabledBorderColor}"/>
+		<!---
+			@keywords private
+			Offset for value selector.
+		-->
+		<variable name="selectorOffset" type="number" value="-1"/>
+		
+		<!--- @keywords private -->		
+		<handler name="oninit">
+			<![CDATA[
+			this.layout.update();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="getUntruncatedWidth">
+			<![CDATA[
+			return this.padding + this.selectedValueText.getUntruncatedWidth() + this.padding + this.dropdown.width + this.padding;
+			]]>
+		</method>
+		
+		<Layout name="layout">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				this.updateHandler.connect(this.classroot, "onwidth");
+				this.updateHandler.connect(this.classroot, "onheight");
+				this.updateHandler.connect(this.classroot.selectedValueText, "onwidth");
+				this.updateHandler.connect(this.classroot.selectedValueText, "onheight");
+				this.updateHandler.connect(this.classroot.dropdown, "onheight");
+				this.updateHandler.connect(this.classroot.dropdown, "onwidth");
+				]]>
+			</method>
+			
+			<!--- @keywords private -->
+			<method args="e" name="update">
+				<![CDATA[
+				if (!this.locked && this.classroot.dropdown) {
+					this.lock();
+					this.classroot.selectedValueText.setVariable("x", this.classroot.padding);
+					this.classroot.selectedValueText.setVariable("y", (this.classroot.height - this.classroot.selectedValueText.height)/2);
+					this.classroot.dropdown.setVariable("x", this.classroot.width - this.classroot.dropdown.width - this.classroot.padding);
+					this.classroot.dropdown.setVariable("y", (this.classroot.height - this.classroot.dropdown.height)/2);
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+		
+		<Component height="${this.parent.height}" bgcolor="${this.parent.borderColor}" width="1" x="0" y="0"/>
+		<Component height="${this.parent.height}" bgcolor="${this.parent.borderColor}" width="1" x="${this.parent.width - 1}" y="0"/>
+		<Component bgcolor="${this.parent.borderColor}" height="1" width="${this.parent.width}" x="0" y="0"/>
+		<Component bgcolor="${this.parent.borderColor}" height="1" width="${this.parent.width}" x="0" y="${this.parent.height - 1}"/>
+		
+		<Component imageSet="${this.classroot.dropDownResource}" name="dropdown" opacity="${this.parent._enabled ? null : 0.50}">
+			<handler name="onwidth">
+				<![CDATA[
+				this.classroot.selectedValueText.updateTextWidth();
+				]]>
+			</handler>
+		</Component>
+    </BaseValueSelector>
+
+	<!---
+		@keywords private
+		
+		This combo box implementation is for internal use by both {@link cmc/foundation/PropertyCombobox} and {@link cmc/foundation/GridComboBox}
+		to bind a {@link cmc/foundation/ModelProperty} with the combo box.
+		The relationship is bi-directional.  This means that the combo box state will be refreshed to represent the value
+		of the property and the new property value will be stored when a user changes the combo box state.
+	-->
+	<BaseComboBox classDefinition="true" definitionName="cmc/foundation/ComboBox">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!--- Reference to {@link cmc/foundation/ModelProperty} object that is being edited. -->
+		<variable name="property" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			if (this.propValueDel) {
+				this.propValueDel.disconnectAll();
+				delete this.propValueDel;
+			}
+			this.setVariable('visible', false);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this combo box. Listeners are created to
+			watch the property value. If the property changes at anytime, the updateValue method will be called.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this combo box
+		-->	
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				this.createComboBox();
+				if (this.property != null) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					this.clearSelection();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Calls createComboBox
+		 -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.property) {
+				this.createComboBox();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Creates the combo box and adds the selectable options from those specified in the {@link cmc/foundation/ModelProperty}
+			property definitions values.  The current selection is then set for the combo box from the
+			{@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="createComboBox">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property != null && this.property.propertyDefinition != null) {
+				var propDef = this.property.propertyDefinition;
+				if (!this.propValueDel) {
+					this.propValueDel = new EventHandler.Class(this, "createComboBox");
+				}
+				else {
+					this.propValueDel.disconnectAll();
+				}
+				this._initializingComboBox = true;
+				this.setValues(this.property.propertyDefinition.getPropertyValues(this.property.o, this.propValueDel));
+				this.selectItem(this.property.value);
+				if (this.selectedValue == null && this.property.value != null && this.property.value != "") {
+					var unlistedValue = this.property.propertyDefinition.getPropertyValue(this.property, null);
+					if (unlistedValue == null) {
+						unlistedValue = {
+							value: this.property.value,
+							displayName: this.property.value
+						};
+					}
+					this.selectValue(unlistedValue);
+				}
+				else {
+					this.updateSelectedValue();
+				}
+				this._initializingComboBox = false;
+			}
+			]]>
+		</method>	
+		
+		<!---
+			Update and refresh the cmc/foundation/ComboBox value with a new cmc/foundation/ModelProperty value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = this.property.value;
+			if (this.selectedValue == null || value != this.selectedValue.value) {
+				if (value != null && value != "") {
+					this.selectItem(value);
+					if (this.selectedValue == null) {
+						this.selectValue({
+							value: value,
+							displayName: value
+						});
+					}
+				}
+				else {
+					this.clearSelection();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the cmc/foundation/ModelProperty to represent the cmc/foundation/ComboBox value. This method is called when the combo box
+			value is changed.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this.property) {
+				var newValue = this.selectedValue ? this.selectedValue.value : "";
+				this.property.change(newValue);
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/ComboBox", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.property.o.logString());
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			When the value of the combo box is changed by the business user, storeValue method will be called.
+		-->		
+		<handler name="onselectedValue">
+			<![CDATA[
+			if (!this._initializingComboBox) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+		<!--- @keywords private -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</BaseComboBox>
+			
+	<!---
+		@keywords final
+		cmc/foundation/PropertyCombobox is a property editor and is used to create a combo box that binds to a property
+		value {@link cmc/foundation/ModelProperty}.  Use cmc/foundation/PropertyCombobox when implementing a combo box inside a
+		{@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.  The class cmc/foundation/PropertyCombobox is final, to create
+		a new properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		This combo box widget to be used within a {@link cmc/foundation/ObjectProperties}.  This widget will allow users to select a
+		value for the specified property by displaying a list of possible values.  The list of possible values is determined
+		by examining the {@link cmc/foundation/PropertyDefinition} associated with this property.  The possible values are listed as
+		{@link cmc/foundation/PropertyValues} as children under the property definition.
+		
+		The example	below would create a combo box inside a properties view and add the selectable options from those
+		specified in the {@link cmc/foundation/ModelProperty} property definitions values.  The current color selection is then set
+		for the combo box from the {@link cmc/foundation/ModelProperty} value.
+		
+		@START_CODE
+			<PropertyCombobox
+				propertyName="colorSelector"
+				promptText="${resourceBundle.colorSelector}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyCombobox">
+		<dependency localName="ComboBox" moduleName="cmc/foundation/ComboBox"/>
+		<!---
+			@keywords private
+			Create the combo box editor for the given property component. This method overrides the createEditor method in
+			the cmc/foundation/PropertiesComponent class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new ComboBox.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	 </PropertyEditor>
+	
+	<!---
+		@keywords final
+		A wrapper around {@link cmc/foundation/BaseComboBox} for use with the {@link cmc/foundation/ObjectGrid}. This grid wrapper will show text as the
+		viewer class and the actual {@link cmc/foundation/ComoBox} as the editor class.
+		cmc/foundation/GridComboBox works similar to {@link cmc/foundation/PropertyCombobox} except it will display a column of
+		combo boxes inside of {@link cmc/foundation/ObjectGrid}.
+		
+		The below example goes inside {@link cmc/foundation/ObjectGrid} tag. It would create a {@link cmc/foundation/ComboBox} column
+		that would associate a combo box to the object_color property for each object displayed in the grid.
+		
+		@START_CODE
+        <GridComboBox
+            name="color"
+            objectPath="ObjectGroup/ObjectGroupDescription"
+            propertyName="object_color"
+            required="true"
+            visible="true"
+            editable="true"
+            text="${resourceBundle.objectColor}"
+            width="100"/>
+		@END_CODE
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridComboBox">
+		<dependency localName="ColumnComboBoxEditor" moduleName="cmc/foundation/ColumnComboBoxEditor"/>
+		<dependency localName="GridComboBoxViewer" moduleName="cmc/foundation/GridComboBoxViewer"/>
+		<dependency localName="GridComboBoxEditor" moduleName="cmc/foundation/GridComboBoxEditor"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridComboBoxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridComboBoxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridComboBoxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridComboBoxEditor}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/ColumnComboBoxEditor" to create Column Editor editor.
+		-->
+		<variable name="columnEditorClass" value="${ColumnComboBoxEditor}"/>
+	</GridColumn>
+	
+	<!---
+		@keywords final
+		Use this class to display a combo box in a grid cell. Use this class instead
+		of cmc/foundation/GridComboBox if you need to display a combo box for some rows and something
+		else for other rows.
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/foundation/GridComboBoxCellDescriptor">
+		<dependency localName="GridComboBoxViewer" moduleName="cmc/foundation/GridComboBoxViewer"/>
+		<dependency localName="GridComboBoxEditor" moduleName="cmc/foundation/GridComboBoxEditor"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridComboBoxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridComboBoxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridComboBoxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridComboBoxEditor}"/>
+	</GridCellDescriptor>
+
+	
+	<!---
+		@keywords private
+		
+		Combo box viewer class for internal use by {@link cmc/foundation/GridComboBox} to display a property status and will be
+		displayed while the grid is in view mode.
+	-->
+	<GridTextViewer classDefinition="true" definitionName="cmc/foundation/GridComboBoxViewer">
+		<!---
+			Gets the display value from the properties value and sets it as the text to be displayed in the viewer.
+			@param cmc/foundation/EventHandler del An optional delegate to call when a change in property value is caused by the value service.
+			@returns string: display value
+		-->
+		<method args="del" name="getDisplayValue">
+			<![CDATA[
+			var value = this.property.value;
+			var displayValue = "";
+			if (this.property.propertyDefinition != null) {
+				var propertyValues = this.property.propertyDefinition.getPropertyValues(this.property.o, del);
+				for (var i = 0; i < propertyValues.length; i++) {
+					var propertyValue = propertyValues[i];
+					if (propertyValue.value == value) {
+						displayValue = propertyValue.displayName;
+						del.connect(propertyValue, "ondisplayName");
+					}
+				}
+			}
+			if (displayValue == "") {
+				displayValue = this.property.value;
+			}
+			return displayValue;
+			]]>
+		</method>
+		
+		<!---
+			Update and refresh cmc/foundation/GridComboBoxViewer value with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var displayValue = this.getDisplayValue(this.updateValueDel);
+			if (this.text != displayValue) {
+				this.setVariable("text", displayValue);
+			}
+			]]>
+		</method>
+	</GridTextViewer>
+	
+	<!---
+		@keywords private
+		
+		Combo box editor class for internal use by cmc/foundation/GridComboBox to bind a property to the grid combo box and will be
+		displayed while the grid is in edit mode. Extends {@link cmc/foundation/ComboBox} to handle transition from edit mode to view
+		mode with mouse and key navigation.
+	-->
+	<ComboBox classDefinition="true" definitionName="cmc/foundation/GridComboBoxEditor" width="${this.immediateParent.availableWidth}" useCompactPadding="true">
+	</ComboBox>
+	
+	<!--- 
+		@keywords private
+		This combobox is used to edit {@link cmc/foundation/GridComboBox} column
+	 -->
+	<BaseComboBox classDefinition="true" definitionName="cmc/foundation/ColumnComboBoxEditor">
+		<!--- 
+			@keywords private
+			The column {@link cmc/foundation/GridComboBox} being edited by {@link cmc/foundation/ColumnComboBoxEditor}
+		 -->
+		<variable name="column" value="${null}"/>
+		
+		<!--- Selected objects {@link cmc/foundation/ModelObject} in grid -->
+		<variable name="selectedObjects" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<handler name="oncolumn">
+			<![CDATA[
+			if (this.column == null) {
+				this.setValues(null);
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="getValue">
+			<![CDATA[
+			return this.selectedValue ? this.selectedValue.value : "";
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="initialValue" name="resetValue">
+			<![CDATA[
+			var o = this.column.getObject(this.selectedObjects[0], null);
+			var propertyName = this.column.getPropertyName(this.selectedObjects[0]);
+			var property = o.getProperty(propertyName);
+			if (property != null && property.propertyDefinition != null) {
+				this.setValues(property.propertyDefinition.getPropertyValues(o, null));
+			}
+			this.selectItem(initialValue);
+			]]>
+		</method>
+	</BaseComboBox>
+</Definitions>

@@ -1,0 +1,1192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords abstract
+	
+		This class performs a client side action on selected business objects.
+		The action is written in its <code>performAction</code> method.
+		Instances of cmc/foundation/ClientAction can only be declared as children of an instance
+		of {@link cmc/foundation/ObjectDefinition}.
+		
+		<p>A single instance of {@link cmc/foundation/EnablementCondition}, {@link cmc/foundation/EnablementAndCondition} or
+		{@link cmc/foundation/EnablementOrCondition} can be declared as a child of a client action.
+		The enablement condition will be used by the framework to determine if a client 
+		action is available for the currently selected business objects. If it is available, 
+		the framework will add the action to the context menu. If <code>addToEditMenu</code> 
+		is set to "true", the action is also added to the "Edit" menu. If <code>addToViewMenu</code> 
+		is set to "true", the action is also added to the "View" menu. 
+		If the <code>toolbarIcon</code> attribute has been defined, 
+		then the action will also be available on the toolbar.
+		
+		<p>The following example demonstrates the declaration of a client action.
+		The client action includes an enablement condition that will resolve to "true" 
+		if a property named "state" exists in the business object.
+		Otherwise, this	client action will not be available. 
+
+		@START_CODE
+		<class name="cmc/foundation/ChangeStateAction" extends="cmc/foundation/ClientAction">
+			<method name="performAction" args="objects">
+				<![CDATA[
+				for (var i = 0; i < objects.length; i++) {
+					this.changeState(objects[i]);
+				}
+				]]>
+			</method>
+			<method name="changeState" args="o">
+			...
+			</method>
+		</class>
+		
+		<ChangeStateAction displayName="Change State" toolbarIcon="changeStateToolbarIcon">
+			<EnablementCondition propertyName="state" enablementValue="${null}" negate="true"/>
+		</ChangeStateAction>
+		@END_CODE
+		
+		<p>If a business object has a client action defined and a property name of "state", 
+		the menu option "Change State" will be available in its context menu. When this option 
+		is selected from the context menu, the <code>changeState</code> method defined inside 
+		the class <code>cmc/foundation/ChangeStateAction</code> class is executed.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ClientAction">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			The display name for this action. This is a required attribute.
+		-->
+		<variable name="displayName" type="string"/>
+		
+		<!---
+			The menu display name for this action. This name will appear in both the
+			Edit menu and the context menu. If this attribute is not set,
+			it will default to the displayName attribute.
+		-->
+		<variable name="menuDisplayName" type="string" value="${null}"/>
+
+		<!---
+			The shortcut keys used to invoke this action from the keyboard 
+			when the object is selected. Reference {@link cmc/foundation/KeyUtil#callOnKeyCombo} for details
+			on the format in which shortcut keys has to be specified.
+			@type String[]
+		-->
+		<variable name="shortcutKeys" value="${null}"/>
+
+		<!---
+			@keywords private
+			Flag to indicate if shortcutKeys are registered
+		-->			
+		<variable name="keysRegistered" type="boolean" value="false"/>
+
+		<!---
+			Icon resource name. If specified, a button will be added to the toolbar.
+		-->		
+		<variable name="toolbarIcon" type="string" value=""/>		
+		<!---
+			Icon resource name. If specified, a button will be added to the action area of {@link cmc/foundation/ChildListEditor}.
+		-->		
+		<variable name="childListEditorIcon" type="string" value="${null}"/>
+		<!---
+			Indicates whether to add the client action to the "Edit" menu when the client action is 
+			available for the currently selected business objects. The default value is "true".
+		-->		
+		<variable name="addToEditMenu" type="boolean" value="true"/>
+		<!---
+			Indicates whether to add the client action to the "View" menu when the client action is 
+			available for the currently selected business objects. The default value is "false".
+		-->		
+		<variable name="addToViewMenu" type="boolean" value="false"/>
+		<!---
+			Indicates whether the client action is available when the business object is selected in explorer view. This attribute
+			will only affect the availability of the client action in the "Edit" menu and the toolbar. The context menu will not be affected.
+			The default is "true". 
+		-->
+		<variable name="availableFromExplorerView" type="boolean" value="true"/>
+
+		<!---
+			Indicates whether the client action is available when the business object is selected in a list view embedded in a properties view.
+			This attribute will only affect the availability of the client action in the "Edit" menu and the toolbar. The context menu will not be affected.
+			The default is "true".
+		-->
+		<variable name="availableFromEmbeddedListView" type="boolean" value="true"/>
+
+		<!---
+			Indicates whether the client action is available when the business object is selected in a list view in the main work area.
+			This attribute will only affect the availability of the client action in the "Edit" menu and the toolbar. The context menu will not be affected.
+			The default is "true".
+		-->
+		<variable name="availableFromMainListView" type="boolean" value="true"/>
+		
+		<!---
+			This attribute specifies if this client side action is enabled when multiple objects are selected.
+		-->
+		<variable name="allowMultipleSelection" type="boolean" value="true"/>	
+
+		<!---
+			Indicates whether this client action is added to the Utilities view context menu. The default is <code>false</code>.
+		-->
+		<variable name="addToUtilitiesContextMenu" type="boolean" value="false"/>
+
+		<!---
+			Indicates whether this client action is added to the explorer view context menu. The default is <code>true</code>.
+		-->
+		<variable name="addToExplorerContextMenu" type="boolean" value="true"/>
+
+		<!---
+			Indicates whether this client action is added to the list view context menu. The default is <code>true</code>.
+		-->
+		<variable name="addToListContextMenu" type="boolean" value="true"/>
+		
+		<!---
+			The type for this action.
+		-->
+		<variable name="actionType" type="string" value=""/>
+		
+		<!---
+			Indicates that this client action creates an object, and that the menu item should be added
+			to the part of the context menu that is reserved for New object actions.
+			The default is <code>false</code>.
+		-->
+		<variable name="newObjectAction" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Initialize the client action add this to parent.clientActions
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var actions = this.parent.clientActions;
+			if (!actions) {
+				actions = [];
+				this.parent.clientActions = actions;
+			}
+			actions.push(this);
+			if (this.shortcutKeys != null) {
+				this.doClientActionDel = new EventHandler.Class(this, "doClientAction");
+				var model = ModelUtil.Singleton.findModelForView(this);
+				if (model != null) {
+					this.checkBusinessObjectEditorDel = new EventHandler.Class(this, "checkBusinessObjectEditor");
+					this.checkBusinessObjectEditorDel.connect(model, "onmodelInitialized");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the menu display name. If the menuDisplayName attribute has not been set
+			then this method will return the value of the displayName attribute.
+
+			@return boolean: the menu display name
+		-->
+		<method name="getMenuDisplayName">
+			<![CDATA[
+			return this.menuDisplayName == null ? this.displayName : this.menuDisplayName;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method calls the doClientAction method in the business object editor passing its own instance.
+		-->				
+		<method args="e" name="doClientAction">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (model != null) {
+				var oEditor = model.oEditor;
+				if (ViewUtil.Singleton.containedInModalView(oEditor)) {
+					oEditor.doClientAction(this);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords abstract
+	
+			This method is invoked by the framework when the client action is executed from the "Edit" menu, toolbar or
+			the context menu. Override this method to implement the action that needs to be performed on the selected
+			business object whenever the client action is executed.
+			
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->				
+		<method args="objects" name="performAction">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if business object editor is initialized and register shortcutKeys event
+		-->			
+		<method args="e" name="checkBusinessObjectEditor">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (model.modelInitialized && !this.checkShortcutKeysDel) {
+				this.checkShortcutKeysDel = new EventHandler.Class(this, "checkShortcutKeys");
+				this.checkShortcutKeysDel.connect(model.oEditor, "onactive");
+				this.checkShortcutKeysDel.connect(model.oEditor, "onenabledClientActions");
+				this.checkBusinessObjectEditorDel.disconnectAll();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.doClientActionDel) {
+				this.doClientActionDel.disconnectAll();
+				delete this.doClientActionDel;
+			}
+			if (this.checkBusinessObjectEditorDel) {
+				this.checkBusinessObjectEditorDel.disconnectAll();
+				delete this.checkBusinessObjectEditorDel;
+			}
+			if (this.checkShortcutKeysDel) {
+				this.checkShortcutKeysDel.disconnectAll();
+				delete this.checkShortcutKeysDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Method to register/unregister shortcut keys
+		-->			
+		<method args="e" name="checkShortcutKeys">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (model.oEditor.active && model.oEditor.enabledClientActions != null && model.oEditor.enabledClientActions.indexOf(this) != -1) {
+				this.registerShortcutKey();
+			}
+			else {
+				this.unregisterShortcutKey();
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Registers the shortcut key
+		-->
+		<method name="registerShortcutKey">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.keysRegistered = true;
+				KeyUtil.callOnKeyCombo(this.doClientActionDel, this.shortcutKeys);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Unregisters the shortcut key
+		-->
+		<method name="unregisterShortcutKey">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.keysRegistered = false;
+				KeyUtil.removeKeyComboCall(this.doClientActionDel, this.shortcutKeys);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns true if this client action is enabled for the specified
+			model object by evaluating the associated {@link cmc/foundation/EnablementCondition} object.
+			This method is only used to determine if this action is visible to the user.
+			It is not invoked from the {@link cmc/foundation/ClientAction#doClientAction} method.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			if (this.enablementCondition) {
+				return this.enablementCondition.isEnabled(o);
+			}
+			else {
+				return true;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the enablement condition changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerEnablementDelegate">
+			<![CDATA[
+			if (this.enablementCondition) {
+				this.enablementCondition.registerDelegate(o, del);
+			}
+			]]>
+		</method>
+
+	</Node>
+
+	<!---
+		@keywords final
+		
+		<p>This class is used to preview a file, an URL, or text in the Management Center.
+		Instances of this class should only be declared as direct children of instances of {@link cmc/foundation/ObjectDefinition}.</p>
+		
+		<p>This action can preview external URLs, text and files stored in the WebSphere Commerce Server.
+		The <code>isExternal</code> and <code>externalObjectTypes</code> attributes are used to indicate whether the file is an external URL.
+		The <code>textObjectPath</code> and <code>textPropertyName</code> attributes are used to determine if the preview action can preview text.</p>
+		
+		<p>When previewing an internal file. The URL is constructed as follows:
+		<ul>
+		    <li>Protocol: The protocol used to load the Management Center. For example, https.
+		    <li>Hostname: The hostname where the Management Center was loaded from. For example, commerce.mycompany.com.
+		    <li>Port: The port number used to load the Management Center from the host. For example, commerce.mycompany.com:8000, 
+		    where 8000 is the port number.
+		    <li>File path: The path to the file prefixed with "/webapp/wcs/preview". The path to the file is determined by 
+		    the properties indicated in the <code>pathPropertyName</code> attribute and optionally the 
+		    <code>filenamePropertyName</code> attribute.		
+		</ul>
+		</p>
+
+		<p>An example of the constructed URL is <code>https://localhost:8000/webapp/wcs/preview/ConsumerDirect/images/catalog/FUDEL_01.jpg</code>.
+		This URL is launched from a new browser pop-up window.</p>
+
+		<p>When previewing an external URL the value of the <code>pathPropertyName</code> property is an URL of an external file.
+		A new browser pop-up window opens to display the URL.</p>
+		
+		<p>When previewing text, the value of the <code>textPropertyName</code> property is displayed in a new browser pop-up window.</p>
+
+		<p>The following example demonstrates the declaration of this class. Let <code>/ConsumerDirect/images/catalog/FUDEL_01.jpg</code> be the
+		value of the property <code>fullPath</code> in the currently selected business object.</p>
+		
+		@START_CODE
+		<PreviewFileClientAction displayName="Preview File in Browser" pathPropertyName="fullPath" />
+		@END_CODE
+
+		<p>When the context menu option "Preview File in Browser" is clicked for the currently selected business object, 
+		an URL such as <code>https://localhost:8000/webapp/wcs/preview/ConsumerDirect/images/catalog/FUDEL_01.jpg</code> is constructed
+		and opens in a new browser pop-up window.</p>
+	-->
+	<ClientAction addToEditMenu="false" addToUtilitiesContextMenu="true" allowMultipleSelection="false" classDefinition="true" definitionName="cmc/foundation/PreviewFileClientAction">
+		<dependency localName="ClientActionUnsavedDialog" moduleName="cmc/foundation/ClientActionUnsavedDialog"/>
+		<!---
+			Indicates whether the file path is actually an URL of an external resource.
+		-->				
+		<variable name="isExternal" type="boolean" value="false"/>
+		<!---
+			A comma-separated list of object types that should be considered external. If this value is not empty,
+			then {@link cmc/foundation/PreviewFileClientAction#isExternal} is ignored.
+		-->
+		<variable name="externalObjectTypes" type="string" value=""/>
+		<!---
+			The object path to the object containing {@link cmc/foundation/PreviewFileClientAction#pathPropertyName} and
+			{@link cmc/foundation/PreviewFileClientAction#filenamePropertyName}. If the object path resolves to more than one object,
+			the first object will be used. If no object path is specified, the current object will be used.
+		-->
+		<variable name="objectPath" type="string" value=""/>
+		<!---
+			The name of the property in the business object which is used to resolve the file path. This is a mandatory attribute.
+		-->				
+		<variable name="pathPropertyName" type="string"/>
+		<!---
+			The property name of the object that contains a comma-separated list of language ID's that an asset is associated with.
+		-->
+		<variable name="languageIdsPropertyName" type="string" value=""/>
+		<!---
+			The name of the property that contains the file name portion of the path. This is an optional attribute. 
+			If this attribute is set, the full path to the file is constructed by combining the values of  both the 
+			<code>filenamePropertyName</code> and <code>pathPropertyName</code> properties. For example:
+			
+			<code>/webapp/wcs/preview/<i>value of the pathPropertyName property</i>/<i>value of filenamePropertyName property</i></code>
+
+			<p>If this value is not set, the full path to the file is constructed only by the value of the <code>pathPropertyName</code> property.</p>
+		-->				
+		<variable name="filenamePropertyName" type="string" value=""/>		
+		<!---
+			Object path to the child object that contains the text property.
+		-->
+		<variable name="textObjectPath" type="string" value=""/>
+		<!---
+			Name of the property that contains the text to preview.
+		-->
+		<variable name="textPropertyName" type="string" value=""/>
+		<!---
+			Name of the property that contains the preview format. The preview format is used to determine if the
+			previewed object is text or a file. The value of the specified property is matched against the
+			types specified by <code>fileTypeValues</code>. If this attribute is not specified, then
+			all objects will be treated as file objects.
+		-->
+		<variable name="formatPropertyName" type="string" value=""/>
+		<!---
+			Comma-separated list of values that will be considered file types when testing the value of <code>formatPropertyName</code>.
+		-->
+		<variable name="fileTypeValues" type="string" value=""/>
+
+		<!---
+			This method is invoked by the framework when the client action is executed from the context menu or toolbar.
+			It constructs the URL and launches it in a new browser pop-up window.
+			
+			@param [cmc/foundation/ModelObject] objects The array of selected model objects.
+		-->				
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var o = objects[0];
+			if (o.isOpenGroupDirty(true)) {
+				ClientActionUnsavedDialog.Singleton.openClientActionUnsavedDialog(this);
+			}
+			else {
+				var caller = this;
+				require(["cmc/foundation/PreviewAttachmentActionHandler"], function(PreviewAttachmentActionHandler) {
+					PreviewAttachmentActionHandler.Singleton.triggerAction(o, caller.objectPath, caller.pathPropertyName, caller.filenamePropertyName, caller.isExternal, caller.externalObjectTypes, caller.languageIdsPropertyName, caller.textObjectPath, caller.textPropertyName, caller.formatPropertyName, caller.fileTypeValues);
+				});
+			}
+			]]>
+		</method>
+	</ClientAction>
+
+	<!---
+		<p>This class is used to create a client action that will create a content version for a business object.  Instances of this class should only be declared as direct children of 
+		instances of {@link cmc/foundation/ObjectDefinition}.</p>
+
+		<p>When the business objects are selected with this class defined, a toolbarIcon will appear that allow the user to create a content version.
+		When the icon is clicked, a dialog will open to prompt the user for the version name and comment.</p>
+
+		<p>Object definitions that include this client action must also include a {@link cmc/foundation/ReferenceObjectDefinition reference object definition} with objectType attribute
+		set to "ContentVersion".</p>
+
+		<p>The following example demonstrates the declaration of this class</p>
+		
+		@START_CODE
+		<CreateContentVersionClientAction/>
+		@END_CODE
+	-->
+	<ClientAction addToExplorerContextMenu="false" addToListContextMenu="false" availableFromEmbeddedListView="false" availableFromExplorerView="false" classDefinition="true" definitionName="cmc/foundation/CreateContentVersionClientAction" displayName="${foundationResources.Singleton.ContentVersionCreateClientAction.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ClientActionUnsavedDialog" moduleName="cmc/foundation/ClientActionUnsavedDialog"/>
+
+		<EnablementAndCondition conditionType="contentVersionEnabledCondition">
+			<EnablementCondition contextName="contentVersionEnabled" enablementValue="true"/>
+			<EnablementCondition enablementValue="" propertyName="objectVersionId"/>
+		</EnablementAndCondition>
+
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var objectsDirty = false;
+			for (var i = 0; i < objects.length; i++) {
+				var o = objects[i];
+				if (o.isOpenGroupDirty(true)) {
+					ClientActionUnsavedDialog.Singleton.openClientActionUnsavedDialog(this);
+					objectsDirty = true;
+					break;
+				}
+			}
+			if (!objectsDirty) {
+				require(["cmc/foundation/CreateContentVersionDialog"], function(CreateContentVersionDialog) {
+					CreateContentVersionDialog.Singleton.openCreateContentVersionDialog(objects);
+				});
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			return this.contentVersionEnabledCondition.isEnabled(o) && this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="o, del" name="registerEnablementDelegate">
+			<![CDATA[
+			this.inherited(arguments);
+			this.contentVersionEnabledCondition.registerDelegate(o, del);
+			]]>
+		</method>
+		
+	</ClientAction>
+
+	<!---
+		@keywords private
+		<p>This class defines a client action for restoring a Content Version for a business object.</p>
+	-->
+	<ClientAction addToExplorerContextMenu="false" allowMultipleSelection="false" childListEditorIcon="restoreVersionToolbarIcon" classDefinition="true" definitionName="cmc/foundation/RestoreContentVersionClientAction" displayName="${foundationResources.Singleton.ContentVersionRestoreClientAction.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ClientActionUnsavedDialog" moduleName="cmc/foundation/ClientActionUnsavedDialog"/>
+ 
+		<EnablementAndCondition>
+			<EnablementCondition contextName="contentVersionEnabled" enablementValue="true"/>
+			<EnablementCondition checkReadOnly="true" enablementValue="false"/>
+		</EnablementAndCondition>
+
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var o = objects[0];
+			if (o.isOpenGroupDirty(true)) {
+				ClientActionUnsavedDialog.Singleton.openClientActionUnsavedDialog(this);
+			}
+			else {
+				require(["cmc/foundation/RestoreContentVersionConfirmationDialog"], function(RestoreContentVersionConfirmationDialog) {
+					RestoreContentVersionConfirmationDialog.Singleton.openRestoreContentVersionConfirmationDialog(o);
+				});
+			}
+			]]>
+		</method>
+	</ClientAction>
+
+    <!---
+		@keywords private
+		<p>This class defines a service for checking whether the session is timeout.</p>
+	-->
+    <Service definitionName="cmc/foundation/CheckSessionForConfiguratorService" singletonDefinition="true" url="/cmc/GetOnlineStores">
+		 <method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var storeConfig = requestParent.storeConfig;
+			var modelPath = requestParent.modelPath;
+			var workspaceName = requestParent.workspaceName;
+			var workspaceTask = requestParent.workspaceTask;
+			var workspaceTaskGroup = requestParent.workspaceTaskGroup;
+			var catentryId = requestParent.catentryId;
+			var configXML = requestParent.configXML;
+			var startDate = requestParent.startDate;
+			requestParent.launchConfigurator(storeConfig, modelPath, workspaceName, workspaceTask, workspaceTaskGroup, catentryId, configXML, startDate);
+			]]>
+		</method>		
+		
+		
+	</Service>
+	<!---
+		@keywords private
+		<p>This class defines a service for creating a Content Version for a business object.</p>
+	-->
+	<Service definitionName="cmc/foundation/CreateContentVersionService" singletonDefinition="true" transactionService="true" url="/cmc/CreateContentVersion">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+
+		<ServiceParam name="storeId"/>
+
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			requestParent.setGetChildrenServicesStale(requestParent.objectDefinition.getChildDefinition("ContentVersion"), true);
+			var msg;
+			var messageType = "createContentVersionSuccessful";
+			var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+			if (msgCount == 1) {
+				msg = foundationResources.Singleton.replaceValues("createContentVersionSuccessful", [requestParent.openGroupObject.objectDisplayName]);
+			}
+			else {
+				msg = foundationResources.Singleton.replaceValues("createMultipleContentVersionsSuccessful", [msgCount]);
+			}
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		<p>This class defines a service for restoring a Content Version for a business object.</p>
+	-->
+	<Service definitionName="cmc/foundation/RestoreContentVersionService" singletonDefinition="true" transactionService="true" url="/cmc/RestoreContentVersion">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+
+		<ServiceParam name="storeId"/>
+
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var msg;
+			var messageType = "restoreContentVersionSuccessful";
+			var msg = foundationResources.Singleton.replaceValues("restoreContentVersionSuccessful", [requestParent.getPropertyValue("versionNumber"), requestParent.openGroupObject.objectDisplayName]);
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			requestParent.parentObject.getProperty("basedOnVersionNumber").setVariable("value", requestParent.getPropertyValue("versionNumber"));
+			requestParent.parentObject.getProperty("basedOnVersionName").setVariable("value", requestParent.getPropertyValue("versionName"));
+			requestParent.parentObject.refreshObject();
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		<p>This class defines a new handler to create a new content version object.</p>
+	-->
+	<NewHandler classDefinition="true" definitionName="cmc/foundation/ContentVersionNewHandler">
+		<dependency localName="CreateContentVersionClientAction" moduleName="cmc/foundation/CreateContentVersionClientAction"/>
+		
+		<!--- @keywords private -->
+		<method args="parentObject" name="getClientAction">
+			<![CDATA[
+			var clientActions = parentObject.objectDefinition.clientActions;
+			for (var i = 0; i < clientActions.length; i++) {
+				if (clientActions[i] instanceof CreateContentVersionClientAction.Class) {
+					return clientActions[i];
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="objectDefinition, parentObject" name="createNewObject">
+			<![CDATA[
+			var clientAction = this.getClientAction(parentObject);
+			if (clientAction != null) {
+				clientAction.performAction([parentObject]);
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="parentObject" name="isEnabled">
+			<![CDATA[
+			var enabled = true;
+			var clientAction = this.getClientAction(parentObject);
+			if (clientAction != null) {
+				enabled = clientAction.isEnabled(parentObject);
+			}
+			return enabled;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="parentObject, del" name="registerEnablementDelegate">
+			<![CDATA[
+			var clientAction = this.getClientAction(parentObject);
+			if (clientAction != null) {
+				clientAction.registerEnablementDelegate(parentObject, del);
+			}
+			]]>
+		</method>
+	</NewHandler>
+	
+	<!---
+		@keywords private
+		<p>This class defines a client action for opening a version with current business object in compare view.</p>
+	-->
+	<ClientAction allowMultipleSelection="false" childListEditorIcon="compareVersionWithCurrentObjectToolbarIcon" classDefinition="true" definitionName="cmc/foundation/OpenVersionWithCurrentObjectAction" displayName="${foundationResources.Singleton.toolbarCompareVersionWithCurrentObject.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var o = objects[0];
+			var parentObject = o.getParentPrimaryObject();
+			o.model.oEditor.openObjectsInCompareView(parentObject, o.getReferencedObject());
+			]]>
+		</method>
+	</ClientAction>
+
+	<!---
+		Service that generates and returns a Coremetrics single sign-on token.
+		@keywords private
+	-->
+	<Service definitionName="cmc/foundation/GetAnalyticsSSOTokenService" sendLocale="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetAnalyticsSSOToken">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		
+		<ServiceParam name="storeId"/>
+		
+		<!---
+			Parse the response values from the get SSO token service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			var clientId = "";
+			var username = "";
+			var timestamp = "";
+			var token = "";
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var parameterName = node.nodeName;
+				if (parameterName == "clientId") {
+					clientId = XMLUtil.getNodeValue(node);
+				}
+				else if (parameterName == "username") {
+					username = XMLUtil.getNodeValue(node);
+				}
+				else if (parameterName == "timestamp") {
+					timestamp = XMLUtil.getNodeValue(node);
+				}
+				else if (parameterName == "token") {
+					token = XMLUtil.getNodeValue(node);
+				}
+			}
+			requestParent.launchReport(clientId, username, timestamp, token);
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		Service that generates and returns a marketing center single sign-on token.
+		@keywords private
+	-->
+	<Service definitionName="cmc/foundation/GetMarketingCenterSSOTokenService" sendLocale="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetAnalyticsSSOToken">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		
+		<ServiceParam name="storeId"/>
+		
+		<!---
+			Parse the response values from the get SSO token service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			var clientId = "";
+			var username = "";
+			var timestamp = "";
+			var token = "";
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var parameterName = node.nodeName;
+				if (parameterName == "clientId") {
+					clientId = XMLUtil.getNodeValue(node);
+				}
+				else if (parameterName == "username") {
+					username = XMLUtil.getNodeValue(node);
+				}
+				else if (parameterName == "timestamp") {
+					timestamp = XMLUtil.getNodeValue(node);
+				}
+				else if (parameterName == "token") {
+					token = XMLUtil.getNodeValue(node);
+				}
+			}
+			requestParent.launchMC(clientId, username, timestamp, token);
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		<p>This client action exposes the ability to launch a Coremetrics Analytics report on an organization object,
+		such as the E-Marketing Spots or Activities folders, or a primary object like products and SKUs in CMC.</p>
+		
+		<p>For each object that a report should be associated with, the object definition simply needs to be
+		instrumented with an instance of <code>OpenCoremetricsReportClientAction</code> with the appropriate
+		<code>displayName</code> and <code>reportUri</code> parameters set. For example:
+		
+		@START_CODE
+		<OpenCoremetricsReportClientAction displayName="Open e-Marketing spots report" reportUri="report:/websphere/espot.ftl"/>
+		@END_CODE
+		</p>
+	-->
+	<LaunchURLClientAction addToEditMenu="false" addToViewMenu="true" classDefinition="true" definitionName="cmc/foundation/OpenCoremetricsReportClientAction" displayName="${foundationResources.Singleton.viewCoremetricsReport.string}" toolbarIcon="analyticsToolbarIcon" url="https://welcome.coremetrics.com/analyticswebapp/analytics.jsp" urlRequestMethod="GET" windowName="Coremetrics_Window">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		
+		<!---
+			The relative Coremetrics report URI to load, which can be obtained from Coremetrics.
+			For example, <code>report:/merchandising/hierarchy.ftl</code>.
+		-->
+		<variable name="reportUri" type="string" value=""/>
+		
+		<!---
+			Generates and launches a new window to the fully-qualified URL of the specified Coremetrics report.  
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (this.reportUri != "") {
+				var caller = this;
+				require(["cmc/foundation/GetAnalyticsSSOTokenService"], function(GetAnalyticsSSOTokenService) {
+					GetAnalyticsSSOTokenService.Singleton.doRequest(caller);
+				});
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="clientId, username, timestamp, token" name="launchReport">
+			<![CDATA[
+			this.urlParamValueMap = new Object();
+			this.urlParamValueMap.uri = this.reportUri;
+			this.urlParamValueMap.locale = ContextUtil.Singleton.findContextValue(null, "locale").value;
+			if (clientId && clientId != "" && username && username != "" && timestamp && timestamp != "" && token && token != "") {
+				this.urlParamValueMap.clientId = clientId;
+				this.urlParamValueMap.username = username;
+				this.urlParamValueMap.timestamp = timestamp;
+				this.urlParamValueMap.token = token;
+				this.urlParamValueMap.authsrc = "wc";
+			}
+			var url = this.url;
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(this);
+			if (storeConfig != null && storeConfig.analytics != null && storeConfig.analytics.url != null && storeConfig.analytics.url != "") {
+				url = storeConfig.analytics.url;
+			}
+			this.launchURLWindow(url);
+			]]>
+		</method>
+		
+		<CoremetricsEnablementCondition/>
+	</LaunchURLClientAction>
+
+
+	<!---
+		<p>This client action exposes the ability to launch a marketing center page on an organization object,
+		such as the promotion code exports, or a primary object such as promotion in CMC.</p>
+		
+		<p>When launching the marketing center, it can be associated with an object or not, the object definition needs to be
+		instrumented with an instance of <code>OpenMarketingCenterClientAction</code> with the appropriate
+		<code>displayName</code>, <code>uri</code> and <code>url</code> parameters set. For example:
+		
+		@START_CODE
+		<OpenMarketingCenterClientAction displayName="Manage Promotion Code in IBM marketing Center" uri="managepromocodes:promoCodes" url="https://mc.coremetrics.com/mcwebapp/welcome.do"/>
+		@END_CODE
+		
+		If an object is associated when launching the marketing center, it can add one optional parameter <code>defaultName</code>. 
+		The value of the defaultName from the object will be passed to the marketing center as a name value pair. For example, 
+		@START_CODE
+		<OpenMarketingCenterClientAction displayName="Create campaign in IBM marketing Center" uri="mc_campaigns:" defaultName="adminName" url="https://mc.coremetrics.com/mcwebapp/welcome.do"/>
+		@END_CODE
+		if the value of the adminName for this promotion is "PromotionTest", the actual URL to be launched will be:
+		<code>https://mc.coremetrics.com/mcwebapp/welcome.do?uri=mc_campaigns:&defaultName=PromotionTest</code>
+		</p>
+	-->
+	<LaunchURLClientAction addToEditMenu="false" addToViewMenu="true" classDefinition="true" definitionName="cmc/foundation/OpenMarketingCenterClientAction" displayName="" toolbarIcon="MarketingCenterContextToolbarIcon" url="https://mc.coremetrics.com/mcwebapp/welcome.do" urlRequestMethod="GET" windowName="MarketingCenter_Window">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+
+		<!---
+			The relative marketing center URI to load, which can be obtained from Marketing Center.
+			For example, <code>promocodes:</code>.
+		-->
+		<variable name="uri" type="string" value=""/>
+		<variable name="defaultName" type="string" value=""/>
+		<variable name="defaultNameValue" type="string" value=""/>
+		
+		<!---
+			Generates and launches a new window to the fully-qualified URL of the specified marketing center page.  
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (this.uri != "") {
+				if (this.defaultName != "") {
+					this.defaultNameValue = objects[0].getPropertyValue(this.defaultName);
+				}
+				var caller = this;
+				require(["cmc/foundation/GetMarketingCenterSSOTokenService"], function(GetMarketingCenterSSOTokenService) {
+					GetMarketingCenterSSOTokenService.Singleton.doRequest(caller);
+				});
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="clientId, username, timestamp, token" name="launchMC">
+			<![CDATA[
+			this.urlParamValueMap = new Object();
+			this.urlParamValueMap.uri = this.uri;
+			if (this.defaultNameValue != null && this.defaultNameValue != "") {
+				this.urlParamValueMap.defaultName = this.defaultNameValue;
+			}
+			this.urlParamValueMap.locale = ContextUtil.Singleton.findContextValue(null, "locale").value;
+			if (clientId && clientId != "" && username && username != "" && timestamp && timestamp != "" && token && token != "") {
+				this.urlParamValueMap.clientId = clientId;
+				this.urlParamValueMap.username = username;
+				this.urlParamValueMap.timestamp = timestamp;
+				this.urlParamValueMap.token = token;
+				this.urlParamValueMap.authsrc = "wc";
+			}
+			var url = this.url;
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(this);
+			if (storeConfig != null && storeConfig.analytics != null && storeConfig.analytics.marketingCenterUrl != null && storeConfig.analytics.marketingCenterUrl != "") {
+				url = storeConfig.analytics.marketingCenterUrl;
+			}
+			this.launchURLWindow(url);
+			]]>
+		</method>
+		
+		<MarketingCenterEnablementCondition/>
+
+	</LaunchURLClientAction>
+
+
+	<!---
+		@keywords private
+		<p>This class defines a client action to launch a specific URL.</p>
+	-->
+	<ClientAction allowMultipleSelection="false" classDefinition="true" definitionName="cmc/foundation/LaunchURLClientAction">
+		<!---  The URL to load -->
+		<variable name="url" type="string" value=""/>
+		<!---  The property map -->
+		<variable name="urlParamValueMap" value="${null}"/>
+		<!---  HTTP request method to use for the request. Allowed values are "GET" or "POST". The default value is "POST". -->
+		<variable name="urlRequestMethod" type="string" value="POST"/>
+		<!---  The window name -->
+		<variable name="windowName" type="string" value=""/>
+		
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			this.launchURLWindow();
+			]]>
+		</method>
+		
+		<!---
+			Launches a new window to <code>url</code> with the query parameters defined in <code>urlParamValueMap</code>.
+		-->
+		<method args="url" name="launchURLWindow">
+			<![CDATA[
+			if (typeof(url) == "undefined") url = null;
+			if ((url != null && url != "") || (this.url != null && this.url != "")) {
+				var newWindowObj = new Object();
+				newWindowObj.URL = (url != null && url != "") ? url : this.url;
+				newWindowObj.windowName = this.windowName;
+				newWindowObj.windowFeatures = "scrollbars=yes,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+				newWindowObj.windowWidth = 1014;
+				newWindowObj.windowHeight = 710;
+				if (this.urlParamValueMap != null) {
+					newWindowObj.URL = "";
+					newWindowObj.content = "<html><body><form action=\"" + ((url != null && url != "") ? url : this.url) + "\" method=\"" + this.urlRequestMethod + "\">";
+					for (var key in this.urlParamValueMap) {
+						var value = this.urlParamValueMap[key];
+						value = decodeURIComponent(value);
+						newWindowObj.content += "<input type=\"hidden\" name=\"" + key + "\" value=\"" + value + "\">";
+					}
+					newWindowObj.content += "</form></body></html>";
+					newWindowObj.submitForm = true;
+				}
+				openNewCenteredWindow(newWindowObj);
+			}
+			]]>
+		</method>
+	</ClientAction>
+
+	<!---
+		<p>This class defines a client action to launch Visual Modeler</p>
+	-->
+	<LaunchURLClientAction classDefinition="true" definitionName="cmc/foundation/LaunchVisualModelerClientAction" displayName="${catalogResources.Singleton.kitConfigLaunchVMButton.string}" windowName="VisualModeler_Window">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(objects[0]);
+			var identityId = ContextUtil.Singleton.findContextValue(null, "unencryptedIdentityId").value;
+			var identitySignature = ContextUtil.Singleton.findContextValue(null, "identitySignature").value;
+			var locale = ContextUtil.Singleton.findContextValue(null, "locale").value;
+			if (storeConfig != null) {
+				var locales = locale.split("_");
+				var language = locales[0];
+				var country = locales[1];
+				var visualModelerServer = storeConfig.sterlingConfig.visualModelerServer;
+				visualModelerServer = StringUtil.Singleton.replace(visualModelerServer, "en/US", language + "/" + country);
+				this.url = visualModelerServer + "?" + "cmd=LoginDisplay&validate=true&LoginData-entryPoint=visualModeler&LoginData-messageType=visualModeler";
+				this.urlParamValueMap = {
+					login: storeConfig.sterlingConfig.visualModelerId,
+					passwd: storeConfig.sterlingConfig.visualModelerPassword,
+					storeId: storeConfig.storeId,
+					currency: storeConfig.defaultCurrency != null ? storeConfig.defaultCurrency.currencyCode : null,
+					identityId: identityId,
+					identitySignature: identitySignature,
+					LocaleCode: locale
+				};
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+	</LaunchURLClientAction>
+	
+	<!---
+		<p>This class defines a client action to launch Sterling Configurator </p>
+	-->
+	<LaunchURLClientAction classDefinition="true" definitionName="cmc/foundation/LaunchConfiguratorClientAction" displayName="${catalogResources.Singleton.kitConfigLaunchConfiguratorButton.string}" windowName="Configurator_Window">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<dependency localName="LaunchURLClientAction" moduleName="cmc/foundation/LaunchURLClientAction"/>
+		
+		<variable name="storeConfig" value="${null}"/>
+		<variable name="modelPath" value="${null}"/>
+		<variable name="workspaceName" value="${null}"/>
+		<variable name="workspaceTask" value="${null}"/>
+		<variable name="workspaceTaskGroup" value="${null}"/>
+		<variable name="catentryId" value="${null}"/>
+		<variable name="configXML" value="${null}"/>
+		<variable name="startDate" value="${null}"/>
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (objects[0]) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "objects[0]", objects[0].logString());
+				this.storeConfig = ContextUtil.Singleton.findStoreConfig(objects[0]);
+				var po = objects[0];
+				for (var i = 0; i < objects[0].references.length; i++) {
+					var ro = objects[0].references[i];
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "ro", ro.logString());
+					if (ro.objectType == "DynamicKitChildPDK" || ro.objectType == "DynamicKitChildInheritedPDK") {
+						po = ro.parentObject;
+						break;
+					}
+				}
+				if (po) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "po", po.logString());
+					this.modelPath = po.getObject("CatalogEntryConfigModel/KitConfigModelAssociationGroup/ConfigModelGroup").getPropertyValue("path");
+				}
+				this.workspaceName = ContextUtil.Singleton.findContextValue(objects[0], "workspaceName").value;
+				this.workspaceTask = ContextUtil.Singleton.findContextValue(objects[0], "workspaceTask").value;
+				this.workspaceTaskGroup = ContextUtil.Singleton.findContextValue(objects[0], "workspaceTaskGroup").value;
+				this.catentryId = objects[0].objectId;
+				this.configXML = objects[0].getPropertyValue("xprop_dynamicKitDefaultConfiguration", "CatalogEntryExtraProperties");
+				this.startDate = objects[0].getPropertyValue("xprop_startDate", "CatalogEntryExtraProperties");
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "workspaceName", this.workspaceName);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "modelPath", this.modelPath);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "catentryId", this.catentryId);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "configXML", this.configXML);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/LaunchConfiguratorClientAction", "startDate", this.startDate);
+				var caller = this;
+				require(["cmc/foundation/CheckSessionForConfiguratorService"], function(CheckSessionForConfiguratorService) {
+					CheckSessionForConfiguratorService.Singleton.doRequest(caller);
+				});
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="storeConfig, modelPath, workspaceName, workspaceTask, workspaceTaskGroup, catentryId, configXML, startDate" name="launchConfigurator">
+			<![CDATA[
+			if (storeConfig != null) {
+				var objects = null;
+				var tempUrl = window.location;
+				var contextUrl;
+				if (cmcConfig.serviceContextRoot) {
+					contextUrl = cmcConfig.serviceContextRoot;
+				}
+				else {
+					contextUrl = "/lobtools";
+				}
+				this.url = storeConfig.sterlingConfig.configuratorURL + "?sfId=" + storeConfig.sterlingConfig.sterlingOrganization;
+				var identityId = ContextUtil.Singleton.findContextValue(null, "identityId").value;
+				var identitySignature = ContextUtil.Singleton.findContextValue(null, "identitySignature").value;
+				var returnUrl = tempUrl.protocol.substring(0, tempUrl.protocol.length - 1) + "://" + tempUrl.hostname + ":" + tempUrl.port + contextUrl + "/cmc/UpdateDynamicKitPreConfiguration?storeId=" + storeConfig.storeId + "&catentryId=" + catentryId + "&workspaceName=" + workspaceName + "&workspaceTask=" + workspaceTask + "&workspaceTaskGroup=" + workspaceTaskGroup + "&locale=" + ContextUtil.Singleton.findContextValue(null, "locale").value;
+				var css = tempUrl.protocol.substring(0, tempUrl.protocol.length - 1) + "://" + tempUrl.hostname + ":" + tempUrl.port + contextUrl + "/css/configurator/configurator.css";
+				var localeCode = ContextUtil.Singleton.findContextValue(null, "locale").value;
+				configXML = this.escapeTextForConfigXML(configXML);
+				configXML = StringUtil.Singleton.escapeText(configXML);
+				var firingPhase = "Initiate";
+				var configDate = this.truncateStartDate(startDate);
+				this.urlParamValueMap = {
+					organizationCode: storeConfig.sterlingConfig.sterlingOrganization,
+					currency: storeConfig.defaultCurrency != null ? storeConfig.defaultCurrency.currencyCode : null,
+					LocaleCode: localeCode,
+					Model: modelPath,
+					doneButton: catalogResources.Singleton.kitConfiguratorSaveButton.string,
+					ReturnURL: returnUrl,
+					identityId: identityId,
+					identitySignature: identitySignature,
+					storeId: storeConfig.storeId,
+					css: css,
+					workspaceName: workspaceName,
+					workspaceTask: workspaceTask,
+					workspaceTaskGroup: workspaceTaskGroup,
+					ConfigXML: configXML,
+					FiringPhase: firingPhase,
+					configDate: configDate
+				};
+				LaunchURLClientAction.Class.prototype.performAction.call(this, objects);
+			}
+			;
+			]]>
+		</method>
+		
+		
+		
+		<!---
+			Returns an escaped version of the string.
+			
+			@param string str The string.
+			@returns string The escaped version of the string.
+		-->
+		<method args="str" name="escapeTextForConfigXML">
+			<![CDATA[
+			var textStr = str;
+			if (typeof (str) != "undefined" && str != null && LangUtil.Singleton.isString(str)) {
+				var escapeChars = {
+					'&amp;': '&amp;amp;',
+					'&lt;': '&amp;lt;',
+					'&gt;': '&amp;gt;',
+					'&apos;': '&amp;apos;',
+					'&quot;': '&amp;quot;'
+				};
+				var i;
+				for (var ec in escapeChars) {
+					var tempBeforeStr = "";
+					while (textStr.indexOf(ec) > -1) {
+						i = textStr.indexOf(ec);
+						tempBeforeStr = tempBeforeStr + textStr.substring(0, i) + escapeChars[ec];
+						textStr = textStr.substring(i + ec.length);
+					}
+					textStr = tempBeforeStr + textStr;
+				}
+			}
+			return textStr;
+			]]>
+		</method>
+		
+		<!---
+			Truncate the start date. e.g.From '2014-09-20T00:00:00.001-04:00' to be '2014-09-20T00:00:00'
+			
+			@param string str The string.
+			@returns string The formated startDate.
+		-->
+		<method args="str" name="truncateStartDate">
+			<![CDATA[
+			var textStr = str;
+			if (typeof (str) != "undefined" && str != null && LangUtil.Singleton.isString(str)) {
+				textStr = textStr.substring(0, 19);
+			}
+			return textStr;
+			]]>
+		</method>
+	</LaunchURLClientAction>
+
+	<!---
+		@keywords private
+		<p>This class defines a client action to delete all Preconfigured components.</p>
+	-->
+	<ClientAction allowMultipleSelection="false" classDefinition="true" definitionName="cmc/foundation/DeletePreconfigClientAction" displayName="${catalogResources.Singleton.kitDeletePreconfigButton.string}">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<!--- @keywords private -->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			require(["cmc/foundation/DeletePreconfigConfirmationDialog"], function(DeletePreconfigConfirmationDialog) {
+				DeletePreconfigConfirmationDialog.Singleton.openDeletePreconfigConfirmationDialog(objects[0]);
+			});
+			]]>
+		</method>
+	</ClientAction>
+</Definitions>

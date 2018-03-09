@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","ru",{bold:"Полужирный",italic:"Курсив",strike:"Перечеркивание",subscript:"Нижний индекс",superscript:"Верхний индекс",underline:"Подчеркивание"});

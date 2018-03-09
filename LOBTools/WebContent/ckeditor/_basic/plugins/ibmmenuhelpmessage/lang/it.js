@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","it",{keystrokeForContextMenu:"Selezionare Ctrl + clic con il tasto destro del mouse per maggiori opzioni",keystrokeForContextMenuMac:"Selezionare Cmd + clic con il tasto destro del mouse per maggiori opzioni"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","nl",{keystrokeForContextMenu:"Klik op Ctrl + Pijl naar rechts voor meer opties",keystrokeForContextMenuMac:"Klik op Cmd + Pijl naar rechts voor meer opties"});

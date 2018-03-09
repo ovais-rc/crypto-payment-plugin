@@ -1,0 +1,242 @@
+<?xml version="1.0" standalone="yes" ?>
+<Reporting>
+  <Report  reportName="CsrDailyRevenueReport" online="true" >
+   <comment></comment>
+   <SQLvalue>
+SELECT 
+	DS.LOGONID AS logonId,
+	DS.NAME AS NAME,
+	SUM(DS.REVENUE) AS REVENUE,
+	RANK() OVER (ORDER BY SUM(DS.REVENUE) Desc) AS RANKING
+FROM
+	(SELECT DISTINCT
+		REG.LOGONID AS logonId,
+		CONCAT(COALESCE(ADDR.LASTNAME,''),CONCAT(CONCAT(', ',COALESCE(ADDR.MIDDLENAME,'')),CONCAT(' ',COALESCE(ADDR.FIRSTNAME,'')))) AS NAME,
+		(CASE
+			WHEN OI.CURRENCY = SE.SETCCURR
+				THEN OI.TOTALPRODUCT + OI.TOTALADJUSTMENT
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR) = 'M'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL) * 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR)
+					) AS DECIMAL(20, 5))
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR) = 'D'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL)/ 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR)
+					) AS DECIMAL(20, 5))
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY) = 'M'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL) / 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY)
+					) AS DECIMAL(20, 5))
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY) = 'D'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL) * 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY)
+					) AS DECIMAL(20, 5))
+                	ELSE NULL
+                END) AS REVENUE
+	FROM
+		MBRGRP MG, 
+		MBRGRPMBR MGM,
+		USERREG REG,
+		ADDRESS ADDR,
+		ORDUSERS OU,
+		ORDERITEMS OI,
+		ORDERS ORD,
+		STOREENT SE,
+		MBRGRPUSG MGU,
+		MBRGRPTYPE MGT
+	WHERE
+		MG.MBRGRPNAME = '{teamName}' AND
+		MG.MBRGRP_ID = MGU.MBRGRP_ID AND
+		MGU.MBRGRPTYPE_ID = MGT.MBRGRPTYPE_ID AND
+		MGT.NAME = 'ServiceRepGroup' AND
+		MG.MBRGRP_ID = MGM.MBRGRP_ID AND
+		MGM.MEMBER_ID  = REG.USERS_ID AND
+		MGM.MEMBER_ID = ADDR.MEMBER_ID AND
+		MGM.MEMBER_ID = OU.SUBMITTER_ID AND
+		ORD.STOREENT_ID IN ({storeent_id}) AND
+		ORD.ORDERS_ID = OU.ORDERS_ID AND
+		ORD.ORDERS_ID = OI.ORDERS_ID AND
+		ORD.STOREENT_ID = SE.STOREENT_ID AND
+		ORD.TIMEPLACED &gt;= $DB_TIMESTAMP_FUNC({CurrentDateStart})$ AND
+		ORD.TIMEPLACED &lt;= $DB_TIMESTAMP_FUNC({CurrentDateEnd})$ AND
+		ADDR.ISPRIMARY = 1 AND
+		ORD.MEMBER_ID IN (
+					SELECT
+						REP.CUST_ID
+					FROM
+						REPCUSTREL REP
+					WHERE
+						REP.REP_ID = MGM.MBRGRP_ID 
+				)
+	)  DS
+GROUP BY
+	DS.NAME, DS.LOGONID
+ORDER BY
+	{sort} {order}
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>reporting.reportStrings</resourceBundle>
+         <title>CsrDailyRevenueReportOutputViewTitle</title>
+         <message>CsrDailyRevenueReportOutputViewTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+		<displayInHeader>false</displayInHeader>
+		<displayInSummary>false</displayInSummary>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+	   <columns>
+            <columnKey>C0</columnKey>
+            <columnName>CsrDailyRevenueReportCsrLogonIdColumnTitle</columnName>            	
+         </columns>
+	   <columns>
+            <columnKey>C1</columnKey>
+            <columnName>CsrDailyRevenueReportCsrNameColumnTitle</columnName>            	
+         </columns>
+	   <columns>
+            <columnKey>C2</columnKey>
+            <columnName>CsrDailyRevenueReportCsrAmountSoldColumnTitle</columnName> 
+            <columnType>decimal</columnType>
+            <setMaximumFractionDigits>2</setMaximumFractionDigits>
+            <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>CsrDailyRevenueReportRankingColumnTitle</columnName>            
+         </columns>         
+      </userDefinedParameters>
+   </display>
+  </Report>  
+  <Report  reportName="CsrDailyRevenueReportForAll" online="true" >
+   <comment></comment>
+   <SQLvalue>
+SELECT 
+	DS.TEAMNAME AS TEAM,
+	DS.LOGONID AS logonId,
+	DS.NAME AS NAME,
+	SUM(DS.REVENUE) AS REVENUE,
+	RANK() OVER (ORDER BY SUM(DS.REVENUE) Desc) AS RANKING
+FROM
+	(SELECT DISTINCT
+		MG.MBRGRPNAME AS TEAMNAME,
+		REG.LOGONID AS logonId,
+		CONCAT(COALESCE(ADDR.LASTNAME,''),CONCAT(CONCAT(', ',COALESCE(ADDR.MIDDLENAME,'')),CONCAT(' ',COALESCE(ADDR.FIRSTNAME,'')))) AS NAME,
+		(CASE
+			WHEN OI.CURRENCY = SE.SETCCURR
+				THEN OI.TOTALPRODUCT + OI.TOTALADJUSTMENT
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR) = 'M'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL) * 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR)
+					) AS DECIMAL(20, 5))
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR) = 'D'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL)/ 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = OI.CURRENCY AND TOCURR = SE.SETCCURR)
+					) AS DECIMAL(20, 5))
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY) = 'M'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL) / 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY)
+					) AS DECIMAL(20, 5))
+                	WHEN (SELECT MULTIPLYORDIVIDE FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY) = 'D'
+                		THEN CAST((CAST((OI.TOTALPRODUCT + OI.TOTALADJUSTMENT) AS REAL) * 
+					(SELECT	FACTOR FROM CURCONVERT WHERE STOREENT_ID IN ({storeent_id}) AND FROMCURR = SE.SETCCURR AND TOCURR = OI.CURRENCY)
+					) AS DECIMAL(20, 5))
+                	ELSE NULL
+                END) AS REVENUE
+	FROM
+		MBRGRP MG, 
+		MBRGRPMBR MGM,
+		USERREG REG,
+		ADDRESS ADDR,
+		ORDUSERS OU,
+		ORDERITEMS OI,
+		ORDERS ORD,
+		STOREENT SE,
+		MBRGRPUSG MGU,
+		MBRGRPTYPE MGT
+	WHERE
+		MG.MBRGRP_ID = MGU.MBRGRP_ID AND
+		MGU.MBRGRPTYPE_ID = MGT.MBRGRPTYPE_ID AND
+		MGT.NAME = 'ServiceRepGroup' AND
+		MG.MBRGRP_ID = MGM.MBRGRP_ID AND
+		MGM.MEMBER_ID  = REG.USERS_ID AND
+		MGM.MEMBER_ID = ADDR.MEMBER_ID AND
+		MGM.MEMBER_ID = OU.SUBMITTER_ID AND
+		ORD.STOREENT_ID IN ({storeent_id}) AND
+		ORD.ORDERS_ID = OU.ORDERS_ID AND
+		ORD.ORDERS_ID = OI.ORDERS_ID AND
+		ORD.STOREENT_ID = SE.STOREENT_ID AND
+		ORD.TIMEPLACED &gt;= $DB_TIMESTAMP_FUNC({CurrentDateStart})$ AND
+		ORD.TIMEPLACED &lt;= $DB_TIMESTAMP_FUNC({CurrentDateEnd})$ AND
+		ADDR.ISPRIMARY = 1 AND
+		ORD.MEMBER_ID IN (
+					SELECT
+						REP.CUST_ID
+					FROM
+						REPCUSTREL REP
+					WHERE
+						REP.REP_ID = MGM.MBRGRP_ID 
+				)
+	) DS
+GROUP BY
+	DS.TEAMNAME, DS.NAME, DS.LOGONID
+ORDER BY
+	{sort} {order}
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>reporting.reportStrings</resourceBundle>
+         <title>CsrDailyRevenueReportOutputViewTitle</title>
+         <message>CsrDailyRevenueReportOutputViewTitle</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family: Arial, Helvetica, Sans-serif; font-size: 9pt; line-height: 9pt; color : white; background-color : darkblue; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+			<displayInHeader>false</displayInHeader>
+			<displayInSummary>false</displayInSummary>
+			<displayTotal>false</displayTotal>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+		 <columns>
+            <columnKey>C0</columnKey>
+            <columnName>CsrActiveAccountsB2CReportTeamNameColumnTitle</columnName> 
+			<columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<displayInHeader>TRUE</displayInHeader>
+			<displayInSummary>True</displayInSummary>
+         </columns>
+	    <columns>
+            <columnKey>C1</columnKey>
+            <columnName>CsrDailyRevenueReportCsrLogonIdColumnTitle</columnName>            	
+         </columns>
+	   <columns>
+            <columnKey>C2</columnKey>
+            <columnName>CsrDailyRevenueReportCsrNameColumnTitle</columnName>            	
+         </columns>
+	   <columns>
+            <columnKey>C3</columnKey>
+            <columnName>CsrDailyRevenueReportCsrAmountSoldColumnTitle</columnName> 
+            <columnType>decimal</columnType>
+            <setMaximumFractionDigits>2</setMaximumFractionDigits>
+            <setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>CsrDailyRevenueReportRankingColumnTitle</columnName>            
+         </columns>         
+      </userDefinedParameters>
+   </display>
+  </Report>  
+</Reporting>

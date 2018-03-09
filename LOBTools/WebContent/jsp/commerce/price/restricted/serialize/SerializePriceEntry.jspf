@@ -1,0 +1,109 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<object objectType="PriceEntry">
+	<c:set var="showVerb" value="${showVerb}" scope="request"/>
+	<c:set var="businessObject" value="${priceList.priceEntry}" scope="request"/>
+	<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+	<priceEntryId>${priceEntry.catalogEntryIdentifier.uniqueID}_${priceEntry.qualifier}_${priceList.priceListIdentifier.uniqueID}</priceEntryId>
+	<priceListId>${priceList.priceListIdentifier.uniqueID}</priceListId>
+	<qualifier>${priceEntry.qualifier}</qualifier>
+	<c:if test="${priceEntry.minimumQuantity != 0.0}">
+		<minimumQuantity>${priceEntry.minimumQuantity}</minimumQuantity>
+	</c:if>
+
+	<c:if test="${priceEntry.maximumQuantity ne 0.0}">
+		<maximumQuantity>${priceEntry.maximumQuantity}</maximumQuantity>
+	</c:if>
+	<c:set var="startDate" scope="page" value="${priceEntry.startDate}" />
+	<c:set var="endDate" scope="page" value="${priceEntry.endDate}" />
+	<startDate>
+		<c:if test="${priceEntry.startDate != null}">
+			${priceEntry.startDate}
+		</c:if> 
+	</startDate>
+	<endDate>
+		<c:if test="${priceEntry.endDate!= null}">
+			${priceEntry.endDate}
+		</c:if>
+	</endDate>	
+	<precedence><fmt:formatNumber type="number" value="${priceEntry.precedence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></precedence>
+	<defaultStoreCurrency>${priceEntry.price.price.currency}</defaultStoreCurrency>
+	<c:if test="${!(empty priceEntry.price.price.currency)}">
+		<${priceEntry.price.price.currency}>${priceEntry.price.price.value}</${priceEntry.price.price.currency}>
+	</c:if>
+	<c:if test="${!(empty priceEntry.price.alternativeCurrencyPrice)}">
+		<c:forEach var="altPrice" items="${priceEntry.price.alternativeCurrencyPrice}">
+			<${altPrice.currency}>${altPrice.value}</${altPrice.currency}>
+		</c:forEach>
+	</c:if>
+	<c:set var="catalogEntry" value="${priceEntry.catalogEntryInformation}"/>
+	<c:set var="childTypeLocked" value=''/>
+	<c:set var="inherited" value=""/>
+	<c:if test="${catalogEntry.catalogEntryTypeCode == 'ProductBean' || catalogEntry.catalogEntryTypeCode == 'ItemBean' || catalogEntry.catalogEntryTypeCode == 'BundleBean' || catalogEntry.catalogEntryTypeCode == 'DynamicKitBean' || catalogEntry.catalogEntryTypeCode == 'PackageBean'}">
+		<c:if test="${priceEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+			<c:set var="inherited" value="Inherited"/>
+			<c:set var="childTypeLocked" value='readonly="true"'/>
+		</c:if>
+		<c:choose>
+			<c:when	test="${catalogEntry.catalogEntryTypeCode == 'ProductBean'}">
+				<c:set var="type" value="Product"/>
+			</c:when>
+			<c:when test="${catalogEntry.catalogEntryTypeCode == 'BundleBean'}">
+				<c:set var="type" value="Bundle"/>
+			</c:when>
+			<c:when	test="${catalogEntry.catalogEntryTypeCode == 'PackageBean' || catalogEntry.catalogEntryTypeCode == 'DynamicKitBean'}">
+				<c:set var="type" value="Kit"/>
+			</c:when>
+			<c:when	test="${catalogEntry.catalogEntryTypeCode == 'ItemBean'}">
+				<c:set var="type" value="ProductSKU"/>
+			</c:when>
+		</c:choose>
+		<c:set var="objectType" value="${inherited}${type}"/>
+		<c:set var="childType" value="Child${objectType}"/>
+		<%-- Need special handling for Product SKU --%>
+		<c:if test="${type == 'ProductSKU' }" >
+			<c:set var="childType" value="ProductChild${inherited}SKU"/>
+		</c:if>
+		<object objectType="${objectType}">
+			<c:set var="showVerb" value="${showVerb}" scope="request"/>
+			<c:set var="businessObject" value="${catalogEntry}" scope="request"/>
+			<catenttypeId readonly="true"><wcf:cdata data="${priceEntry.catalogEntryInformation.catalogEntryTypeCode}"/></catenttypeId>
+			<catentryId><wcf:cdata data="${priceEntry.catalogEntryIdentifier.uniqueID}"/></catentryId>
+			<ownerId><wcf:cdata data="${priceEntry.catalogEntryIdentifier.externalIdentifier.ownerID}"/></ownerId>
+			<objectStoreId><wcf:cdata data="${priceEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+			<partnumber><wcf:cdata data="${priceEntry.catalogEntryIdentifier.externalIdentifier.partNumber}"/></partnumber>
+			<c:forEach var="description" items="${catalogEntry.description}">
+				<object objectType="CatalogEntryDescription">
+					<languageId><wcf:cdata data="${description.language}"/></languageId>
+					<catalogEntryId><wcf:cdata data="${priceEntry.catalogEntryIdentifier.uniqueID}"/></catalogEntryId>
+					<name><wcf:cdata data="${description.name}"/></name>
+					<sDesc><wcf:cdata data="${description.shortDescription}"/></sDesc>
+					<lDesc><wcf:cdata data="${description.longDescription}"/></lDesc>
+					<keyword><wcf:cdata data="${description.keyword}"/></keyword>
+					<fImage><wcf:cdata data="${description.fullImage}"/></fImage>
+					<tImage><wcf:cdata data="${description.thumbnail}"/></tImage>
+					<c:forEach var="userDataField" items="${description.attributes}">
+						<xdesc_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xdesc_${userDataField.typedKey}>
+					</c:forEach>
+				</object>
+			</c:forEach>
+		</object>
+	</c:if>
+
+	<c:forEach var="userDataField" items="${PriceList.userData.userDataField}">
+		<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+	</c:forEach>
+
+</object> 

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright, International Business Machines Corporation 2004
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+
+ <Report reportName="biEMailActivityRevenueReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+ <SQLvalue>
+  
+   
+
+	SELECT	distinct
+		 
+		EML_NAME AS "E-mail Activity Name",
+		coalesce(CMP.CAMPAIGN_NAME,' ') AS "Campaign Name",
+		coalesce(Round(AVG(FES.RPT_SLS_VAL),2),0) AS "Average Order Amount",
+		coalesce(COUNT(FES.PLACEDORDERS),0) AS "Associated Number of Orders", 
+		coalesce(Round(SUM(RPT_SLS_VAL),2),0) AS "Associated Revenue",
+		coalesce(FES.REPORT_CURRENCY,' ') AS "Currency"
+		 
+	FROM 
+	        WCA.FACT_EMAIL_STATS as FES
+		 
+		  join (SELECT NAME AS EML_NAME, EMLPROMO_ID, STOREENT_ID from WCA.EMLPROMO) AS EMLP
+		   on (EMLP.EMLPROMO_ID = FES.EMLPROMO_ID AND EMLP.STOREENT_ID = FES.STORE_ID)
+		
+		   
+		  left outer join( SELECT NAME as CAMPAIGN_NAME, CAMPAIGN_ID, STORE_ID from WCA.CAMPAIGN ) AS CMP
+                  on (CMP.CAMPAIGN_ID = FES.CAMPAIGN_ID AND CMP.STORE_ID = FES.STORE_ID)
+                                   
+                    join (SELECT ORDER_STATUS_ID,ORDER_ID, STORE_ID from WCA.FACT_ORDERS) AS FO
+                        on (FES.ORDER_ID = FO.ORDER_ID AND FO.STORE_ID = FES.STORE_ID)
+                        
+                      join (SELECT ORDER_STATUS_ID from WCA.ORDER_STATUS_REF ) AS OR
+                        on (OR.ORDER_STATUS_ID = FO.ORDER_STATUS_ID )
+                  
+                           join (SELECT PER_ID,CALENDAR_DATE from WCA.PERIOD) AS P
+                               on (P.PER_ID=FES.PER_ID)
+                     
+   		
+		
+		
+	WHERE	
+		
+		lower(EML_NAME) like lower('{emailActivityName}%')
+		AND lower(coalesce(CMP.CAMPAIGN_NAME,' ')) like lower('{campaignName}%')
+		AND WCA.PARAM_VALUE_IN(CHAR(FO.ORDER_STATUS_ID),'FE_EFFECTIVE_ORD_STATUS')=1
+		AND FES.STORE_ID IN ({storeent_id})
+		AND p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+		AND p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$		
+		AND FES.PLACEDORDERS=1 
+		
+	GROUP BY 
+		FES.EMLPROMO_ID, EML_NAME,CAMPAIGN_NAME,FES.REPORT_CURRENCY
+		
+	ORDER By
+		 {sortBy} {sortOrder}
+		 
+		</SQLvalue>
+
+ <display>
+			<standardInfo>
+				<resourceBundle>bi.biNLS</resourceBundle>
+				<title>eMailActivityRevenue</title>
+				<message>eMailActivityRevenue</message>
+			</standardInfo>
+			<userDefinedParameters>
+				<THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+				<TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+				<spaceBetweenColumns>20</spaceBetweenColumns>
+				<columnDefaultAttributes>
+					<displayInReport>true</displayInReport>
+					<displayInHeader>false</displayInHeader>
+					<displayInSummary>false</displayInSummary>
+					<displayTotal>false</displayTotal>
+					<columnWidth>0</columnWidth>
+					<maxEntryLength>999</maxEntryLength>
+					<columnType>string</columnType>
+					<columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+				</columnDefaultAttributes>
+				 
+				<columns>
+					<columnKey>C0</columnKey>
+					<columnName>eMailActivityName</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C1</columnKey>
+					<columnName>campaignName</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C2</columnKey>
+					<columnName>avgOrderAmount</columnName>
+					<columnType>decimal</columnType>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				<columns>
+					<columnKey>C3</columnKey>
+					<columnName>associatedOrders</columnName>
+					<columnType>decimal</columnType>
+					<displayTotal>True</displayTotal>
+						 
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+                                </columns>
+				 
+				<columns>
+					<columnKey>C4</columnKey>
+					<columnName>associatedRevenue</columnName>
+					<columnType>decimal</columnType>
+					<displayTotal>True</displayTotal>
+					<setMinimumFractionDigits>2</setMinimumFractionDigits>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+
+				 <columns>
+				        <displayInReport>false</displayInReport>
+					<columnKey>C5</columnKey>
+					<columnName>currency</columnName>
+					<columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+				</columns>
+				
+				
+
+				
+			</userDefinedParameters>
+		</display>
+
+
+
+  </Report>
+
+
+ </Reporting>

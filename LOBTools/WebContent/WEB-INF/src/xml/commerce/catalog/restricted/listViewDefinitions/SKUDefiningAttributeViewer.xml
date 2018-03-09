@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+
+	<!---
+		This class is a properties component used for displaying sku defining attributes
+		in the ProductSKU properties page.
+		
+		This class extends 'cmc/foundation/PropertiesComponent', and will instantiate two other viewers.
+		
+		If the parent product contains defining attributes then the 'cmc/catalog/BaseSKUDefiningAttributesViewer'
+		will be shown, to display a dynamic list of defining attributes.
+		
+		If the parent product contains NO defining attributes then the 'cmc/catalog/NoSKUDefiningAttributesViewer'
+		will be shown.  This viewer simply displays a message informing the user that there are no
+		defining attributes to be displayed.
+		
+		This class is not customizable.
+		
+		@keywords private
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/catalog/PropertySKUDefiningAttributesViewer">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="BaseSKUDefiningAttributesViewer" moduleName="cmc/catalog/BaseSKUDefiningAttributesViewer"/>
+		<dependency localName="NoSKUDefiningAttributesViewer" moduleName="cmc/catalog/NoSKUDefiningAttributesViewer"/>
+	
+		<!---
+			This method creates the editor for the property component.
+			
+			This is an abstract method inherited from the superclass 'cmc/foundation/PropertiesComponent'
+			and must be implemented by classes that extend cmc/foundation/PropertiesComponent.
+			
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component for the new editor view.
+			@keywords private
+			@see cmc/foundation/PropertiesComponent#createEditor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/catalog/PropertySKUDefiningAttributesViewer", "createEditor", [parentComponent]);
+			}
+			new BaseSKUDefiningAttributesViewer.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o
+			});
+			new NoSKUDefiningAttributesViewer.Class(parentComponent, {
+				name: "editor2",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				editor: parentComponent.editor
+			});
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/catalog/PropertySKUDefiningAttributesViewer", "createEditor");
+			}
+			]]>
+		</method>
+
+	</PropertiesComponent>
+	
+	<!---
+		This class is a used by the properties component 'cmc/catalog/PropertySKUDefiningAttributesViewer' to display
+		a message to the user that there are no defining attributes for a product level sku.
+		
+		This class is not customizable.
+		
+		@keywords private
+	-->
+	<Component classDefinition="true" definitionName="cmc/catalog/NoSKUDefiningAttributesViewer">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+	
+		<!---
+			The editor that that this viewer is associated with.
+			@keywords private
+		-->
+		<variable name="editor"/>
+		
+		<!--
+			Text to display to the user that there are no defining attributes
+			for this SKU.  This text is translatable.
+		-->
+		<TextComponent text="${catalogResources.Singleton.skuNoDefiningAttributes.string}"/>
+		
+		<!--
+			Initialization.
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.setVariable("visible", !this.editor.visible);
+			]]>
+		</handler>
+		
+		<!--
+			Onvisible event handler.
+			@keywords private
+		-->
+		<handler eventSource="this.editor" name="onvisible">
+			<![CDATA[
+			this.setVariable("visible", !this.editor.visible);
+			]]>
+		</handler>
+		
+	</Component>
+	
+	<!---
+		This class is a used by the properties component 'cmc/catalog/PropertySKUDefiningAttributesViewer' to display
+		sku defining attributes in a grid in the ProductSKU properties page.
+		
+		This class is not customizable.
+		
+		@keywords private
+	-->
+	<Component classDefinition="true" definitionName="cmc/catalog/BaseSKUDefiningAttributesViewer">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="BaseSKUDefiningAttributeColumnGrid" moduleName="cmc/catalog/BaseSKUDefiningAttributeColumnGrid"/>
+		<dependency localName="ModelObjectList" moduleName="cmc/foundation/ModelObjectList"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+	
+		
+		<!---
+			The style, derived by parent properties component
+			@keywords private
+		-->
+		<variable name="style" value="${this.parent.style}"/>
+		
+		<!---
+			Reference to the instance of cmc/foundation/ModelObject that is being modified by the
+			properties view that contains this child list viewer.
+			@keywords private
+		-->
+		<variable name="o"/>
+		
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableHeight" attribute. This
+			is used to calculate the list view's available height.
+		-->
+		<variable name="availableHeightView" value="${ViewUtil.Singleton.getAvailableHeightView(this)}"/>
+		
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the list view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		
+		<!--
+			Initialization.
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.availableHeightView != null) {
+				this.updateAvailableHeightDel = new EventHandler.Class(this, "updateAvailableHeight");
+				this.updateAvailableHeightDel.connect(this.availableHeightView, "onavailableHeight");
+				this.updateAvailableHeight();
+			}
+			if (this.availableWidthView != null) {
+				this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+				this.updateAvailableWidthDel.connect(this.availableWidthView, "onavailableWidth");
+				this.updateAvailableWidth();
+			}
+			this.attributeColumnsUpdatedDel = new EventHandler.Class(this, "attributeColumnsUpdated");
+			this.list = new BaseSKUDefiningAttributeColumnGrid.Class(this, {
+				name: "list",
+				rowMenuClass: null,
+				menuClass: null,
+				fitExistingRows: true,
+				padding: 0
+			});
+			this.attributeColumnsUpdatedDel.connect(this.list, "onattributeColumns");
+			this.oList = new ModelObjectList.Class(this.list, {
+				v: this.list,
+				filterList: [],
+				objectDefinitions: null,
+				modelObjects: [],
+				sortComparator: null
+			});
+			if (this.o) {
+				this.updateProductObject();
+				this.oList.setVariable("modelObjects", [this.o]);
+			}
+			]]>
+		</handler>
+
+		<!---
+			This method will cleanup any delegates used throughout this class.
+			
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributesViewer", "destroy");
+			}
+			if (this.updateAvailableHeightDel) {
+				this.updateAvailableHeightDel.disconnectAll();
+				delete this.updateAvailableHeightDel;
+			}
+			if (this.updateAvailableWidthDel) {
+				this.updateAvailableWidthDel.disconnectAll();
+				delete this.updateAvailableWidthDel;
+			}
+			if (this.updateProductObjectDel) {
+				this.updateProductObjectDel.disconnectAll();
+				delete this.updateProductObjectDel;
+			}
+			if (this.attributeColumnsUpdated) {
+				this.attributeColumnsUpdatedDel.disconnectAll();
+				delete this.attributeColumnsUpdatedDel;
+			}
+			if (this.oList) {
+				this.oList.destroy();
+			}
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/BaseSKUDefiningAttributesViewer", "destroy");
+			}
+			]]>
+		</method>	
+		
+		<!---
+			This method checks the number of attribute columns and if there are none,
+			sets the attribute 'visible' to false, otherwise sets it to 'true'.
+			
+			@keywords private
+		-->
+		<method args="e" name="attributeColumnsUpdated">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("visible", this.list.attributeColumns.length > 0);
+			]]>
+		</method>
+		
+		<!---
+			Update the available height of the grid.			
+			@keywords private
+		-->
+		<method args="e" name="updateAvailableHeight">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newHeight = this.availableHeightView.availableHeight - 2;
+			if (this.availableHeight != newHeight) {
+				this.setVariable("availableHeight", newHeight);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the available width of the grid.
+			@keywords private
+		-->
+		<method args="e" name="updateAvailableWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = this.availableWidthView.availableWidth - this.x - 2;
+			if (this.availableWidth != newWidth) {
+				this.setVariable("availableWidth", newWidth);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/catalog/BaseSKUDefiningAttributesViewer", "setModelObject(newObject)", [newObject]);
+			}
+			if (this.o != newObject) {
+				this.o = newObject;
+				if (this.oList) {
+					this.oList.setVariable("modelObjects", []);
+				}
+				this.updateProductObject();
+				if (this.oList && this.o) {
+					this.oList.setVariable("modelObjects", [this.o]);
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/catalog/BaseSKUDefiningAttributesViewer", "setModelObject");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Updates the product object to the given list
+			@param cmc/foundation/ModelObject newObject: the new object
+			@keywords private
+		-->
+		<method args="e" name="updateProductObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/catalog/BaseSKUDefiningAttributesViewer", "updateProductObject");
+			}
+			if (this.updateProductObjectDel) {
+				this.updateProductObjectDel.disconnectAll();
+			}
+			else {
+				this.updateProductObjectDel = new EventHandler.Class(this, "updateProductObject");
+			}
+			if (this.list) {
+				var productObject = null;
+				if (this.o) {
+					productObject = this.o.getParentPrimaryObject("InheritedProduct");
+					if (productObject == null) {
+						productObject = this.o.getParentPrimaryObject("Product");
+					}
+					this.updateProductObjectDel.connect(this.o, "onreferences");
+				}
+				this.list.setVariable("productObject", productObject);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/catalog/BaseSKUDefiningAttributesViewer", "updateProductObject");
+			}
+			]]>
+		</method>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Component>
+
+</Definitions>

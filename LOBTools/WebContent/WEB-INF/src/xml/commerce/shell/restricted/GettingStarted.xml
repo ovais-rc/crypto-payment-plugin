@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/shell/GettingStartedPage" height="${this.immediateParent.height}" visible="false" width="${this.immediateParent.width}">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+
+		<!--- @keywords private -->
+		<variable name="indent" type="number" value="80"/>
+		
+		<!--- @keywords private -->
+		<variable name="backgroundWidth" type="number" value="${Math.max(1428, this.parent.width)}"/>
+		
+		<!--- @keywords private -->
+		<variable name="featureWidth" type="number" value="${(this.backgroundWidth - 220) / 2}"/>
+		
+		<!--- @keywords private -->
+		<variable name="resourceWidth" type="number" value="${(this.backgroundWidth - 310) / 4}"/>
+
+		<!--- @keywords private -->
+		<variable name="displayName" type="string" value="${shellResources.Singleton.applicationMenuGettingStarted.string}"/>
+
+		<!---
+			@keywords private
+			This attribute indicates that this view currently has registered shortcut keys.
+		-->
+		<variable name="keysRegistered" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="handleUserClose">
+			<![CDATA[
+			this.savePreferences("false");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="handleUserOpen">
+			<![CDATA[
+			this.savePreferences("true");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="opened" name="savePreferences">
+			<![CDATA[
+			PreferenceManager.Singleton.setPreference("CMCGettingStartedPage", opened);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.pageDownDel = new EventHandler.Class(this, "pageDown");
+			this.pageUpDel = new EventHandler.Class(this, "pageUp");
+			this.checkFocusDel = new EventHandler.Class(this, "checkFocus");
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.pageDownDel.disconnectAll();
+			delete this.pageDownDel;
+			this.pageUpDel.disconnectAll();
+			delete this.pageUpDel;
+			this.checkFocusDel.disconnectAll();
+			delete this.checkFocusDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<handler name="onactive">
+			<![CDATA[
+			if (this.active) {
+				this.registerShortcutKeys();
+				this.checkFocusDel.disconnectAll();
+				this.checkFocusDel.connect(FocusUtil, "onfocus");
+			}
+			else {
+				this.unregisterShortcutKeys();
+				this.checkFocusDel.disconnectAll();
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method registers the shortcut keys. 
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.keysRegistered = true;
+				KeyUtil.callOnKeyCombo(this.pageDownDel, ["Pagedown"]);
+				KeyUtil.callOnKeyCombo(this.pageUpDel, ["Pageup"]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method unregisters the shortcut keys. 
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.keysRegistered = false;
+				KeyUtil.removeKeyComboCall(this.pageDownDel, ["Pagedown"]);
+				KeyUtil.removeKeyComboCall(this.pageUpDel, ["Pageup"]);
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method scrolls the getting started page down one page
+		-->
+		<method args="e" name="pageDown">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				this.vScroll.step(20);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method scrolls the getting started page up one page.
+		-->
+		<method args="e" name="pageUp">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				this.vScroll.step(-20);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check focus and auto scroll if needed.
+		-->
+		<method args="e" name="checkFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var focusedView = FocusUtil.getFocus();
+			var containsFocus = ViewUtil.Singleton.containsView(this, focusedView);
+			if (containsFocus) {
+				var vScrollStepsize = this.vScroll.stepsize;
+				var hScrollStepsize = this.hScroll.stepsize;
+				var y = focusedView.getVariableRelative("y", this.clipView);
+				var x = focusedView.getVariableRelative("x", this.clipView);
+				var clipViewHeight = this.clipView.height;
+				var clipViewWidth = this.clipView.width;
+				if (y < 0) {
+					var space = y / vScrollStepsize;
+					this.vScroll.step(space);
+				}
+				if (y + focusedView.height > clipViewHeight) {
+					var space = (y + focusedView.height - clipViewHeight) / vScrollStepsize;
+					this.vScroll.step(space);
+				}
+				if (x < 0) {
+					var space = x / hScrollStepsize;
+					this.hScroll.step(space);
+				}
+				if (x + focusedView.width > clipViewWidth) {
+					var space = (x + focusedView.width - clipViewWidth) / hScrollStepsize;
+					this.hScroll.step(space);
+				}
+			}
+			]]>
+		</method>		
+		
+		<Component clip="true" height="${this.parent.height - (this.parent.hScroll.visible ? this.parent.hScroll.height : 0)}" name="clipView" width="${this.parent.width - (this.parent.vScroll.visible ? this.parent.vScroll.width : 0)}">
+			<Component name="gsView" bgcolor="#ffffff">
+				<AxisLayout axis="y"/>
+				<Component name="mainView" fgcolor="#ffffff">
+					<Component height="${Math.max(335, this.parent.mainContentView.y + this.parent.mainContentView.height)}" width="${this.classroot.backgroundWidth}" imageSet="gsMainBg" bgcolor="#386094"/>
+					<Component name="mainContentView" y="50" x="${this.classroot.indent}" width="${this.classroot.backgroundWidth - 2 * this.classroot.indent}">
+						<AxisLayout axis="y"/>
+						<TextComponent fontsize="24" multiline="true" text="${shellResources.Singleton.gsWelcomeTitle2.string}" width="${this.parent.width}"/>
+						<Component height="25"/>
+						<Component>
+							<AxisLayout axis="x"/>
+							<VideoButton imageSet="gsFeatureVideoThumb" package="cmc/shell" videoLink="demo/ProductTour/ProductTour.html?noframes=true"/>
+							<Component width="${this.classroot.backgroundWidth - this.x - 2 * this.classroot.indent}">
+								<AxisLayout axis="y"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle3.string}" fontsize="14" lineHeight="20" width="${this.parent.width}"/>
+								<Component height="25"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle4.string}" fontsize="15" width="${this.parent.width}"/>
+								<Component height="10"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle5.string}" width="${this.parent.width}" lineHeight="16"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle6.string}" width="${this.parent.width}" lineHeight="16"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle7.string}" width="${this.parent.width}" lineHeight="16"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle8.string}" width="${this.parent.width}" lineHeight="16"/>
+								<TextComponent multiline="true" text="${shellResources.Singleton.gsWelcomeTitle9.string}" width="${this.parent.width}" lineHeight="16"/>
+							</Component>
+						</Component>
+						<Component height="25"/>
+					</Component>
+				</Component>
+				<Component height="35"/>
+				<Component name="features" x="${this.classroot.indent}">
+					<AxisLayout axis="x" spacing="60"/>
+					<Component>
+						<AxisLayout axis="y" spacing="26"/>
+						<Component name="composerView" width="${this.classroot.featureWidth}">
+							<AxisLayout axis="y" spacing="18"/>
+							<TextComponent multiline="true" fontsize="16" fontstyle="bold" text="${shellResources.Singleton.gsPageComposerTitle1.string}" width="${this.parent.width}"/>
+							<Component width="${this.parent.width}">
+								<AxisLayout axis="x" spacing="15"/>
+								<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/PageComp/PageComp.html?noframes=true"/>
+								<Component width="${this.parent.width - this.x}">
+									<AxisLayout axis="y" spacing="3"/>
+									<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsPageComposerTitle2.string}" width="${this.parent.width}"/>
+									<TextComponent multiline="true" text="${shellResources.Singleton.gsPageComposerTitle3.string}" width="${this.parent.width}" lineHeight="17"/>
+									<HelpLinkText helpLink="concepts/cpzpagecompover.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+								</Component>
+							</Component>
+						</Component>
+						<Component name="marketingView" width="${this.classroot.featureWidth}">
+							<AxisLayout axis="y" spacing="18"/>
+							<TextComponent multiline="true" fontsize="16" fontstyle="bold" text="${shellResources.Singleton.gsMarketingTitle1.string}" width="${this.parent.width}"/>
+							<Component width="${this.parent.width}">
+								<AxisLayout axis="y" spacing="26"/>
+								<Component width="${this.parent.width}">
+									<AxisLayout axis="x" spacing="15"/>
+									<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/WebIntro/WebIntro.html?noframes=true"/>
+									<Component width="${this.parent.width - this.x}">
+										<AxisLayout axis="y" spacing="3"/>
+										<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsMarketingTitle2.string}" width="${this.parent.width}"/>
+										<TextComponent multiline="true" text="${shellResources.Singleton.gsMarketingTitle3.string}" width="${this.parent.width}" lineHeight="17"/>
+										<HelpLinkText helpLink="concepts/csbwebacts.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+									</Component>
+								</Component>
+								<Component width="${this.parent.width}">
+									<AxisLayout axis="x" spacing="15"/>
+									<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/DialogIntro/DialogIntro.html?noframes=true"/>
+									<Component width="${this.parent.width - this.x}">
+										<AxisLayout axis="y" spacing="3"/>
+										<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsMarketingTitle4.string}" width="${this.parent.width}"/>
+										<TextComponent multiline="true" text="${shellResources.Singleton.gsMarketingTitle5.string}" width="${this.parent.width}" lineHeight="17"/>
+										<HelpLinkText helpLink="concepts/csbdiaacts.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+									</Component>
+								</Component>
+								<Component width="${this.parent.width}">
+									<AxisLayout axis="x" spacing="15"/>
+									<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/Experiment/Experiment.html?noframes=true" yoffset="3"/>
+									<Component width="${this.parent.width - this.x}">
+										<AxisLayout axis="y" spacing="3"/>
+										<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsMarketingTitle6.string}" width="${this.parent.width}"/>
+										<TextComponent multiline="true" text="${shellResources.Singleton.gsMarketingTitle7.string}" width="${this.parent.width}" lineHeight="17"/>
+										<HelpLinkText helpLink="concepts/csbexpoverview.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+									</Component>
+								</Component>
+							</Component>
+						</Component>		
+					</Component>
+					<Component>
+						<AxisLayout axis="y" spacing="26"/>
+						<Component name="promotionView" width="${this.classroot.featureWidth}">
+							<AxisLayout axis="y" spacing="18"/>
+							<TextComponent multiline="true" fontsize="16" fontstyle="bold" text="${shellResources.Singleton.gsPromotionsTitle1.string}" width="${this.parent.width}"/>
+							<Component width="${this.parent.width}">
+								<AxisLayout axis="x" spacing="15"/>
+								<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/Promotions/Promotions.html?noframes=true"/>
+								<Component width="${this.parent.width - this.x}">
+									<AxisLayout axis="y" spacing="3"/>
+									<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsPromotionsTitle2.string}" width="${this.parent.width}"/>
+									<TextComponent multiline="true" text="${shellResources.Singleton.gsPromotionsTitle3.string}" width="${this.parent.width}" lineHeight="17"/>
+									<HelpLinkText helpLink="concepts/cprover.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+								</Component>
+							</Component>
+						</Component>
+						<Component name="catalogView" width="${this.classroot.featureWidth}">
+							<AxisLayout axis="y" spacing="18"/>
+							<TextComponent multiline="true" fontsize="16" fontstyle="bold" text="${shellResources.Singleton.gsCatalogsTitle1.string}" width="${this.parent.width}"/>
+							<Component width="${this.parent.width}">
+								<AxisLayout axis="y" spacing="26"/>
+								<Component width="${this.parent.width}">
+									<AxisLayout axis="x" spacing="15"/>
+									<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/MerchandisingAssociation/MerchandisingAssociations.html?noframes=true"/>
+									<Component width="${this.parent.width - this.x}">
+										<AxisLayout axis="y" spacing="3"/>
+										<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsCatalogsTitle2.string}" width="${this.parent.width}"/>
+										<TextComponent multiline="true" text="${shellResources.Singleton.gsCatalogsTitle3.string}" width="${this.parent.width}" lineHeight="17"/>
+										<HelpLinkText helpLink="tasks/tpnchpro.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+									</Component>
+								</Component>
+								<Component width="${this.parent.width}">
+									<AxisLayout axis="x" spacing="15"/>
+									<VideoButton imageSet="gsVideoThumb" package="cmc/shell" videoLink="demo/SalesCatalog/SalesCatalog.html?noframes=true"/>
+									<Component width="${this.parent.width - this.x}">
+										<AxisLayout axis="y" spacing="3"/>
+										<TextComponent multiline="true" fontsize="14" fontstyle="bold" text="${shellResources.Singleton.gsCatalogsTitle4.string}" width="${this.parent.width}"/>
+										<TextComponent multiline="true" text="${shellResources.Singleton.gsCatalogsTitle5.string}" width="${this.parent.width}" lineHeight="17"/>
+										<HelpLinkText helpLink="concepts/cscsales.htm" text="${shellResources.Singleton.gsLearnMore.string}" width="${this.parent.width}" fgcolor="#4178be"/>
+									</Component>
+								</Component>
+							</Component>
+						</Component>
+					</Component>
+				</Component>
+				<Component height="30"/>
+				<Component bgcolor="#f7f7f7" name="resourcesView" width="${this.classroot.backgroundWidth}">
+					<AxisLayout axis="y" inset="25"/>
+					<TextComponent multiline="true" fontsize="16" fontstyle="bold" text="${shellResources.Singleton.gsResourcesTitle1.string}" x="${this.classroot.indent}" width="${this.classroot.backgroundWidth - 2 * this.classroot.indent}"/>
+					<Component height="18"/>
+					<Component x="${this.classroot.indent}">
+						<AxisLayout axis="x" spacing="50"/>
+						<Component name="paternerSolutions" width="${this.classroot.resourceWidth}">
+							<AxisLayout/>
+							<Component imageSet="solutions"/>
+							<Component height="12"/>
+							<HelpLinkText fgcolor="#027f84" fontsize="14" fontstyle="bold" helpLink="concepts/cwnISVsummary.htm" helpLinkTopicPath="/SSZLC2_8.0.0/com.ibm.commerce.admin.doc/" text="${shellResources.Singleton.gsResourcesTitle2.string}" width="${this.parent.width}"/>
+							<Component height="6"/>
+							<TextComponent multiline="true" text="${shellResources.Singleton.gsResourcesTitle3.string}" width="${this.parent.width}" lineHeight="17"/>
+						</Component>
+						<Component name="onlineHelp" width="${this.classroot.resourceWidth}">
+							<AxisLayout/>
+							<Component imageSet="onlineHelp"/>
+							<Component height="12"/>
+							<HelpLinkText fgcolor="#027f84" fontsize="14" fontstyle="bold" helpLink="concepts/ctfcmc.htm" text="${shellResources.Singleton.gsResourcesTitle4.string}" underlineOnMouseOver="true" width="${this.parent.width}"/>
+							<Component height="6"/>
+							<TextComponent multiline="true" text="${shellResources.Singleton.gsResourcesTitle5.string}" width="${this.parent.width}" lineHeight="17"/>
+						</Component>
+						<Component name="faq" width="${this.classroot.resourceWidth}">
+							<AxisLayout/>
+							<Component imageSet="questions"/>
+							<Component height="12"/>
+							<HelpLinkText fgcolor="#027f84" fontsize="14" fontstyle="bold" helpLink="refs/rtfcmc_faq.htm" text="${shellResources.Singleton.gsResourcesTitle6.string}" underlineOnMouseOver="true" width="${this.parent.width}"/>
+							<Component height="6"/>					
+							<TextComponent multiline="true" text="${shellResources.Singleton.gsResourcesTitle7.string}" width="${this.parent.width}" lineHeight="17"/>
+						</Component>
+						<Component name="education" width="${this.classroot.resourceWidth}">
+							<AxisLayout/>
+							<Component imageSet="assistant"/>
+							<Component height="12"/>
+							<HelpLinkText fgcolor="#027f84" fontsize="14" fontstyle="bold" helpLink="plugin_coverpage.html" helpLinkTopicPath="/SSZLC2_8.0.0/com.ibm.iea.wcs/" text="${shellResources.Singleton.gsResourcesTitle8.string}" underlineOnMouseOver="true" width="${this.parent.width}"/>
+							<Component height="6"/>
+							<TextComponent multiline="true" text="${shellResources.Singleton.gsResourcesTitle9.string}" width="${this.parent.width}" lineHeight="17"/>
+						</Component>
+					</Component>
+					<Component height="50"/>
+				</Component>
+			</Component>
+		</Component>
+
+		<Component bgcolor="#ffffff" height="${this.classroot.hScroll.height}" name="gsVScrollBottom" visible="${this.classroot.vScroll.visible &amp;&amp; this.classroot.hScroll.visible}" width="${this.classroot.vScroll.width}" x="${this.classroot.vScroll.x}" y="${this.classroot.hScroll.y}"/>
+				
+		<VerticalScrollbar height="${this.parent.clipView.height}" name="vScroll" scrolltarget="${this.parent.clipView.gsView}" visible="${this.scrollable}" x="${this.parent.clipView.x + this.parent.clipView.width}" y="${this.parent.clipView.y}"/>
+				
+		<HorizontalScrollbar name="hScroll" scrolltarget="${this.parent.clipView.gsView}" visible="${this.scrollable}" width="${this.parent.clipView.width}" x="${this.parent.clipView.x}" y="${this.parent.clipView.y + this.parent.clipView.height}"/>
+	</Component>
+	
+	<!---
+		@keywords private
+		
+		This class implements the buttons in Management Center getting started videos.
+	-->
+	<FocusableBaseButton classDefinition="true" definitionName="cmc/shell/VideoButton" doesenter="true">
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<Tooltip extendedText="${shellResources.Singleton.gsPlayVideo.string}" name="videoInfo" text="${shellResources.Singleton.gsPlayVideo.string}"/>
+				
+		<!--- @keywords private -->
+		<variable name="videoLink" type="string"/>
+	
+		<!--- @keywords private -->
+		<handler name="onclick">
+			<![CDATA[
+			if (this.videoLink != "") {
+				var caller = this;
+				require(["cmc/shell/HelpManager"], function(HelpManager) {
+					HelpManager.Singleton.openVideoLink(caller.videoLink);
+				});
+			}
+			]]>
+		</handler>
+	</FocusableBaseButton>
+	
+</Definitions>

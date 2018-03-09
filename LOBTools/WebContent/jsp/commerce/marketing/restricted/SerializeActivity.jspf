@@ -1,0 +1,137 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<c:set var="mktBundleName" value="com.ibm.commerce.marketing.client.lobtools.properties.MarketingLOB"/>
+
+<c:set var="readOnly" value="false"/>
+<c:if test="${activity.state == 'Active' || activity.experimentFormat == 'PreviousVersion' || activity.activityIdentifier.externalIdentifier.storeIdentifier.uniqueID == '0' }">
+	<c:set var="readOnly" value="true"/>
+</c:if>
+
+<c:set var="objStoreId" value="${activity.activityIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+<c:if test="${activity.activityIdentifier.externalIdentifier.storeIdentifier.uniqueID == '0'}">
+	<c:set var="objStoreId" value="${param.storeId}"/>
+</c:if>
+
+<c:set var="inherited" value=""/>
+<c:if test="${objStoreId != param.storeId}">
+	<c:set var="inherited" value="Inherited"/>
+</c:if>
+<c:set var="template" value=""/>
+<c:if test="${activity.templateFormat == 'Open' || activity.templateFormat == 'Closed'}">
+	<c:set var="template" value="Template" />
+</c:if>
+
+<c:choose>
+	<c:when test="${activity.format == 'Web'}">
+		<c:set var="objectType" value="WebActivity" />
+	</c:when>
+	<c:when test="${activity.format == 'Dialog'}">
+		<c:set var="objectType" value="DialogActivity" />
+	</c:when>
+	<c:when test="${activity.format == 'Email'}">
+		<c:set var="objectType" value="EmailActivity" />
+	</c:when>
+	<c:when test="${activity.format == 'Search'}">
+		<c:set var="objectType" value="SearchActivity" />
+	</c:when>
+</c:choose>
+
+<object objectType="${inherited}${objectType}${template}" readonly="${readOnly}">
+	<c:if test="${!empty activity.familyIdentifier.uniqueID}">
+		<reference>
+			<object objectType="Related${inherited}${objectType}">
+				<relatedActivityId>${activity.activityIdentifier.uniqueID}</relatedActivityId>
+				<parent>
+					<object objectType="${objectType}Family">
+						<familyId>${activity.familyIdentifier.uniqueID}</familyId>
+					</object>
+				</parent>
+			</object>
+		</reference>
+	</c:if>
+	<activityId>${activity.activityIdentifier.uniqueID}</activityId>
+	<objectStoreId>${objStoreId}</objectStoreId>
+	
+	<c:set var="activityName" value="${activity.activityIdentifier.externalIdentifier.name}"/>
+	<c:set var="activityDesc" value="${activity.description}"/>
+	<c:if test="${!empty template}">
+		<c:set var="nameKey" value="${'template_'}${activity.activityIdentifier.uniqueID}${'_name'}"/>
+		<c:set var="descKey" value="${'template_'}${activity.activityIdentifier.uniqueID}${'_desc'}"/>
+		<c:set var="nullNameValue" value="${'???'}${nameKey}${'???'}"/>
+		<c:set var="nullDescValue" value="${'???'}${descKey}${'???'}"/>
+		<fmt:setLocale value="${param.locale}" />
+		<fmt:setBundle basename="${mktBundleName}" var="mktResourceBundle" />		
+		<fmt:message bundle="${mktResourceBundle}" key="${nameKey}" var="template_name"/>
+		<fmt:message bundle="${mktResourceBundle}" key="${descKey}" var="template_desc"/>
+		
+		<c:if test="${template_name != nullNameValue}">
+			<c:set var="activityName" value="${template_name}"/>
+		</c:if>
+		<c:if test="${template_desc != nullDescValue}">
+			<c:set var="activityDesc" value="${template_desc}"/>
+		</c:if>
+	</c:if>
+	<name><wcf:cdata data="${activityName}"/></name>
+	<description><wcf:cdata data="${activityDesc}"/></description>
+	
+	<version>${activity.version}</version>
+	<published>${activity.publishedVersion}</published>
+	<state><wcf:cdata data="${activity.state}"/></state>
+	<startdate>${activity.startDate}</startdate>
+	<enddate>${activity.endDate}</enddate>
+	<repeatable>${activity.repeatable}</repeatable>
+	<priority><wcf:cdata data="${activity.priority}"/></priority>
+	<activityType><wcf:cdata data="${activity.format}"/></activityType>
+	<experimentType><wcf:cdata data="${activity.experimentFormat}"/></experimentType>
+	<templateType><wcf:cdata data="${activity.templateFormat}"/></templateType>
+	<created><wcf:cdata data="${activity.created}"/></created>
+	<lastupdate><wcf:cdata data="${activity.lastUpdate}"/></lastupdate>
+	<lastupdatedby><wcf:cdata data="${activity.lastUpdatedBy}"/></lastupdatedby>
+	<c:if test="${activity.format == 'Search'}">
+		<c:forEach var="activityElement" items="${activity.campaignElement}">
+			<c:if test="${activityElement.campaignElementTemplateIdentifier.externalIdentifier.name == 'viewSearchEMarketingSpot'}">
+				<c:set var="element" value="${activityElement}" scope="request"/>
+				<object objectType="path">
+					<elementName>${element.parentElementIdentifier.name}</elementName>
+					<jsp:include page="/cmc/SerializeActivityElement-viewSearchEMarketingSpot" />
+				</object>
+			</c:if>
+		</c:forEach>
+	</c:if>
+	<c:if test="${activity.format == 'Email'}">
+		<object objectType="EmailStatistics">
+			<uniqueId>1</uniqueId>
+			<open readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.open}"/></open>
+			<clicked readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.clicked}"/></clicked>
+			<bounced readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.bounced}"/></bounced>
+			<totalRecipients readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.totalRecipients}"/></totalRecipients>
+			<sent readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.sent}"/></sent>
+			<received readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.received}"/></received>
+			<percentageReceived readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.percentageReceived}"/></percentageReceived>
+			<percentageOpened readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.percentageOpened}"/></percentageOpened>
+			<percentageClicked readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.percentageClicked}"/></percentageClicked>
+			<percentageBounced readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.percentageBounced}"/></percentageBounced>
+			<percentageClickedOverOpened readonly="true"><wcf:cdata data="${activity.marketingEMailStatistics.percentageClickedOverOpened}"/></percentageClickedOverOpened> 
+			<c:forEach var="userDataField" items="${activity.marketingEMailStatistics.userData.userDataField}">
+				<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+			</c:forEach>
+		</object>
+	</c:if>
+	<c:forEach var="userDataField" items="${activity.userData.userDataField}">
+		<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+	</c:forEach>
+
+	<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+</object>

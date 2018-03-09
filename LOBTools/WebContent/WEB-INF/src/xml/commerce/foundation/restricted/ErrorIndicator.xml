@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This class is used to create an error indicator view. The error indicator view is associated
+		with a component that has an error. The component view must have a boolean attribute named "hasError".
+	-->
+	<DrawComponent classDefinition="true" definitionName="cmc/foundation/ErrorIndicator" ignoreLayout="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- The view around which the error indicator will be displayed. This is a required attribute. -->
+		<variable name="indicatorView" value="${null}"/>
+		<!---
+			The number of pixels of offset between the indicator view and the error indicator.
+		-->
+		<variable name="offset" type="number" value="1"/>
+		<!---
+			The color of the error indicator.
+		-->
+		<variable name="errorBorderColor" type="string" value="#FF0000"/>
+		<!---
+			The width of the error indicator border.
+		-->
+		<variable name="errorBorderSize" type="number" value="1"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.indicatorView.hasError) {
+				this.renderLines();
+			}
+			else {
+				this.setVariable("visible", false);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.renderLinesDel) {
+				this.renderLinesDel.disconnectAll();
+				delete this.renderLinesDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Handle changes to hasError.
+		-->
+		<handler eventSource="this.indicatorView" name="onhasError">
+			<![CDATA[
+			if (this.indicatorView.hasError) {
+				this.sendBehind(this.indicatorView);
+				this.setVariable("visible", true);
+				this.renderLines();
+			}
+			else {
+				this.setVariable("visible", false);
+				if (this.renderLinesDel) {
+					this.renderLinesDel.disconnectAll();
+				}
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->	
+		<method args="e" name="renderLines">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.renderLinesDel) {
+				this.renderLinesDel.disconnectAll();
+			}
+			else {
+				this.renderLinesDel = new EventHandler.Class(this, "renderLines");
+			}
+			if (this.visible) {
+				this.renderLinesDel.connect(this.indicatorView, "onx");
+				this.renderLinesDel.connect(this.indicatorView, "ony");
+				this.renderLinesDel.connect(this.indicatorView, "onwidth");
+				this.renderLinesDel.connect(this.indicatorView, "onheight");
+				this.setVariable("x", this.indicatorView.x - this.offset);
+				this.setVariable("y", this.indicatorView.y - this.offset);
+				this.clear();
+				this.beginPath();
+				this.strokeStyle = this.errorBorderColor;
+				this.lineWidth = this.errorBorderSize;
+				var startX = this.indicatorView.getVariableRelative("x", this) - this.x - 1;
+				var startY = this.indicatorView.getVariableRelative("y", this) - this.y - 1;
+				this.moveTo(startX, startY);
+				this.lineTo(startX + this.indicatorView.width + 1, startY);
+				this.stroke();
+				this.lineTo(startX + this.indicatorView.width + 1, startY + this.indicatorView.height + 1);
+				this.stroke();
+				this.lineTo(startX, startY + this.indicatorView.height + 1);
+				this.stroke();
+				this.lineTo(startX, startY);
+				this.stroke();
+			}
+			]]>
+		</method>
+		
+	</DrawComponent>
+
+</Definitions>

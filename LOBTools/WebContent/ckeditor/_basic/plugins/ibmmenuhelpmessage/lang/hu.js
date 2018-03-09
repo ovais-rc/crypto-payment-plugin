@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","hu",{keystrokeForContextMenu:"További lehetőségekért a Ctrl gomb lenyomása mellett kattintson a jobb egérgombbal.",keystrokeForContextMenuMac:"További lehetőségekért a Cmd gomb lenyomása mellett kattintson a jobb egérgombbal."});

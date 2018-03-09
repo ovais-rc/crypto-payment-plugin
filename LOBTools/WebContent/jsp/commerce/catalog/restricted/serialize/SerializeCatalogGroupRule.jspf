@@ -1,0 +1,407 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="inheritedCategoryReadOnly" value="readonly='false'"/>
+<c:if test="${param.storeId != category.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}">
+	<c:set var="inheritedCategoryReadOnly" value="readonly='true'"/>
+</c:if>
+<c:forEach var="element" items="${category.rule.element}">
+	<%-- Control variable initialization --%>
+	<c:set var="objectType" value="" />
+	<c:set var="elementObjectType" value="" />
+	<c:set var="readonly" value="" /> 
+	<c:set var="propertyFilter" value="false" />
+	<c:set var="attributeFilter" value="false" />
+	<c:set var="categoryFilter" value="false" />
+	<c:set var="filterName" value="" />
+	<c:set var="filterType" value="" />
+	<c:set var="filterDataType" value="" />
+	<c:set var="filterValueList" value="" />
+	<c:set var="searchActionOrderBy" value="false" />
+	<c:set var="catalogEntryInclusion" value="false" />
+	
+	<%-- 
+		Set control variables 
+	--%>
+	<c:choose>		
+		<c:when test="${element.type_=='searchActionFilter'}">
+			<c:forEach var="elementNVP" items="${element.NVP}">
+				<c:if test="${elementNVP.key=='filterType'}">
+					<c:set var="filterType" value="${elementNVP.value}" />
+				</c:if>
+				<c:if test="${elementNVP.key == 'filterName'}">
+					<c:set var="filterName" value="${elementNVP.value}" />
+				</c:if>			
+				<c:if test="${elementNVP.key=='filterDataType'}">
+					<c:set var="filterDataType" value="${elementNVP.value}" />
+				</c:if>
+				<c:if test="${elementNVP.key=='filterValue' || fn:contains(elementNVP.key, 'filterValue_')}">
+					<c:choose>
+						<c:when test="${empty filterValueList}">
+							<c:set var="filterValueList" value="${elementNVP.value}" />
+						</c:when>
+						<c:otherwise>
+							<c:set var="filterValueList"
+								value="${filterValueList},${elementNVP.value}" />
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+			<c:if test="${filterType=='catalogEntryProperty'}">
+				<c:set var="objectType" value="catalogEntryPropertySearchFilter" />
+				<c:set var="elementObjectType" value="catalogEntryPropertySearchFilter" />
+				<c:set var="propertyFilter" value="true" />			
+			</c:if>
+			<c:if test="${filterType=='attributeType'}">
+				<c:set var="objectType" value="ChildAttributeWithAllowedValues" />
+				<c:set var="attributeFilter" value="true" />
+			</c:if>
+			<c:if test="${filterType=='catgroupType'}">
+				<c:set var="objectType" value="ChildCatalogGroupFilter" />
+				<c:set var="categoryFilter" value="true" />
+			</c:if>
+		</c:when>		
+		<c:when test="${element.type_=='searchActionOrderBy'}">
+			<c:set var="objectType" value="searchActionOrderBy" />
+			<c:set var="elementObjectType" value="searchActionOrderBy" />
+			<c:set var="searchActionOrderBy" value="true" />			
+		</c:when>
+		<c:when test="${element.type_=='searchActionInclusion'}">
+			<c:set var="elementObjectType" value="SearchFilterCatalogEntryInclusion" />
+			<c:set var="catalogEntryInclusion" value="true" />			
+		</c:when>
+	</c:choose>
+
+	<%-- 
+		Determine the CMC category object type to generate based on this category filter.
+	--%>
+	<c:if test="${objectType == 'ChildCatalogGroupFilter'}">
+		<c:set var="owningCatalog" value="${param.masterCatalogId}" />
+		<c:set var="owningCatalogIdentifier"
+			value="${param.masterCatalogIdentifier}" />
+		<c:set var="catalogStoreId" value="${param.masterCatalogStoreId}" />
+		<c:set var="filterValues" value="${fn:split(filterValueList, ',')}" />
+		<c:set var="catGroupId" value="${filterValues[0]}" />
+		<c:set var="filterValues" value="${fn:split(catGroupId, '_')}" />
+		<c:if test="${fn:length(filterValues) == 2}">
+			<c:set var="owningCatalog" value="${filterValues[0]}" />
+			<c:set var="catGroupId" value="${filterValues[1]}" />
+		</c:if>
+		<c:if test="${owningCatalog != param.masterCatalogId}">
+			<wcf:getData
+				type="com.ibm.commerce.catalog.facade.datatypes.CatalogType"
+				var="salesCatalog" expressionBuilder="getCatalogDetailsByID">
+				<wcf:contextData name="storeId" data="${param.storeId}" />
+				<wcf:param name="catalogId" value="${owningCatalog}" />
+			</wcf:getData>
+			<c:set var="owningCatalogIdentifier"
+				value="${salesCatalog.catalogIdentifier.externalIdentifier.identifier}" />
+			<c:set var="catalogStoreId"
+				value="${salesCatalog.catalogIdentifier.externalIdentifier.storeIdentifier.uniqueID}" />
+		</c:if>
+		<wcf:getData
+			type="com.ibm.commerce.catalog.facade.datatypes.CatalogGroupType"
+			var="catalogGroup" expressionBuilder="getCatalogGroupDetailsByID"
+			varShowVerb="showVerb">
+			<wcf:contextData name="storeId" data="${param.storeId}" />
+			<wcf:contextData name="catalogId" data="${owningCatalog}" />
+			<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}" />
+			<wcf:param name="catGroupId" value="${catGroupId}" />
+		</wcf:getData>
+		<c:choose>
+			<c:when
+				test="${catalogGroup.catalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+				<c:set var="elementObjectType"
+					value="ChildInheritedCatalogGroupFilter" />
+				<c:set var="objectType" value="InheritedCatalogGroup" />
+				<c:if test="${owningCatalog != param.masterCatalogId}">
+					<c:set var="objectType" value="InheritedSalesCatalogGroup" />
+				</c:if>
+			</c:when>
+			<c:otherwise>
+				<c:set var="elementObjectType" value="ChildCatalogGroupFilter" />
+				<c:set var="objectType" value="CatalogGroup" />
+				<c:if test="${owningCatalog != param.masterCatalogId}">
+					<c:set var="objectType" value="SalesCatalogGroup" />
+				</c:if>
+			</c:otherwise>
+		</c:choose>
+	</c:if>
+
+	<%-- 
+		Determine the CMC attribute object type to generate based on this attribute filter.
+	--%>
+	<c:if test="${objectType == 'ChildAttributeWithAllowedValues'}">
+		
+		<c:set var="attrValueIDList" value="" />
+		<c:forTokens var="fValue" items="${filterValueList}" delims=",">
+  			<c:choose>
+				<c:when test="${empty attrValueIDList}">
+					<c:set var="attrValueIDList" value="${fValue}" />
+				</c:when>
+				<c:otherwise>
+					<c:set var="attrValueIDList"
+						value="${attrValueIDList}${' or @identifier='}${fValue}" />
+				</c:otherwise>
+			</c:choose>
+		</c:forTokens>
+		
+		<wcf:getData
+			type="com.ibm.commerce.catalog.facade.datatypes.AttributeDictionaryAttributeType"
+			var="attribute"
+			expressionBuilder="getAttributeDictionaryAttributeAndAllowedValuesByID"
+			varShowVerb="showVerb">
+			<wcf:contextData name="storeId" data="${param.storeId}" />
+			<wcf:param name="uniqueID" value="${filterName}" />
+			<wcf:param name="identifier" value="${attrValueIDList}" />
+			<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}" />
+		</wcf:getData>
+	
+		<c:set var="inheritedAttribute" value="" />
+		<c:set var="attributeType" value="AllowedValues" />
+		<c:if
+			test="${attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+			<c:set var="inheritedAttribute" value="Inherited" />
+		</c:if>
+		<c:set var="elementObjectType"
+			value="Child${inheritedAttribute}AttributeWithAllowedValues" />
+	</c:if>
+	
+	<%-- 
+		Generate the catalog entry inclusion objects
+		<_cat:Element type="searchActionInclusion">
+          <_cat:UniqueID>33405</_cat:UniqueID>
+          <_cat:NVP name="sequence">1</_cat:NVP>
+          <_cat:NVP name="inclusionValue">10006</_cat:NVP>
+          <_cat:NVP name="inclusionField">catentryId</_cat:NVP>
+        </_cat:Element>
+	--%>
+	<c:if test="${catalogEntryInclusion}">
+		<c:forEach var="elementNVP" items="${element.NVP}">
+			<c:if test="${elementNVP.key == 'inclusionValue'}">
+				<c:set var="catalogEntryId" value="${elementNVP.value}"/>
+			</c:if>
+		</c:forEach>
+		
+		<wcf:getData type="com.ibm.commerce.catalog.facade.datatypes.CatalogEntryType[]"
+			var="catalogEntries"
+			expressionBuilder="getCatalogEntryDetailsByIDs"
+			varShowVerb="showVerb"
+			recordSetStartNumber="${param.recordSetStartNumber}"
+			recordSetReferenceId="${param.recordSetReferenceId}"
+			maxItems="${param.maxItems}">
+			<wcf:contextData name="storeId" data="${param.storeId}"/>
+			<wcf:contextData name="catalogId" data="${param.catalogId}"/>
+			<wcf:contextData name="versionId" data="${param.objectVersionId}"/>
+			<wcf:param name="dataLanguageIds" value="${param.dataLanguageIds}"/>
+			<wcf:param name="UniqueID" value="${catalogEntryId}"/>
+		</wcf:getData>
+		
+		<c:if test="${!(empty catalogEntries)}">
+			
+			<object objectType="${elementObjectType}" ${inheritedCategoryReadOnly}>
+				<elementId>${element.uniqueID}</elementId>
+				<elementType>${element.type_}</elementType>
+				<catentryId>${catalogEntryId}</catentryId>
+				<c:forEach var="elementNVP" items="${element.NVP}">
+					<${elementNVP.key}><wcf:cdata data="${elementNVP.value}"/></${elementNVP.key}>
+				</c:forEach>
+				<c:forEach var="catalogEntry" items="${catalogEntries}">
+					
+					<c:choose>
+						<c:when test="${catalogEntry.catalogEntryTypeCode == 'ProductBean'}">
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+								<c:set var="objectType" value="Product"/>
+							</c:if>
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+								<c:set var="objectType" value="InheritedProduct"/>
+							</c:if>
+						</c:when>
+						<c:when test="${catalogEntry.catalogEntryTypeCode == 'BundleBean'}">
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+								<c:set var="objectType" value="Bundle"/>
+							</c:if>
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+								<c:set var="objectType" value="InheritedBundle"/>
+							</c:if>
+						</c:when>
+						<c:when test="${catalogEntry.catalogEntryTypeCode == 'PackageBean'}">
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+								<c:set var="objectType" value="Kit"/>
+							</c:if>
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+								<c:set var="objectType" value="InheritedKit"/>
+							</c:if>
+						</c:when>
+						<c:when test="${catalogEntry.catalogEntryTypeCode == 'DynamicKitBean'}">
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+								<c:set var="objectType" value="Kit"/>
+							</c:if>
+							<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+								<c:set var="objectType" value="InheritedKit"/>
+							</c:if>
+						</c:when>
+						<c:when
+							test="${catalogEntry.catalogEntryTypeCode == 'ItemBean'}">
+							<c:choose>
+								<c:when test="${(!empty catalogEntry.parentCatalogEntryIdentifier)}">
+									<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+										<c:set var="objectType" value="ProductSKU"/>
+									</c:if>
+									<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+										<c:set var="objectType" value="InheritedProductSKU"/>
+									</c:if>
+								</c:when>
+								<c:when test="${(empty catalogEntry.parentCatalogEntryIdentifier) && (!empty catalogEntry.parentCatalogGroupIdentifier)}">
+									<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+										<c:set var="objectType" value="CatalogGroupSKU"/>
+									</c:if>
+									<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+										<c:set var="objectType" value="InheritedCatalogGroupSKU"/>
+									</c:if>
+								</c:when>
+								<c:otherwise>
+									<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID == param.storeId }">
+										<c:set var="objectType" value="ProductSKU"/>
+									</c:if>
+									<c:if test="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+										<c:set var="objectType" value="InheritedProductSKU"/>
+									</c:if>
+								</c:otherwise>
+							</c:choose>
+						</c:when>
+						<c:otherwise><c:set var="objectType" value="unknown"/></c:otherwise>
+					</c:choose>
+					
+					<jsp:directive.include file="SerializeCatalogEntry.jspf"/>
+				</c:forEach>
+			</object>
+		</c:if>
+	</c:if>
+	
+	<%-- 
+		Generate the search action order by CMC objects. (for sorting)
+	--%>
+	<c:if test="${searchActionOrderBy}">
+		<c:set var="readonly" value="readonly='true'" />
+		<object objectType="${elementObjectType}" ${inheritedCategoryReadOnly}>
+			<elementId>${element.uniqueID}</elementId>
+			<elementType>${element.type_}</elementType>
+			<c:forEach var="elementNVP" items="${element.NVP}">
+				<c:if test="${elementNVP.key == 'orderByField'}">
+					<${elementNVP.key} ${readonly}><wcf:cdata data="${elementNVP.value}"/></${elementNVP.key}>
+				</c:if>
+				<c:if test="${elementNVP.key != 'orderByField'}">
+					<${elementNVP.key}><wcf:cdata data="${elementNVP.value}"/></${elementNVP.key}>
+				</c:if>
+			</c:forEach>
+		</object>
+	</c:if>
+
+	<%-- 
+		Generate the attribute, category and property filters.
+	--%>
+	<c:if test="${(attributeFilter && !(empty attribute)) ||  
+				  (categoryFilter && !(empty catalogGroup)) || 
+				  (!attributeFilter && !categoryFilter && !searchActionOrderBy && !catalogEntryInclusion)}">
+		<object objectType="${elementObjectType}" ${inheritedCategoryReadOnly}>
+			<elementId>${element.uniqueID}</elementId>
+			<elementType>${element.type_}</elementType> 
+			<%-- With property filters, the filter name is set to read-only after it has been saved. --%>
+			<c:set var="readonly" value="" /> 
+			<c:if test="${propertyFilter}">
+				<c:set var="readonly" value="readonly='true'" />
+			</c:if> 
+			<%-- Generate the filter data --%>
+			<c:forEach var="elementNVP" items="${element.NVP}">
+				<c:if test="${elementNVP.key!='filterValue'}">
+					<c:choose>
+						<c:when test="${elementNVP.key == 'filterName'}">
+							<${elementNVP.key} ${readonly}><wcf:cdata data="${elementNVP.value}" /></${elementNVP.key}>
+						</c:when>
+						<c:when test="${elementNVP.key == 'filterOperator'}">
+							<c:choose>
+								<c:when test="${filterDataType == 'NUMERIC'}">
+									<filterOperatorNumeric><wcf:cdata data="${elementNVP.value}" /></filterOperatorNumeric>
+								</c:when>
+								<c:when test="${filterDataType == 'EXACTSTRING'}">
+									<filterOperatorExactString><wcf:cdata data="${elementNVP.value}" /></filterOperatorExactString>
+								</c:when>
+								<c:when test="${filterDataType == 'ANYSTRING'}">
+									<filterOperatorAnyString><wcf:cdata data="${elementNVP.value}" /></filterOperatorAnyString>
+								</c:when>
+								<c:otherwise>
+									<${elementNVP.key}><wcf:cdata data="${elementNVP.value}" /></${elementNVP.key}>
+								</c:otherwise>
+							</c:choose>
+						</c:when>
+						<c:otherwise>
+							<${elementNVP.key}><wcf:cdata data="${elementNVP.value}" /></${elementNVP.key}>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+			
+			<%-- Generate the filter values --%>
+			<c:forTokens var="fValue" items="${filterValueList}" delims=",">
+				<c:choose>
+					<c:when test="${propertyFilter}">
+							<%-- Numeric properties are always single-valued --%>
+							<c:if test="${filterDataType == 'NUMERIC'}">
+								<filterValue><wcf:cdata data="${fValue}" /></filterValue>
+							</c:if>
+							<%-- Text properties are always multi-valued --%>
+							<c:if test="${filterDataType != 'NUMERIC'}">
+								<object objectType="filterValue">
+									<filterValue><wcf:cdata data="${fValue}" /></filterValue>
+								</object>
+							</c:if>
+					</c:when>
+					<c:when test="${attributeFilter}">
+						<object objectType="ChildAttributeAllowedValues"> 
+							<attrValId><wcf:cdata data="${fValue}" /></attrValId>
+						</object>
+					</c:when>
+					<c:when test="${categoryFilter}">
+						<object objectType="filterValue">
+							<filterValue><wcf:cdata data="${fValue}" /></filterValue> 
+						</object>
+					</c:when>
+					<c:otherwise>
+						<object objectType="filterValue">
+							<filterValue><wcf:cdata data="${fValue}" /></filterValue> 
+						</object>
+					</c:otherwise>
+				</c:choose>
+			</c:forTokens>
+
+			<%-- Generate the primary attribute object this reference object is pointing to. --%>
+			<c:if test="${attributeFilter}">
+				<jsp:directive.include
+					file="SerializeAttributeDictionaryAttribute.jspf" />
+			</c:if>
+			<%-- Generate the primary category object this reference object is pointing to. --%>
+			<c:if test="${categoryFilter}">
+				<c:if test="${owningCatalog == param.masterCatalogId}">
+					<jsp:directive.include file="SerializeCatalogGroup.jspf" />
+				</c:if>
+				<c:if test="${owningCatalog != param.masterCatalogId}">
+					<jsp:directive.include file="SerializeSalesCatalogGroup.jspf" />
+				</c:if>
+			</c:if>
+		</object>
+	</c:if>
+	
+</c:forEach>
+

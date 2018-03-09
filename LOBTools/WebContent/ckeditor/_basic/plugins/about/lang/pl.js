@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("about","pl",{copy:"Copyright &copy; $1. Wszelkie prawa zastrzeżone.",dlgTitle:"Informacje o edytorze CKEditor",help:"Pomoc zawiera $1.",moreInfo:"Informacje licencyjne można znaleźć w serwisie WWW:",title:"Informacje o edytorze CKEditor",userGuide:"Podręcznik użytkownika edytora CKEditor"});

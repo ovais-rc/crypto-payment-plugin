@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		 
+		This class contains miscellaneous utility methods for comparing arrays, checking for empty objects, returning the
+		type of a given object, etc.
+	 -->
+	<Node definitionName="cmc/foundation/LangUtil" singletonDefinition="true">
+		<!---
+			@keywords private
+			This map stores all the supported bi-directional languages.
+		-->
+		<variable name="BI_DIRECTIONAL_LANGUAGES" value="${{ar: true,he: true,iw: true}}"/>
+
+		<!--- 
+			@keywords private
+			Utility method used for invoking a specified method in a given object for all the elements in a given array of objects. 
+			It iterates through all the elements in the given array and invokes the callback method in the context object and passes 
+			the current element	in the array, the index of the element in the array and the array itself to the callback method. 
+			Following is an example:
+			
+			@START_CODE
+			 	<method name="addName" args="name">
+			 		<![CDATA[
+			 		this.names.push(name);
+			 		]]>
+			 	</method>
+
+			 	<method name="addDeptNames">
+			 		<![CDATA[
+			 		var deptNames = ["Biology", "Zoology", "Physics"];
+		 			LangUtil.forEach(deptNames, function(n){
+			 			this.addName(n);
+			 		}, this);
+			 		]]>
+			 	</method>
+			@END_CODE
+			
+			In the above example, addName is a method that adds a given department name to the names array. When addDeptNames is
+			executed, for each of the array elements - "Biology", "Zoology" and "Physics" the inline callback function function(n)
+			will get called for the context object this. In the callback function we are taking only one parameter n that corresponds
+			to the current element in the array. So n will have values "Biology", "Zoology" and "Physics" which then gets passed to 
+			the addName method.
+			
+			@param array elements: an array of objects whose elements would be passed to the callback method. If a string is passed to
+			this method instead of an array, then first the string will be splited into characters and an array will be formed.
+			@param object callback: the callback method.
+			@param object context: the context object.
+		 -->
+		<method args="elements, callback, context" name="forEach">
+			<![CDATA[
+			if (elements == null) {
+				return;
+			}
+			if (typeof (elements) == "string") {
+				elements = elements.split("");
+			}
+			for (var len = elements.length, i = 0; i < len; ++i) {
+				callback.apply(context, [elements[i], i, elements]);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			Checks whether a given object is of type string.
+			@param object obj: the object to be checked.
+			@return boolean: true if the object is of type string, false otherwise.
+		-->
+		<method args="obj" name="isString">
+			<![CDATA[
+			return (typeof (obj) == "string" || obj instanceof String);
+			]]>
+		</method>
+		
+		<!--- 
+			Checks whether a given object is a function.
+			@param object obj: the object to be checked.
+			@return boolean: true if the object is a function, false otherwise.
+		-->
+		<method args="obj" name="isFunction">
+			<![CDATA[
+			return (typeof (obj) == 'function' || obj instanceof Function);
+			]]>
+		</method>
+		
+		<!--- 
+			Checks whether a given object is an array.
+			@param object obj: the object to be checked.
+			@return boolean: true if the object is an array, false otherwise.
+		-->
+		<method args="obj" name="isArray">
+			<![CDATA[
+			return (obj instanceof Array);
+			]]>
+		</method>
+		
+		<!---
+			Returns the descriptive type name of a given object. If the object is an array then "array" is returned.
+			@param object obj: the object for which type is required.
+			@return string: the descriptive type name of the object or "array" if the object is an array.
+		-->
+		<method args="obj" name="getType">
+			<![CDATA[
+			var type = obj.constructor.classname;
+			if (!type) {
+				if (obj instanceof Array) {
+					return "array";
+				}
+				type = typeof obj;
+			}
+			return type;
+			]]>
+		</method>
+		
+		<!--- 
+			Filters a given array of objects based upon a given filter method. It iterates through all the elements in the given array, 
+			and for each element in	the array, it invokes the filter method. The filter method is invoked on a given object which is called
+			as the context object. The parameters passed to the filter method are the current element in the array, the index of the element
+			in the array and the array itself. If the filter method returns true then the current element is added to the resultant array. 
+			The resultant array	is returned to the caller. Following is an example:
+			
+			@START_CODE
+				<class name="FilterUtil">
+				 	<method name="filterMethod" args="countryName, index, countryList">
+				 		<![CDATA[
+				 		return (countryName.charAt(countryName.length - 1) == 'a');
+				 		]]>
+				 	</method>
+				</class>
+				
+				<class name="CountryTable">
+					<FilterUtil name="countryFilter1"/>
+					<FilterUtil name="countryFilter2"/>
+
+				 	<method name="getFilteredList">
+				 		<![CDATA[
+			 			var names = ["Canada", "Africa", "India", "Japan"];
+				 		var filteredNames = LangUtil.filter(names, this.countryFilter1.filterMethod, this.countryFilter1);
+				 		return filteredNames;
+				 		]]>
+				 	</method>
+				</class>
+			@END_CODE
+			
+			In the example above, the getFilteredList method in the CountryTable class filters the country names array and returns an array of
+			country names that end with 'a'. So the array returned by getFilteredList will have values ["Canada", "Africa", "India"]. Here the
+			names array is filtered based upon the filter method filterMethod in FilterUtil class. countryFilter1 is the context object for 
+			which filterMethod is invoked.
+			
+			@param array objects: the array of objects to be filtered. 
+			@param object filterMethod: the filter method. 
+			@param object context: the context object.
+			@return array: array of filtered objects. 
+		 -->
+		<method args="objects, filterMethod, context" name="filter">
+			<![CDATA[
+			if (objects == null) {
+				return [];
+			}
+			var result = [];
+			for (var i = 0, len = objects.length; i < len; ++i) {
+				if (filterMethod.apply(context, [objects[i], i, objects])) {
+					result.push(objects[i]);
+				}
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Maps a given array of objects into another based upon a given mapping method. It iterates through all the elements in the given array, 
+			and for each element in the array, it invokes the mapping method. The mapping method is invoked on a given object which is called as 
+			the	context	object. The parameters passed to the mapping method are the current element in the array, the index of the element in the 
+			array and the array itself. The mapping method may change the element in some way. The new element is added to the resultant array. 
+			The resultant array is returned to the caller. As the mapping method always returns an object, the size of the resultant array is 
+			always the same	as that of the given array. Following is an example:
+			
+			@START_CODE
+				<class name="MapUtil">
+				 	<method name="mapMethod" args="countryName, index, countryList">
+				 		<![CDATA[
+				 		return countryName.replace("a","b");
+				 		]]>
+				 	</method>
+				</class>
+				
+				<class name="CountryTable">
+					<MapUtil name="countryMap1"/>
+					<MapUtil name="countryMap2"/>
+
+				 	<method name="getMappedList">
+				 		<![CDATA[
+			 			var names = ["Canada", "Africa", "India", "Mexico"];
+				 		var mappedNames = LangUtil.map(names, this.countryMap2.mapMethod, this.countryMap1);
+				 		return mappedNames;
+				 		]]>
+				 	</method>
+				</class>
+			@END_CODE
+			
+			In the example above, the getMappedList method in the CountryTable class converts the country names array into an array of country
+			names where the first occurance of 'a' in the country name has been replaced by 'b'. So the array returned by getMappedList will 
+			have values ["Cbnada", "Africb", "Indib", "Mexico"]. Here the names array is mapped based upon the mapping method mapMethod in 
+			MapUtil class. countryMap1 is the context object for which mapMethod is invoked.
+
+			@param array objects: the array of objects to be mapped. 
+			@param object mapMethod: the mapping method. 
+			@param object context: the context object.
+			@return array: array of mapped objects. 
+		 -->
+		 <method args="objects, mapMethod, context" name="map">
+			<![CDATA[
+			if (!objects) {
+				return [];
+			}
+			var result = [];
+			for (var i = 0, len = objects.length; i < len; ++i) {
+				result.push(mapMethod.apply(context, [objects[i], i, objects]));
+			}
+			return result;
+			]]>
+		</method>
+		 
+		 <!---
+		 	Checks whether two given objects are identical. If the given objects are arrays then a in-depth comparison between all the elements
+		 	in both the arrays are carried out. The javascript strict comparison operator "===" is used to do the comparison. Following is 
+		 	an example:
+		 	
+			@START_CODE
+			 	<method name="check">
+			 		<![CDATA[
+			 		var names1 = ["Canada", "Africa", "India", "Japan"];
+			 		var names2 = ["Canada", "Africa", "India", "China"];
+			 		return LangUtil.isIdentical(names1, names2);
+			 		]]>
+			 	</method>
+			@END_CODE
+			
+			In the above example, the check method returns false as the values in names1 do not match with the values in names2.
+
+		 	@param object o1: the first object to be compared.
+		 	@param object o2: the second object to be compared with o1.
+		 	@return boolean: true if the two objects are identical, false otherwise.
+		  -->
+		  <method args="o1, o2" name="isIdentical">
+			<![CDATA[
+			if (!this.isArray(o1) || !this.isArray(o2)) {
+				return o1 === o2;
+			}
+			if (o1.length != o2.length) {
+				return false;
+			}
+			for (var i = 0, len = o1.length; i < len; ++i) {
+				if (!this.isIdentical(o1[i], o2[i])) {
+					return false;
+				}
+			}
+			return true;
+			]]>
+		</method>
+		  
+		<!---
+			Checks whether a given object is empty. An object is empty if it is null or if its type is undefined. If an object contains properties
+			than it is not empty.
+			
+		  	@param object obj: the object to be checked.
+		 	@return boolean: true if the the object is empty, false otherwise.
+		-->
+		<method args="obj" name="isEmpty">
+			<![CDATA[
+			if (obj == null || typeof (obj) == 'undefined') {
+				return true;
+			}
+			for (var v in obj) {
+				return false;
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the byte count for a UTF-8 encoding convertible string.
+			@param object s: UTF-8 convertible string. 
+			@return number: the UTF-8 byte count in the given string.
+		 -->
+		<method args="s" name="getUTF8ByteCount">
+			<![CDATA[
+			if (s === null) {
+				return 0;
+			}
+			var oneByteMax = 0x007F;
+			var twoByteMax = 0x07FF;
+			var str = String(s);
+			var byteSize = str.length;
+			for (var i = 0; i < str.length; i++) {
+				var chr = str.charCodeAt(i);
+				if (chr > oneByteMax) {
+					byteSize = byteSize + 1;
+				}
+				if (chr > twoByteMax) {
+					byteSize = byteSize + 1;
+				}
+			}
+			return byteSize;
+			]]>
+		</method>
+
+		<!---
+			Checks whether the given language is a bi-directional language or not.
+			@param string lang: the language to be checked.
+			@return boolean: true if the language is a bi-directional language, false otherwise.
+		-->
+		<method args="lang" name="isBiDiLanguage">
+			<![CDATA[
+			if (lang.length > 2) {
+				lang = lang.substring(0, 2);
+			}
+			return !!this.BI_DIRECTIONAL_LANGUAGES[lang];
+			]]>
+		</method>
+	</Node>
+</Definitions>

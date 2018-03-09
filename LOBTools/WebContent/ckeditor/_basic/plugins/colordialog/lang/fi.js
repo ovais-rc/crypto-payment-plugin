@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","fi",{clear:"Tyhjennä",highlight:"Korostus",options:"Väriasetukset",selected:"Valittu väri",title:"Valitse väri",ibm:{currentColor:"Nykyinen väri"}});

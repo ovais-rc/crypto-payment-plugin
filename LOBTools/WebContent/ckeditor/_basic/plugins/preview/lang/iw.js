@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("preview","iw",{preview:"תצוגה מקדימה:"});

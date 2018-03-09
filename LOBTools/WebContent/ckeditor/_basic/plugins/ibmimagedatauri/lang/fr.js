@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","fr",{error:"Le collage des images n'est actuellement pas pris en charge. Utilisez l'option 'Insérer une image' de la barre d'outils à la place."});

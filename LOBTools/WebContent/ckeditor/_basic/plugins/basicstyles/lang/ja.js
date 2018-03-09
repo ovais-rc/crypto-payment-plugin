@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","ja",{bold:"太字",italic:"イタリック",strike:"取り消し線",subscript:"下付き文字",superscript:"上付き文字",underline:"下線"});

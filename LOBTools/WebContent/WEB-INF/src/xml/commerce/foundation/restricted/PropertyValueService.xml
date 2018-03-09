@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class is used to define a service that will retrieve the possible {@link cmc/foundation/PropertyValue values} for a 
+		{@link cmc/foundation/PropertyDefinition} from the server. 
+		The example in {@link cmc/foundation/PropertyRadioGroup} shows the use of {@link cmc/foundation/PropertyValue} 
+		for static values. However, if you need to dynamically construct the {@link cmc/foundation/PropertyValue}
+		instances by retrieving data from the server, you must declare a {@link cmc/foundation/PropertyValueService}
+		under {@link cmc/foundation/PropertyDefinition}. This service is invoked when the {@link cmc/foundation/PropertyDefinition}
+		is initialized and each time that the Management Center model is reinitialized.
+				
+		<p>There can be only one instance of {@link cmc/foundation/PropertyValueService} defined under {@link cmc/foundation/PropertyDefinition}.
+		
+		<p>The following code snippet shows how this class is used. Although property values are hardcoded 
+		in the example in {@link cmc/foundation/PropertyRadioGroup}, in this example, a <code>cmc/foundation/PropertyValueService</code> 
+		is defined within the {@link cmc/foundation/PropertyDefinition} node to retrieve the possible property values from the server.
+				
+		@START_CODE
+			...
+			Let the following xml be the response from GetUnitOfMeasureService:
+			
+			<values>
+				<value displayName="Kilogram">KGM</value>
+				<value displayName="milligram">LBR</value>
+				<value displayName="1 Unit">C62</value>
+			</values>
+			...
+			<PropertyDefinition propertyName="unitOfMeasure">
+				<PropertyValueService url="/GetUnitOfMeasureService">
+			</PropertyDefinition>
+			...
+		@END_CODE
+		
+		<p>In this example, GetUnitOfMeasureService is invoked when the {@link cmc/foundation/PropertyDefinition} is initialized. 
+		The service response will be parsed by the {@link cmc/foundation/PropertyValueService#parseValues} method, and three instances
+		of {@link cmc/foundation/PropertyValue} that correspond to the three name-value pairs in the service response will be created. 
+		These {@link cmc/foundation/PropertyValue} instances will be added to the parent {@link cmc/foundation/PropertyDefinition} instance.
+		
+		@see cmc/foundation/PropertyValue
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/PropertyValueService" retryOnError="true">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.valueService = this;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the values key for a particular model object.
+			
+			@param cmc/foundation/ModelObject o: the given model object 
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change
+		-->
+		<method args="o, del" name="getValuesKey">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var valuesKey = null;
+			var enabledParams = ServiceUtil.Singleton.getEnabledParameters(this.serviceParams, o);
+			if (del) {
+				for (var i = 0; i < enabledParams.length; i++) {
+					enabledParams[i].registerDelegate(o, del);
+				}
+			}
+			var rpds = {
+				requestParent: o,
+				args: {}
+			};
+			ServiceUtil.Singleton.resolveParameters(enabledParams, rpds);
+			if (rpds.loadingParameters.length == 0) {
+				valuesKey = "vk";
+				for (var key in rpds.args) {
+					valuesKey = valuesKey + key + "_" + rpds.args[key];
+				}
+			}
+			return valuesKey;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when an element named "values" is found in the service response XML.
+			It is assumed that there are child "value" tags with a displayName attribute. These will
+			be used to generate cmc/foundation/PropertyValue objects.
+			
+			Any existing previous service-requested cmc/foundation/PropertyValue objects for the parent cmc/foundation/PropertyDefinition
+			will be cleared for each data request.
+			
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			var valuesKey = this.getValuesKey(requestParent);
+			if (valuesKey != null) {
+				this.parent.releasePropertyValues(valuesKey);
+				var nodes = e.childNodes;
+				for (var i = 0; i < nodes.length; i++) {
+					var node = nodes[i];
+					if (node.nodeName == "value") {
+						var displayName = "";
+						var isDefault = (node.getAttribute("isDefault") == "true") ? true : false;
+						var value = XMLUtil.getNodeValue(node);
+						displayName = node.getAttribute("displayName");
+						if ((value != "") && (displayName != "")) {
+							this.parent.createPropertyValue({
+								value: value,
+								displayName: displayName,
+								fromService: true,
+								valuesKey: valuesKey,
+								isDefault: isDefault
+							});
+						}
+					}
+				}
+				EventUtil.trigger(this.parent, "onvalueServiceComplete");
+			}
+			]]>
+		</method>
+	</Service>
+</Definitions>

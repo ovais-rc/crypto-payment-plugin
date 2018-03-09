@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+
+	<!---
+		@keywords private
+		This class is used to save many to many merchandising associations via {@link cmc/foundation/ActionManager}.
+	-->
+	<SaveHandler classDefinition="true" definitionName="cmc/catalog/MerchandingAssociationsSaveHandler">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="CopyActionHandler" moduleName="cmc/foundation/CopyActionHandler"/>
+		<dependency localName="DeleteAssociationSourceService" moduleName="cmc/catalog/DeleteAssociationSourceService"/>
+		<method args="object" name="save">
+			<![CDATA[
+			var sourceObjects = object.getObjects("MerchandisingAssociationReferencedManytoManyCatalogSourceEntries");
+			var targetObjects = object.getObjects("MerchandisingAssociationReferencedManytoManyCatalogEntries");
+			object.setOpen(false);
+			object.setVariable("openGroupDirty", false);
+			this.commitObject(object);
+			var removeExisting = object.getPropertyValue("removeExisting");
+			if (sourceObjects.length > 0) {
+				if (removeExisting == "true") {
+					for (var i = 0; i < sourceObjects.length; i++) {
+						DeleteAssociationSourceService.Singleton.doRequest(sourceObjects[i].getReferencedObject());
+					}
+					require(["cmc/foundation/WaitForTransactionsHandler"], function(WaitForTransactionsHandler) {
+						WaitForTransactionsHandler.Singleton.triggerAction(object.model);
+					});
+				}
+				var lastSourceIndex = -1;
+				for (var i = sourceObjects.length - 1; i >= 0 && lastSourceIndex == -1; i--) {
+					var sourceObject = sourceObjects[i].getReferencedObject();
+					for (var j = 0; j < targetObjects.length; j++) {
+						if (targetObjects[j].getReferencedObject() != sourceObject) {
+							lastSourceIndex = i;
+							break;
+						}
+					}
+				}
+				if (lastSourceIndex >= 0) {
+					var transactionEventId = ServiceTransactionUtil.Singleton.createTransactionEvent(true);
+					for (var i = 0; i <= lastSourceIndex; i++) {
+						var sourceObject = sourceObjects[i].getReferencedObject();
+						var lastTargetIndex = -1;
+						for (var j = targetObjects.length - 1; j >= 0; j--) {
+							if (targetObjects[j].getReferencedObject() != sourceObject) {
+								lastTargetIndex = j;
+								break;
+							}
+						}
+						if (lastTargetIndex < 0) {
+							continue;
+						}
+						var transactionGroupId = ServiceTransactionUtil.Singleton.createTransactionGroup(sourceObject, transactionEventId, true);
+						for (var j = 0; j <= lastTargetIndex; j++) {
+							var targetObject = targetObjects[j];
+							if (targetObject.getReferencedObject() == sourceObject) {
+								continue;
+							}
+							var targetType = targetObject.getReferencedObject().objectType;
+							var objectDefinition = null;
+							if (targetType == "Product" || targetType == "Kit" || targetType == "Bundle" || targetType == "ProductSKU" || targetType == "CatalogGroupSKU") {
+								objectDefinition = sourceObject.model.getObjectDefinition(sourceObject, "MerchandisingAssociationReferencedCatalogEntries");
+							}
+							else if (targetType == "InheritedProduct" || targetType == "InheritedKit" || targetType == "InheritedBundle" || targetType == "InheritedProductSKU" || targetType == "InheritedCatalogGroupSKU") {
+								objectDefinition = sourceObject.model.getObjectDefinition(sourceObject, "MerchandisingAssociationReferencedInheritedCatalogEntries");
+							}
+							if (objectDefinition != null) {
+								CopyActionHandler.Singleton.triggerAction(targetObject, sourceObject, objectDefinition, false, null, transactionEventId, transactionGroupId, true, j == lastTargetIndex, i == lastSourceIndex && (j == lastTargetIndex));
+							}
+						}
+					}
+				}
+			}
+			require(["cmc/foundation/ReleaseObjectHandler"], function(ReleaseObjectHandler) {
+				ReleaseObjectHandler.Singleton.triggerAction(object);
+			});
+			]]>
+		</method>
+		<method args="o" name="commitObject">
+			<![CDATA[
+			for (var key in o.propertyMap) {
+				o.propertyMap[key].reset();
+			}
+			o.newObject = false;
+			o.implicitNewObject = false;
+			for (var key in o.childObjectMap) {
+				var childObject = o.childObjectMap[key];
+				if (!childObject.getIsVersionObject() && childObject.parentObject == o && childObject.openGroupObject == o.openGroupObject) {
+					this.commitObject(childObject);
+				}
+			}
+			]]>
+		</method>
+	</SaveHandler>
+
+	<!---
+		@keywords private
+		This client action is used to delete all the merchandising associations for the specified products.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/catalog/DeleteAllAssociationsClientAction" displayName="${catalogResources.Singleton.deleteAllAssociations.string}">
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			@keywords private
+			@param cmc/foundation/ModelObject objects: The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (objects) {
+				require(["cmc/catalog/DeleteAllAssociationsTypeSelectionDialog"], function(DeleteAllAssociationsTypeSelectionDialog) {
+					DeleteAllAssociationsTypeSelectionDialog.Singleton.openDeleteAllAssociationsTypeSelectionDialog(objects);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if the following conditions are true.
+			This client action is enabled for the product by evaluating
+			the associated {@link cmc/foundation/EnablementCondition} object.
+			The user has access to the product.
+			The workspace is not read only.
+			This method is only used to determine if this action is visible to the user.
+			It is not invoked from the {@link cmc/foundation/ClientAction#doClientAction} method.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (enabled && o.model.oEditor.respectWorkspaceContext) {
+				var readOnlyModeContextValue = ContextUtil.Singleton.findContextValue(null, "readOnlyMode");
+				enabled = (readOnlyModeContextValue.value != "true");
+			}
+			if (enabled && o.isContextReadOnly()) {
+				enabled = false;
+			}
+			return enabled;
+			]]>
+		</method>
+	</ClientAction>
+
+	<!---
+		@keywords private
+		This service is used to delete all the merchandising associations whose source is the specified product.
+	-->
+	<Service definitionName="cmc/catalog/DeleteAssociationSourceService" singletonDefinition="true" transactionService="true" url="/cmc/DeleteAllAssociationsForSource">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<ServiceParam name="storeId"/>
+		<ServiceParam name="catalogId" parentProperty="true" parentType="CatalogAlias" propertyName="catalogId"/>
+		<ServiceParam name="catentryId" propertyName="catentryId"/>
+
+		<!---
+			@keywords private
+			This method is called when this custom service completed successfully. Client objects will be released if
+			necessary to make sure the association reference objects are up to date to reflect the changes after the
+			delete action.
+
+			@param cmc/foundation/ModelObject requestParent: The object on which this custom service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			var deleteObjects = [];
+			for (var key in requestParent.childObjectMap) {
+				var o = requestParent.childObjectMap[key];
+				if (!o.getIsVersionObject() && (o.objectType == "MerchandisingAssociationReferencedCatalogEntries" || o.objectType == "MerchandisingAssociationReferencedInheritedCatalogEntries")) {
+					deleteObjects.push(o);
+				}
+			}
+			while (deleteObjects.length > 0) {
+				var o = deleteObjects.shift();
+				ModelUtil.Singleton.releaseModelObject(o);
+			}
+			this.inherited(arguments);
+			var msg;
+			var messageType = "deleteOutboundMASuccessful";
+			var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+			if (msgCount == 1) {
+				msg = catalogResources.Singleton.replaceValues("deleteOutboundMASuccessful", [requestParent.openGroupObject.objectDisplayName]);
+			}
+			else {
+				msg = catalogResources.Singleton.replaceValues("deleteMultiOutboundMASuccessful", [msgCount]);
+			}
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		This service is used to delete all the merchandising associations whose target is the specified product.
+	-->
+	<Service definitionName="cmc/catalog/DeleteAssociationTargetService" singletonDefinition="true" transactionService="true" url="/cmc/DeleteAllAssociationsForTarget">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<ServiceParam name="storeId"/>
+		<ServiceParam name="catalogId" parentProperty="true" parentType="CatalogAlias" propertyName="catalogId"/>
+		<ServiceParam name="catentryId" propertyName="catentryId"/>
+
+		<!---
+			@keywords private
+			This method is called when this custom service completed successfully. Client objects will be released if
+			necessary to make sure the association reference objects are up to date to reflect the changes after the
+			delete action.
+
+			@param cmc/foundation/ModelObject requestParent: The object on which this custom service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			var deleteObjects = [];
+			for (var key in requestParent.referenceMap) {
+				var o = requestParent.referenceMap[key];
+				if (!o.getIsVersionObject() && (o.objectType == "MerchandisingAssociationReferencedCatalogEntries" || o.objectType == "MerchandisingAssociationReferencedInheritedCatalogEntries")) {
+					deleteObjects.push(o);
+				}
+			}
+			while (deleteObjects.length > 0) {
+				var o = deleteObjects.shift();
+				ModelUtil.Singleton.releaseModelObject(o);
+			}
+			this.inherited(arguments);
+			var msg;
+			var messageType = "deleteInboundMASuccessful";
+			var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+			if (msgCount == 1) {
+				msg = catalogResources.Singleton.replaceValues("deleteInboundMASuccessful", [requestParent.openGroupObject.objectDisplayName]);
+			}
+			else {
+				msg = catalogResources.Singleton.replaceValues("deleteMultiInboundMASuccessful", [msgCount]);
+			}
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		The dialog for the user to select the type of deleting all merchandising associations for the specified products.
+		The user will be prompted to select whether to delete all merchandising associations for the specified products or
+		to delete all merchandising associations that reference the specified products, or both.
+	-->
+	<AlertDialog definitionName="cmc/catalog/DeleteAllAssociationsTypeSelectionDialog" promptText="${catalogResources.Singleton.deleteAllAssociationsDialogPrompt.string}" showCancel="true" singletonDefinition="true">
+		<dependency localName="DeleteAssociationTargetService" moduleName="cmc/catalog/DeleteAssociationTargetService"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="DeleteAssociationSourceService" moduleName="cmc/catalog/DeleteAssociationSourceService"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<!---
+			The array of products in which their merchandising associations are to be deleted.
+		-->
+		<variable name="deleteObjects" value="${null}"/>
+
+		<!---
+			Business Object Editor of the object to be removed.
+		-->
+		<variable name="oEditor" value="${null}"/>
+
+		<!---
+			Select the type of deleting all merchandising associations for the specified products.
+			@param array objects: The array of products in which their merchandising associations are to be deleted.
+		-->
+		<method args="objects" name="openDeleteAllAssociationsTypeSelectionDialog">
+			<![CDATA[
+			this.openWindow();
+			this.deleteObjects = objects;
+			this.oEditor = objects[0].model.oEditor;
+			]]>
+		</method>
+
+		<!---
+			Set the focus to OK button.
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.viewButtons.okBtn);
+			]]>
+		</method>
+
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+
+		<!---
+			Close the dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.deleteObjects = null;
+			this.oEditor = null;
+			this.checkboxView.sourceCheckbox.setVariable("value", false);
+			this.checkboxView.targetCheckbox.setVariable("value", false);
+			]]>
+		</method>
+
+		<!---
+			Delete the merchandising associations.
+		-->
+		<method name="handleOK">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.start("catDeleteAllAssociationsTypeSelectionDialog handleOK");
+			}
+			if (this.checkboxView.sourceCheckbox.value) {
+				for (var i = 0; i < this.deleteObjects.length; i++) {
+					DeleteAssociationSourceService.Singleton.doRequest(this.deleteObjects[i]);
+				}
+			}
+			if (this.checkboxView.targetCheckbox.value) {
+				for (var i = 0; i < this.deleteObjects.length; i++) {
+					DeleteAssociationTargetService.Singleton.doRequest(this.deleteObjects[i]);
+				}
+			}
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.end();
+			}
+			]]>
+		</method>
+
+		<Component clip="true" ignoreLayout="true" name="checkboxView" x="${this.parent.text.x}" y="${this.parent.text.y + this.parent.text.height + 5}">
+			<BaseCheckbox name="sourceCheckbox">
+				<TextComponent multiline="true" name="sourceText" text="${catalogResources.Singleton.deleteAllAssociationsForSource.string}" width="${this.parent.parent.parent.text.width}" x="${this.parent._title.x}" y="${this.parent.text_y}"/>
+			</BaseCheckbox>
+			<BaseCheckbox name="targetCheckbox">
+				<TextComponent multiline="true" name="targetText" text="${catalogResources.Singleton.deleteAllAssociationsForTarget.string}" width="${this.parent.parent.parent.text.width}" x="${this.parent._title.x}" y="${this.parent.text_y}"/>
+			</BaseCheckbox>
+			<AxisLayout axis="y" spacing="3"/>
+		</Component>
+	</AlertDialog>
+
+</Definitions>

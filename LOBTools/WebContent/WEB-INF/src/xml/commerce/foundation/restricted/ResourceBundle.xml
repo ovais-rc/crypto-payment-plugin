@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This class declares a service that loads the contents of a resource bundle.
+		A resource bundle is used to define all the NL messages used in the user interface.
+	-->
+	<Service definitionName="cmc/foundation/GetResourceBundleService" retryOnError="true" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" sendRequestIdentifier="false" url="/GetResourceBundle">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			This method is called when an element named "values"
+			is found in the service response XML.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/GetResourceBundleService", "parseValues(requestParent,e,requestIdentifier)", [requestParent]);
+			}
+			var nodes = e.childNodes;
+			if (nodes.length == 0) {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/GetResourceBundleService", "parseValues", "Unable to load resource bundle: " + requestParent.baseName);
+				}
+			}
+			else {
+				for (var i = 0; i < nodes.length; i++) {
+					var node = nodes[i];
+					var key = node.nodeName;
+					var textNode = node.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+						var resource = requestParent[key];
+						if (resource) {
+							resource.string = textNode.nodeValue;
+							EventUtil.trigger(resource, "onstring", resource.string);
+						}
+						else {
+							requestParent[key] = {
+								name: key,
+								string: textNode.nodeValue
+							};
+						}
+					}
+				}
+				requestParent.updateConstrainedAttributes();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/GetResourceBundleService", "parseValues(requestParent,e,requestIdentifier)");
+			}
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		Resource bundles contain locale specific strings. If your program requires a locale specific string then
+		loading from a resource bundle assures that the string is appropiate for the current user's locale. Resource
+		bundles allows programs to be easily localized or translated into different languages.
+		
+		This class is created to represent a resource bundle object. At class initialization, 
+		all the resource bundle keys defined will be retrieved from the resource bundle file. Then the locale specific
+		strings can be easily referenced by accessing the resource bundle object with the different keys.
+		
+		Using this class to access locale specific strings, allows developers to code independently of locale.
+		
+		Sample Usage:
+		@START_CODE
+				<ResourceBundle definitionName="cmc/myCompany/myResources" baseName="extension.myCompany.MyResourcesLOB" singletonDefinition="true"/>
+		@END_CODE
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ResourceBundle">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Fully qualified resource bundle base name.
+		-->
+		<variable name="baseName" type="string"/>
+		<!---
+			Fully qualified resource bundle extension base name. If not specified, this will default to 
+			"extension.componentName.fileName".
+			
+			This is the path to the resource bundle file which takes precedence over the resource bundle
+			defined by the baseName parameter. The key name/value from this resource bundle will overwrite any
+			existing key name/value combination. 
+		-->
+		<variable name="extensionBaseName" type="string" value=""/>
+		<!---
+			@keywords private
+			Array of object attributes that are constrained to resource bundle keys.
+			Each entry in the array is a map with three values:
+				key - the name of the resource bundle key
+				node - the node with the constrained attribute
+				attributeName - the name of the attribute
+		-->
+		<variable name="constrainedAttributes" value="${[]}"/>
+		<!---
+			@keywords private
+			The current locale of this resource bundle.
+		-->
+		<variable name="currentLocale" value="${null}"/>
+
+		<!---
+			@keywords private 
+			
+			Initialization handler for this class.
+		-->
+		<handler eventSource="RootComponent.Singleton" name="oninit">
+			<![CDATA[
+			this.load();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private 
+			
+			Initialization method for this class.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.loadDel = new EventHandler.Class(this, "load");
+			this.inherited(arguments);
+			this.load();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private 
+			
+			Destroy method for this class.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.loadDel.disconnectAll();
+			delete this.loadDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Load the resource bundle.
+		-->
+		<method args="e" name="load">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.loadDel.disconnectAll();
+			var localeValue = ContextUtil.Singleton.findContextValue(null, "locale", this.loadDel);
+			if (localeValue.value != this.currentLocale) {
+				this.currentLocale = localeValue.value;
+				if (localeValue.value && this.baseName) {
+					if (this.extensionBaseName == "") {
+						var tokens = this.baseName.split(".");
+						this.extensionBaseName = "extension." + tokens[3] + "." + tokens[7];
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "INFO", "cmc/foundation/ResourceBundle", "load", "--- extensionBaseName = " + this.extensionBaseName + " ---");
+						}
+					}
+					var bundle = this;
+					require(["cmc/foundation/GetResourceBundleService"], function(GetResourceBundleService) {
+						GetResourceBundleService.Singleton.doRequest(bundle, {
+							baseName: bundle.baseName,
+							extensionBaseName: bundle.extensionBaseName,
+							developmentMode: ContextUtil.Singleton.findContextValue(null, "developmentMode").value
+						});
+					});
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Return a formatted string for the specified resource key and parameter list. It substitutes the
+			parameters in the message with the values given in the parameter list.
+			
+			@param string key: resource key
+			@param Array paramList: an array of parameters that are to be substituted into the message
+			@returns string: the resulting message string
+		-->
+		<method args="key, paramList" name="replaceValues">
+			<![CDATA[
+			var resource = this[key];
+			if (!resource || !resource.string) {
+				return null;
+			}
+			var value = StringUtil.Singleton.replaceParams(resource.string, paramList);
+			return value;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Constrain the specified attribute to the specified resource key.
+			@param string key: resource key
+			@param node node: the node with the attribute to be constrained
+			@param string attributeName: the name of the attribute being constrained
+		-->
+		<method args="key, node, attributeName" name="constrainVariable">
+			<![CDATA[
+			this.constrainedAttributes.push({
+				key: key,
+				node: node,
+				attributeName: attributeName
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="updateConstrainedAttributes">
+			<![CDATA[
+			for (var i = 0; i < this.constrainedAttributes.length; i++) {
+				var constrainedAttribute = this.constrainedAttributes[i];
+				if (typeof (this[constrainedAttribute.key]) != 'undefined') {
+					constrainedAttribute.node.setVariable(constrainedAttribute.attributeName, this[constrainedAttribute.key].string);
+				}
+				else {
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "WARNING", "cmc/foundation/ResourceBundle", "updateConstrainedAttributes", "Undefined resource bundle key: " + constrainedAttribute.key);
+					}
+				}
+			}
+			]]>
+		</method>
+	</Node>
+</Definitions>

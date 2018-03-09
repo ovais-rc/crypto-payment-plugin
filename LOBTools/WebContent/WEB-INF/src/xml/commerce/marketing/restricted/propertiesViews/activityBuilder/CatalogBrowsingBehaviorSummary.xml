@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This summary view provides brief information about the {@link cmc/marketing/CatalogBrowsingBehaviorElementObject} flow element.
+		The generated text is shown beneath the element on the Activity Builder flow diagram.
+	-->
+	<FlowElementSummary classDefinition="true" definitionName="cmc/marketing/CatalogBrowsingBehaviorSummary">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<FlowSummaryParam name="elemTemplateName" propertyName="elemTemplateName"/>
+		<FlowSummaryParam name="containsOperator" propertyName="containsOperator"/>
+		<FlowSummaryParam name="anyOrAll" propertyName="anyOrAll"/>
+		<FlowSummaryParam name="categoryNames" objectPath="ChildCatalogGroup/CatalogGroupAlias/CatalogGroupDescription" propertyName="name"/>
+		<FlowSummaryParam name="productNames" objectPath="ChildCatentry/CatalogEntry/CatalogEntryDescription" propertyName="name"/>
+		<FlowSummaryParam name="includeSubcategories" propertyName="type"/>
+		<FlowSummaryParam name="daysOperator" propertyName="daysOperator"/>
+		<FlowSummaryParam name="days" propertyName="days"/>
+		<FlowSummaryParam name="date1" propertyName="date1"/>
+		<FlowSummaryParam name="date2" propertyName="date2"/>
+		<FlowSummaryParam name="beforeDate" propertyName="beforeDate"/>
+		<FlowSummaryParam name="beforeAfterOnDate" propertyName="beforeAfterOnDate"/>
+		<FlowSummaryParam name="numberOfTimesOperator" propertyName="numberOfTimesOperator"/>
+		<FlowSummaryParam name="numberOfTimes" propertyName="numberOfTimes"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedProductsAny, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedProductsAll, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedCategoriesAny, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedCategoriesAll, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedCategoriesAndSubCategoriesAny, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedCategoriesAndSubCategoriesAll, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedProductsInCategoriesAny, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedProductsInCategoriesAll, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedWithinLastXDays, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedAtLeastXDaysAgo, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedBeforeXDate, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedAfterXDate, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedBetweenXandYDates, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedOnXDate, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedLessThan, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryViewedAtLeast, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryNone, "onstring");
+			]]>
+		</handler>
+		
+		<method args="e" name="updateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var summaryText = "";
+			var dateText = this.getDateSummary();
+			var numberText = this.getNumberSummary();
+			if (this.resolvedParams.elemTemplateName == "recordedCustomerBehaviorProductBrowsed") {
+				summaryText = this.getCatalogSummary("Products");
+			}
+			else if (this.resolvedParams.elemTemplateName == "recordedCustomerBehaviorCategoryBrowsed") {
+				summaryText = this.getCatalogSummary("Categories");
+			}
+			else if (this.resolvedParams.elemTemplateName == "recordedCustomerBehaviorProductInCategoryBrowsed") {
+				summaryText = this.getCatalogSummary("ProductsInCategories");
+			}
+			if ((numberText != "") && (summaryText != "")) {
+				summaryText += "\n" + numberText;
+			}
+			if ((dateText != "") && (summaryText != "")) {
+				summaryText += "\n" + dateText;
+			}
+			if ((this.resolvedParams.containsOperator == "!=") && (summaryText != "")) {
+				summaryText = marketingResources.Singleton.summaryNone.string + "\n" + summaryText;
+			}
+			this.setSummaryText(summaryText);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="usage" name="getCatalogSummary">
+			<![CDATA[
+			if (usage == undefined) {
+				usage = "Products";
+			}
+			var summary = "";
+			var anyOrAll = this.resolvedParams.anyOrAll;
+			if ((anyOrAll == "any") || (anyOrAll == "all")) {
+				var anyText = (anyOrAll == "any") ? "Any" : "All";
+				if (usage == "Products") {
+					var productText = this.getValuesList("productNames");
+					if (productText != "") {
+						summary = marketingResources.Singleton.replaceValues("summaryViewedProducts" + anyText, [productText]);
+					}
+				}
+				else if ((usage == "Categories") || (usage == "ProductsInCategories")) {
+					var includeSubcategories = this.resolvedParams.includeSubcategories;
+					if ((usage == "Categories") && (includeSubcategories == "PARENTCATEGORY")) {
+						includeSubcategories = "AndSubCategories";
+					}
+					else {
+						includeSubcategories = "";
+					}
+					var categoryText = this.getValuesList("categoryNames");
+					if (categoryText != "") {
+						summary = marketingResources.Singleton.replaceValues("summaryViewed" + usage + includeSubcategories + anyText, [categoryText]);
+					}
+				}
+			}
+			return summary;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getDateSummary">
+			<![CDATA[
+			var summary = "";
+			if (this.resolvedParams.daysOperator == "<=") {
+				if (this.resolvedParams.days != "") {
+					var days = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.days);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedWithinLastXDays", [days]);
+				}
+			}
+			else if (this.resolvedParams.daysOperator == ">") {
+				if (this.resolvedParams.days != "") {
+					var days = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.days);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedAtLeastXDaysAgo", [days]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == "<") {
+				if (this.resolvedParams.date1 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedBeforeXDate", [date1]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == ">") {
+				if (this.resolvedParams.date1 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedAfterXDate", [date1]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == ">=" && this.resolvedParams.beforeDate == "<=") {
+				if (this.resolvedParams.date1 != "" && this.resolvedParams.date2 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					var date2 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date2, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedBetweenXandYDates", [date1, date2]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == "=") {
+				if (this.resolvedParams.date1 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedOnXDate", [date1]);
+				}
+			}
+			return summary;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getNumberSummary">
+			<![CDATA[
+			var summary = "";
+			if (this.resolvedParams.numberOfTimes != "") {
+				if (this.resolvedParams.numberOfTimesOperator == "<") {
+					var numberOfTimes = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.numberOfTimes);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedLessThan", [numberOfTimes]);
+				}
+				else if (this.resolvedParams.numberOfTimesOperator == ">=") {
+					var numberOfTimes = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.numberOfTimes);
+					summary = marketingResources.Singleton.replaceValues("summaryViewedAtLeast", [numberOfTimes]);
+				}
+			}
+			return summary;
+			]]>
+		</method>
+	</FlowElementSummary>
+</Definitions>

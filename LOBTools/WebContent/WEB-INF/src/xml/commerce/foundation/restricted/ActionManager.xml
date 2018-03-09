@@ -1,0 +1,3309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		The action manager is a utility that will serialize user actions. Many user actions trigger
+		many services and deferred callbacks and involve multiple steps. The action manager ensures
+		that only one action is active at time.
+	-->
+	<Node definitionName="cmc/foundation/ActionManager" singletonDefinition="true">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<!---
+			An array of pending actions. Actions are simple objects that have properties required to
+			complete the action. Every action must have a property named "actionHandler". The action
+			handler is a utility instance that will handle the details of the action. The first action
+			in the list is the active action.
+		-->
+		<variable name="pendingActions" value="${[]}"/>
+
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.actionCallbackDel = new EventHandler.Class(this, "actionCallback");
+			]]>
+		</handler>
+
+		<!---
+			Add the specified action to the list of pending actions.
+			@param object action: action instance
+		-->
+		<method args="action" name="addAction">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) action.eventId = EventTimer.Singleton.currentEventId;
+			this.pendingActions.push(action);
+			SingletonRegistry.progressIndicator.addAction();
+			if (this.pendingActions.length == 1) {
+				CallbackUtil.Singleton.addDeferredCallback(this.actionCallbackDel);
+			}
+			]]>
+		</method>
+
+		<!---
+			Remove the specified action from the list of pending actions.
+			@param object action: action instance
+		-->
+		<method args="action" name="removeAction">
+			<![CDATA[
+			var index = this.pendingActions.indexOf(action);
+			if (index != -1) {
+				action.actionHandler.releaseAction(action);
+				this.pendingActions.splice(index, 1);
+				SingletonRegistry.progressIndicator.removeAction();
+				if (index == 0) {
+					this.actionCallbackDel.disconnectAll();
+					CallbackUtil.Singleton.cancelCallback(this.actionCallbackDel);
+					if (this.pendingActions.length > 0) {
+						CallbackUtil.Singleton.addDeferredCallback(this.actionCallbackDel);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle action callback.
+		-->
+		<method args="e" name="actionCallback">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.actionCallbackDel.disconnectAll();
+			if (ModalUtil.getModalComponent() == null) {
+				var action = this.pendingActions[0];
+				if (EventTimer.Singleton.enabled && action.eventId) EventTimer.Singleton.restart(action.eventId);
+				action.actionHandler.performAction(action);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			else {
+				this.actionCallbackDel.connect(ModalUtil, "onmode");
+			}
+			]]>
+		</method>
+
+		<!---
+			Stop any pending actions.
+			@param cmc/foundation/Model model: object model instance
+		-->
+		<method args="model" name="stopActions">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ActionManager", "stopActions(model)", "model=" + model);
+				if (model) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ActionManager", "stopActions(model)", "model.oEditor=" + model.oEditor);
+				}
+			}
+			var stoppablePendingActions = [];
+			var remainingPendingActions = [];
+			var currentActionStopped = false;
+			for (var i = 0; i < this.pendingActions.length; i++) {
+				var action = this.pendingActions[i];
+				if (typeof (model) == "undefined" || model == null || action.model == model) {
+					stoppablePendingActions.push(action);
+					if (i == 0) {
+						currentActionStopped = true;
+					}
+				}
+				else {
+					remainingPendingActions.push(action);
+				}
+			}
+			this.pendingActions = remainingPendingActions;
+			while (stoppablePendingActions.length > 0) {
+				var action = stoppablePendingActions.shift();
+				action.actionHandler.releaseAction(action);
+			}
+			if (currentActionStopped) {
+				this.actionCallbackDel.disconnectAll();
+				CallbackUtil.Singleton.cancelCallback(this.actionCallbackDel);
+				if (this.pendingActions.length > 0) {
+					CallbackUtil.Singleton.addDeferredCallback(this.actionCallbackDel);
+				}
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		Handles the copy action.
+	-->
+	<Node definitionName="cmc/foundation/CopyActionHandler" singletonDefinition="true">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<!---
+			Current copy action. A copy action must be deferred until the source object is loaded.
+		-->
+		<variable name="currentAction" value="${null}"/>
+
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.checkChildrenLoadedDel = new EventHandler.Class(this, "checkChildrenLoaded");
+			this.checkChildrenErrorDel = new EventHandler.Class(this, "checkChildrenError");
+			]]>
+		</handler>
+
+		<!---
+			Trigger the copy action.
+			@param cmc/foundation/ModelObject sourceObject: the object that is to be copied
+			@param cmc/foundation/ModelObject targetObject: the target object for the copy action
+			@param cmc/foundation/ObjectDefinition targetDefinition: the target object definition
+			@param boolen doOpen: open the properties view for the copied object
+			@param cmc/foundation/EventHandler callbackDelegate: a callback delegate that will be executed when the copy completes successfully
+			@param transactionEventId: The transaction event ID under which the copy of the object will be saved
+			@param transactionGroupId: The transaction group ID of an open group object.
+			@param boolean saveCopy: save the copied object
+			@param boolean isLastSaveInGroup: Indicates that this is the last object to be saved under the transactionGroupId.
+			@param boolean isLastSaveObject: Indicates that this is the last object to be saved with this transaction event
+			@param string sequencePropertyName: The sequence property of the source object. This is not null when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param string sequencePropertyPath: The object path for the sequence property of the source object.
+			@param number nextSeq: The value for the next sequence in the list. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param object newObjectOptions: an object that contains the arguments to be passed to the populate new object service
+		-->
+		<method args="sourceObject, targetObject, targetDefinition, doOpen, callbackDelegate, transactionEventId, transactionGroupId, saveCopy, isLastSaveInGroup, isLastSaveObject, sequencePropertyName, sequencePropertyPath, nextSeq, newObjectOptions" name="triggerAction">
+			<![CDATA[
+			if (typeof(transactionEventId) == "undefined") transactionEventId = -1;
+			if (typeof(transactionGroupId) == "undefined") transactionGroupId = -1;
+			if (typeof(saveCopy) == "undefined") saveCopy = false;
+			if (typeof(isLastSaveInGroup) == "undefined") isLastSaveInGroup = false;
+			if (typeof(isLastSaveObject) == "undefined") isLastSaveObject = false;
+			if (typeof(sequencePropertyName) == "undefined") sequencePropertyName = null;
+			if (typeof(sequencePropertyPath) == "undefined") sequencePropertyPath = null;
+			if (typeof(nextSeq) == "undefined") nextSeq = -1;
+			if (typeof(newObjectOptions) == "undefined") newObjectOptions = null;
+			sourceObject.incrementReferenceCount();
+			if (targetObject != null) {
+				targetObject.incrementReferenceCount();
+			}
+			var action = {
+				actionHandler: this,
+				sourceObject: sourceObject,
+				targetObject: targetObject,
+				targetDefinition: targetDefinition,
+				doOpen: doOpen,
+				callbackDelegate: callbackDelegate,
+				model: sourceObject.model,
+				transactionEventId: transactionEventId,
+				transactionGroupId: transactionGroupId,
+				saveCopy: saveCopy,
+				isLastSaveInGroup: isLastSaveInGroup,
+				isLastSaveObject: isLastSaveObject,
+				sequencePropertyName: sequencePropertyName,
+				sequencePropertyPath: sequencePropertyPath,
+				nextSeq: nextSeq,
+				newObjectOptions: newObjectOptions
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the specified copy action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.sourceObject.decrementReferenceCount();
+			if (action.targetObject != null) {
+				action.targetObject.decrementReferenceCount();
+			}
+			if (action == this.currentAction) {
+				this.checkChildrenLoadedDel.disconnectAll();
+				this.checkChildrenErrorDel.disconnectAll();
+				this.currentAction = null;
+			}
+			if (action.isLastSaveInGroup) {
+				ServiceTransactionUtil.Singleton.releaseLongRunningTransactionGroup(action.transactionGroupId);
+			}
+			if (action.isLastSaveObject) {
+				ServiceTransactionUtil.Singleton.activeTransactionEventId = null;
+				ServiceTransactionUtil.Singleton.releaseLongRunningTransactionEvent(action.transactionEventId);
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle the callback and perform the copy action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			if (action.targetDefinition.primary) {
+				if (!action.sourceObject.isGetChildrenServicesLoaded(action.sourceObject.objectDefinition.getCopyObjectDefinitions(), true)) {
+					this.currentAction = action;
+					this.checkChildrenLoadedDel.connect(action.sourceObject, "onGetChildrenServiceCompleted");
+					this.checkChildrenErrorDel.connect(action.sourceObject, "onGetChildrenServiceError");
+					action.sourceObject.checkParsedData();
+					action.sourceObject.forceParseData = true;
+					action.sourceObject.setHasReleasableChildren();
+					action.sourceObject.loadChildren(action.sourceObject.objectDefinition.getCopyObjectDefinitions(), true);
+				}
+				else {
+					this.copyPrimaryObject(action);
+					require(["cmc/foundation/ActionManager"], function(ActionManager) {
+						ActionManager.Singleton.removeAction(action);
+					});
+				}
+			}
+			else {
+				var target = action.targetObject;
+				var dirty = target != null ? target.openGroupDirty : false;
+				var copy = action.sourceObject.model.createNewObject(action.targetDefinition, target, true, action.sourceObject);
+				if (action.sequencePropertyName != null) {
+					copy.setPropertyValue(action.sequencePropertyName, action.sequencePropertyPath, action.nextSeq);
+				}
+				if (action.saveCopy) {
+					ServiceTransactionUtil.Singleton.activeTransactionEventId = action.transactionEventId;
+					if (dirty || copy.getReferencedObject().openGroupDirty) {
+						target.saveObject(false, true);
+					}
+					else {
+						copy.saveObject(false, false);
+						if (!target.viewed) {
+							target.closeObject(false);
+						}
+						target.setVariable("openGroupDirty", false);
+					}
+				}
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Copy primary object.
+			@param object action: the action instance
+		-->
+		<method args="action" name="copyPrimaryObject">
+			<![CDATA[
+			var newObject = action.sourceObject.model.createNewObject(action.targetDefinition, null, true, action.sourceObject);
+			newObject.viewed = true;
+			if (action.targetObject != null) {
+				var parentDef = null;
+				var definitions = action.targetObject.objectDefinition.parentReferenceObjectDefinitions;
+				definitions = definitions.concat(action.targetObject.objectDefinition.collectionReferenceObjectDefinitions);
+				for (var i = 0; i < definitions.length; i++) {
+					var oDef = definitions[i];
+					if (oDef.isReferencedDefinition(action.targetDefinition)) {
+						parentDef = oDef;
+						break;
+					}
+				}
+				if (parentDef != null) {
+					var newRO = action.targetObject.model.createNewObject(parentDef, action.targetObject);
+					if (action.sequencePropertyName != null) {
+						newRO.setPropertyValue(action.sequencePropertyName, action.sequencePropertyPath, action.nextSeq);
+					}
+					newRO.addChild(newObject);
+				}
+			}
+			if (action.newObjectOptions && newObject.objectDefinition.populateNewObjectService != null) {
+				newObject.objectDefinition.populateNewObjectService.doRequest(newObject, action.newObjectOptions);
+			}
+			if (action.doOpen) {
+				newObject.model.oEditor.selectOpenObject(newObject);
+			}
+			if (action.callbackDelegate) {
+				action.callbackDelegate.execute(newObject);
+			}
+			if (action && action.objectKey && AutomationUtil.Singleton.active) {
+				AutomationUtil.Singleton.setObject(action.objectKey, newObject);
+			}
+			]]>
+		</method>
+
+		<!---
+			Check current copy action to see if the source object's children have been loaded.
+			If they've been loaded, then the copy can proceed.
+		-->
+		<method args="e" name="checkChildrenLoaded">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var action = this.currentAction;
+			if (action.sourceObject.isGetChildrenServicesLoaded(action.sourceObject.objectDefinition.getCopyObjectDefinitions(), true)) {
+				this.copyPrimaryObject(action);
+				this.loadComplete();
+			}
+			else if (!action.sourceObject.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			Check current copy action to see if the source object's children requests have an error.
+			If there was an error loading the children, then the copy will be aborted.
+		-->
+		<method args="service" name="checkChildrenError">
+			<![CDATA[
+			var action = this.currentAction;
+			if (service.matchesObjectDefinitions(action.sourceObject.objectDefinition, action.sourceObject.objectDefinition.getCopyObjectDefinitions()) || !action.sourceObject.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			Called when the load is complete to clean up the action handler. This is called on both the
+			success and error case.
+		-->
+		<method name="loadComplete">
+			<![CDATA[
+			var action = this.currentAction;
+			action.sourceObject.forceParseData = false;
+			this.checkChildrenLoadedDel.disconnectAll();
+			this.checkChildrenErrorDel.disconnectAll();
+			this.currentAction = null;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		Handle move action.
+	-->
+	<Node definitionName="cmc/foundation/MoveActionHandler" singletonDefinition="true">
+		<!---
+			Trigger the move action.
+			@param cmc/foundation/ModelObject sourceObject: the object to be moved
+			@param cmc/foundation/ModelObject targetObject: the target parent object for the move
+			@param cmc/foundation/ObjectDefinition targetDefinition: the target object definition
+			@param string sequencePropertyName: The sequence property of the source object. This is not null when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param string sequencePropertyPath: The object path for the sequence property of the source object.
+			@param number nextSeq: The value for the next sequence in the list. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+		-->
+		<method args="sourceObject, targetObject, targetDefinition, sequencePropertyName, sequencePropertyPath, nextSeq" name="triggerAction">
+			<![CDATA[
+			if (typeof(sequencePropertyName) == "undefined") sequencePropertyName = null;
+			if (typeof(sequencePropertyPath) == "undefined") sequencePropertyPath = null;
+			if (typeof(nextSeq) == "undefined") nextSeq = -1;
+			targetObject.incrementReferenceCount();
+			sourceObject.incrementReferenceCount();
+			var action = {
+				actionHandler: this,
+				sourceObject: sourceObject,
+				targetObject: targetObject,
+				targetDefinition: targetDefinition,
+				model: sourceObject.model,
+				sequencePropertyName: sequencePropertyName,
+				sequencePropertyPath: sequencePropertyPath,
+				nextSeq: nextSeq
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the move action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			if (action.sourceObject != null) {
+				action.sourceObject.decrementReferenceCount();
+			}
+			action.targetObject.decrementReferenceCount();
+			]]>
+		</method>
+
+		<!---
+			Perform the move action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			var sourceDef = action.sourceObject.objectDefinition;
+			if (sourceDef.primary) {
+				var newRO = action.targetObject.model.createNewObject(action.targetDefinition, action.targetObject);
+				if (action.sequencePropertyName != null) {
+					newRO.setPropertyValue(action.sequencePropertyName, action.sequencePropertyPath, action.nextSeq);
+				}
+				newRO.addChild(action.sourceObject);
+			}
+			else {
+				var doDelete = !sourceDef.parentReference;
+				var newRO = action.sourceObject.model.createNewObject(action.targetDefinition, action.targetObject, true, action.sourceObject);
+				if (action.sequencePropertyName != null) {
+					newRO.setPropertyValue(action.sequencePropertyName, action.sequencePropertyPath, action.nextSeq);
+				}
+				if (doDelete) {
+					action.sourceObject.deleteObject();
+				}
+			}
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		Handle add reference action.
+	-->
+	<Node definitionName="cmc/foundation/AddReferenceActionHandler" singletonDefinition="true">
+		<!---
+			Trigger the add reference action.
+			@param cmc/foundation/ModelObject sourceObject: the primary object being referenced
+			@param cmc/foundation/ModelObject targetObject: the parent object for the new reference
+			@param cmc/foundation/ObjectDefinition targetDefinition: reference object definition
+			@param cmc/foundation/ObjectDefinition primaryDefinition: primary object definition for the intermediary implicitly created object
+			@param cmc/foundation/ObjectDefinition childDefinition: child object definition for the intermediary implicitly created primary object
+			@param boolean update: whether to update the targetObject after adding the reference object
+			@param string sequencePropertyName: The sequence property of the new object. This is not null when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param string sequencePropertyPath: The object path for the sequence property of the new object.
+			@param number nextSeq: The next sequence value in the list. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+		-->
+		<method args="sourceObject, targetObject, targetDefinition, primaryDefinition, childDefinition, update, sequencePropertyName, sequencePropertyPath, nextSeq" name="triggerAction">
+			<![CDATA[
+			if (typeof(update) == "undefined") update = true;
+			if (typeof(sequencePropertyName) == "undefined") sequencePropertyName = null;
+			if (typeof(sequencePropertyPath) == "undefined") sequencePropertyPath = null;
+			if (typeof(nextSeq) == "undefined") nextSeq = -1;
+			targetObject.incrementReferenceCount();
+			sourceObject.incrementReferenceCount();
+			var action = {
+				actionHandler: this,
+				sourceObject: sourceObject,
+				targetObject: targetObject,
+				targetDefinition: targetDefinition,
+				primaryDefinition: primaryDefinition ? primaryDefinition : null,
+				childDefinition: childDefinition ? childDefinition : null,
+				model: sourceObject.model,
+				update: update,
+				sequencePropertyName: sequencePropertyName,
+				sequencePropertyPath: sequencePropertyPath,
+				nextSeq: nextSeq
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the add reference action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.sourceObject.decrementReferenceCount();
+			action.targetObject.decrementReferenceCount();
+			]]>
+		</method>
+
+		<!---
+			Perform the add reference action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			if (!action.targetDefinition.isReferencedDefinition(action.sourceObject.objectDefinition)) {
+				var model = action.targetObject.model;
+				var newPO = model.createNewObject(action.primaryDefinition);
+				if (action.sourceObject.objectDefinition.primary) {
+					var newRO = model.createNewObject(action.childDefinition, newPO);
+					newRO.addChild(action.sourceObject);
+				}
+				else {
+					var newCO = model.createNewObject(action.childDefinition, newPO, true, action.sourceObject);
+				}
+				var newRO = model.createNewObject(action.targetDefinition, action.targetObject);
+				newRO.addChild(newPO);
+				if (action.sequencePropertyName != null) {
+					newRO.setPropertyValue(action.sequencePropertyName, action.sequencePropertyPath, action.nextSeq);
+				}
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			else {
+				var newRO = action.targetObject.model.createNewObject(action.targetDefinition, action.targetObject, action.update);
+				newRO.addChild(action.sourceObject);
+				if (action.targetDefinition.populateNewObjectService != null && !action.sourceObject.newObject) {
+					action.targetDefinition.populateNewObjectService.doRequest(newRO);
+				}
+				if (action.sequencePropertyName != null) {
+					newRO.setPropertyValue(action.sequencePropertyName, action.sequencePropertyPath, action.nextSeq);
+				}
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		Handle add to collection action.
+	-->
+	<Node definitionName="cmc/foundation/AddToCollectionActionHandler" singletonDefinition="true">
+		<!---
+			Trigger the add to collection action.
+			@param cmc/foundation/ModelObject sourceObject: the primary object to be added
+			@param cmc/foundation/ModelObject targetObject: the collection object
+		-->
+		<method args="sourceObject, targetObject" name="triggerAction">
+			<![CDATA[
+			targetObject.incrementReferenceCount();
+			sourceObject.incrementReferenceCount();
+			var action = {
+				actionHandler: this,
+				sourceObject: sourceObject,
+				targetObject: targetObject,
+				model: sourceObject.model
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the add to collection action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.sourceObject.decrementReferenceCount();
+			action.targetObject.decrementReferenceCount();
+			]]>
+		</method>
+
+		<!---
+			Perform the add to collection action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			var sourceDef = action.sourceObject.objectDefinition;
+			var collectionDef = null;
+			var definitions = action.targetObject.objectDefinition.collectionReferenceObjectDefinitions;
+			for (var i = 0; i < definitions.length; i++) {
+				var oDef = definitions[i];
+				if (oDef.isReferencedDefinition(sourceDef)) {
+					collectionDef = oDef;
+					break;
+				}
+			}
+			if (collectionDef != null) {
+				var ro = action.targetObject.getMatchingReferenceObject(collectionDef, action.sourceObject);
+				if (ro != null) {
+					if (ro.pendingDelete) {
+						ro.undeleteObject();
+					}
+				}
+				else {
+					ro = action.targetObject.model.createNewObject(collectionDef, action.targetObject);
+					ro.addChild(action.sourceObject);
+				}
+			}
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		Handles the preview action.
+	-->
+	<Node definitionName="cmc/foundation/PreviewAttachmentActionHandler" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			@keywords private
+			Reference to the current preview action.
+		-->
+		<variable name="currentAction" value="${null}"/>
+
+		<!---
+			URL prefix token that is used to identify unresolved content URLs.
+		-->
+		<variable name="CMS_HOST_TOKEN" type="string" value="http://[cmsHost]"/>
+
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.checkChildrenLoadedDel = new EventHandler.Class(this, "checkChildrenLoaded");
+			this.checkChildrenErrorDel = new EventHandler.Class(this, "checkChildrenError");
+			]]>
+		</handler>
+
+		<!---
+			Trigger the preview action.
+			
+			@param cmc/foundation/ModelObject sourceObject The object that is to be preview
+			@param String objectPath The object path to the object containing pathPropertyName and filenamePropertyName. If the object path
+				resolves to more than one object, the first object will be used. If no object path is specified, the current object will be used.
+			@param String pathPropertyName The name of the property in the business object which is used to resolve the file path. This is a mandatory attribute.
+			@param String filenamePropertyName The name of the property that contains the file name portion of the path. This is an optional attribute. 
+				If this attribute is set, the full path to the file is constructed by combining the values of both the filenamePropertyName and pathPropertyName properties.
+			@param boolean isExternal Indicates whether the file path is actually an URL of an external resource.
+			@param String externalObjectTypes A comma-separated list of object types that should be considered external. If this value is not empty,
+				then isExternal is ignored.
+			@param String languageIdsPropertyName The property name of the object that contains a comma-separated list of language ID's that an asset is associated with.
+			@param String textObjectPath Object path to the child description object
+			@param String textPropertyName Name of the property that contains the content to preview
+			@param String formatPropertyName Name of the property that contains the format
+			@param String fileTypeValues Comma-separated list of values of formatPropertyName that should be considered a file type
+		-->
+		<method args="sourceObject, objectPath, pathPropertyName, filenamePropertyName, isExternal, externalObjectTypes, languageIdsPropertyName, textObjectPath, textPropertyName, formatPropertyName, fileTypeValues" name="triggerAction">
+			<![CDATA[
+			var doFilePreview = true;
+			if (textPropertyName && textPropertyName != "" && formatPropertyName && formatPropertyName != "" && fileTypeValues && fileTypeValues != "") {
+				doFilePreview = false;
+				var fileValues = StringUtil.Singleton.splitAndTrim(fileTypeValues, ",");
+				var filePropValue = sourceObject.getPropertyValue(formatPropertyName);
+				for (var i = 0; i < fileValues.length; i++) {
+					if (fileValues[i] == filePropValue) {
+						doFilePreview = true;
+						break;
+					}
+				}
+			}
+			var objectTypes = [];
+			if (doFilePreview) {
+				if (objectPath != "") {
+					objectTypes = objectPath.split("/");
+				}
+			}
+			else {
+				if (textObjectPath != "") {
+					objectTypes = textObjectPath.split("/");
+				}
+			}
+			sourceObject.incrementReferenceCount();
+			var action = {
+				actionHandler: this,
+				sourceObject: sourceObject,
+				o: sourceObject,
+				objectTypes: objectTypes,
+				pathPropertyName: pathPropertyName,
+				filenamePropertyName: filenamePropertyName,
+				isExternal: isExternal,
+				externalObjectTypes: externalObjectTypes,
+				languageIdsPropertyName: languageIdsPropertyName,
+				textObjectPath: textObjectPath,
+				textPropertyName: textPropertyName,
+				formatPropertyName: formatPropertyName,
+				fileTypeValues: fileTypeValues,
+				doFilePreview: doFilePreview
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the specified preview action.
+			@param Object action the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.sourceObject.decrementReferenceCount();
+			if (action.o != action.sourceObject) {
+				action.o.decrementReferenceCount();
+			}
+			if (action == this.currentAction) {
+				this.checkChildrenLoadedDel.disconnectAll();
+				this.checkChildrenErrorDel.disconnectAll();
+				this.currentAction = null;
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle the callback and perform the preview action.
+			@param Object action the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			if (action.objectTypes.length > 0) {
+				var objectDefs = action.o.objectDefinition.getChildDefinitions(action.objectTypes[0]);
+				if (objectDefs.length > 0) {
+					action.childObjectDefinitions = objectDefs;
+					this.currentAction = action;
+					if (!action.o.isGetChildrenServicesLoaded(objectDefs, true)) {
+						this.checkChildrenLoadedDel.connect(action.o, "onGetChildrenServiceCompleted");
+						this.checkChildrenErrorDel.connect(action.o, "onGetChildrenServiceError");
+						action.o.checkParsedData();
+						action.o.forceParseData = true;
+						action.o.setHasReleasableChildren();
+						action.o.loadChildren(objectDefs, true);
+					}
+					else {
+						this.checkChildrenLoaded();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "SEVERE", "cmc/foundation/PreviewAttachmentActionHandler", "performAction", "Unable to find child object definition that matches " + action.objectTypes[0]);
+					require(["cmc/foundation/ActionManager"], function(ActionManager) {
+						ActionManager.Singleton.removeAction(action);
+					});
+				}
+			}
+			else {
+				this.doPreview(action);
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Given an action, construct and launch a URL based on the object type, file path property, file name property and whether or not
+			workspaces has been enabled. 
+			@param Object action the action instance
+		-->
+		<method args="action" name="doPreview">
+			<![CDATA[
+			if (!action.doFilePreview && action.textPropertyName != "") {
+				var defaultLangObj = action.sourceObject.getObject(action.textObjectPath, false);
+				var text = defaultLangObj.getPropertyValue(action.textPropertyName);
+				var storeObject = ContextUtil.Singleton.findStoreConfig(defaultLangObj);
+				if (storeObject.CKEditorSubstitutionTags != null) {
+					var substitutionTags = storeObject.CKEditorSubstitutionTags.tags;
+					if (substitutionTags) {
+						for (var i in substitutionTags) {
+							var tag = i.substring(1, i.length - 1);
+							text = StringUtil.Singleton.replace(text, tag, substitutionTags[i]);
+						}
+					}
+				}
+				this.launchText(text);
+			}
+			else {
+				if (action.externalObjectTypes && (action.externalObjectTypes != "")) {
+					var externalTypes = StringUtil.Singleton.splitAndTrim(action.externalObjectTypes, ",");
+					for (var i = 0; i < externalTypes.length; i++) {
+						if (action.o.objectType == externalTypes[i]) {
+							action.isExternal = true;
+							break;
+						}
+					}
+				}
+				var o = action.o.getReferencedObject();
+				var url = StringUtil.Singleton.trim(o.getPropertyValue(action.pathPropertyName));
+				
+				var fileName = "";
+				if (action.filenamePropertyName.length > 0) {
+					fileName = StringUtil.Singleton.trim(o.getPropertyValue(action.filenamePropertyName));
+					if (fileName == "") {
+						action.isExternal = true;
+					} else {
+						action.isExternal = false;
+					}
+				}
+				var parameterMap = null;
+				if (!action.isExternal) {
+					var fileRelativePath = url;
+					var tokens = fileRelativePath.split("/");
+					for (var i = 0; i < tokens.length; i++) {
+						tokens[i] = encodeURIComponent(tokens[i]);
+					}
+					fileRelativePath = tokens.join("/");
+					
+					var urlPrefix = "";
+					var isRemote = "true";
+			
+					var storeConfig = ContextUtil.Singleton.findStoreConfig(action.sourceObject);
+					if (storeConfig.isRemoteStore!= null && storeConfig.isRemoteStore.isRemote !=null ){
+			   			isRemote=storeConfig.isRemoteStore.isRemote;
+					}
+				
+					if (storeConfig.remoteStoreServerConfig != null && storeConfig.remoteStoreServerConfig.remoteWebServerHostName != "" && isRemote == "true") {	
+						urlPrefix = "http://" + storeConfig.remoteStoreServerConfig.remoteWebServerHostName;
+						
+						var storePortName = storeConfig.remoteStoreServerConfig.remoteWebServerPort;
+						if(storePortName == "80"){
+							storePortName = "";
+						}else{
+							storePortName = ":" + storePortName;
+						}
+						urlPrefix = urlPrefix + storePortName
+								+ "/wcsstore";
+								
+						url = urlPrefix + fileRelativePath;
+					} else {
+						url = this.getPreviewUrl() + fileRelativePath;
+					}
+				
+					if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+						var paramSeparator = "?";
+						var index = url.indexOf("?");
+						if (index != -1) {
+							paramSeparator = "&";
+						}
+						if (ContextUtil.Singleton.findContextValue(o, "workspaceName").value != "") {
+							url += paramSeparator;
+							paramSeparator = "&";
+							url += "workspace.name=" + ContextUtil.Singleton.findContextValue(o, "workspaceName").value;
+						}
+						if (ContextUtil.Singleton.findContextValue(o, "workspaceTaskGroup").value != "") {
+							url += paramSeparator;
+							paramSeparator = "&";
+							url += "workspace.taskGroup=TG-1";
+						}
+						if (ContextUtil.Singleton.findContextValue(o, "workspaceTask").value != "") {
+							url += paramSeparator;
+							url += "workspace.task=T-1";
+						}
+					}
+					if (ConfigProperties.Singleton.loadContentSecurely) {
+						parameterMap = {
+							identityId: ContextUtil.Singleton.findContextValue(null, "identityId").value,
+							identitySignature: ContextUtil.Singleton.findContextValue(null, "identitySignature").value
+						};
+					}
+				}
+				else {
+				
+					var isFile = url.indexOf("/");
+					var isCMS = url.indexOf(this.CMS_HOST_TOKEN);
+					if (isFile == 0 || isCMS == 0) {
+						var pDef = o.objectDefinition.getPropertyDefinition(o, action.pathPropertyName);
+						if (pDef != null && pDef.urlResolver != null) {
+							url = pDef.urlResolver.resolveURL(o.getProperty(action.pathPropertyName));
+						}
+					}
+				
+					if (url.indexOf("://") == -1) {
+						url = "http://" + url;
+					}
+				}
+				this.launchUrl(url, parameterMap);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			<p>Checks to ensure the source object's children have been loaded. If so, check to see if we need to further
+			load children down the object path. If all levels of children have been loaded, launch the preview with the
+			resolved object.</p>
+			
+			<p>If multiple assets are resolved and languageIdsPropertyName is provided, this client action will select one asset
+			to preview based on the following rules:
+			<ol>
+				<li>Look for the first asset that is associated with the store default language.</li>
+				<li>If such a store default language asset can not be found, look for the first language-insensitive asset.</li>
+				<li>If such a language-insensitive asset can not be found, use the first asset.</li>
+			</ol>
+			</p>
+		-->
+		<method args="e" name="checkChildrenLoaded">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var action = this.currentAction;
+			if (action.o.isGetChildrenServicesLoaded(action.childObjectDefinitions, true)) {
+				var o = action.o;
+				while (action.objectTypes.length > 0) {
+					var type = action.objectTypes.shift();
+					var childObjects = o.getObjects(type);
+					o = null;
+					if (childObjects.length > 0) {
+						o = childObjects[0];
+						if (childObjects.length > 1) {
+							if (action.languageIdsPropertyName != "") {
+								var defaultLangIdContext = ContextUtil.Singleton.findContextValue(o, "defaultLanguageId");
+								var defaultLangId = defaultLangIdContext != null ? defaultLangIdContext.value : "";
+								var defaultLangObject = null;
+								var langInsensitiveObject = null;
+								for (var i = 0; i < childObjects.length; i++) {
+									var langIds = childObjects[i].getPropertyValue(action.languageIdsPropertyName);
+									if ((langIds == "") && (langInsensitiveObject == null)) {
+										langInsensitiveObject = childObjects[i];
+									}
+									else if ((langIds != "") && (defaultLangObject == null)) {
+										var langs = StringUtil.Singleton.splitAndTrim(langIds, ",");
+										for (var j = 0; j < langs.length; j++) {
+											if (defaultLangId == langs[j]) {
+												defaultLangObject = childObjects[i];
+												break;
+											}
+										}
+									}
+								}
+							}
+							if (defaultLangObject) {
+								o = defaultLangObject;
+							}
+							else if (langInsensitiveObject) {
+								o = langInsensitiveObject;
+							}
+						}
+					}
+					if (o == null || o.objectDefinition.primary) {
+						break;
+					}
+				}
+				if (o != null && action.objectTypes.length > 0) {
+					if (action.o != action.sourceObject) {
+						action.o.decrementReferenceCount();
+					}
+					action.o.forceParseData = false;
+					this.checkChildrenLoadedDel.disconnectAll();
+					this.checkChildrenErrorDel.disconnectAll();
+					action.o = o;
+					this.performAction(action);
+				}
+				else {
+					if (o != null) {
+						if (action.o != action.sourceObject) {
+							action.o.decrementReferenceCount();
+						}
+						action.o = o;
+						action.o.incrementReferenceCount();
+						this.doPreview(action);
+					}
+					else {
+						var message = foundationResources.Singleton.replaceValues("noAssetToPreview", [action.sourceObject.objectDisplayName]);
+						MessageLogger.Singleton.logException(null, message);
+					}
+					this.loadComplete();
+				}
+			}
+			else if (!action.o.isGetChildrenServicesLoading()) {
+				var message = foundationResources.Singleton.replaceValues("noAssetToPreview", [action.sourceObject.objectDisplayName]);
+				MessageLogger.Singleton.logException(null, message);
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Checks to see if the source object's children requests have an error.
+			If there was an error loading the children, then the copy will be aborted.
+			@param cmc/foundation/Service the service that generated an error
+		-->
+		<method args="service" name="checkChildrenError">
+			<![CDATA[
+			var action = this.currentAction;
+			if (service.matchesObjectDefinitions(action.o.objectDefinition, action.childObjectDefinitions) || !action.o.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Called when the load is complete to clean up the action handler. This is called on both the
+			success and error case.
+		-->
+		<method name="loadComplete">
+			<![CDATA[
+			var action = this.currentAction;
+			action.o.forceParseData = false;
+			this.checkChildrenLoadedDel.disconnectAll();
+			this.checkChildrenErrorDel.disconnectAll();
+			this.currentAction = null;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the preview URL. Preview URL is in the form of "<previewProtocol>://<hostname>:<previewPort>/webapp/wcs/preview".
+		-->				
+		<method name="getPreviewUrl">
+			<![CDATA[
+			if (!this.previewUrl) {
+				var url = window.location;
+				var previewProtocol = (typeof (cmcConfig.previewProtocol) != "undefined" ? cmcConfig.previewProtocol : url.protocol.substring(0, url.protocol.length - 1));
+				var previewPort = (typeof (cmcConfig.previewPort) != "undefined" ? cmcConfig.previewPort : url.port);
+				var previewWebAlias = (cmcConfig.previewWebAlias ? cmcConfig.previewWebAlias : "/webapp/wcs/preview");
+				if (typeof (cmcConfig.previewPort) != "undefined") {
+					previewProtocol = "https";
+				}
+				this.previewUrl = previewProtocol + "://" + url.hostname + ((previewPort != null && previewPort != "") ? (":" + previewPort) : "") + previewWebAlias;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "FINER", "cmc/foundation/PreviewAttachmentActionHandler", "getPreviewUrl()", "URL=" + this.previewUrl);
+			}
+			return this.previewUrl;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Launches a new browser window with the given URL
+			@param String url URL to launch browser window to.
+			@param Object parameterMap Additional parameters to post
+		-->
+		<method args="url, parameterMap" name="launchUrl">
+			<![CDATA[
+			if (typeof(parameterMap) == "undefined") parameterMap = null;
+			if (url && url != "") {
+				var newWindowObj = new Object();
+				newWindowObj.URL = url;
+				newWindowObj.windowName = "FilePreview";
+				newWindowObj.windowFeatures = "scrollbars=yes,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+				newWindowObj.windowWidth = 550;
+				newWindowObj.windowHeight = 500;
+				if (parameterMap != null) {
+					newWindowObj.URL = "";
+					newWindowObj.content = "<html><body><form action=\"" + url + "\" method=\"POST\">";
+					for (var key in parameterMap) {
+						var value = parameterMap[key];
+						value = decodeURIComponent(value);
+						newWindowObj.content += "<input type=\"hidden\" name=\"" + key + "\" value=\"" + value + "\">";
+					}
+					newWindowObj.content += "</form></body></html>";
+					newWindowObj.submitForm = true;
+				}
+				openNewCenteredWindow(newWindowObj);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Launches a new browser window with the given text
+			@param String text the content to display in the preview window
+		-->
+		<method args="text" name="launchText">
+			<![CDATA[
+			if (text && text != "") {
+				var newWindowObj = new Object();
+				newWindowObj.content = text;
+				newWindowObj.windowName = "FilePreview";
+				newWindowObj.windowFeatures = "scrollbars=yes,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+				newWindowObj.windowWidth = 550;
+				newWindowObj.windowHeight = 500;
+				openNewCenteredWindow(newWindowObj);
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		@keywords private
+		Action utility methods.
+	-->
+	<Node definitionName="cmc/foundation/ActionUtil" singletonDefinition="true">
+		<dependency localName="AddToCollectionActionHandler" moduleName="cmc/foundation/AddToCollectionActionHandler"/>
+		<dependency localName="CopyActionHandler" moduleName="cmc/foundation/CopyActionHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="MoveActionHandler" moduleName="cmc/foundation/MoveActionHandler"/>
+		<dependency localName="AddReferenceActionHandler" moduleName="cmc/foundation/AddReferenceActionHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			@keywords private
+			Check if the move action is enabled for the specified list of source objects.
+			@param array objects: source objects
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param array objectSelectors: array of target object selectors
+			@param boolean referenceMoveable: indicates that reference object is moveable
+		-->
+		<method args="objects, targetObject, objectSelectors, referenceMoveable" name="isMoveActionEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isMoveActionEnabled(objects,targetObject,objectSelectors,referenceMoveable)", [objects, targetObject, objectSelectors, referenceMoveable]);
+			}
+			var actionEnabled = false;
+			if (objects.length > 0) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					var sourceObject = this.getSourceObject(objects[i], objectSelectors);
+					var sourceDef = sourceObject.objectDefinition;
+					if (sourceDef.reference && !sourceDef.parentReference && !sourceDef.collectionReference) {
+						if (!referenceMoveable || !sourceObject.isDeletable()) {
+							actionEnabled = false;
+							break;
+						}
+						else {
+							var refObject = sourceObject.getReferencedObject();
+							if (!sourceDef.isCreatable(targetObject, refObject) || (!sourceDef.allowDuplicates && targetObject.isDuplicateReference(sourceDef, refObject))) {
+								actionEnabled = false;
+								break;
+							}
+							var definitionFound = false;
+							for (var j = 0; j < objectSelectors.length; j++) {
+								if (sourceDef == objectSelectors[j].objectDefinition) {
+									definitionFound = true;
+								}
+							}
+							if (!definitionFound) {
+								actionEnabled = false;
+								break;
+							}
+						}
+					}
+					else {
+						var parentRefObj = sourceObject.getParentReferenceObject();
+						if (parentRefObj == null) {
+							if (objects[i].objectDefinition.collectionReference) {
+								parentRefObj = objects[i];
+							}
+						}
+						if (!sourceObject.moveable || sourceObject == targetObject || (parentRefObj != null && parentRefObj.readOnly)) {
+							actionEnabled = false;
+							break;
+						}
+						else {
+							var parentReferenceFound = false;
+							var reference = null;
+							for (var j = 0; j < objectSelectors.length; j++) {
+								var oDef = objectSelectors[j].objectDefinition;
+								if ((oDef.parentReference || oDef.collectionReference) && oDef.isReferencedDefinition(sourceObject.objectDefinition) && oDef.isCreatable(targetObject, sourceObject)) {
+									parentReferenceFound = true;
+									reference = oDef;
+									break;
+								}
+							}
+							if (!parentReferenceFound) {
+								actionEnabled = false;
+								break;
+							}
+							else {
+								var parentObject = parentRefObj ? parentRefObj.parentObject : null;
+								if (parentObject == null && (reference != null && !reference.alwaysAllowMove)) {
+									actionEnabled = false;
+									break;
+								}
+								if (parentObject == targetObject) {
+									actionEnabled = false;
+									break;
+								}
+								else if (!objects[i].objectDefinition.collectionReference && targetObject.isAncestor(sourceObject)) {
+									actionEnabled = false;
+									break;
+								}
+								else if (objects[i].objectDefinition.collectionReference) {
+									var parentObjs = sourceObject.getCollectionPrimaryObjects();
+									var k = 0;
+									while (k < parentObjs.length && parentObjs[k] != targetObject) {
+										k++;
+									}
+									if (k < parentObjs.length && parentObjs[k] == targetObject) {
+										actionEnabled = false;
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isMoveActionEnabled", actionEnabled);
+			}
+			return actionEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if the copy action is enabled for the specified list of source objects.
+			@param array objects: source objects
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param array objectSelectors: array of target object selectors
+			@param del handler that is called if the state changes
+		-->
+		<method args="objects, targetObject, objectSelectors, del" name="isCopyActionEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isCopyActionEnabled(objects,targetObject,objectSelectors)", [objects, targetObject, objectSelectors]);
+			}
+			var actionEnabled = false;
+			if (objects.length > 0) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					var sourceObject = this.getSourceObject(objects[i], objectSelectors);
+					var sourceDef = sourceObject.objectDefinition;
+					var definitionFound = false;
+					if (sourceDef.reference && !sourceDef.parentReference && !sourceDef.collectionReference) {
+						var refObject = sourceObject.getReferencedObject();
+						var refDef = refObject.objectDefinition;
+						for (var j = 0; j < objectSelectors.length; j++) {
+							var oDef = objectSelectors[j].objectDefinition;
+							if (!oDef.parentReference && !oDef.collectionReference && oDef.getReferencedDefinitions(del) != null && oDef.isReferencedDefinition(refDef) && oDef.newHandler == null && oDef.isCreatable(targetObject, refObject) && (oDef.allowDuplicates || !targetObject.isDuplicateReference(oDef, refObject)) && (oDef == sourceDef || sourceDef.isCompatibleType(oDef.objectType))) {
+								definitionFound = true;
+								break;
+							}
+						}
+					}
+					else {
+						if (sourceDef.primary && sourceDef.copyProtected) {
+							actionEnabled = false;
+							break;
+						}
+						for (var j = 0; j < objectSelectors.length; j++) {
+							var objectSelector = objectSelectors[j];
+							var oDef = objectSelector.objectDefinition;
+							if (oDef.isCreatable(targetObject)) {
+								if (oDef.parentReference || oDef.collectionReference) {
+									var referencedDefinitions = oDef.getReferencedDefinitions(del);
+									if (referencedDefinitions != null) {
+										for (var k = 0; k < referencedDefinitions.length; k++) {
+											var referencedDef = referencedDefinitions[k];
+											if (referencedDef != null && referencedDef.isCreatable(targetObject, null, del) && (referencedDef == sourceDef || sourceDef.isCompatibleType(referencedDef.objectType))) {
+												definitionFound = true;
+												break;
+											}
+										}
+									}
+								}
+								else if (oDef == sourceDef || sourceDef.isCompatibleType(oDef.objectType)) {
+									definitionFound = true;
+								}
+								if (!oDef.primary && !oDef.reference && !oDef.parentReference && !oDef.collectionReference && !ModelUtil.Singleton.matchesObjectSelector(objects[i], objectSelector)) {
+									definitionFound = false;
+								}
+								if (definitionFound) {
+									break;
+								}
+							}
+						}
+					}
+					if (!definitionFound) {
+						actionEnabled = false;
+						break;
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isCopyActionEnabled", actionEnabled);
+			}
+			return actionEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if the duplicate action is enabled for the specified list of source objects.
+			@param array objects source objects
+			@param cmc/foundation/EventHandler del delegate to which events that may effect the enablement of this action will be registered
+		-->
+		<method args="objects, del" name="isDuplicateActionEnabled">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isDuplicateActionEnabled(objects,del)", [objects, del]);
+			}
+			var actionEnabled = false;
+			if (objects.length > 0) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					var sourceObject = objects[i].getReferencedObject();
+					var sourceDef = sourceObject.objectDefinition;
+					if (sourceDef.organizational || (sourceDef.primary && sourceDef.copyProtected)) {
+						actionEnabled = false;
+						break;
+					}
+					var definitionFound = false;
+					if (sourceDef.isCreatable(sourceObject.parentObject, null, del)) {
+						definitionFound = true;
+					}
+					else {
+						var types = sourceDef.getCompatibleObjectTypes();
+						for (var j = 0; j < types.length; j++) {
+							var oDef = sourceObject.model.getObjectDefinition(sourceObject.parentObject, types[j], true);
+							if (oDef != null && oDef.isCreatable(sourceObject.parentObject, null, del)) {
+								definitionFound = true;
+								break;
+							}
+						}
+					}
+					if (!definitionFound) {
+						actionEnabled = false;
+						break;
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isDuplicateActionEnabled", actionEnabled);
+			}
+			return actionEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if the add to collection action is enabled for the specified objects.
+			@param array objects: source objects
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param array objectSelectors: array of target object selectors
+		-->
+		<method args="objects, targetObject, objectSelectors" name="isAddToCollectionActionEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isAddToCollectionActionEnabled(objects,targetObject,objectSelectors)", [objects, targetObject, objectSelectors]);
+			}
+			var actionEnabled = false;
+			if (objects.length > 0) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					var sourceObject = this.getSourceObject(objects[i], objectSelectors);
+					if (sourceObject.objectDefinition.primary) {
+						var collectionDef = null;
+						for (var j = 0; j < objectSelectors.length; j++) {
+							var oDef = objectSelectors[j].objectDefinition;
+							if (oDef.collectionReference && oDef.isReferencedDefinition(sourceObject.objectDefinition)) {
+								collectionDef = oDef;
+								break;
+							}
+						}
+						if (collectionDef == null || !collectionDef.isCreatable(targetObject, sourceObject) || targetObject.isDuplicateReference(collectionDef, sourceObject)) {
+							actionEnabled = false;
+							break;
+						}
+					}
+					else {
+						actionEnabled = false;
+						break;
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isAddToCollectionActionEnabled", actionEnabled);
+			}
+			return actionEnabled;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if the add reference action is enabled for the specified parent object, reference object definition
+			and list of source objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to be referenced.
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param array objectSelectors: array of target object selectors
+			@param cmc/foundation/ObjectDefinition targetDefinition: the target object definition
+		-->
+		<method args="objects, targetObject, objectSelectors, targetDefinition" name="isAddReferenceActionEnabled">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isAddReferenceActionEnabled(objects, targetObject, objectSelectors, targetDefinition)", [objects, targetObject, objectSelectors, targetDefinition]);
+			}
+			var actionEnabled = false;
+			if (targetDefinition.isCreatable(targetObject) && objects.length > 0) {
+				actionEnabled = true;
+				for (var i = 0; i < objects.length; i++) {
+					var sourceObject = this.getSourceObject(objects[i], objectSelectors);
+					var sourceDef = sourceObject.objectDefinition;
+					if (!sourceDef.primary) {
+						actionEnabled = false;
+						break;
+					}
+					if (!targetDefinition.isReferencedDefinition(sourceDef)) {
+						actionEnabled = false;
+						break;
+					}
+					if (!targetDefinition.isCreatable(targetObject, sourceObject)) {
+						actionEnabled = false;
+						break;
+					}
+					if (targetDefinition.newHandler != null) {
+						actionEnabled = false;
+						break;
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/ActionUtil", "isAddReferenceActionEnabled", actionEnabled);
+			}
+			return actionEnabled;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Trigger a move action for each of the specified objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to be moved.
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param array objectSelectors: array of target object selectors
+			@param string sequencePropertyName: The sequence property of the target object. This is not null when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param string sequencePropertyPath: The object path for the sequence property of the target object.
+			@param number nextSeq: The next sequence value in the list. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param number sequenceIncrement: The value used when incrementing sequence values. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+		-->
+		<method args="objects, targetObject, objectSelectors, sequencePropertyName, sequencePropertyPath, nextSeq, sequenceIncrement" name="triggerMove">
+			<![CDATA[
+			if (typeof(sequencePropertyName) == "undefined") sequencePropertyName = null;
+			if (typeof(sequencePropertyPath) == "undefined") sequencePropertyPath = null;
+			if (typeof(nextSeq) == "undefined") nextSeq = -1;
+			if (typeof(sequenceIncrement) == "undefined") sequenceIncrement = 1;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerMove", "Start move");
+			}
+			var startSequence = parseInt(nextSeq);
+			for (var i = 0; i < objects.length; i++) {
+				var sourceObject = this.getSourceObject(objects[i], objectSelectors);
+				var sourceDef = sourceObject.objectDefinition;
+				var targetDefinition = null;
+				for (var j = 0; j < objectSelectors.length; j++) {
+					var oDef = objectSelectors[j].objectDefinition;
+					var childObject = oDef.reference ? sourceObject.getReferencedObject() : null;
+					if (oDef.isCreatable(targetObject, childObject)) {
+						if (oDef.parentReference || oDef.collectionReference) {
+							var isSourceDef = false;
+							var referencedDefinitions = oDef.getReferencedDefinitions();
+							if (referencedDefinitions != null) {
+								for (var k = 0; k < referencedDefinitions.length; k++) {
+									var referencedDef = referencedDefinitions[k];
+									if (referencedDef != null) {
+										if (referencedDef == sourceDef) {
+											targetDefinition = oDef;
+											isSourceDef = true;
+											break;
+										}
+										else if (sourceDef.isCompatibleType(referencedDef.objectType)) {
+											targetDefinition = oDef;
+										}
+									}
+								}
+							}
+							if (isSourceDef) {
+								break;
+							}
+						}
+						else if (oDef == sourceDef) {
+							targetDefinition = oDef;
+							break;
+						}
+						else if (sourceDef.isCompatibleType(oDef.objectType)) {
+							targetDefinition = oDef;
+						}
+					}
+				}
+				if (targetDefinition != null) {
+					MoveActionHandler.Singleton.triggerAction(objects[i], targetObject, targetDefinition, sequencePropertyName, sequencePropertyPath, startSequence.toString());
+					startSequence = startSequence + parseInt(sequenceIncrement);
+				}
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerMove", "End move");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Trigger a copy action for each of the specified objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to be copied.
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param array objectSelectors: array of target object selectors
+			@param string sequencePropertyName: The sequence property of the target object. This is not null when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param string sequencePropertyPath: The object path for the sequence property of the target object.
+			@param number nextSeq: The next sequence value in the list. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param number sequenceIncrement: The value used when incrementing sequence values. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+		-->
+		<method args="objects, targetObject, objectSelectors, sequencePropertyName, sequencePropertyPath, nextSeq, sequenceIncrement" name="triggerCopy">
+			<![CDATA[
+			if (typeof(sequencePropertyName) == "undefined") sequencePropertyName = null;
+			if (typeof(sequencePropertyPath) == "undefined") sequencePropertyPath = null;
+			if (typeof(nextSeq) == "undefined") nextSeq = -1;
+			if (typeof(sequenceIncrement) == "undefined") sequenceIncrement = 1;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerCopy", "Start copy");
+			}
+			var startSequence = parseInt(nextSeq);
+			for (var i = 0; i < objects.length; i++) {
+				var sourceObject = this.getSourceObject(objects[i], objectSelectors);
+				var sourceDef = sourceObject.objectDefinition;
+				var targetDefinition = null;
+				if (sourceDef.reference && !sourceDef.parentReference && !sourceDef.collectionReference) {
+					var refObject = sourceObject.getReferencedObject();
+					var refDef = refObject.objectDefinition;
+					for (var j = 0; j < objectSelectors.length; j++) {
+						var oDef = objectSelectors[j].objectDefinition;
+						if (!oDef.parentReference && !oDef.collectionReference && oDef.getReferencedDefinitions() != null && oDef.isReferencedDefinition(refDef) && oDef.isCreatable(targetObject, refObject) && (oDef.allowDuplicates || !targetObject.isDuplicateReference(oDef, refObject))) {
+							if (oDef == sourceDef) {
+								targetDefinition = oDef;
+								break;
+							}
+							else if (sourceDef.isCompatibleType(oDef.objectType)) {
+								targetDefinition = oDef;
+							}
+						}
+					}
+				}
+				else {
+					for (var j = 0; j < objectSelectors.length; j++) {
+						var oDef = objectSelectors[j].objectDefinition;
+						if (oDef.isCreatable(targetObject)) {
+							if (oDef.parentReference || oDef.collectionReference) {
+								var isSourceDef = false;
+								var referencedDefinitions = oDef.getReferencedDefinitions();
+								if (referencedDefinitions != null) {
+									for (var k = 0; k < referencedDefinitions.length; k++) {
+										var referencedDef = referencedDefinitions[k];
+										if (referencedDef != null && referencedDef.isCreatable(targetObject)) {
+											if (referencedDef == sourceDef) {
+												targetDefinition = referencedDef;
+												isSourceDef = true;
+												break;
+											}
+											else if (sourceDef.isCompatibleType(referencedDef.objectType)) {
+												targetDefinition = referencedDef;
+											}
+										}
+									}
+								}
+								if (isSourceDef) {
+									break;
+								}
+							}
+							else if (oDef == sourceDef) {
+								targetDefinition = oDef;
+								break;
+							}
+							else if (sourceDef.isCompatibleType(oDef.objectType)) {
+								targetDefinition = oDef;
+							}
+						}
+					}
+				}
+				if (targetDefinition != null) {
+					CopyActionHandler.Singleton.triggerAction(sourceObject, targetObject, targetDefinition, i == 0, undefined, -1, -1, false, false, false, sequencePropertyName, sequencePropertyPath, startSequence.toString());
+					startSequence = startSequence + parseInt(sequenceIncrement);
+				}
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerCopy", "End copy");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Trigger a duplicate action for each of the specified objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to be duplicated.
+		-->
+		<method args="objects" name="triggerDuplicate">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerDuplicate", "Start duplicate");
+			}
+			for (var i = 0; i < objects.length; i++) {
+				var sourceObject = objects[i].getReferencedObject();
+				var sourceDef = sourceObject.objectDefinition;
+				var targetDefinition = null;
+				if (sourceDef.isCreatable(sourceObject.parentObject)) {
+					targetDefinition = sourceDef;
+				}
+				else {
+					var types = sourceDef.getCompatibleObjectTypes();
+					for (var j = 0; j < types.length; j++) {
+						var oDef = sourceObject.model.getObjectDefinition(sourceObject.parentObject, types[j], true);
+						if (oDef != null && oDef.isCreatable(sourceObject.parentObject)) {
+							targetDefinition = oDef;
+							break;
+						}
+					}
+				}
+				if (targetDefinition != null) {
+					CopyActionHandler.Singleton.triggerAction(sourceObject, sourceObject.parentObject, targetDefinition, i == 0);
+				}
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerDuplicate", "End duplicate");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Trigger an add to collection action for each of the specified objects.
+			@param array objects: array of cmc/foundation/ModelObject instances to be added
+			@param cmc/foundation/ModelObject targetObject: target object
+		-->
+		<method args="objects, targetObject" name="triggerAddToCollection">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerAddToCollection", "Start add to collection");
+			}
+			for (var i = 0; i < objects.length; i++) {
+				AddToCollectionActionHandler.Singleton.triggerAction(objects[i].getReferencedObject(), targetObject);
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerAddToCollection", "End add to collection");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Trigger an add reference action for each of the specified objects.
+			@param action: A map with the target definition and reference definition
+			@param array objects: array of cmc/foundation/ModelObject instances to be referenced.
+			@param cmc/foundation/ModelObject targetObject: target object
+			@param string sequencePropertyName: The sequence property of the new object. This is not null when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param string sequencePropertyPath: The object path for the sequence property of the new object.
+			@param number nextSeq: The next sequence value in the list. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+			@param number sequenceIncrement: The value used when incrementing sequence values. This is expected when {@link cmc/foundation/BaseChildListEditor#sequencePropertyName} is defined.
+		-->
+		<method args="action, objects, targetObject, sequencePropertyName, sequencePropertyPath, nextSeq, sequenceIncrement" name="triggerAddReference">
+			<![CDATA[
+			if (typeof(sequencePropertyName) == "undefined") sequencePropertyName = null;
+			if (typeof(sequencePropertyPath) == "undefined") sequencePropertyPath = null;
+			if (typeof(nextSeq) == "undefined") nextSeq = -1;
+			if (typeof(sequenceIncrement) == "undefined") sequenceIncrement = 1;
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerAddReference", "Start add reference");
+			}
+			var numChild = 0;
+			for (var key in targetObject.childObjectMap) {
+				numChild++;
+			}
+			var updateInterval = 25;
+			if (numChild > 0) {
+				updateInterval = 25 * Math.ceil(numChild / 100);
+			}
+			var startSequence = parseInt(nextSeq);
+			for (var i = 0; i < objects.length; i++) {
+				if (action.targetDefinition.allowDuplicates || !targetObject.isDuplicateReference(action.targetDefinition, objects[i])) {
+					var update = false;
+					if ((i < 25 && numChild <= 25) || (i == objects.length - 1) || (i % updateInterval == 0)) {
+						update = true;
+					}
+					AddReferenceActionHandler.Singleton.triggerAction(objects[i].getReferencedObject(), targetObject, action.targetDefinition, action.primaryDefinition, action.childDefinition, update, sequencePropertyName, sequencePropertyPath, startSequence.toString());
+					startSequence = startSequence + parseInt(sequenceIncrement);
+				}
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionUtil", "triggerAddReference", "End add reference");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the source object for the action.
+			@param cmc/foundation/ModelObject object: cmc/foundation/ModelObject instance to be acted on.
+			@param array objectSelectors: array of target object selectors
+		-->
+		<method args="object, objectSelectors" name="getSourceObject">
+			<![CDATA[
+			var sourceObject = object.getReferencedObject();
+			var objectDef = object.objectDefinition;
+			if (objectSelectors != null && objectDef.reference && !objectDef.parentReference && !objectDef.collectionReference) {
+				for (var i = 0; i < objectSelectors.length; i++) {
+					var oDef = objectSelectors[i].objectDefinition;
+					if (objectDef == oDef || objectDef.isCompatibleType(oDef.objectType)) {
+						sourceObject = object;
+						break;
+					}
+				}
+			}
+			return sourceObject;
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		Handles the release action.
+	-->
+	<Node definitionName="cmc/foundation/ReleaseObjectHandler" singletonDefinition="true">
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<!---
+			@keywords private
+			Trigger a release object action
+			@param object: object to be released
+		-->
+		<method args="object" name="triggerAction">
+			<![CDATA[
+			object.incrementReferenceCount();
+			var action = {
+				actionHandler: this,
+				object: object,
+				model: object.model
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the add reference action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.object.decrementReferenceCount();
+			ModelUtil.Singleton.releaseModelObject(action.object);
+			]]>
+		</method>
+
+		<!---
+			Perform the add reference action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+		
+	<!---
+		@keywords private
+		Wait until all pending transactions are complete.
+	-->
+	<Node definitionName="cmc/foundation/WaitForTransactionsHandler" singletonDefinition="true">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		
+		<!---@keywords private-->
+		<variable name="currentAction" value="${null}"/>
+		
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.allTransactionsCompleteDel = new EventHandler.Class(this, "allTransactionsComplete");
+			]]>
+		</handler>
+		<!---
+			@keywords private
+			Trigger a wait action
+			
+			@param cmc/foundation/Model model the current model
+			@param cmc/foundation/EventHandler callbackDel optional callback delegate
+			@param Object callbackArgs arguments to pass to callback delegate
+		-->
+		<method args="model, callbackDel, callbackArgs" name="triggerAction">
+			<![CDATA[
+			if (typeof(callbackDel) == "undefined") callbackDel = null;
+			if (typeof(callbackArgs) == "undefined") callbackArgs = null;
+			if (callbackArgs && callbackArgs.o != null) {
+				callbackArgs.o.incrementReferenceCount();
+			}
+			this.currentAction = {
+				actionHandler: this,
+				model: model,
+				callbackDel: callbackDel,
+				callbackArgs: callbackArgs
+			};
+			var caller = this;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(caller.currentAction);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the add reference action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			this.allTransactionsCompleteDel.disconnectAll();
+			if (this.currentAction != null && this.currentAction.callbackArgs != null && this.currentAction.callbackArgs.o != null) {
+				this.currentAction.callbackArgs.o.decrementReferenceCount();
+			}
+			]]>
+		</method>
+		
+		<method args="e" name="allTransactionsComplete">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentAction != null && this.currentAction.callbackDel != null) {
+				this.currentAction.callbackDel.execute(this.currentAction.callbackArgs);
+			}
+			var caller = this;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(caller.currentAction);
+			});
+			]]>
+		</method>
+
+		<!---
+			Perform the add reference action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+				this.allTransactionsCompleteDel.connect(ServiceTransactionUtil.Singleton, "allTransactionsComplete");
+			}
+			else {
+				if (action != null && action.callbackDel != null) {
+					action.callbackDel.execute(action.callbackArgs);
+				}
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		Handles the open action.
+	-->
+	<Node definitionName="cmc/foundation/OpenObjectActionHandler" singletonDefinition="true">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="GetWorkspaceTasksService" moduleName="cmc/foundation/GetWorkspaceTasksService"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GetStorePathStoresService" moduleName="cmc/foundation/GetStorePathStoresService"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="LoadChildrenActionHandler" moduleName="cmc/foundation/LoadChildrenActionHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Current find and open action.
+		-->
+		<variable name="currentAction" value="${null}"/>
+
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.getStorePathStoresServiceCompleteDel = new EventHandler.Class(this, "getStorePathStoresServiceComplete");
+			this.getWorkspaceTasksServiceCompleteDel = new EventHandler.Class(this, "getWorkspaceTasksServiceComplete");
+			this.triggerSearchDel = new EventHandler.Class(this, "triggerSearch");
+			this.searchCompleteDel = new EventHandler.Class(this, "searchComplete");
+			this.applyOpenOptionsDel = new EventHandler.Class(this, "applyOpenOptions");
+			]]>
+		</handler>
+
+		<!---
+			Trigger the find and open action.
+			@param cmc/foundation/Model model: the model
+			@param string searchType: the search type
+			@param object searchOptions: the search options
+			@param boolean select: select the opened object
+			@param boolean openInCompareView: set to true to indicate that the object is to be opened in the compare view
+			@param cmc/foundation/BaseContext context: the search context
+			@param string toolId: tool identifier
+			@param string storeId: store identifier
+			@param string storeSelection: store selection option (assetStore, eSite, prompt)
+			@param string workspaceTaskSelection: workspace task selection option (prompt, noprompt)
+			@param string languageId: language ID
+		-->
+		<method args="model, searchType, searchOptions, select, openInCompareView, context, toolId, storeId, storeSelection, workspaceTaskSelection, languageId" name="triggerAction">
+			<![CDATA[
+			if (typeof(select) == "undefined") select = true;
+			if (typeof(openInCompareView) == "undefined") openInCompareView = false;
+			var action = {
+				actionHandler: this,
+				model: model,
+				searchType: searchType,
+				searchOptions: searchOptions,
+				select: select,
+				openInCompareView: openInCompareView,
+				context: context,
+				toolId: toolId,
+				storeId: storeId,
+				storeSelection: storeSelection,
+				workspaceTaskSelection: workspaceTaskSelection,
+				languageId: languageId
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the specified open object action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			if (action == this.currentAction) {
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+				this.triggerSearchDel.disconnectAll();
+				this.searchCompleteDel.disconnectAll();
+				this.currentAction = null;
+			}
+			]]>
+		</method>
+
+		<!---
+			Invokes the get store service.
+		-->
+		<method name="invokeGetStoreService">
+			<![CDATA[
+			if (this.currentAction != null) {
+				var action = this.currentAction;
+				GetStorePathStoresService.Singleton.doRequest(this, {
+					storeId: action.storeId,
+					usage: SingletonRegistry[action.toolId].usage,
+					assetStoreOnly: action.storeSelection == "assetStore",
+					eSiteOnly: action.storeSelection == "eSite"
+				});
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				this.getStorePathStoresServiceCompleteDel.connect(GetStorePathStoresService.Singleton, "onserviceComplete");
+				action.serviceRequestId = GetStorePathStoresService.Singleton.requestIdentifier;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle the callback and perform the open action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			this.currentAction = action;
+			if (action.context && !action.context.storeConfig.configurationLoaded) {
+				this.triggerSearchDel.disconnectAll();
+				this.triggerSearchDel.connect(action.context.storeConfig, "onconfigurationLoaded");
+				action.boe = action.model.oEditor;
+				action.context.storeConfig.loadConfiguration();
+			}
+			else if (action.toolId && action.storeId) {
+				if (typeof (SingletonRegistry[action.toolId]) != "undefined") {
+					if (typeof (action.workspaceTaskSelection) != "undefined" && action.workspaceTaskSelection == "prompt" && ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+						GetWorkspaceTasksService.Singleton.doRequest(this);
+						this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+						this.getWorkspaceTasksServiceCompleteDel.connect(GetWorkspaceTasksService.Singleton, "onserviceComplete");
+						action.serviceRequestId = GetWorkspaceTasksService.Singleton.requestIdentifier;
+					}
+					else {
+						this.invokeGetStoreService();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "SEVERE", "cmc/foundation/OpenObjectActionHandler", "performAction", "Unable to find tool with ID: " + action.toolId);
+					var caller = this;
+					require(["cmc/foundation/ActionManager"], function(ActionManager) {
+						ActionManager.Singleton.removeAction(caller.currentAction);
+					});
+				}
+			}
+			else {
+				action.boe = action.model.oEditor;
+				this.triggerSearch();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Change the current store to the specified store.
+			@param cmc/foundation/Store newStore: the new store
+			@param boolean prompt: Prompt the user if there are unsaved changes. The default is "true".
+		-->
+		<method args="newStore, prompt" name="changeStore">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = true;
+			if (this.currentAction != null) {
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				var action = this.currentAction;
+				if (prompt && ToolsController.Singleton.isToolOpen(action.toolId)) {
+					ToolsController.Singleton.focusTool(action.toolId);
+					action.boe = ToolsController.Singleton.getTool(action.toolId);
+					if (action.boe.localContext != null && action.boe.localContext.storeConfig != null && action.boe.localContext.storeConfig.storeId == newStore.storeId) {
+						ToolsController.Singleton.focusTool(action.toolId);
+						this.triggerSearch();
+					}
+					else if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+						require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+							TransactionProgressDialog.Singleton.openWindow();
+						});
+						var caller = this;
+						require(["cmc/foundation/ActionManager"], function(ActionManager) {
+							ActionManager.Singleton.removeAction(caller.currentAction);
+						});
+					}
+					else {
+						var unsavedObjects = [];
+						var openObjects = action.boe.model.openObjects;
+						for (var i = 0; i < openObjects.length; i++) {
+							var o = openObjects[i];
+							if (o.openGroupObject.openGroupDirty) {
+								unsavedObjects.push(o);
+							}
+						}
+						if (unsavedObjects.length > 0) {
+							var caller = this;
+							require(["cmc/foundation/ChangeStoreConfirmationDialog"], function(ChangeStoreConfirmationDialog) {
+								ChangeStoreConfirmationDialog.Singleton.openChangeStoreConfirmationDialog(caller, newStore, unsavedObjects);
+							});
+						}
+						else {
+							this.changeStore(newStore, false);
+						}
+					}
+				}
+				else {
+					action.newStore = newStore;
+					this.triggerSearch();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetStorePathStoresService does not return a store.
+		-->
+		<method name="handleStoreNotAvailable">
+			<![CDATA[
+			this.getStorePathStoresServiceCompleteDel.disconnectAll();
+			MessageLogger.Singleton.logException(null, foundationResources.Singleton.openFailed.string);
+			var caller = this;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(caller.currentAction);
+			});
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetStorePathStoresService returns more than one store.
+			@param Array stores: array of stores
+		-->
+		<method args="stores" name="handleMultipleStores">
+			<![CDATA[
+			this.getStorePathStoresServiceCompleteDel.disconnectAll();
+			var caller = this;
+			require(["cmc/foundation/SelectStoreDialog"], function(SelectStoreDialog) {
+				SelectStoreDialog.Singleton.openSelectStoreDialog(caller, stores);
+			});
+			]]>
+		</method>
+		
+		<!---
+			Change the current workspace context to the specified workspace task.
+			@param new task: The workspace task object.
+			@param boolean prompt: Prompt the user if there are unsaved changes. The default is "true".
+		-->
+		<method args="newTask, prompt" name="changeTask">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = true;
+			if (this.currentAction != null) {
+				var action = this.currentAction;
+				if (prompt) {
+					var wrkspTaskId = ContextUtil.Singleton.findContextValue(null, "workspaceTaskId");
+					if ((wrkspTaskId != null && wrkspTaskId.value != newTask.taskId) || wrkspTaskId == null) {
+						if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+							require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+								TransactionProgressDialog.Singleton.openWindow();
+							});
+							var caller = this;
+							require(["cmc/foundation/ActionManager"], function(ActionManager) {
+								ActionManager.Singleton.removeAction(caller.currentAction);
+							});
+						}
+						else {
+							if (ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+								var caller = this;
+								require(["cmc/foundation/ChangeTaskConfirmationDialog"], function(ChangeTaskConfirmationDialog) {
+									ChangeTaskConfirmationDialog.Singleton.openChangeTaskConfirmationDialog(caller, newTask);
+								});
+							}
+							else {
+								this.changeTask(newTask, false);
+							}
+						}
+					}
+					else {
+						this.invokeGetStoreService();
+					}
+				}
+				else {
+					if (newTask.displayName === foundationResources.Singleton.approvedContentDisplayName.string) {
+						var caller = this;
+						require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+							WorkspaceUtil.Singleton.workOnBase();
+							caller.invokeGetStoreService();
+						});
+					} else {
+						var caller = this;
+						require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+							WorkspaceUtil.Singleton.changeWorkspaceContext(newTask);
+							caller.invokeGetStoreService();
+						});
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Work on approved content.
+		-->
+		<method name="workOnApprovedContent">
+			<![CDATA[
+			if (this.currentAction != null) {
+				var action = this.currentAction;
+				var caller = this;
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+					caller.invokeGetStoreService();
+				});
+			}				
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetWorkspaceTaskService does not return any workspace tasks.
+		-->
+		<method name="handleTaskNotAvailable">
+			<![CDATA[
+			this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+			if (ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true") {
+				var caller = this;
+				require(["cmc/foundation/WorkOnApprovedContentDialog"], function(WorkOnApprovedContentDialog) {
+					WorkOnApprovedContentDialog.Singleton.openWorkOnApprovedContentDialog(caller);
+				});
+			} else {
+				this.invokeGetStoreService();
+			}
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetWorkspaceTaskService returns more than one task.
+			@param Array stores: array of tasks
+		-->
+		<method args="tasks" name="handleMultipleTasks">
+			<![CDATA[
+			this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+			var caller = this;
+			require(["cmc/foundation/SelectTaskDialog"], function(SelectTaskDialog) {
+				SelectTaskDialog.Singleton.openSelectTaskDialog(caller, tasks);
+			});
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when the cmc/foundation/GetWorkspaceTasksService completes. If
+			the service completes normally, then the action will no longer be listening to this event.
+			If it completes abnormally, this method is called and the action is released.
+		-->
+		<method args="args" name="getWorkspaceTasksServiceComplete">
+			<![CDATA[
+			if (args && this.currentAction && args.requestIdentifier == this.currentAction.serviceRequestId) {
+				this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when the cmc/foundation/GetStorePathStoresService completes. If
+			the service completes normally, then the action will no longer be listening to this event.
+			If it completes abnormally, this method is called and the action is released.
+		-->
+		<method args="args" name="getStorePathStoresServiceComplete">
+			<![CDATA[
+			if (args && this.currentAction && args.requestIdentifier == this.currentAction.serviceRequestId) {
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Method that is called by the cmc/foundation/ChangeStoreConfirmationDialog or cmc/foundation/SelectStoreDialog when the user chooses not to change the store.
+		-->
+		<method name="cancelChangeStore">
+			<![CDATA[
+			var caller = this;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(caller.currentAction);
+			});
+			]]>
+		</method>
+		
+		<!---
+			Method that is called by the cmc/foundation/ChangeTaskConfirmationDialog or cmc/foundation/SelectTaskDialog when the user chooses not to change the workspace context.
+		-->
+		<method name="cancelChangeTask">
+			<![CDATA[
+			this.invokeGetStoreService();
+			]]>
+		</method>
+		
+		<!---
+			Method that is called by the WorkOnApprovedContentDialog  
+			when the user chooses not to work on approved content context.
+		-->
+		<method name="cancelWorkOnApprovedContent">
+			<![CDATA[
+			this.invokeGetStoreService();
+			]]>
+		</method>
+		
+		<!---
+			Trigger the search.
+		-->
+		<method args="e" name="triggerSearch">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var action = this.currentAction;
+			this.triggerSearchDel.disconnectAll();
+			if (!action.boe) {
+				if (!SingletonRegistry[action.toolId].objectClass) {
+					this.triggerSearchDel.connect(SingletonRegistry[action.toolId], "onobjectClass");
+					SingletonRegistry[action.toolId].loadDeferredVariable("objectClass");
+				}
+				else {
+					if (!ToolsController.Singleton.isToolOpen(action.toolId)) {
+						ToolsController.Singleton.openToolById(action.toolId, action.newStore);
+						action.boe = ToolsController.Singleton.getTool(action.toolId);
+					}
+					else {
+						action.boe = ToolsController.Singleton.getTool(action.toolId);
+						action.boe.header.storeSelectionList.changeStore(action.newStore, false);
+					}
+				}
+			}
+			if (action.boe && (action.newStore == null || action.newStore.configurationLoaded)) {
+				action.model = action.boe.model;
+				if (action.languageId) {
+					var languages = action.boe.localContext.storeConfig.supportedLanguages;
+					for (var i = 0; i < languages.length; i++) {
+						var language = languages[i];
+						if (language.languageId == action.languageId) {
+							if (!language.isDefault) {
+								PreferenceManager.Singleton.setPreference("CMCInputLanguageIds", action.languageId);
+								PreferenceManager.Singleton.sendPreferenceChangedEvent("CMCInputLanguageIds");
+							}
+							break;
+						}
+					}
+				}
+				var searchDefinition = action.model.getSearchDefinition(action.searchType, this.triggerSearchDel);
+				if (searchDefinition != null) {
+					if (action.searchOptions != null) {
+						if (typeof (action.searchOptions.searchText) != "undefined" && action.searchOptions.searchText == "") {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "SEVERE", "cmc/foundation/OpenObjectActionHandler", "triggerSearch", "Missing searchOptions searchText");
+							var caller = this;
+							require(["cmc/foundation/ActionManager"], function(ActionManager) {
+								ActionManager.Singleton.removeAction(caller.currentAction);
+							});
+						}
+						else {
+							action.searchResults = action.model.findSearchResults(action.searchType, action.context);
+							this.searchCompleteDel.disconnectAll();
+							this.searchCompleteDel.connect(action.searchResults, "onsearchComplete");
+							action.searchResults.doSearch(action.searchOptions);
+							action.serviceRequestId = searchDefinition.searchService.requestIdentifier;
+						}
+					}
+					else {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "SEVERE", "cmc/foundation/OpenObjectActionHandler", "triggerSearch", "Missing searchOptions");
+						var caller = this;
+						require(["cmc/foundation/ActionManager"], function(ActionManager) {
+							ActionManager.Singleton.removeAction(caller.currentAction);
+						});
+					}
+				}
+			}
+			if (action.newStore && !action.newStore.configurationLoaded) {
+				action.newStore.loadConfiguration();
+				this.triggerSearchDel.connect(action.newStore, "onconfigurationLoaded");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Called when the search is complete. If the completed search is for this action, then the object is opened.
+		-->
+		<method args="args" name="searchComplete">
+			<![CDATA[
+			if (typeof(args) == "undefined") args = null;
+			var action = this.currentAction;
+			if (args && args.requestIdentifier == action.serviceRequestId) {
+				this.searchCompleteDel.disconnectAll();
+				var errorMessage = null;
+				if (args && args.searchResultObjects) {
+					var objects = args.searchResultObjects;
+					var objectToOpen = null;
+					if (objects.length > 0) {
+						if (action.context != null || typeof (action.searchOptions.searchUniqueId) == "undefined") {
+							objectToOpen = objects[0];
+						}
+						if (typeof (action.searchOptions.searchUniqueId) != "undefined") {
+							for (var i = 0; i < objects.length; i++) {
+								var o = objects[i];
+								if (o.objectId == action.searchOptions.searchUniqueId) {
+									objectToOpen = o;
+									break;
+								}
+							}
+						}
+					}
+					if (objectToOpen == null) {
+						if (objects.length == 0) {
+							errorMessage = args.statusMessage;
+						}
+						else {
+							errorMessage = foundationResources.Singleton.replaceValues("searchObjectNotFoundMsg", [action.searchOptions.searchText]);
+						}
+					}
+					else {
+						if (this.currentAction.openInCompareView) {
+							objectToOpen.doOpenInCompareView();
+						}
+						else {
+							objectToOpen.doOpen(action.select);
+							if (action.openOptions != null) {
+								var loadChildrenTriggered = false;
+								var childObjectPath = action.openOptions.childObjectPath;
+								if (childObjectPath != null && childObjectPath != "") {
+									var childObject = objectToOpen.getObject(childObjectPath);
+									if (childObject == null) {
+										var pathSelectors = ModelUtil.Singleton.getPathSelectors(childObjectPath);
+										var childObjectDefinitions = objectToOpen.objectDefinition.getChildDefinitions(pathSelectors[0].type);
+										if (childObjectDefinitions.length > 0) {
+											LoadChildrenActionHandler.Singleton.triggerAction(objectToOpen, childObjectDefinitions, this.applyOpenOptionsDel, {
+												o: objectToOpen,
+												openOptions: action.openOptions
+											});
+											loadChildrenTriggered = true;
+										}
+									}
+								}
+								if (!loadChildrenTriggered) {
+									this.applyOpenOptions({
+										o: objectToOpen,
+										openOptions: action.openOptions
+									});
+								}
+							}
+						}
+						if (action && action.objectKey && AutomationUtil.Singleton.active) {
+							AutomationUtil.Singleton.setObject(action.objectKey, objectToOpen);
+						}
+					}
+				}
+				else if (args && args.statusMessage) {
+					errorMessage = args.statusMessage;
+				}
+				if (errorMessage != null) {
+					MessageLogger.Singleton.logException(null, errorMessage);
+				}
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Called after the object is opened to further refine the open behaviour.
+		-->
+		<method args="args" name="applyOpenOptions">
+			<![CDATA[
+			if (typeof(args) == "undefined") args = null;
+			if (args && args.o != null && args.openOptions != null) {
+				var selectionObject = args.o;
+				var childObjectPath = args.openOptions.childObjectPath;
+				if (childObjectPath != null && childObjectPath != "") {
+					selectionObject = args.o.getObject(childObjectPath);
+				}
+				if (selectionObject != null) {
+					if (args.openOptions.propertyName != null && args.openOptions.punchOutEditServiceId != null) {
+						var property = selectionObject.getProperty(args.openOptions.propertyName);
+						if (property.propertyDefinition != null && property.propertyDefinition.punchOutEditServices != null) {
+							var services = property.propertyDefinition.punchOutEditServices;
+							for (var i = 0; i < services.length; i++) {
+								if (services[i].punchOutEditServiceId == args.openOptions.punchOutEditServiceId && services[i].isEnabled(selectionObject)) {
+									services[i].doRequest(selectionObject);
+									break;
+								}
+							}
+						}
+					}
+					if (args.openOptions.navigationListDefinitionName != null) {
+						var o = selectionObject.getReferencedObject();
+						var navigationListDef = null;
+						var notFound = true;
+						for (var i = 0; i < o.objectDefinition.navigationListDefinitions.length && notFound; i++) {
+							if (o.objectDefinition.navigationListDefinitions[i].isEnabled(o) && o.objectDefinition.navigationListDefinitions[i].name == args.openOptions.navigationListDefinitionName) {
+								notFound = false;
+								navigationListDef = o.objectDefinition.navigationListDefinitions[i];
+							}
+						}
+						if (navigationListDef != null) {
+							o.model.oEditor.showNavigationList(navigationListDef);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		Handles the create object action.
+	-->
+	<Node definitionName="cmc/foundation/CreateObjectActionHandler" singletonDefinition="true">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="GetWorkspaceTasksService" moduleName="cmc/foundation/GetWorkspaceTasksService"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GetStorePathStoresService" moduleName="cmc/foundation/GetStorePathStoresService"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Current create new object action.
+		-->
+		<variable name="currentAction" value="${null}"/>
+
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.getStorePathStoresServiceCompleteDel = new EventHandler.Class(this, "getStorePathStoresServiceComplete");
+			this.getWorkspaceTasksServiceCompleteDel = new EventHandler.Class(this, "getWorkspaceTasksServiceComplete");
+			this.doCreateDel = new EventHandler.Class(this, "doCreate");
+			]]>
+		</handler>
+
+		<!---
+			Trigger the create object action.
+			@param cmc/foundation/Model model: the model
+			@param string objectType: the object type
+			@param object newObjectOptions: parameters that will be passed to the populate new object service
+			@param string toolId: tool identifier
+			@param string storeId: store identifier
+			@param string storeSelection: store selection option (assetStore, eSite, prompt)
+			@param string workspaceTaskSelection: workspace task selection option (prompt, noprompt)
+			@param string languageId: language ID
+		-->
+		<method args="model, objectType, newObjectOptions, toolId, storeId, storeSelection, workspaceTaskSelection, languageId" name="triggerAction">
+			<![CDATA[
+			if (typeof(newObjectOptions) == "undefined") newObjectOptions = null;
+			var action = {
+				actionHandler: this,
+				model: model,
+				objectType: objectType,
+				newObjectOptions: newObjectOptions,
+				toolId: toolId,
+				storeId: storeId,
+				storeSelection: storeSelection,
+				workspaceTaskSelection: workspaceTaskSelection,
+				languageId: languageId
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the specified create object action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			if (action == this.currentAction) {
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+				this.doCreateDel.disconnectAll();
+				this.currentAction = null;
+			}
+			]]>
+		</method>
+
+		<!---
+			Invokes the get store service.
+		-->
+		<method name="invokeGetStoreService">
+			<![CDATA[
+			if (this.currentAction != null) {
+				var action = this.currentAction;
+				GetStorePathStoresService.Singleton.doRequest(this, {
+					storeId: action.storeId,
+					usage: SingletonRegistry[action.toolId].usage,
+					assetStoreOnly: action.storeSelection == "assetStore",
+					eSiteOnly: action.storeSelection == "eSite"
+				});
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				this.getStorePathStoresServiceCompleteDel.connect(GetStorePathStoresService.Singleton, "onserviceComplete");
+				action.serviceRequestId = GetStorePathStoresService.Singleton.requestIdentifier;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Handle the callback and perform the create action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			this.currentAction = action;
+			if (ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true" && action.workspaceTaskSelection != "prompt") {
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+				if (ConfigProperties.Singleton.readOnlyOnApprovedContent) {
+					require(["cmc/shell/ApplicationInReadOnlyModeInApprovedContentDialog"], function(ApplicationInReadOnlyModeInApprovedContentDialog) {
+						ApplicationInReadOnlyModeInApprovedContentDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					require(["cmc/shell/ApplicationInReadOnlyModeDialog"], function(ApplicationInReadOnlyModeDialog) {
+						ApplicationInReadOnlyModeDialog.Singleton.openWindow();
+					});
+				}
+			}
+			else if (action.toolId && action.storeId) {
+				if (typeof (SingletonRegistry[action.toolId]) != "undefined") {
+					if (typeof (action.workspaceTaskSelection) != "undefined" && action.workspaceTaskSelection == "prompt" && ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+						GetWorkspaceTasksService.Singleton.doRequest(this);
+						this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+						this.getWorkspaceTasksServiceCompleteDel.connect(GetWorkspaceTasksService.Singleton, "onserviceComplete");
+						action.serviceRequestId = GetWorkspaceTasksService.Singleton.requestIdentifier;
+					}
+					else {
+						this.invokeGetStoreService();
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "SEVERE", "cmc/foundation/CreateObjectActionHandler", "performAction", "Unable to find tool with ID: " + action.toolId);
+					var caller = this;
+					require(["cmc/foundation/ActionManager"], function(ActionManager) {
+						ActionManager.Singleton.removeAction(caller.currentAction);
+					});
+				}
+			}
+			else {
+				action.boe = action.model.oEditor;
+				action.storeId = action.boe.localContext.storeConfig.storeId;
+				this.doCreate();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Change the current store to the specified store.
+			@param cmc/foundation/Store newStore: the new store
+			@param boolean prompt: Prompt the user if there are unsaved changes. The default is "true".
+		-->
+		<method args="newStore, prompt" name="changeStore">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = true;
+			if (this.currentAction != null) {
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				var action = this.currentAction;
+				action.storeId = newStore.storeId;
+				if (prompt && ToolsController.Singleton.isToolOpen(action.toolId)) {
+					ToolsController.Singleton.focusTool(action.toolId);
+					action.boe = ToolsController.Singleton.getTool(action.toolId);
+					if (action.boe.localContext != null && action.boe.localContext.storeConfig != null && action.boe.localContext.storeConfig.storeId == newStore.storeId) {
+						ToolsController.Singleton.focusTool(action.toolId);
+						this.doCreate();
+					}
+					else if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+						require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+							TransactionProgressDialog.Singleton.openWindow();
+						});
+						var caller = this;
+						require(["cmc/foundation/ActionManager"], function(ActionManager) {
+							ActionManager.Singleton.removeAction(caller.currentAction);
+						});
+					}
+					else {
+						var unsavedObjects = [];
+						var openObjects = action.boe.model.openObjects;
+						for (var i = 0; i < openObjects.length; i++) {
+							var o = openObjects[i];
+							if (o.openGroupObject.openGroupDirty) {
+								unsavedObjects.push(o);
+							}
+						}
+						if (unsavedObjects.length > 0) {
+							var caller = this;
+							require(["cmc/foundation/ChangeStoreConfirmationDialog"], function(ChangeStoreConfirmationDialog) {
+								ChangeStoreConfirmationDialog.Singleton.openChangeStoreConfirmationDialog(caller, newStore, unsavedObjects);
+							});
+						}
+						else {
+							this.changeStore(newStore, false);
+						}
+					}
+				}
+				else {
+					action.newStore = newStore;
+					this.doCreate();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetStorePathStoresService does not return a store.
+		-->
+		<method name="handleStoreNotAvailable">
+			<![CDATA[
+			this.getStorePathStoresServiceCompleteDel.disconnectAll();
+			MessageLogger.Singleton.logException(null, foundationResources.Singleton.createFailed.string);
+			var caller = this;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(caller.currentAction);
+			});
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetStorePathStoresService returns more than one store.
+			@param Array stores: array of stores
+		-->
+		<method args="stores" name="handleMultipleStores">
+			<![CDATA[
+			this.getStorePathStoresServiceCompleteDel.disconnectAll();
+			var caller = this;
+			require(["cmc/foundation/SelectStoreDialog"], function(SelectStoreDialog) {
+				SelectStoreDialog.Singleton.openSelectStoreDialog(caller, stores);
+			});
+			]]>
+		</method>
+		
+		<!---
+			Change the current workspace context to the specified workspace task.
+			@param new task: The workspace task object.
+			@param boolean prompt: Prompt the user if there are unsaved changes. The default is "true".
+		-->
+		<method args="newTask, prompt" name="changeTask">
+			<![CDATA[
+			if (typeof(prompt) == "undefined") prompt = true;
+			if (this.currentAction != null) {
+				var action = this.currentAction;
+				if (prompt) {
+					var wrkspTaskId = ContextUtil.Singleton.findContextValue(null, "workspaceTaskId");
+					if ((wrkspTaskId != null && wrkspTaskId.value != newTask.taskId) || wrkspTaskId == null) {
+						if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+							require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+								TransactionProgressDialog.Singleton.openWindow();
+							});
+							var caller = this;
+							require(["cmc/foundation/ActionManager"], function(ActionManager) {
+								ActionManager.Singleton.removeAction(caller.currentAction);
+							});
+						}
+						else {
+							if (ToolsController.Singleton.hasUnsavedChangesAllWorkspaceContextTools()) {
+								var caller = this;
+								require(["cmc/foundation/ChangeTaskConfirmationDialog"], function(ChangeTaskConfirmationDialog) {
+									ChangeTaskConfirmationDialog.Singleton.openChangeTaskConfirmationDialog(caller, newTask);
+								});
+							}
+							else {
+								this.changeTask(newTask, false);
+							}
+						}
+					}
+					else {
+						this.invokeGetStoreService();
+					}
+				}
+				else {
+					if (newTask.displayName === foundationResources.Singleton.approvedContentDisplayName.string) {
+						var caller = this;
+						require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+							WorkspaceUtil.Singleton.workOnBase();
+							caller.invokeGetStoreService();
+						});					
+					} else {
+						var caller = this;
+						require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+							WorkspaceUtil.Singleton.changeWorkspaceContext(newTask);
+							caller.invokeGetStoreService();
+						});
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Work on approved content.
+		-->
+		<method name="workOnApprovedContent">
+			<![CDATA[
+			if (this.currentAction != null) {
+				var action = this.currentAction;
+				var caller = this;
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+					caller.invokeGetStoreService();
+				});
+			}				
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetWorkspaceTaskService does not return any workspace tasks.
+		-->
+		<method name="handleTaskNotAvailable">
+			<![CDATA[
+			this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+			if (ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true") {
+				var caller = this;
+				require(["cmc/foundation/WorkOnApprovedContentDialog"], function(WorkOnApprovedContentDialog) {
+					WorkOnApprovedContentDialog.Singleton.openWorkOnApprovedContentDialog(caller);
+				});
+			} else {
+				this.invokeGetStoreService();
+			}
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when cmc/foundation/GetWorkspaceTaskService returns more than one task.
+			@param Array stores: array of tasks
+		-->
+		<method args="tasks" name="handleMultipleTasks">
+			<![CDATA[
+			this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+			var caller = this;
+			require(["cmc/foundation/SelectTaskDialog"], function(SelectTaskDialog) {
+				SelectTaskDialog.Singleton.openSelectTaskDialog(caller, tasks);
+			});
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when the cmc/foundation/GetWorkspaceTasksService completes. If
+			the service completes normally, then the action will no longer be listening to this event.
+			If it completes abnormally, this method is called and the action is released.
+		-->
+		<method args="args" name="getWorkspaceTasksServiceComplete">
+			<![CDATA[
+			if (args && this.currentAction && args.requestIdentifier == this.currentAction.serviceRequestId) {
+				this.getWorkspaceTasksServiceCompleteDel.disconnectAll();
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			The method that is called when the cmc/foundation/GetStorePathStoresService completes. If
+			the service completes normally, then the action will no longer be listening to this event.
+			If it completes abnormally, this method is called and the action is released.
+		-->
+		<method args="args" name="getStorePathStoresServiceComplete">
+			<![CDATA[
+			if (args && this.currentAction && args.requestIdentifier == this.currentAction.serviceRequestId) {
+				this.getStorePathStoresServiceCompleteDel.disconnectAll();
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Method that is called by the cmc/foundation/ChangeStoreConfirmationDialog or cmc/foundation/SelectStoreDialog when the user chooses not to change the store.
+		-->
+		<method name="cancelChangeStore">
+			<![CDATA[
+			var caller = this;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(caller.currentAction);
+			});
+			]]>
+		</method>
+		
+		<!---
+			Method that is called by the cmc/foundation/ChangeTaskConfirmationDialog or cmc/foundation/SelectTaskDialog when the user chooses not to change the workspace context.
+		-->
+		<method name="cancelChangeTask">
+			<![CDATA[
+			if (ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true") {
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+			} else {
+				this.invokeGetStoreService();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Method that is called by the WorkOnApprovedContentDialog  
+			when the user chooses not to work on approved content context.
+		-->
+		<method name="cancelWorkOnApprovedContent">
+			<![CDATA[
+			if (ContextUtil.Singleton.findContextValue(null, "readOnlyMode").value == "true") {
+				var caller = this;
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(caller.currentAction);
+				});
+			} else {
+				this.invokeGetStoreService();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the new object.
+		-->
+		<method args="e" name="doCreate">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.doCreateDel.disconnectAll();
+			var action = this.currentAction;
+			if (!action.boe) {
+				if (!SingletonRegistry[action.toolId].objectClass) {
+					this.doCreateDel.connect(SingletonRegistry[action.toolId], "onobjectClass");
+					SingletonRegistry[action.toolId].loadDeferredVariable("objectClass");
+				}
+				else {
+					if (!ToolsController.Singleton.isToolOpen(action.toolId)) {
+						ToolsController.Singleton.openToolById(action.toolId, action.newStore);
+						action.boe = ToolsController.Singleton.getTool(action.toolId);
+					}
+					else {
+						action.boe = ToolsController.Singleton.getTool(action.toolId);
+						action.boe.header.storeSelectionList.changeStore(action.newStore, false);
+					}
+					if (action.newStore && !action.newStore.configurationLoaded) {
+						this.doCreateDel.connect(action.newStore, "onconfigurationLoaded");
+					}
+				}
+			}
+			if (action.boe && (action.newStore == null || action.newStore.configurationLoaded)) {
+				action.model = action.boe.model;
+				if (action.languageId) {
+					var languages = action.boe.localContext.storeConfig.supportedLanguages;
+					for (var i = 0; i < languages.length; i++) {
+						var language = languages[i];
+						if (language.languageId == action.languageId) {
+							if (!language.isDefault) {
+								PreferenceManager.Singleton.setPreference("CMCInputLanguageIds", action.languageId);
+								PreferenceManager.Singleton.sendPreferenceChangedEvent("CMCInputLanguageIds");
+							}
+							break;
+						}
+					}
+				}
+				var oDef = action.model.getObjectDefinition(null, action.objectType, true);
+				if (oDef != null) {
+					var usage = oDef.writeUsage;
+					if (usage == null) {
+						usage = action.boe.usage;
+					}
+					var objectStore = ModelUtil.Singleton.objectStoreMap[action.storeId + usage];
+					if (objectStore == null) {
+						objectStore = ModelUtil.Singleton.createObjectStore({
+							storeId: action.storeId,
+							usage: usage
+						});
+						ModelUtil.Singleton.objectStoreMap[action.storeId + usage] = objectStore;
+					}
+					if (!objectStore.accessRightChecked) {
+						this.doCreateDel.connect(objectStore, "onaccessRightChecked");
+					}
+					else if (!oDef.isCreatable()) {
+						var activeDataset = false;
+						for (var i = 0; i < ServiceUtil.Singleton.serviceDatasets.length; i++) {
+							var ds = ServiceUtil.Singleton.serviceDatasets[i];
+							if (ds.submitted && ds.service != null) {
+								this.doCreateDel.connect(ds.service, "onserviceComplete");
+								activeDataset = true;
+								break;
+							}
+						}
+						if (!activeDataset) {
+							MessageLogger.Singleton.logException(null, foundationResources.Singleton.createFailed.string);
+							var caller = this;
+							require(["cmc/foundation/ActionManager"], function(ActionManager) {
+								ActionManager.Singleton.removeAction(caller.currentAction);
+							});
+						}
+					}
+					else {
+						oDef.doCreate({
+							newObjectOptions: action.newObjectOptions,
+							objectKey: action.objectKey
+						});
+						var caller = this;
+						require(["cmc/foundation/ActionManager"], function(ActionManager) {
+							ActionManager.Singleton.removeAction(caller.currentAction);
+						});
+					}
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.util", "SEVERE", "cmc/foundation/CreateObjectActionHandler", "doCreate", "Unable to find object definition with objectType: " + action.objectType);
+					var caller = this;
+					require(["cmc/foundation/ActionManager"], function(ActionManager) {
+						ActionManager.Singleton.removeAction(caller.currentAction);
+					});
+				}
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		GetStorePathStores service. This services expects storeId and usage parameters and returns
+		the list of store path stores in that match the specified usage.
+	-->
+	<Service definitionName="cmc/foundation/GetStorePathStoresService" retryOnError="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetStorePathStores">
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			Parse the specified data element and return a cmc/foundation/Store instance.
+		-->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/GetStorePathStoresService", "parseObjects(requestParent, dataElement)", [requestParent, dataElement]);
+			}
+			var stores = StoreUtil.Singleton.parseStores(dataElement);
+			if (stores.length == 0) {
+				requestParent.handleStoreNotAvailable();
+			}
+			else if (stores.length == 1) {
+				requestParent.changeStore(stores[0]);
+			}
+			else {
+				requestParent.handleMultipleStores(stores);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/GetStorePathStoresService", "parseObjects(requestParent, dataElement)", [stores]);
+			}
+			]]>
+		</method>
+	</Service>
+
+	<!--- GetWorkspaceTask service. This services returns the list of tasks. -->
+	<Service definitionName="cmc/foundation/GetWorkspaceTasksService" retryOnError="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetTasks">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<ServiceParam contextName="workspaceManager" name="workspaceManager"/>
+		<ServiceParam contextName="workspaceApprover" name="workspaceApprover"/>
+		<ServiceParam name="taskStatus" value="TODO"/>
+
+		<!--- Parse the specified data element. -->
+		<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.util", "cmc/foundation/GetWorkspaceTasksService", "parseObjects(requestParent, dataElement)", [requestParent, dataElement]);
+			}
+			var taskList = [];
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var task = this.parseTask(dataElement.childNodes[i]);
+				taskList.push(task);
+			}
+			//add approved content to the task list
+			var approvedContentObj = {
+				displayName: foundationResources.Singleton.approvedContentDisplayName.string
+			}
+			taskList.push(approvedContentObj);
+			if (taskList.length == 1) {
+				requestParent.handleTaskNotAvailable();
+			}
+			else {
+				requestParent.handleMultipleTasks(taskList);
+			}
+			]]>
+		</method>
+
+		<!--- Parses each task object. 
+			@param XML dataElement: the child data element 
+			@returns task selection object. 
+		-->
+		<method args="dataElement" name="parseTask">
+			<![CDATA[
+			var task = {};
+			for (var i = 0; i < dataElement.childNodes.length; i++) {
+				var e = dataElement.childNodes[i];
+				if (e.nodeName == "reference") {
+					var childTaskObjNode = e.childNodes[0];
+					for (var j = 0; j < childTaskObjNode.childNodes.length; j++) {
+						var childTaskObjEl = childTaskObjNode.childNodes[j];
+						if (childTaskObjEl.nodeName == "parent") {
+							var taskGrpObjNode = childTaskObjEl.childNodes[0];
+							for (var k = 0; k < taskGrpObjNode.childNodes.length; k++) {
+								var taskGrpObjEl = taskGrpObjNode.childNodes[k];
+								if (taskGrpObjEl.nodeName == "taskGroupId") {
+									var textNode = taskGrpObjEl.firstChild;
+									if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+										task.taskGroupId = textNode.nodeValue;
+									}
+								}
+								if (taskGrpObjEl.nodeName == "taskGroupIdentifier") {
+									var textNode = taskGrpObjEl.firstChild;
+									if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+										task.taskGroupIdentifier = textNode.nodeValue;
+									}
+								}
+								if (taskGrpObjEl.nodeName == "taskGroupName") {
+									var textNode = taskGrpObjEl.firstChild;
+									if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+										task.taskGroupName = textNode.nodeValue;
+									}
+								}
+								if (taskGrpObjEl.nodeName == "reference") {
+									var childTaskGrpObjNode = taskGrpObjEl.childNodes[0];
+									for (var m = 0; m < childTaskGrpObjNode.childNodes.length; m++) {
+										var childTaskGrpEl = childTaskGrpObjNode.childNodes[m];
+										if (childTaskGrpEl.nodeName == "parent") {
+											var wrkspcObjNode = childTaskGrpEl.childNodes[0];
+											for (var n = 0; n < wrkspcObjNode.childNodes.length; n++) {
+												var wrkspcObjEl = wrkspcObjNode.childNodes[n];
+												if (wrkspcObjEl.nodeName == "workspaceId") {
+													var textNode = wrkspcObjEl.firstChild;
+													if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+														task.workspaceId = textNode.nodeValue;
+													}
+												}
+												if (wrkspcObjEl.nodeName == "workspaceIdentifier") {
+													var textNode = wrkspcObjEl.firstChild;
+													if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+														task.workspaceIdentifier = textNode.nodeValue;
+													}
+												}
+												if (wrkspcObjEl.nodeName == "wrkspcName") {
+													var textNode = wrkspcObjEl.firstChild;
+													if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+														task.workspaceName = textNode.nodeValue;
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				else {
+					if (e.nodeName == "taskId") {
+						var textNode = e.firstChild;
+						if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+							task.taskId = textNode.nodeValue;
+							task.value = textNode.nodeValue;
+						}
+					}
+					if (e.nodeName == "taskIdentifier") {
+						var textNode = e.firstChild;
+						if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+							task.taskIdentifier = textNode.nodeValue;
+						}
+					}
+					if (e.nodeName == "taskName") {
+						var textNode = e.firstChild;
+						if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+							task.taskName = textNode.nodeValue;
+							task.displayName = textNode.nodeValue;
+						}
+					}
+				}
+			}
+			if (task.taskName != null && task.workspaceName != null && task.taskGroupName != null) {
+				task.displayName = foundationResources.Singleton.replaceValues("workspaceTaskName", [task.taskName,task.taskGroupName,task.workspaceName]);
+			}
+			return task;
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		Handles the load children action. This generic action is used to manage the loading of child objects
+		before invoking a callback method.
+	-->
+	<Node definitionName="cmc/foundation/LoadChildrenActionHandler" singletonDefinition="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Current load children action.
+		-->
+		<variable name="currentAction" value="${null}"/>
+
+		<!---
+			@keywords private
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			this.checkChildrenLoadedDel = new EventHandler.Class(this, "checkChildrenLoaded");
+			this.checkChildrenErrorDel = new EventHandler.Class(this, "checkChildrenError");
+			]]>
+		</handler>
+
+		<!---
+			Trigger the load children action.
+			@param cmc/foundation/ModelObject parentObject the parent object
+			@param [cmc/foundation/ObjectDefinition] childObjectDefinitions array of child object definitions to load
+			@param cmc/foundation/EventHandler callbackDel callback delegate
+			@param Object callbackArgs arguments to pass to callback delegate
+		-->
+		<method args="parentObject, childObjectDefinitions, callbackDel, callbackArgs" name="triggerAction">
+			<![CDATA[
+			if (typeof(callbackArgs) == "undefined") callbackArgs = null;
+			parentObject.incrementReferenceCount();
+			var action = {
+				actionHandler: this,
+				parentObject: parentObject,
+				childObjectDefinitions: childObjectDefinitions,
+				callbackDel: callbackDel,
+				callbackArgs: callbackArgs
+			};
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+
+		<!---
+			Release the specified load children action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="releaseAction">
+			<![CDATA[
+			action.parentObject.decrementReferenceCount();
+			if (action == this.currentAction) {
+				this.checkChildrenLoadedDel.disconnectAll();
+				this.checkChildrenErrorDel.disconnectAll();
+				this.currentAction = null;
+			}
+			]]>
+		</method>
+
+		<!---
+			Perform the load children action.
+			@param Object action: the action instance
+		-->
+		<method args="action" name="performAction">
+			<![CDATA[
+			if (!action.parentObject.isGetChildrenServicesLoaded(action.childObjectDefinitions, true)) {
+				this.currentAction = action;
+				this.checkChildrenLoadedDel.connect(action.parentObject, "onGetChildrenServiceCompleted");
+				this.checkChildrenErrorDel.connect(action.parentObject, "onGetChildrenServiceError");
+				action.parentObject.forceParseData = true;
+				action.parentObject.setHasReleasableChildren();
+				action.parentObject.loadChildren(action.childObjectDefinitions, true);
+			}
+			else {
+				action.callbackDel.execute(action.callbackArgs);
+				require(["cmc/foundation/ActionManager"], function(ActionManager) {
+					ActionManager.Singleton.removeAction(action);
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check current load children action to see if the parent object's children have been loaded.
+			If they've been loaded, then the callback can proceed.
+		-->
+		<method args="e" name="checkChildrenLoaded">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var action = this.currentAction;
+			if (action.parentObject.isGetChildrenServicesLoaded(action.childObjectDefinitions, true)) {
+				action.callbackDel.execute(action.callbackArgs);
+				this.loadComplete();
+			}
+			else if (!action.parentObject.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			Check current load children action to see if the parent object's children requests have an error.
+			If there was an error loading the children, then the callback will not be executed.
+		-->
+		<method args="service" name="checkChildrenError">
+			<![CDATA[
+			var action = this.currentAction;
+			if (service.matchesObjectDefinitions(action.parentObject.objectDefinition, action.childObjectDefinitions) || !action.parentObject.isGetChildrenServicesLoading()) {
+				this.loadComplete();
+			}
+			]]>
+		</method>
+
+		<!---
+			Called when the load is complete to clean up the action handler. This is called on both the
+			success and error case.
+		-->
+		<method name="loadComplete">
+			<![CDATA[
+			var action = this.currentAction;
+			action.parentObject.forceParseData = false;
+			this.checkChildrenLoadedDel.disconnectAll();
+			this.checkChildrenErrorDel.disconnectAll();
+			this.currentAction = null;
+			require(["cmc/foundation/ActionManager"], function(ActionManager) {
+				ActionManager.Singleton.removeAction(action);
+			});
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

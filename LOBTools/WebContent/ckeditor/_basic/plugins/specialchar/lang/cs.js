@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","cs",{options:"Volby speciálního znaku",title:"Speciální znak",toolbar:"Vložit speciální znak"});

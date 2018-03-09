@@ -1,0 +1,44 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2008 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf"%>
+
+<object objectType="onlineBehavior">
+	<parent>
+		<object objectId="${element.parentElementIdentifier.name}"/>
+	</parent>
+	<elemTemplateName><wcf:cdata data="${element.campaignElementTemplateIdentifier.externalIdentifier.name}"/></elemTemplateName>
+	<elementName>${element.campaignElementIdentifier.name}</elementName>
+	<sequence>${element.elementSequence}</sequence>
+	<customerCount readonly="true">${element.count}</customerCount>
+	<c:forEach var="elementVariable" items="${element.campaignElementVariable}">
+		<c:if test="${elementVariable.name != 'urlValueList' && elementVariable.name != 'searchTermList'}">
+			<${elementVariable.name}><wcf:cdata data="${elementVariable.value}"/></${elementVariable.name}>
+		</c:if>
+		<c:if test="${elementVariable.name == 'urlValueList'}">
+			<object objectType="urlValue">
+				<urlValue><wcf:cdata data="${elementVariable.value}"/></urlValue>
+			</object>
+		</c:if>
+		<c:if test="${elementVariable.name == 'searchTermList'}">
+			<object objectType="searchTerm">
+				<searchTerm><wcf:cdata data="${elementVariable.value}"/></searchTerm>
+			</object>
+		</c:if>
+	</c:forEach>
+	<c:forEach var="userDataField" items="${element.userData.userDataField}">
+		<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+	</c:forEach>
+</object>

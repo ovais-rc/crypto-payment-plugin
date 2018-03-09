@@ -1,0 +1,94 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2009 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%><%@ page language="java" 
+%><%@ page import="java.io.*" 
+%><%@ page import="java.util.*" 
+%><%@ page import="java.math.*" 
+%><%@ page import="java.sql.Timestamp" 
+%><%@ page import="java.text.MessageFormat" 
+%><%@ page import="com.ibm.commerce.beans.*" 
+%><%@ page import="com.ibm.commerce.command.*" 
+%><%@ page import="com.ibm.commerce.common.beans.*" 
+%><%@ page import="com.ibm.commerce.common.objects.*" 
+%><%@ page import="com.ibm.commerce.payment.utils.*" 
+%><%@ page import="com.ibm.commerce.tools.optools.order.beans.*" 
+%><%@ page import="com.ibm.commerce.tools.util.*" 
+%><%@ page import="com.ibm.commerce.tools.xml.*" 
+%><%@ page import="com.ibm.commerce.server.*" 
+%><%@ page import="com.ibm.commerce.user.beans.*" 
+%><%@ page import="com.ibm.commerce.context.globalization.*" 
+%><%@ page import="com.ibm.commerce.order.beans.*" 
+%><%@ page import="com.ibm.commerce.catalog.beans.*" 
+%><%@ page import="com.ibm.commerce.utils.*" 
+%><%@ page import="com.ibm.commerce.fulfillment.beans.*" 
+%><%@ page import="com.ibm.commerce.price.beans.FormattedMonetaryAmountDataBean" 
+%><%@ page import="com.ibm.commerce.price.utils.MonetaryAmount" 
+%><%@ page import="com.ibm.commerce.price.utils.NumberUsageConstants" 
+%><%@ page import="com.ibm.commerce.edp.beans.EDPPaymentInstructionsDataBean" 
+%><%@ page import="com.ibm.commerce.edp.api.EDPPaymentInstruction" 
+%><%@ page session="false" 
+%><%response.setContentType("text/html;charset=UTF-8");
+%><%response.setHeader("Pragma", "No-cache");
+%><%response.setDateHeader("Expires", 0);
+%><%response.setHeader("Cache-Control", "no-cache");
+%><%!
+
+//Format the amount
+public String formatAmount(BigDecimal amount, String currency, StoreAccessBean storeAB, Integer languageId) {
+	String result = "";
+	try {
+		FormattedMonetaryAmountDataBean formatDB = null;
+		if (amount != null) {
+			formatDB = new FormattedMonetaryAmountDataBean(new MonetaryAmount(amount, currency), storeAB, languageId);
+		} else {
+			amount = new java.math.BigDecimal(0);
+			formatDB = new FormattedMonetaryAmountDataBean(new MonetaryAmount(amount, currency), storeAB, languageId);
+		}
+		formatDB.setNumberUsage(NumberUsageConstants.COMMERCE_TEXT);
+		result = formatDB.toString();
+
+	} catch (Exception ex) {
+		result = "";
+	}
+	return result;
+}
+
+//retrieve the payment status for Advanced Order
+public String getCOPaymentStatus(
+	Hashtable tmpOrderLabels,
+	HttpServletRequest request,
+	HttpServletResponse response,
+	String orderId) {
+	String paymentState = null;
+	com.ibm.commerce.edp.beans.EDPPaymentStatusDataBean eDPPaymentStatusDataBean =
+		new com.ibm.commerce.edp.beans.EDPPaymentStatusDataBean();
+	eDPPaymentStatusDataBean.setOrderId(new Long(orderId));
+	try {
+		com.ibm.commerce.beans.DataBeanManager.activate(eDPPaymentStatusDataBean, request, response);
+		paymentState = eDPPaymentStatusDataBean.getPaymentStatus();
+	} catch (Exception ex) {
+	}
+
+	if (paymentState == null || paymentState.trim().length() == 0) {
+		paymentState = (String) tmpOrderLabels.get("orderSummaryDetPaymentStateNotApplicable");
+	} else {
+		String paymentStateLabel = (String) tmpOrderLabels.get(paymentState);
+		if (paymentStateLabel != null && paymentStateLabel.trim().length() > 0) {
+			paymentState = paymentStateLabel;
+		}
+	}
+
+	return paymentState;
+
+}
+%>

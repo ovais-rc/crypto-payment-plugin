@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		Get SSO token service. This is used to retrieve the SSO token for the current session.
+	-->
+	<Service definitionName="cmc/price/GetSSOToken" sendIdentity="true" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetSSOToken">
+		<!---
+			Parse the response values from the get SSO token service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			requestParent.popupExportWindow();
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		This client action is used to export files for the specified price lists.
+	-->
+	<ClientAction classDefinition="true" definitionName="cmc/price/ExportPriceListClientAction" displayName="${priceResources.Singleton.priceListExport.string}">
+		<dependency localName="priceResources" moduleName="cmc/price/PriceResources"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		
+		<variable name="exportUrl" type="string"/>
+		
+		<!---
+			@keywords private
+			@param cmc/foundation/ModelObject objects: The array of selected model objects.
+		-->
+		<method args="objects" name="performAction">
+			<![CDATA[
+			var storeId = objects[0].getPropertyValue("objectStoreId");
+			var type = "PriceList";
+			var format = "csv";
+			var SSOToken = ContextUtil.Singleton.findContextValue(null, "SSOToken").value;
+			this.exportUrl = "ExportServlet?storeId=" + storeId + "&type=" + type + "&format=" + format + "&priceListId=";
+			for (var i = 0; i < objects.length; i++) {
+				var ro = objects[i].getReferencedObject();
+				var objectId = ro.getPropertyValue(ro.objectDefinition.idProperty);
+				this.exportUrl = this.exportUrl + objectId;
+				if (i != objects.length - 1) {
+					this.exportUrl = this.exportUrl + ",";
+				}
+			}
+			var caller = this;
+			require(["cmc/price/GetSSOToken"], function(GetSSOToken) {
+				GetSSOToken.Singleton.doRequest(caller, {});
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="popupExportWindow">
+			<![CDATA[
+			var SSOToken = ContextUtil.Singleton.findContextValue(null, "SSOToken").value;
+			this.exportUrl = this.exportUrl + "&ActivityToken=" + SSOToken;
+			var newWindowObj = new Object();
+			newWindowObj.URL = this.exportUrl;
+			newWindowObj.windowName = "Export";
+			newWindowObj.windowFeatures = "left=0,top=0,width=1014,height=710,scrollbars=no,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+			openNewWindow(newWindowObj);
+			]]>
+		</method>
+	</ClientAction>
+
+</Definitions>

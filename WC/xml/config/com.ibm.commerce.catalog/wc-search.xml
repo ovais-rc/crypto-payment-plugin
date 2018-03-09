@@ -1,0 +1,1812 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<_config:search-config
+	xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../xsd/wc-search.xsd ">
+
+	<!--
+		===================== Server configurations =====================
+	-->
+
+	<!--
+		This setting uses the Apache Commons HTTP Client to connect to Solr.  The following is a list
+		of configurable settings:
+		
+		URL: HTTP URL location of the remote Solr server context root
+			 note: if reference is provided, this option is ignored
+		reference: WAS configured name binding for the URL to connect to the Solr server.  For example,
+		           server or cluster scope: com.ibm.commerce.foundation.server.services.search.url
+		           cell scope: cell/persistent/com.ibm.commerce.foundation.server.services.search.url
+		           note: if reference is not provided, URL will be used instead
+		soTimeout: HTTP client default socket timeout in milliseconds for waiting for data. The default
+		           is 0 which is interpreted as an infinite timeout.
+		connectionTimeout: HTTP client connection timeout is the number of milliseconds to wait until a
+		                   connection is established. The default value is 0 which means a timeout is
+		                   not used. 
+		defaultMaxConnectionsPerHost: The default maximum number of connections allowed per host. The
+		                              default is 2.
+		maxTotalConnections: The maximum number of connections allowed overall.
+		maxRetries: The maximum number of times to re-connect before failing. 
+		retryTimeInterval: The amount of time in milliseconds to wait in between each connection retry.
+		followRedirects: Indicating whether or not HTTP redirects should be automatically followed.
+		allowCompression: When enabled, HTTP client is able to make better use of available bandwidth
+		                  and provide faster transmission speeds between both servers.
+		
+		Note: Avoid using too long for the two timeout values below as it will cause the storefront
+              page to hang for a prolonged period in an event where the Solr server is not available.
+              The search runtime will retry for "maxRetries" number of times and there will be
+              "retryTimeInterval" milliseconds before each retry attempt.  Also putting consideration
+              with the value set for "soTimeout" and "connectionTimeout", it is possible to determine
+              the maximum amount of time delayed on each browser request upon a search server connection
+              timeout.  For example, if the connection timeout is set to 15 seconds and there is only one
+              retry which waits for one second before retrying, in total, the request will take 31 seconds
+              to return for the initial attempt.  All future search requests from the same browser request
+              will be ignored.  Therefore in this example, regardless of how many search requests issued
+              on any given JSP, the waiting time at most is 31 seconds before an error page is returned
+              back to the browser.
+              This timeout setting should only be used as the HTTP connection timeout; for the search
+              request timeout, use the maxTimeAllowed parameter inside of each search profile.
+	-->
+		
+	<_config:server name="AdvancedConfiguration">
+		<_config:common-http URL="http://localhost/solr"
+		    reference="com.ibm.commerce.foundation.server.services.search.url"
+			soTimeout="15000" connectionTimeout="15000"
+			defaultMaxConnectionsPerHost="600" maxTotalConnections="600"
+			maxRetries="1" retryTimeInterval="1000"
+			followRedirects="false" allowCompression="true" />
+	</_config:server>
+	
+	<_config:index name="CatalogEntry"
+		object="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrCatalogNavigationViewImpl">
+	</_config:index>
+	
+	<_config:index name="UnstructuredContent"
+		object="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrCatalogNavigationViewImpl">
+	</_config:index>
+
+	<_config:index name="CatalogGroup"
+		object="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrCatalogNavigationViewImpl">
+	</_config:index>
+		
+	<_config:cores>
+	</_config:cores>
+
+	<!-- 
+		============================
+		IBM Internal Search Profiles
+		============================
+		
+		Do not modify any of the following search profiles provided by IBM.
+		Doing this may cause unpredictable results from the starter storefront.
+	 -->
+
+	<_config:profile name="AutoComplete" indexName="CatalogEntry" />
+	
+	<_config:profile name="SearchTermAssociation" indexName="CatalogEntry" />
+	
+	<!-- 
+		This profile, IBM_Global, is the base search profile - it contains all
+		common settings and properties that are re-usable to most search scenarios.
+		But each of these settings can be individually overridden for additional
+		customization.
+	 -->	 
+	<_config:profile name="IBM_Global" indexName="CatalogEntry">
+
+		<!-- 
+			The query section declares properties that influence how the query
+			expression gets executed against the Solr server at runtime.
+		 -->
+		<_config:query>
+			<!--
+				This parameter restricts the maximum number of the search results
+				per page.  Defaults to 50.
+			-->
+			<_config:param name="maxRows" value="50" />
+			
+			<!--
+				This parameter restricts the maximum amount of time allowed for any
+				query to execute. If the query takes more time than the specified
+				milliseconds, a timeout occurs and partial (or no) results may be
+				returned.  Defaults to 15000.
+			-->
+			<_config:param name="maxTimeAllowed" value="15000" />
+			
+			<!--
+				Each search profile can enable this parameter if the profile
+				DOES need the specific value against the global setting of 
+				"SearchProfilesDebug" in wc-component.xml
+				
+				Usage of this field please refer to the note of "SearchProfilesDebug" 
+				in wc-component.xml file
+			
+				<_config:param name="debug" value="false" />
+			-->
+			
+			<!--
+				Determines the level of details for preview. Defaults to 1.
+				0: Minimal  - includes marketing rules
+				1: Summary  - includes marketing rules, index status
+				2: Detailed - includes marketing rules, index status, query explain
+
+				Each search profile can enable this parameter if the profile
+				DOES need the specific value against the global setting of 
+				"SearchProfilesPreview" in wc-component.xml
+
+				Usage of this field please refer to the note of "SearchProfilesPreview" 
+				in wc-component.xml file
+
+				<_config:param name="preview" value="1" />
+			-->
+			
+			<!--
+				Each search profile can enable this parameter if the profile
+				DOES need the specific value against the global setting of 
+				"SearchProfilesPrice" in wc-component.xml
+
+				Usage of this field please refer to the note of "SearchProfilesPrice" 
+				in wc-component.xml file
+
+				<_config:param name="price" value="1" />	
+			-->
+					
+			<!--
+				Each search profile can enable this parameter if the profile
+				DOES need the specific value against the global setting of 
+				"SearchProfilesStatistics" in wc-component.xml
+
+				Usage of this field please refer to the note of "SearchProfilesStatistics" 
+				in wc-component.xml file
+
+				<_config:param name="statistics" value="false"/>
+			-->
+            
+            <!--
+			  	List of mandatory expression providers that will be called upon each search request.
+			  	See SolrSearchExpressionProvider for details.
+			  	
+			  	Note: These providers cannot be customized nor reconfigured.
+			  	
+			  	A) SolrSearchProfileNameValidator
+			  	
+			  	This is a Solr specific implementation of the search expression validator for
+ 				the search profile name. This provider ensures that the control parameter
+ 				_wcf.search.profile is passed in and its definition is defined in the search
+ 				configuration file.
+			  	
+			  	B) SolrSearchIndexNameValidator
+				
+				This expression provider is for validating the index core name.  It can also determine the name if not specified by:
+ 				
+ 				1) checking if _wcf.search.index is passed in as part of the expression,
+ 				2) if not, then look up the core name from the given search profile,
+ 				3) otherwise, try to derive the core name by making use of the store ID to determine the master catalog ID
+				   and the locale name.
+				
+				The resulting Solr index name will be added back into the SelectionCriteria object (_wcf.search.index) for other
+				downstream processing.	
+				
+				C) SolrSearchDecodeMetaTokenExpressionProvider
+				
+				This is a Solr specific implementation of the search expression provider for decoding the meta string by calling
+				SolrSearchMetaTokenDecoder. The meta string is used for representing the search context, such as the bread crumb
+ 				trail.
+ 				
+ 				D) SolrSearchEncodeMetaTokenExpressionProvider
+ 				
+ 				This is a Solr specific implementation of the search expression provider for encoding the meta string. This
+ 				This provider encodes the meta string stored in _wcf.search.meta so that it can be reused later to represent
+ 				the current facet state.
+ 				
+ 				E) SolrSearchExpressionValidator
+				
+				This search expression provider is to:
+				
+ 				1) ensure the query expression is not empty;
+ 				2) if so, generate a default all inclusive condition (*:*) and added back to the SelectionCriteria
+ 				   object (_wcf.search.internal.optional.query);
+ 				3) ensure all special characters are escaped properly before passing down to the search engine.
+			-->
+           
+			<!--
+			  	List of additional expression providers.
+			-->
+		    
+            <!-- 
+            	SolrSearchBasedMerchandisingExpressionProvider
+            	
+            	This is a Solr-specific implementation of the search-based merchandising expression provider. This provider calls the marketing
+            	component to run search activities. Search activities can apply to all searches or target specific search keywords. They may add
+            	additional constraints to the  search request to influence the order of the results as well as add new conditions to the search 
+ 				query with the intention of adding new products to search results.
+ 				  
+				For example, search activities may scope search results to contain only products that are in stock; they can also elevate products
+				that meet a specific criteria (such as brand, profit margin or  customer ranking) to the top of the search result.
+ 				
+ 				The query fragments produced by search activities will be added back into the SelectionCriteria object for other downstream
+ 				processing:
+ 				
+ 				_wcf.search.internal.filterquery
+ 				_wcf.search.internal.optional.query
+ 				_wcf.search.internal.mandatory.query
+ 				_wcf.search.internal.boostquery
+ 				_wcf.search.internal.sort
+ 				_wcf.search.term
+ 
+ 				Note: This provider should run before SolrSearchByKeywordExpressionProvider to ensure that search term can be replaced successfully
+ 				by the 'Add or Replace Search Criteria' marketing action.
+             -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchBasedMerchandisingExpressionProvider" />
+			
+			<!-- 
+				SolrSearchTermAssociationExpressionProvider
+				
+				This search expression provider is for handling the search term association(STA) expansion. This provider helps getting synonyms
+				and replace the search term to fetch the final result.
+				
+				The synonyms fetched by STA service will be added back into the SelectionCriteria object for other downstream
+ 				processing:
+ 					_wcf.search.internal.synonyms
+			 -->
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTermAssociationExpressionProvider"/>
+			
+			<!-- 
+				SolrSearchByKeywordExpressionProvider
+				
+				This search expression provider is for handling the search by keyword request. This provider helps converting an XPath
+				expression into a Solr specific expression. The following is the description of its behavior:
+				
+				if EXACT match type is specified
+					Expression is considered to include keyword using the EXACT match pattern => +(f1:"t1 t2" f2:"t1 t2")
+				if NONE match type is specified
+					Expression is considered to include keyword using the NONE match pattern => -(f1:(t1 t2) f2:(t1 t2))
+				if ALL match type is specified
+					Expression is considered to include keyword using the ALL match pattern => +(f1:(+t1 +t2) f2:(+t1 +t2))
+				otherwise (default behavior for storefront Quick Search)
+					Expression is considered to include keyword using the ANY match pattern => +(f1:(t1 t2) f2:(t1 t2))
+					
+				if exclude term and EXACT match type is specified
+					Expression is considered to exclude keyword using the EXACT match pattern => -f1:"t1 t2" -f2:"t1 t2"
+				otherwise
+					Expression is considered to exclude keyword using the ANY or ALL match pattern => -f1:(t1 t2) -f2:(t1 t2)
+				
+				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.optional.query) 
+				for other downstream processing.
+			 -->
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+			
+			<!-- 
+				SolrSearchByCategoryExpressionProvider
+				
+				This search expression provider for handling the search by category, as well as taking into account of the sales catalog in the
+				current business context.
+				
+				The resulting Solr expression will be added back into the SelectionCriteria object (category into _wcf.search.internal.mandatory.query
+				and catalog into _wcf.search.internal.filterquery) for other downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider" />
+			
+			<!-- 
+				SolrSearchByManufacturerExpressionProvider
+				
+				This search expression provider for handling the search by brand name requests.
+				
+				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.meta)
+				and to be encoded into the meta string later on.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByManufacturerExpressionProvider" />
+			
+			<!-- 
+				SolrSearchByPriceExpressionProvider
+				
+				This search expression provider for handling the search by price range request generated from the Advanced Search page.
+				
+				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.meta)
+				and to be encoded into the meta string later on.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPriceExpressionProvider" />
+			
+			<!-- 
+				SolrSearchByFacetExpressionProvider
+				
+				This search expression provider is for handling the search by facet request.  It adds additional facets when provided through
+				_wcf.search.facet and skips those facets defined in this exclude list, _wcf.search.exclude.facet.  This provider helps converting
+				an XPath expression into a Solr specific expression.  The resulting Solr expression will be added back into the SelectionCriteria
+ 				object (_wcf.search.internal.meta) and to be encoded into the meta string (_wcf.search.meta) later on.
+			 -->			
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByFacetExpressionProvider" />
+			
+			<!-- 
+				SolrSearchByStorePathExpressionProvider
+				
+				This search expression provider is for generating condition to handle store path.
+				
+ 				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.filterquery) for
+				other downstream processing.		
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider" />
+			
+			<!-- 
+				SolrSearchByPublishedEntryOnlyExpressionProvider
+				
+				This search expression provider is for restricting search results to only published entries.
+				
+				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.filterquery) for
+				other downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider" />
+			
+			<!-- 
+				SolrSearchByCustomExpressionProvider
+				
+				This search expression provider is for handling the search by custom expression stored in _wcf.search.expr. This custom expression will be added
+				to the SelectionCriteria object (_wcf.search.internal.optional.query) for other downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+			
+			<!-- 
+				SolrSearchFacetConditionExpressionProvider
+				
+				This search expression provider is used to generate a list of attribute related facets and currency specific price range facets for the current
+				search request.	The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.facet.field) for other
+				downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchFacetConditionExpressionProvider"/>
+			
+			<!-- 
+				SolrSearchTypeExpressionProvider
+				
+				This search expression provider is for handling the match type for keyword search requests. The following is the pseudo logic of how
+				the match type (_wcf.search.type) can be converted into a search criteria:
+				
+ 				- Match type is defaulted: ANY, exclude SKU
+				- Exclude SKU expression is represented as => -catenttype_id_ntk_cs:ItemBean
+ 				- Only SKU expression is represented as => - +catenttype_id_ntk_cs:ItemBean
+ 				- Include SKU expression does not need to be qualified
+ 				
+				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.filterquery) for
+				other downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider" />
+			
+			<!-- 
+				SolrSearchSequencingExpressionProvider
+				
+				This search expression provider is for ordering product entries in the search result by ranking.  The result will be added back into
+				the SelectionCriteria object (_wcf.search.internal.boostquery) for other downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchSequencingExpressionProvider"/>
+					
+			<!-- 
+				SolrSearchProductEntitlementExpressionProvider
+				
+				This search expression provider is for performing product entitlement. It is done by calling ProductEntitlementExpressionHelper
+				in order to build search engine specific query expression for contracts that contains CatalogFilter Term Conditions and
+				ProductSet Term Conditions - if contract list is passed in, ProductEntitlementExpressionHelper will build the search
+				expression against those contracts instead of fetch contract from context; otherwise if there is no contract passed as parameter,
+				this helper class will then fetch the current eligible contracts and build search expression against them.
+				
+				The resulting Solr expression will be added back into the SelectionCriteria object (_wcf.search.internal.filterquery) for
+				other downstream processing.
+			 -->
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider" />
+			
+			<!--
+				SolrSearchInventoryExpressionProvider
+				
+				This search expression provider is for handling searching the Inventory index by updating the inv_sttffmqty_* generic field name 
+				with a specific field name i.e.	inv_strffmqty_10152_10001 for store Id 10152, and fulfillment cetner Id 10001 into the expression. 
+				The resulting Solr expression will be added back into the SelectionCriteria object.
+			 -->
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchInventoryExpressionProvider"/>
+			
+			<!--
+			  	List of search query pre-processors.
+			  	
+			  	A query pre-processor can be used to modify the SolrQuery object right before sending to Solr server for processing.
+			  	
+			  	All query pre-processor must extend from <code>AbstractSolrSearchQueryPreprocessor</code> class and implements
+			  	<code>SearchQueryPreprocessor</code> interface in order to allow initialization of the <code>iSelectionCriteria</code>
+			  	and <code>iSolrQuery</code> object reference.
+			  	
+			  	For example:
+			  	
+  				<_config:preprocessor classname="com.ibm.commerce.catalog.facade.server.services.search.query.solr.SolrSearchSampleQueryPreprocessor" />
+			-->
+						
+			<!--
+			  	List of search query post-processors.
+			  	
+			  	A query post-processor can be used to modify the physical data object, SolrEntityContainerImpl, right after the
+			  	QueryResponse is returned from the Solr server.
+			  	
+			  	All query post-processor must extend from <code>AbstractSolrSearchQueryPostprocessor</code> class and implements
+			  	<code>SearchQueryPostprocessor</code> interface in order to allow initialization of the <code>iSelectionCriteria</code>,
+ 				<code>iQueryResponse</code>, and <code>iResponseObject</code> object reference.
+ 				 
+			  	For example:
+			  	
+			  	<_config:postprocessor classname="com.ibm.commerce.catalog.facade.server.services.search.query.solr.SolrSearchSampleQueryPostprocessor" />
+			-->
+			
+		</_config:query>
+		
+		<!-- 
+			The sort section is for defining sorting options and their corresponding
+			values that can be used directly from the storefront.
+			
+			For example,
+			
+			<_config:sort>
+				<_config:field name="1" value="mfName_ntk_cs asc" />
+				<_config:field name="2" value="name_ntk asc,price_* asc" />
+			</_config:sort>
+			
+			In the example above, when a value of "2" is passed in through a control
+			parameter _wcf.search.sort, the following two parameters will be added
+			to the final Solr expression:
+			
+				sort=name_ntk+asc,price_USD+asc
+			
+			Note that "price_*" contains a special operator "*" that will be substituted
+			with the shopper's currency at runtime.  In the example, the shopper's
+			currency is USD. 
+		 -->
+		<_config:sort>
+		</_config:sort>
+        
+		<!-- 
+			The result section is for declaring a list of search index fields to be
+			returned in the search result set.  Additional data filtering can applied.
+		 -->
+		<_config:result>
+			<!--
+			  	List of fields to be returned. If none specified, all indexed fields
+			  	will be returned.
+			-->
+			
+			<!--
+			  	List of result filters for additional post processing.
+			-->
+			
+			<!-- 
+				SearchCatalogEntryViewSKUResultFilter
+				
+				This is the CatalogNavigationView search result filter for retrieving all related
+				child SKUs for a given product list.  The result will be inserted back into 
+				the CatalogNavigationView noun.
+				
+				Note that this result filter must be declared before SolrSearchCatalogEntryViewPriceResultFilter
+				when used together.  The logic has been optimized to avoid excessive internal search
+				related calls.
+			 -->
+			<!-- 
+			<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+ 			 -->
+			
+			<!-- 
+				SearchCatalogEntryViewPriceResultFilter
+				
+				This is the CatalogNavigationView search result filter for modifying 
+				prices in each CatalogEntryView object. Its purpose is to determine the
+ 				calculated contract price that is suitable to be displayed to the shopper.
+		     -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+				
+			<!-- 
+				SearchCatalogEntryViewSingleSKUResultFilter
+				
+				This is the CatalogNavigationView search result filter for determining
+				whether each CatalogEntryView object is a single SKU or not.
+			 -->
+			<!--  
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSingleSKUResultFilter"/>
+            -->
+			<!-- 
+				SearchCatalogNavigationViewPreviewResultFilter
+				
+				This is the CatalogNavigationView search result filter for setting up all
+				required meta data for previewing search operations in the store preview.
+				This includes the indexing status and search query string.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewPreviewResultFilter"/>
+
+			<!-- 
+				SearchCatalogNavigationViewDynamicKitResultFilter
+
+				This CatalogNavigationView search result filter is used to populate a 
+				Dynamic Kit response BOD with its configuration data. This data include 
+				the Model name, Model configuration, and whether the Dynamic Kit has a 
+				predefined configuration. 	If a predefined configuration has been defined,
+				the response includes details about the	preconfigured components of the 
+				Dynamic Kit and the total price of the Dynamic Kit.
+
+				Notes: 
+				- Components and price information is returned only when all components
+				of the Dynamic Kit are displayable and when the shopper has entitlement to the 
+				components.
+				- You can use the IBM_findCatalogEntryDynamicKitSummary search profile
+				for a response with price information.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+            <!-- 
+				SearchCatalogEntryViewDescriptionResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				catalog entries override for an eSite store. The fields include name,  
+				short description, long description, thumbnail, full image and keyword.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+            <!-- 
+				SolrFacetEntryViewImageAndSequenceResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				additional information for facet entries.  Namely, if the facet is attribute dictionary attribute based
+				the sequence and image from the ATTRVALDESC table will be respected for the facet entry values returned.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrFacetEntryViewImageAndSequenceResultFilter"/>            
+        </_config:result>
+        <!-- 
+			The highlighting section is for declaring a list of search index fields to
+			be used for highlighting and their associated highlighting behavior at runtime.
+		 -->
+		<_config:highlight simplePost="&lt;/span&gt;&lt;/strong&gt;" simplePre="&lt;strong&gt;&lt;span class=font2&gt;">
+		</_config:highlight>
+		
+		<!-- 
+			The faceting section is for declaring the default (or fallback) facet behaviour at runtime.
+			Notice these settings can be overridden by the Facet Management UI in Management Centre
+			when similar properties of a facet-able attribute have been explicitly set by the business user.
+			
+			Note: the facets section is deprecated.
+		 -->
+		<_config:facets>
+			<!--
+				This param determines the ordering of the facet field constraints.
+				- count - sort the constraints by count (highest count first). This is the default.
+				- index - to return the constraints sorted in their index order
+				          (lexicographic by indexed term). For terms in the ascii range, this
+						  will be alphabetically sorted.
+			-->
+			<_config:param name="sort" value="count" />
+			<!--
+				This param indicates the minimum counts for facet fields should be
+				included in the response. The default value is 0.
+			-->
+			<_config:param name="minCount" value="1" />
+			<!--
+				This parameter indicates the maximum number of constraint counts
+				that should be returned for the facet fields. A negative value means
+				unlimited. The default value is 100.
+			-->
+			<_config:param name="limit" value="200" />
+			<!--
+				This "converter" parameter specifies which facet field name to
+				be sent through the given converter class at runtime to perform
+				additional data conversion.
+				Note: this parameter is not available in Management Centre and
+				can only be set in this configuration file.
+			-->
+			<_config:converter field="parentCatgroup_id_search" classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" />
+		</_config:facets>
+		
+		<!-- 
+			The spell checking section is for defining the spell checking 
+			behavior at runtime.
+		 -->
+		<_config:spellcheck>
+			<!--
+				This parameter indicates the maximum number of suggestions to be
+				returned.
+			-->
+			<_config:param name="limit" value="5" />
+		</_config:spellcheck>
+		
+		<!-- 
+			For additional data mapping.
+		 -->
+		<_config:mapping>
+		</_config:mapping>
+		
+	</_config:profile>
+	
+    <!-- 
+		This profile, IBM_BreadCrumb, is a base search profile for fetch breadcrumb trace information.
+		It is not used for the "direct" page like ProductComparePage,AdvancedSearchPage',StaticSearchPage and SEO product page.
+	 -->
+    <_config:profile indexName="CatalogEntry" name="IBM_BreadCrumb">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+        </_config:query>
+        <_config:sort/>
+        <_config:result/>       
+        <_config:facets/>
+        <_config:spellcheck/>
+        <_config:mapping/>
+    </_config:profile>
+    
+    <!-- 
+    	This is the extension profile for the CatalogEntry index.
+    	
+    	If creating a new profile in an extension 'wc-search.xml'
+    	in the com.ibm.commerce.catalog-ext folder, this profile 
+    	can be used to avoid copying extra information into the extension
+    	file.
+    	
+    	ie. _config:server, _config:index, _config:cores
+    	
+    	If you are extending an existing IBM profile, this is not necessary.    	
+	-->
+    <_config:profile indexName="CatalogEntry" name="IBM_extensionProfile">
+    </_config:profile>
+    
+   <!-- 
+    	This is the extension profile for the UnstructuredContent index.
+    	
+    	If creating a new profile in an extension 'wc-search.xml'
+    	in the com.ibm.commerce.catalog-ext folder, this profile 
+    	can be used to avoid copying extra information into the extension
+    	file.
+    	
+    	ie. _config:server, _config:index, _config:cores
+    	
+    	If you are extending an existing IBM profile, this is not necessary.    	
+	-->
+    <_config:profile indexName="UnstructuredContent" name="IBM_extensionProfile_UnstructuredContent">
+    </_config:profile>
+    
+   <!-- 
+    	This is the extension profile for the CatalogGroup index.
+    	
+    	If creating a new profile in an extension 'wc-search.xml'
+    	in the com.ibm.commerce.catalog-ext folder, this profile 
+    	can be used to avoid copying extra information into the extension
+    	file.
+    	
+    	ie. _config:server, _config:index, _config:cores
+    	
+    	If you are extending an existing IBM profile, this is not necessary.    	
+	-->
+    <_config:profile indexName="CatalogGroup" name="IBM_extensionProfile_CatalogGroup">
+    </_config:profile>    
+    
+	<!--
+		This profile inherits all the elements defined in IBM_Global profile.
+	-->
+	<_config:profile name="IBM_findCatalogEntryByName"
+		extends="IBM_Global">
+		<!--
+			Extension defined at element level means all properties are
+			inherited.
+		-->
+		<_config:query inherits="true">
+			<!-- 
+			 	Default search field which contains name, short description, part number, keyword,
+			 	and all searchable attributes.  
+			 -->
+			<_config:field name="name"/>
+    </_config:query>
+		<_config:sort inherits="false">
+			<_config:field name="1" value="mfName_ntk_cs asc" />
+			<_config:field name="2" value="name_ntk asc" />
+			<_config:field name="3" value="price_* asc" />
+			<_config:field name="4" value="price_* desc" />
+		</_config:sort>
+		<_config:highlight inherits="true">
+			<_config:field name="name" />
+		</_config:highlight>
+	</_config:profile>
+
+	<!--
+		This profile inherits all the elements defined in IBM_Global profile.
+	-->
+	<_config:profile name="IBM_findCatalogEntryByNameAndShortDescription"
+		extends="IBM_findCatalogEntryByName">
+		<_config:query inherits="true">
+			<_config:field name="shortDescription"/>
+			<_config:field name="defaultSearch"/>
+        </_config:query>
+		<_config:highlight inherits="true">
+			<_config:field name="shortDescription" />
+		</_config:highlight>
+	</_config:profile>
+    <_config:profile name="IBM_findCatalogEntryByNameAndShortDescriptionInDetail"
+    	extends="IBM_findCatalogEntryByNameAndShortDescription">
+    </_config:profile>
+	
+	<!--
+		This profile inherits all the elements defined in IBM_Global profile.
+	-->
+	<_config:profile name="IBM_findCatalogEntryByNameAndShortDescriptionOnly"
+		extends="IBM_findCatalogEntryByName">
+		<_config:query inherits="true">
+			<_config:field name="shortDescription"/>
+        </_config:query>
+		<_config:highlight inherits="true">
+			<_config:field name="shortDescription" />
+		</_config:highlight>
+	</_config:profile>
+	
+	<_config:profile name="IBM_findCatalogEntryByUnstructureField"
+		extends="IBM_Global">
+		<_config:query inherits="true">
+			<_config:field name="unstructure" />
+		</_config:query>
+		<_config:sort inherits="false">
+			<_config:field name="1" value="mfName_ntk_cs asc" />
+			<_config:field name="2" value="name_ntk asc" />
+			<_config:field name="3" value="price_* asc" />
+			<_config:field name="4" value="price_* desc" />
+		</_config:sort>
+	</_config:profile>
+	
+	<_config:profile name="IBM_Global_Unstructured" indexName="UnstructuredContent">
+		<_config:query>
+			<_config:param name="maxRows" value="20" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchFacetConditionExpressionProvider"/>
+		</_config:query>
+		<_config:sort />
+		<_config:result>
+			<_config:field name="attachment_id" />
+			<_config:field name="catentry_id" />
+			<_config:field name="path" />
+			<_config:field name="name" />
+			<_config:field name="mimetype" />
+			<_config:field name="rulename" />
+			<_config:field name="identifier" />
+			<_config:field name="image" />
+			<_config:field name="shortdesc" />
+			<_config:field name="longdesc" />
+			<_config:field name="tika_stream_size"/>
+		</_config:result>
+		<_config:highlight simplePost="&lt;/span&gt;&lt;/strong&gt;" simplePre="&lt;strong&gt;&lt;span class=font2&gt;">
+		</_config:highlight>
+		<_config:facets />
+		<_config:spellcheck />
+		<_config:mapping />
+	</_config:profile>
+	
+	<_config:profile name="IBM_findAttachmentByCatentryId" extends="IBM_Global_Unstructured">
+		<_config:sort inherits="false">
+			<_config:field name="1" value="rulename asc"/>
+            <_config:field name="2" value="mimetype asc"/>
+        </_config:sort>
+	</_config:profile>
+	
+	<_config:profile name="IBM_findAttachmentByContent" 
+		extends="IBM_Global_Unstructured">
+		<_config:query inherits="true">
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+			<_config:field name="tika_content" />
+			<_config:field name="name"/>
+			<_config:field name="shortdesc"/>
+			<_config:field name="longdesc"/>
+		</_config:query>
+	</_config:profile>
+
+	<_config:profile name="IBM_FilteredCatalogEntry" indexName="CatalogEntry">
+   		<_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCatalogFilterExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+			<_config:field name="catentry_id" />
+		</_config:query>
+		<_config:result>
+		 	<_config:field name="catentry_id"/>
+		</_config:result>
+		<_config:facets />
+	</_config:profile>
+
+	<_config:profile name="IBM_CatalogEntryEntitlement" indexName="CatalogEntry">
+   		<_config:query>
+			<_config:param name="maxRows" value="5000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider" />
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />            
+			<_config:field name="catentry_id" />
+		</_config:query>
+		<_config:result>
+		 	<_config:field name="catentry_id"/>
+		</_config:result>
+		<_config:facets />
+	</_config:profile>
+    <_config:profile name="IBM_CatalogEntryCategoryEntitlement" indexName="CatalogEntry">
+        <_config:query>
+			<_config:param name="maxRows" value="5000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+        </_config:result>
+        <_config:facets/>
+    </_config:profile>
+	
+    <!-- IBM_findCatalogGroupByFacet-->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogGroupByFacet">
+    	<_config:query>
+            <_config:param name="maxRows" value="1"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchBasedMerchandisingExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider" />
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchFacetConditionExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchInventoryExpressionProvider"/>
+            <_config:field name="defaultSearch"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+        </_config:result>
+		<_config:facets>
+            <_config:param name="sort" value="count" />
+            <_config:param name="minCount" value="1" />
+            <_config:param name="limit" value="-1" />
+            <_config:converter field="parentCatgroup_id_search" classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" />
+		</_config:facets>
+    </_config:profile>	
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryIdByNameAndShortDescription">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>       
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />                
+            <_config:field name="defaultSearch"/>
+            <_config:field name="shortDescription"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+        </_config:result>
+        <_config:facets/>
+    </_config:profile>
+  <!--
+     The following search types are supported: 
+    
+      Match type  | Search Type  |         Description                       
+    
+    1.  ANY       |   0     |  INCLUDE products, kits, bundles
+                  |         |  EXCLUDE product level SKUs and category level SKUs
+                  |         |
+    2.  EXACT     |   1     |  INCLUDE products, kits, bundles
+                  |         |  EXCLUDE product level SKUs and category level SKUs
+                  |         |
+    3.  ALL       |   2     |  INCLUDE products, kits, bundles
+                  |         |  EXCLUDE product level SKUs and category level SKUs
+                  |         |
+    4.  NONE      |   3     |  INCLUDE products, kits, bundles
+                  |         |  EXCLUDE product level SKUs and category level SKUs             
+                  |         |
+    5.  ANY       |   10    |  INCLUDE products, kits, bundles, product level SKUs, category level SKUs
+                  |         |  EXCLUDE 
+                  |         |
+    6.  EXACT     |   11    |  INCLUDE products, kits, bundles, product level SKUs, category level SKUs
+                  |         |  EXCLUDE 
+                  |         |
+    7.  ALL       |   12    |  INCLUDE products, kits, bundles, product level SKUs, category level SKUs
+                  |         |  EXCLUDE 
+                  |         |
+    8.  NONE      |   13    |  INCLUDE products, kits, bundles, product level SKUs, category level SKUs
+                  |         |  EXCLUDE 
+                  |         |
+    9.  ANY       |   100   |  INCLUDE product level SKUs, category level SKUs
+                  |         |  EXCLUDE products, kits, bundles  
+                  |         |
+    10.  EXACT    |   101   |  INCLUDE product level SKUs, category level SKUs
+                  |         |  EXCLUDE products, kits, bundles
+                  |         |
+    11.  ALL      |   102   |  INCLUDE product level SKUs, category level SKUs
+                  |         |  EXCLUDE products, kits, bundles
+                  |         |
+    12.  NONE     |   103   |  INCLUDE product level SKUs, category level SKUs
+                  |         |  EXCLUDE products, kits, bundles
+                  |         |
+    13.  ANY      |   1000  |  INCLUDE products, kits, bundles, category level SKUs
+                  |(Default)|  EXCLUDE product level SKUs
+                  |         |
+    14.  EXACT    |   1001  |  INCLUDE products, kits, bundles, category level SKUs
+                  |         |  EXCLUDE product level SKUs
+                  |         |
+    15.  ALL      |   1002  |  INCLUDE products, kits, bundles, category level SKUs
+                  |         |  EXCLUDE product level SKUs
+                  |         |
+    16.  NONE     |   1003  |  INCLUDE products, kits, bundles, category level SKUs
+                  |         |  EXCLUDE product level SKUs               
+                  |         |
+    17.  ANY      |   10000 |  INCLUDE category level SKUs
+                  |         |  EXCLUDE products, kits, bundles, product level SKUs
+                  |         |           
+    17.  EXACT    |   10001 |  INCLUDE category level SKUs
+                  |         |  EXCLUDE products, kits, bundles, product level SKUs            
+                  |         |           
+    18.  ALL      |   10002 |  INCLUDE category level SKUs
+                  |         |  EXCLUDE products, kits, bundles, product level SKUs  
+                  |         |           
+    19.  NONE     |   10003 |  INCLUDE category level SKUs
+                  |         |  EXCLUDE products, kits, bundles, product level SKUs  
+     -->
+    <_config:profile indexName="CatalogEntry" name="IBM_findNavigationSuggestions">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchNoSearchResultsExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchNavigationSuggestionsResultFilter"/>
+        </_config:result>
+        <_config:navigationSuggestion>
+            <_config:suggestion name="Category" 
+            	handler="com.ibm.commerce.catalog.facade.server.services.search.suggestion.solr.CategoryNavigationSuggestion"/>
+            <_config:suggestion name="Brand" 
+            	handler="com.ibm.commerce.catalog.facade.server.services.search.suggestion.solr.BrandNavigationSuggestion"/>
+            <_config:suggestion name="Articles" 
+                handler="com.ibm.commerce.catalog.facade.server.services.search.suggestion.solr.WebContentNavigationSuggestion">
+               <_config:param name="totalNumber" value="100"/>
+           </_config:suggestion>
+        </_config:navigationSuggestion>
+    </_config:profile>
+    
+    <_config:profile indexName="CatalogEntry" name="IBM_findNavigationSuggestion_Brands">
+        <_config:query>
+            <_config:param name="maxRows" value="100"/>
+            <_config:param name="searchType" value="12"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>            
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchFacetConditionExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+        </_config:query>
+        <_config:facets>
+            <_config:param name="sort" value="index"/>
+            <_config:param name="minCount" value="1"/>
+            <_config:param name="limit" value="100"/>
+            <_config:converter field="parentCatgroup_id_search" classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" />
+        </_config:facets>        
+    </_config:profile>
+    
+    <_config:profile indexName="CatalogGroup" name="IBM_findNavigationSuggestion_Categories">
+        <_config:query>
+            <_config:param name="maxRows" value="200"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCatalogExpressionProvider"/>  
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+        </_config:query>
+        <_config:sort>
+            <_config:field name="1" value="name_ntk_cs asc"/>
+        </_config:sort>
+        <_config:result>
+            <_config:field name="catgroup_id"/>
+            <_config:field name="name"/>
+            <_config:field name="name_ntk_cs"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="thumbnail"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogGroupEntitlementResultFilter"/>
+        </_config:result>
+    </_config:profile>
+    
+	<!-- Search profile for IBM_findCatalogEntrySummary-->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntrySummary">
+        <_config:query>
+	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="longDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <!-- 
+				SearchCatalogEntryViewDescriptionResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				catalog entries override for an eSite store. The fields include name,  
+				short description, long description, thumbnail, full image and keyword.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+			<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>        
+		</_config:result>
+    </_config:profile>
+    
+    <!-- Search profile for IBM_findCatalogEntryDetails-->
+    <_config:profile name="IBM_findCatalogEntryDetails" extends="IBM_findCatalogEntrySummary">
+        <_config:result inherits="true">
+		    <_config:field name="parentCatgroup_id_facet"/>
+            <_config:field name="parentCatentry_id"/>
+            <_config:field name="subscripType"/>
+            <_config:field name="disallowRecOrder"/>
+        	<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter" /> 
+	        <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesResultFilter"/>       
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesAllowedValueResultFilter"/> 
+        </_config:result>        		        
+     </_config:profile>
+ 
+    <!-- Search profile for IBM_findCatalogEntryDetailsWithAttachments-->
+       <_config:profile name="IBM_findCatalogEntryDetailsWithAttachments" extends="IBM_findCatalogEntryDetails">
+        <_config:result inherits="true">
+        	<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttachmentsResultFilter"/>
+        </_config:result>        		        
+    </_config:profile>
+    	
+    <!-- Search profile for IBM_findCatalogEntryDetailsWithComponentsAndAttachments-->
+       <_config:profile name="IBM_findCatalogEntryDetailsWithComponentsAndAttachments" extends="IBM_findCatalogEntryDetailsWithAttachments">
+         <_config:result inherits="true">
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPackageBundleResultFilter"/>
+			<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+        </_config:result>        		        
+    </_config:profile>
+    
+	<!-- Search profile for IBM_findCatalogEntryDetailsWithComponents-->
+    <_config:profile  extends="IBM_findCatalogEntryDetails" name="IBM_findCatalogEntryDetailsWithComponents">
+        <!--  The search profile used to fetch the details of associated catalog entries. -->
+        <_config:param name="catalogEntrySearchProfile" value="IBM_fetchRelatedCatalogEntryDetailedInfo"/>
+        <_config:result inherits="true">
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPackageBundleResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryMerchandisingAssocResultFilter"/>
+        </_config:result>
+    </_config:profile>
+	
+    <!-- Search profile for IBM_findCatalogEntryDetailsWithMerchandisingAssocSummary-->
+    <_config:profile name="IBM_findCatalogEntryDetailsWithMerchandisingAssocSummary" extends="IBM_findCatalogEntryDetails">
+        <!--  The search profile used to fetch the details of associated catalog entries. -->
+        <_config:param name="catalogEntrySearchProfile" value="IBM_fetchRelatedCatalogEntrySummaryInfo"/>
+        <_config:result inherits="true">
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryMerchandisingAssocResultFilter"/>
+        </_config:result>        		        
+   	 </_config:profile>
+    
+    <!-- Search profile for IBM_findCatalogEntryDetailsWithMerchandisingAssocDetails-->
+    <_config:profile name="IBM_findCatalogEntryDetailsWithMerchandisingAssocDetails" extends="IBM_findCatalogEntryDetails">
+        <!--  The search profile used to fetch the details of associated catalog entries. -->
+        <_config:param name="catalogEntrySearchProfile" value="IBM_fetchRelatedCatalogEntryDetailedInfo"/>
+        <_config:result inherits="true">
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryMerchandisingAssocResultFilter"/>
+        </_config:result>        		        
+    </_config:profile>
+      
+	   <!-- Search profile for IBM_findCatalogEntryDynamicKitSummary-->
+	   <_config:profile extends="IBM_findCatalogEntryByID" name="IBM_findCatalogEntryDynamicKitSummary">
+        <!--  The search profile used to Dynamic Kit pre-configuartion Data but with no price. -->
+        <_config:param name="DynamicKitReturnPrice" value="false"/>
+        <_config:result inherits="true">
+        </_config:result>
+    </_config:profile>
+	
+        <!-- Search profile for IBM_findCatalogEntryAll-->
+       <_config:profile name="IBM_findCatalogEntryAll" extends="IBM_findCatalogEntryDetailsWithComponentsAndAttachments">             
+        <!--  The search profile used to fetch the details of associated catalog entries. -->
+        <_config:param name="catalogEntrySearchProfile" value="IBM_fetchRelatedCatalogEntryDetailedInfo"/>
+        <_config:result inherits="true">
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryMerchandisingAssocResultFilter"/>
+			<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewSEOTitleMetaDataFilter"/>
+        </_config:result> 		        
+    </_config:profile>
+	<!-- Search profile for IBM_findCatalogEntryDetails_PriceMode ,it is introduced to determine the price mode in category page and search result page-->
+	<_config:profile extends="IBM_findCatalogEntryDetails" name="IBM_findCatalogEntryDetails_PriceMode">
+		<_config:query>
+		</_config:query>
+	</_config:profile>
+	<!-- Search profile for IBM_findCatalogEntryAll_PriceMode ,it is introduced to determine the price mode in category page and search result page-->
+	<_config:profile extends="IBM_findCatalogEntryAll" name="IBM_findCatalogEntryAll_PriceMode">
+		<_config:query>
+		</_config:query>
+	</_config:profile>
+	<!-- Search profile for IBM_findCatalogEntryPriceWithAttributes_PriceMode ,it is introduced to determine the price mode in category page and search result page-->
+	<_config:profile extends="IBM_findCatalogEntryPriceWithAttributes" name="IBM_findCatalogEntryPriceWithAttributes_PriceMode">
+		<_config:query>
+		</_config:query>
+	</_config:profile>
+
+    <!-- Search profile for IBM_findCatalogEntryAttachments -->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryAttachments">
+        <_config:query>
+            <_config:param name="maxRows" value="200"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttachmentsResultFilter"/>
+        </_config:result>
+    </_config:profile>
+    
+    <!-- Search profile for IBM_findCatalogEntryPrice -->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryPrice">
+        <_config:query>         
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:field name="catentry_id"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+            <!-- 
+				SearchCatalogEntryViewDescriptionResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				catalog entries override for an eSite store. The fields include name,  
+				short description, long description, thumbnail, full image and keyword.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>			
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>			
+        </_config:result>        		        
+    </_config:profile>
+    
+    <!-- Search profile for IBM_findCatalogEntryPriceWithAttributes -->
+    <_config:profile name="IBM_findCatalogEntryPriceWithAttributes" extends="IBM_findCatalogEntryPrice">
+        <_config:result inherits="true">
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="shortDescription"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesAllowedValueResultFilter"/>
+        </_config:result>        		        
+    </_config:profile>
+    
+    <!-- Search profile for IBM_findComponentsSummary , used to lookup pre-configured components
+	   with a Dynamic Kit 
+	 -->
+	 	<_config:profile indexName="CatalogEntry" name="IBM_findComponentsSummary">
+		<_config:query>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider" />
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+		</_config:query>
+		<_config:result>
+			<_config:field name="catentry_id" />
+			<_config:field name="partNumber_ntk" />
+			<_config:field name="name" />
+			<_config:field name="catenttype_id_ntk_cs" />
+			<_config:field name="shortDescription"/>
+			<!-- 
+				SearchCatalogEntryViewDescriptionResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				catalog entries override for an eSite store. The fields include name,  
+				short description, long description, thumbnail, full image and keyword.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+		</_config:result>
+	</_config:profile> 
+	 
+    <!-- This is an internal search profile for componenetView SummaryDetials for package and bundle bean -->
+    <_config:profile name="IBM_findComponentsSummaryDetails" extends="IBM_findComponentsSummary">
+        <_config:result inherits="true">
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="longDescription"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesAllowedValueResultFilter"/>
+        </_config:result>
+    </_config:profile>
+	
+    <!-- Search profile to look up child SKUs; this profile is for IBM internal use only -->
+    <_config:profile indexName="CatalogEntry" name="IBM_findChildSKUs">
+        <_config:query>
+            <_config:param name="maxRows" value="200"/>         
+	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="parentCatentry_id"/>
+            <_config:field name="buyable"/>        
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttachmentsResultFilter"/>
+        </_config:result>        		            
+    </_config:profile>
+
+      <!-- Search profile for IBM_fetchRelatedCatalogEntrySummaryInfo. This is used to retrieve associations between catalog entries, like,
+	    	bundles, kits, merchandising associations.
+	     	This profile is for IBM internal use only. Do not alter.-->
+	<_config:profile indexName="CatalogEntry" name="IBM_fetchRelatedCatalogEntrySummaryInfo">
+	        <_config:query>         
+		        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+	 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+	 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+				<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+	        </_config:query>
+	        <_config:result>
+	        	<_config:field name="catenttype_id_ntk_cs"/>
+	            <_config:field name="catentry_id"/>
+	            <_config:field name="storeent_id"/>
+	            <_config:field name="buyable"/>
+	            <_config:field name="partNumber_ntk"/>
+	            <_config:field name="name"/>
+	            <_config:field name="thumbnail"/>
+	            <_config:field name="price_*"/>
+	            <_config:field name="shortDescription"/>
+            <!-- 
+				SearchCatalogEntryViewDescriptionResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				catalog entries override for an eSite store. The fields include name,  
+				short description, long description, thumbnail, full image and keyword.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+	        </_config:result>       
+	</_config:profile>
+	    
+	<!-- Search profile for IBM_fetchRelatedCatalogEntryDetailedInfo. This is used to retrieve associations between catalog entries, like,
+	    	bundles, kits, merchandising associations.
+	     	This profile is for IBM internal use only. Do not alter.-->	
+	<_config:profile name="IBM_fetchRelatedCatalogEntryDetailedInfo" extends="IBM_fetchRelatedCatalogEntrySummaryInfo">
+	        <_config:result inherits="true">
+				<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+				<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+				<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPackageBundleResultFilter"/>
+				<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesResultFilter"/>
+				<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesAllowedValueResultFilter"/>
+	        </_config:result>       
+        </_config:profile>
+    
+    <!--
+		This profile inherits all the elements defined in IBM_Global profile.
+	-->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryByID">
+       <_config:query>         
+	       	<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+          <!-- 
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSingleSKUResultFilter"/>
+            -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+            <!-- 
+				SearchCatalogEntryViewDescriptionResultFilter
+
+				This CatalogNavigationView search result filter is used to populate  
+				catalog entries override for an eSite store. The fields include name,  
+				short description, long description, thumbnail, full image and keyword.
+			 -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+        </_config:result>
+    </_config:profile>
+    <!-- Search profile for web content search -->
+    <_config:profile indexName="UnstructuredContent" name="IBM_Global_WebContent">
+        <_config:query>
+            <_config:param name="maxRows" value="100"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTermAssociationExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchWebContentStoreInfoExpressionProvider"/>
+            <_config:field name="tika_content"/>
+            <_config:field name="name"/>
+            <_config:field name="shortdesc"/>
+            <_config:field name="longdesc"/>
+        </_config:query>
+        <_config:sort inherits="false">
+            <_config:field name="1" value="name_ntk_cs asc"/>
+            <_config:field name="2" value="mimetype asc"/>
+        </_config:sort>
+        <_config:result>
+            <_config:field name="attachmentrel_id"/>
+            <_config:field name="path"/>
+            <_config:field name="identifier"/>
+            <_config:field name="name"/>
+            <_config:field name="mimetype"/>
+            <_config:field name="shortdesc"/>
+            <_config:field name="longdesc"/>
+        </_config:result>
+        <_config:highlight simplePost="&lt;/span>&lt;/strong>" simplePre="&lt;strong>&lt;span class=font2>">
+            <_config:field name="name"/>
+            <_config:field name="shortdesc"/>
+            <_config:field name="longdesc"/>
+        </_config:highlight>
+        <_config:facets/>
+        <_config:spellcheck>
+            <_config:param name="limit" value="5"/>
+        </_config:spellcheck>
+        <_config:mapping/>
+    </_config:profile>   
+      
+    <!-- Search profile for IBM_findCatalogGroupSummary-->
+    <_config:profile indexName="CatalogGroup" name="IBM_findCatalogGroupSummary">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCatalogExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchSequencingExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catgroup_id"/>
+            <_config:field name="parentCatgroup_id_facet"/>
+            <_config:field name="identifier_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="thumbnail"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogGroupEntitlementResultFilter"/>
+        </_config:result>
+    </_config:profile>
+    
+    <!-- Search profile for IBM_findCatalogGroupDetails-->
+    <_config:profile extends="IBM_findCatalogGroupSummary" name="IBM_findCatalogGroupDetails">
+        <_config:result inherits="true">
+            <_config:field name="longDescription"/>
+            <_config:field name="fullImage"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewSEOTitleMetaDataFilter"/>
+        </_config:result>
+    </_config:profile>
+    
+    <!-- 
+    	This search profile will be used to retrieve the facets for a given category.
+     -->
+    <_config:profile indexName="CatalogEntry" name="IBM_findFacetsByCategory">
+       <_config:query>
+            <_config:param name="maxRows" value="50"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchFacetConditionExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>             
+        </_config:query>
+        <_config:sort/>
+        <_config:result>
+        	<_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="partNumber_ntk"/>
+        </_config:result>
+        <_config:facets>
+            <_config:param name="sort" value="count"/>
+            <_config:param name="minCount" value="1"/>
+            <_config:param name="limit" value="200"/>
+            <_config:converter field="parentCatgroup_id_search" classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" />
+        </_config:facets>
+    </_config:profile>
+
+	<!-- 
+    	This search profile will be used to retrieve the facets for a given category without entitlement.
+     -->
+    <_config:profile indexName="CatalogEntry" name="IBM_findFacetsByCategoryNoEntitlementCheck">
+       <_config:query>
+            <_config:param name="maxRows" value="50"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchFacetConditionExpressionProvider"/>
+        	<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>             
+        </_config:query>
+        <_config:sort/>
+        <_config:result>
+        	<_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="partNumber_ntk"/>
+        </_config:result>
+        <_config:facets>
+            <_config:param name="sort" value="count"/>
+            <_config:param name="minCount" value="1"/>
+            <_config:param name="limit" value="200"/>
+            <_config:converter field="parentCatgroup_id_search" classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" />
+        </_config:facets>
+    </_config:profile>
+	
+	<!-- Search profile for IBM_findCatalogEntryParentInfoNoEntitlementCheck-->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryParentInfoNoEntitlementCheck">
+       <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="longDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:field name="parentCatgroup_id_facet"/>
+            <_config:field name="parentCatentry_id"/>
+            <_config:field name="subscripType"/>
+            <_config:field name="disallowRecOrder"/>
+            <_config:field name="price_*"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+        </_config:result>
+    </_config:profile>
+	<!-- Search profile for IBM_findCatalogEntryForShoppingCart-->
+	<_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryForShoppingCart">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="longDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:field name="parentCatgroup_id_facet"/>
+            <_config:field name="parentCatentry_id"/>
+            <_config:field name="subscripType"/>
+            <_config:field name="disallowRecOrder"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+        </_config:result>
+    </_config:profile>
+	<!-- Search profile for IBM_findCatalogEntrySKUs-->
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntrySKUs">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="longDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:field name="parentCatentry_id"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+        </_config:result>
+    </_config:profile>
+ 
+    <!-- 
+    	This search profile will be used to retrieve the facets for the category display page.
+     -->
+	<_config:profile indexName="CatalogEntry" name="IBM_ComposeFacetListByCategoryId">
+        <_config:query>
+            <_config:param name="maxRows" value="1"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByFacetExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:field name="name"/>
+        </_config:query>
+        <_config:sort/>
+        <_config:result>
+        	<_config:field name="catalog_id"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrFacetEntryViewImageAndSequenceResultFilter"/>
+        </_config:result>
+        <_config:facets>
+            <_config:param name="sort" value="count"/>
+            <_config:param name="minCount" value="1"/>
+            <_config:param name="limit" value="200"/>
+            <_config:converter
+                classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" field="parentCatgroup_id_search"/>
+        </_config:facets>
+    </_config:profile>
+
+	
+    <!-- 
+    	This search profile will be used to retrieve the category facets for the category display page.
+     -->
+    <_config:profile extends="IBM_ComposeFacetListByCategoryId" name="IBM_ComposeCategoryFacetListByCategoryId">
+        <_config:query inherits="true">
+            <_config:param name="maxRows" value="0"/>
+        </_config:query>
+        <_config:facets inherits="true">
+	    <_config:category scope="all">
+	        <_config:excludeFacet name="price"/>
+		<_config:excludeFacet name="mfName_ntk_cs"/>
+	    </_config:category>			
+        </_config:facets>
+    </_config:profile>
+    
+    <!-- 
+    	This search profile will be used to retrieve the products for the category display page.
+     -->
+    <_config:profile indexName="CatalogEntry" name="IBM_ComposeProductListByCategoryId">
+        <_config:query>
+            <_config:param name="maxRows" value="50"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByManufacturerExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPriceExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByFacetExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchSequencingExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:field name="name"/>
+        </_config:query>
+        <_config:sort>
+            <_config:field name="1" value="mfName_ntk_cs asc"/>
+            <_config:field name="2" value="name_ntk asc"/>
+            <_config:field name="3" value="price_* asc"/>
+            <_config:field name="4" value="price_* desc"/>
+        </_config:sort>
+        <_config:result>
+        	<_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+            <!-- 
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSingleSKUResultFilter"/>
+            -->
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewPreviewResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrFacetEntryViewImageAndSequenceResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewStoreDisplayAttributesResultFilter"/>
+        </_config:result>
+        <_config:facets>
+            <_config:param name="sort" value="count"/>
+            <_config:param name="minCount" value="1"/>
+            <_config:param name="limit" value="200"/>
+            <_config:converter
+                classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrSearchCategoryFacetMetaDataConverter" field="parentCatgroup_id_search"/>
+        </_config:facets>
+    </_config:profile>
+    <_config:profile indexName="CatalogEntry" name="IBM_findCatalogEntryDetailsWithAttachments_PriceMode">
+        <_config:query>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="longDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+            <_config:field name="parentCatgroup_id_facet"/>
+            <_config:field name="parentCatentry_id"/>
+            <_config:field name="subscripType"/>
+            <_config:field name="disallowRecOrder"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewSKUResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttributesAllowedValueResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewDynamicKitResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewAttachmentsResultFilter"/>
+        </_config:result>
+    </_config:profile>
+    
+    <!-- 
+    	This search profile removes short description and sequencing expression provider from IBM_findCatalogEntryByNameAndShortDescription.
+    -->
+    <_config:profile extends="IBM_findCatalogEntryByNameAndShortDescription" name="IBM_findCatalogEntryWithoutDescriptionByNameAndShortDescription">
+    	<_config:query inherits="false">
+            <_config:param name="maxRows" value="50"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchBasedMerchandisingExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTermAssociationExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByManufacturerExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPriceExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByFacetExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchInventoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+		    <_config:field name="name"/>
+		    <_config:field name="defaultSearch"/>
+		    <_config:field name="categoryname"/>
+            <_config:field name="shortDescription"/>
+        </_config:query>
+		<_config:result inherits="false">
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+	    	<_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewPriceResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogNavigationViewPreviewResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.SearchCatalogEntryViewDescriptionResultFilter"/>
+            <_config:filter classname="com.ibm.commerce.catalog.facade.server.services.search.metadata.solr.SolrFacetEntryViewImageAndSequenceResultFilter"/>
+        </_config:result>
+    </_config:profile>
+    
+    <_config:profile
+        extends="IBM_findCatalogEntryWithoutDescriptionByNameAndShortDescription" name="IBM_findCatalogEntryWithoutDescriptionByNameAndShortDescriptionInDetail"/>
+
+	<_config:profile indexName="CatalogEntry" name="IBM_dynamicCatalogEntryRecommendation">
+        <_config:query>
+		<_config:param name="maxRows" value="50"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchBasedMerchandisingExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTermAssociationExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCategoryExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByManufacturerExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPriceExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchInventoryExpressionProvider"/>
+            <_config:field name="name"/>
+		<_config:field name="defaultSearch"/>
+		<_config:field name="categoryname"/>
+            <_config:field name="shortDescription"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+        </_config:result>
+    </_config:profile>
+    
+	<_config:profile indexName="CatalogEntry" name="IBM_salesCatalogDynamicCatalogEntryRecommendation">
+        <_config:query>
+		<_config:param name="maxRows" value="500"/>
+            <_config:param name="maxTimeAllowed" value="15000"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchBasedMerchandisingExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTermAssociationExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByKeywordRelevancyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByMasterCatalogExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByManufacturerExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPriceExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchTypeExpressionProvider"/>
+            <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchInventoryExpressionProvider"/>
+            <_config:field name="name"/>
+		<_config:field name="defaultSearch"/>
+		<_config:field name="categoryname"/>
+           <_config:field name="shortDescription"/>
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+        </_config:result>
+    </_config:profile>    
+    
+    <!-- Search profile for IBM_findPDKsByDKIdSummary-->
+    <_config:profile indexName="CatalogEntry" name="IBM_findPDKsByDKIdSummary">
+        <_config:query>
+	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByStorePathExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByPublishedEntryOnlyExpressionProvider"/>
+ 	        <_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchProductEntitlementExpressionProvider"/>
+			<_config:provider classname="com.ibm.commerce.catalog.facade.server.services.search.expression.solr.SolrSearchByCustomExpressionProvider" />
+        </_config:query>
+        <_config:result>
+            <_config:field name="catentry_id"/>
+            <_config:field name="storeent_id"/>
+            <_config:field name="buyable"/>
+            <_config:field name="partNumber_ntk"/>
+            <_config:field name="name"/>
+            <_config:field name="thumbnail"/>
+            <_config:field name="price_*"/>
+            <_config:field name="fullImage"/>
+            <_config:field name="shortDescription"/>
+            <_config:field name="longDescription"/>
+            <_config:field name="keyword"/>
+            <_config:field name="mfName_ntk"/>
+            <_config:field name="catenttype_id_ntk_cs"/>
+		</_config:result>
+    </_config:profile>
+    <!--  This element maps an XPath Key to a search query template. 
+    When XPath queries contain this XPath Key, they are converted to a search query as per the template, with appropriate parameter substitution. -->
+  	<_config:queryMapping indexName='CatalogEntry' xpathKey='/CatalogNavigationView[CatalogEntryView[(UniqueID=)]]' searchQuery='catentry_id:(?UniqueID?)'/>
+  	<_config:queryMapping indexName='CatalogEntry' xpathKey='/CatalogNavigationView[CatalogEntryView[(PartNumber=)]]' searchQuery='partNumber_ntk:(?PartNumber?)'/>
+	<!--  XPath query mapping to get children by parent category ID 
+  	The catalogEntryTypeCode contain values ItemBean, ProductBean, PackageBean, BundleBean or DynamicKitBean -->
+  	<_config:queryMapping indexName="CatalogEntry" xpathKey="/CatalogNavigationView[CatalogEntryView[ParentCatalogGroupID= and (catalogEntryTypeCode=)]]" searchQuery="parentCatgroup_id_search:?ParentCatalogGroupID?  AND catenttype_id_ntk_cs:(?catalogEntryTypeCode?)"/>
+  	<_config:queryMapping indexName="CatalogEntry" xpathKey="/CatalogNavigationView[CatalogEntryView[ParentCatalogGroupID=]]" searchQuery="parentCatgroup_id_search:?ParentCatalogGroupID?"/>
+        <_config:queryMapping indexName="CatalogEntry" xpathKey="/CatalogNavigationView[CatalogEntryView[(UniqueID=)]/MerchandisingAssociations[(AssociationType=)]]" searchQuery="catentry_id:(?UniqueID?)"/>
+  	<_config:queryMapping indexName='CatalogEntry' xpathKey='/CatalogNavigationView[CatalogEntryView[(PartNumber=)]/MerchandisingAssociations[(AssociationType=)]]' searchQuery='partNumber_ntk:(?PartNumber?)'/>
+	<!--  XPath query mapping to get Predefined DynamicKits by parent DynamicKit ID -->
+  	<_config:queryMapping indexName='CatalogEntry' xpathKey='/CatalogNavigationView[(ParentDKID=)]' searchQuery='parentDK_id:(?ParentDKID?)'/>
+    <_config:queryMapping indexName="CatalogGroup"
+        searchQuery="catgroup_id:(?UniqueID?)" xpathKey="/CatalogNavigationView[CatalogGroupView[(UniqueID=)]]"/>
+    <_config:queryMapping indexName="CatalogGroup"
+        searchQuery="identifier_ntk:(?Identifier?)" xpathKey="/CatalogNavigationView[CatalogGroupView[(Identifier=)]]"/>
+    <_config:queryMapping indexName="CatalogGroup"
+        searchQuery="parentCatgroup_id_facet:*_-1" xpathKey="/CatalogNavigationView/CatalogGroupView"/>
+    <_config:queryMapping indexName="CatalogGroup"
+        searchQuery="parentCatgroup_id_facet:(*_?ParentCatalogGroupID?)" xpathKey="/CatalogNavigationView[CatalogGroupView[(ParentCatalogGroupID=)]]" queryComposer="com.ibm.commerce.foundation.internal.server.services.search.processor.solr.SolrSearchQueryContainingAsteriskComposer"/>
+
+</_config:search-config>

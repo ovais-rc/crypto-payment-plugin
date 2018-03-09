@@ -1,0 +1,734 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		Declares a value resolver which resolves a value based on the specified criteria. This
+		class should not be instantiated directly. It is the base class that provides a common
+		mechanism for resolving values. Depending on which attributes are specified, the resolved value
+		will be a constant value, the value of a {@link cmc/foundation/ContextValue context value}, or a
+		property or attribute of a resolved {@link cmc/foundation/ModelObject object}.
+
+		<p>If <code>value</code> is specified, the value resolver
+		will always return the specified value.
+		
+		<p>If <code>contextName</code> is specified then the value will be resolved
+		by searching for a {@link cmc/foundation/ContextValue} with a matching parameter name.
+		
+		<p>If <code>propertyName</code>, <code>checkReadOnly</code>, <code>checkNewObject</code> or <code>checkHasAccessRight</code> is
+		specified, then the value will be resolved by first resolving the right {@link cmc/foundation/ModelObject object}
+		and then returning the specified attribute or property. The model object will be resolved relative
+		to the current object depending on the values specified by <code>parentProperty</code>,
+		<code>resolvePrimaryParent</code>, <code>parentType</code> and <code>objectPath</code>.
+		For a definition of what the current object is, see the classes that extend this base class.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ValueResolver">
+		<dependency localName="SequenceSortComparator" moduleName="cmc/foundation/SequenceSortComparator"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			The name of this value. If "name" is specified without specifying any other
+			attributes, then the value will be resolved by searching for a {@link cmc/foundation/ContextValue} with
+			a matching parameter name. This is a required attribute.
+			@type String
+		-->
+		<variable name="name"/>
+		
+		<!---
+			Optional value. If specified, it will be used as the resolved value.
+			
+			For example, if <code>name="MyPropertyName"</code> and
+			<code>value="MyPropertyValue"</code>, then
+			this resolver will always return the value "MyPropertyValue".
+			This is equivalent to a constant. This attribute cannot be combined with
+			<code>contextName</code>, <code>propertyName</code>, <code>objectPath</code>, <code>parentProperty</code>,
+			<code>resolvePrimaryParent</code>, <code>parentType</code>, <code>checkObjectDefinition</code>,
+			<code>checkReadOnly</code>, <code>checkNewObject</code>, <code>checkHasAccessRight</code> or <code>viewOptionType</code>.
+		-->
+		<variable name="value" type="string" value="${null}"/>
+		
+		<!---
+			Indicates that this value is derived from the parent object. The parent object is the
+			closest primary object in the current object's hierarchy.
+			
+			For example, if <code>name="MyPropertyName"</code>,
+			<code>propertyName="a"</code>, and <code>parentProperty="true"</code>, then
+			this resolver will return the parent object's value of the property named
+			<code>a</code>. The default is "false". This attribute cannot be combined with <code>value</code> or
+			<code>contextName</code>.
+		-->
+		<variable name="parentProperty" type="boolean" value="false"/>
+		<!---
+			Indicates that the parent property retrieved must be the parent primary object.  If it is
+			false it returns the immediate parent. This attribute cannot be combined with <code>value</code> or
+			<code>contextName</code>.
+		-->
+		<variable name="resolvePrimaryParent" type="boolean" value="true"/>
+		
+		<!---
+			Qualifies the search for the parent object to those primary objects with the
+			specified object type or object group.  Used only when the <code>parentProperty="true"</code>.
+		-->
+		<variable name="parentType" type="string" value="${null}"/>
+		
+		<!---
+			Optional object property name. If specified, the value
+			of the specified property will be used as the resolved value. This attribute
+			cannot be combined with <code>value</code>, <code>contextName</code>,
+			<code>checkReadOnly</code>, <code>checkNewObject</code>, or <code>checkHasAccessRight</code>.
+		-->
+		<variable name="propertyName" type="string" value="${null}"/>
+		
+		<!---
+			Optional sequence property name.
+			If <code>objectPath</code> is specified, then the value
+			of this specified property will be used to sequence the values returned.
+			The property value must be a number. 
+		-->		
+		<variable name="sequencePropertyName" type="string" value="${null}"/>
+		
+		<!---
+			Optional sequence property path.
+			When a value for {@link cmc/foundation/ValueResolver#sequencePropertyName sequencePropertyName} is specified, the value of this property will be used to help resolve the property value.			
+			The sequence property path is the object path that determines the objects that contain the sequence property. If the sequence property path is not specified, then it is assumed to be the
+			same as {@link cmc/foundation/ValueResolver#sequencePropertyName objectPath}. If the sequence property path is specified, then it is evaluated relative to the current object.
+		-->	
+		<variable name="sequencePropertyPath" type="string" value="${null}"/>
+		
+		<!---
+			Optional sequence order.
+			When a value for {@link cmc/foundation/ValueResolver#sequencePropertyName sequencePropertyName} is specified, the value will be used to determine sort order.
+		-->
+		<variable name="sortAscending" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			A reference to the sort comparator used to sort the values based on sequence. This is will be defined when {@link cmc/foundation/ValueResolver#sequencePropertyName sequencePropertyName} is not null.
+		-->
+		<variable name="sortComparator" value="${null}"/>
+		
+		<!---
+			@keywords private
+			The object path that "objectPath" and "sequencePropertyPath" have in common. The list of objects returned by this path will be sorted before resolving any remaining object path.
+			This is will be defined when "sequencePropertyName" is not null and "sequencePropertyPath" is different from "objectPath".
+		-->
+		<variable name="commonSequencePath" type="string" value=""/>
+		
+		<!---
+			@keywords private
+			The object path that is unique to "objectPath" when compared with "sequencePropertyPath". After the list of objects returned by "commonSequencePath" is sorted, then
+			this object path is used to locate the objects.
+		-->
+		<variable name="relativeObjectPath" type="string" value=""/>
+		
+		<!---
+			Indicates the object path that is used to locate the right child object {@link cmc/foundation/ModelObject} relative
+			to the current object. If <code>parentProperty</code> is set to "true", the value resolver will first
+			find the parent object before applying the object path.
+			This attribute cannot be combined with <code>value</code> or <code>contextName</code>.
+		-->		
+		<variable name="objectPath" type="string" value="${null}"/>
+
+		<!---
+			Check the object definition of the resolved object. If this attribute is set to "true",
+			then <code>propertyName</code> will be interpreted as an attribute name of the {@link cmc/foundation/ObjectDefinition object definition}
+			associated with the resolved object. The resolved value will be the value of the object definition attribute.
+			For example, let <code>ProductType</code> be the object type of the current object's parent primary object.
+			If <code>checkObjectDefinition="true"</code>, <code>propertyName="objectType"</code>, and <code>parentProperty="true"</code>,
+			then this resolver will resolve to the current object's parent primary object and return it's object type which is <code>ProductType</code>.
+			This attribute cannot be combined with <code>value</code>, <code>contextName</code>, <code>checkReadOnly</code>,
+			<code>checkNewObject</code>, <code>checkHasAccessRight</code> or <code>viewOptionType</code>.
+		-->
+		<variable name="checkObjectDefinition" type="boolean" value="false"/>
+		
+		<!---
+			Check if the resolved object is read only. If this attribute is set to "true", then the resolved value will be "true"
+			if the resolved object is in read-only state. This attribute cannot be combined with
+			<code>value</code>, <code>propertyName</code>, <code>contextName</code>, <code>checkObjectDefinition</code>,
+			<code>checkNewObject</code>, <code>checkHasAccessRight</code> or <code>viewOptionType</code>.
+		-->
+		<variable name="checkReadOnly" type="boolean" value="false"/>
+		
+		<!---
+			Check if the resolved object is a new object. If this attribute is set to "true", then the resolved value will
+			be "true" if the resolved object is a new object. A new object is one that was created on the client and has
+			not yet been saved. This attribute cannot be combined with <code>value</code>, <code>propertyName</code>,
+			<code>contextName</code>, <code>checkObjectDefinition</code>, <code>checkReadOnly</code>, 
+			<code>checkHasAccessRight</code> or <code>viewOptionType</code>.
+		-->
+		<variable name="checkNewObject" type="boolean" value="false"/>
+
+		<!---
+			Check if the business user has edit access to the resolved object. If this attribute is set to "true", then the resolved value
+			will be "true" if the business user has edit access to the object. This attribute cannot be combined with <code>value</code>,
+			<code>propertyName</code>, <code>contextName</code>, <code>checkObjectDefinition</code>, <code>checkReadOnly</code>, 
+			<code>checkNewObject</code> or <code>viewOptionType</code>.
+		-->
+		<variable name="checkHasAccessRight" type="boolean" value="false"/>
+		
+		<!---
+			The name of the context value. If this is specified, then the framework will search for a {@link cmc/foundation/ContextValue context value} with
+			the specified {@link cmc/foundation/ContextValue#parameterName name}. The resolved value will be the value of this context value. This attribute cannot
+			be combined with <code>value</code>, <code>propertyName</code>, <code>objectPath</code>, <code>parentProperty</code>,
+			<code>resolvePrimaryParent</code>, <code>parentType</code>, <code>checkObjectDefinition</code>, <code>checkObjectDefinition</code>,
+			<code>checkReadOnly</code>, <code>checkNewObject</code>, <code>checkHasAccessRight</code> or <code>viewOptionType</code>.
+		-->
+		<variable name="contextName" type="string" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Indicates that this value is resolved from a cmc/foundation/ModelProperty.
+		-->
+		<variable name="isPropertyValue" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Indicates that this value is resolved from a cmc/foundation/ContextValue.
+		-->
+		<variable name="isContextValue" type="boolean" value="false"/>
+
+		<!---
+			The name of the view option type. This value will be matched against the {@link cmc/foundation/ViewOption#viewOptionType view option types}
+			associated with the resolved object. The resolved value will be the value of the view option.
+			This attribute cannot be combined with <code>checkObjectDefinition</code>, <code>value</code>, <code>contextName</code>,
+			<code>checkReadOnly</code>, <code>checkNewObject</code> or <code>checkHasAccessRight</code>.
+		-->
+		<variable name="viewOptionType" type="string" value="${null}"/>
+
+		<!---
+			@keywords private
+			Force the value resolver to resolve all of the possible value sources. By default, all the value
+			sources are resolved only if isPropertyValue is true.
+		-->
+		<variable name="forceResolveAll" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Get the display name for property values.
+		-->
+		<variable name="resolveDisplayName" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Trigger get children services to load the child objects required to resolve values.
+		-->
+		<variable name="loadChildren" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this.value) {
+				if (this.parentProperty || this.propertyName || this.objectPath) {
+					this.isPropertyValue = !this.checkObjectDefinition && !this.checkReadOnly && !this.checkNewObject && !this.checkHasAccessRight && this.viewOptionType == null;
+				}
+				else if (!this.checkObjectDefinition && !this.checkReadOnly && !this.checkNewObject && !this.checkHasAccessRight && this.viewOptionType == null) {
+					if (this.contextName == null && this.name != null && this.name != "") {
+						this.contextName = this.name;
+					}
+					if (this.contextName != null) {
+						this.isContextValue = true;
+					}
+				}
+				if ((this.isPropertyValue || this.checkObjectDefinition) && this.propertyName == null) {
+					this.propertyName = this.name;
+				}
+			}
+			if (this.sequencePropertyName != null && this.objectPath != null) {
+				if (!this.sortComparator) {
+					this.sortComparator = new SequenceSortComparator.Class(this);
+				}
+				this.sortComparator.setVariable("sequencePropertyName", this.sequencePropertyName);
+				var relativeSequencePath = "";
+				if (this.sequencePropertyPath != null && this.sequencePropertyPath != this.objectPath) {
+					var sequencePaths = StringUtil.Singleton.splitAndTrim(this.sequencePropertyPath, "/");
+					var objectPaths = StringUtil.Singleton.splitAndTrim(this.objectPath, "/");
+					for (var i = 0; i < sequencePaths.length; i++) {
+						if (objectPaths.length > i && objectPaths[i] == sequencePaths[i]) {
+							if (this.commonSequencePath != "") {
+								this.commonSequencePath += "/";
+							}
+							this.commonSequencePath += sequencePaths[i];
+						}
+						else {
+							if (relativeSequencePath != "") {
+								relativeSequencePath += "/";
+							}
+							relativeSequencePath += sequencePaths[i];
+						}
+					}
+					for (var i = 0; i < objectPaths.length; i++) {
+						if (sequencePaths.length <= i || sequencePaths[i] != objectPaths[i]) {
+							if (this.relativeObjectPath != "") {
+								this.relativeObjectPath += "/";
+							}
+							this.relativeObjectPath += objectPaths[i];
+						}
+					}
+				}
+				this.sortComparator.setVariable("sequencePropertyPath", relativeSequencePath);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the resolved value for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del delegate to call if the value changes
+			@return string: the resolved value
+		-->
+		<method args="o, del" name="getValue">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var value = null;
+			if (this.value) {
+				value = this.value;
+				if (del) {
+					del.connect(this, "onvalue");
+				}
+			}
+			else if (this.isContextValue) {
+				var contextValue = this.getContextValue(o, del);
+				if (contextValue) {
+					value = contextValue.value;
+				}
+			}
+			else {
+				var object = this.getObject(o, del);
+				if (object) {
+					if (this.isPropertyValue) {
+						value = object.getPropertyValue(this.propertyName);
+						if (del) {
+							var property = object.getProperty(this.propertyName);
+							del.connect(property, "onvalue");
+						}
+						if (this.resolveDisplayName) {
+							var propertyDefinition = object.objectDefinition.getPropertyDefinition(object, this.propertyName, del);
+							if (propertyDefinition) {
+								var propValues = propertyDefinition.getPropertyValues(object, del);
+								for (var i = 0; i < propValues.length; i++) {
+									if (propValues[i].value == value) {
+										value = propValues[i].displayName;
+										if (del) {
+											del.connect(propValues[i], "ondisplayName");
+										}
+										break;
+									}
+								}
+							}
+						}
+					}
+					else if (this.checkObjectDefinition) {
+						value = object.objectDefinition[this.propertyName];
+						if (del) {
+							del.connect(object.objectDefinition, "on" + this.propertyName);
+						}
+					}
+					else if (this.checkNewObject) {
+						value = object.newObject ? "true" : "false";
+						if (del) {
+							del.connect(object, "onnewObject");
+						}
+					}
+					else if (this.checkReadOnly) {
+						value = object.readOnly ? "true" : "false";
+						if (del) {
+							del.connect(object, "onreadOnly");
+						}
+					}
+					else if (this.checkHasAccessRight) {
+						value = object.hasAccessRight ? "true" : "false";
+						if (del) {
+							del.connect(object, "onhasAccessRight");
+						}
+					}
+					else if (this.viewOptionType != null) {
+						value = "false";
+						for (var i = 0; i < object.objectDefinition.viewOptions.length; i++) {
+							if (object.objectDefinition.viewOptions[i].viewOptionType == this.viewOptionType) {
+								value = object.objectDefinition.viewOptions[i].value ? "true" : "false";
+								if (del) {
+									del.connect(object.objectDefinition.viewOptions[i], "onvalue");
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			return value;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the value source for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del delegate to call if the value source changes
+			@return Object: the value source
+		-->
+		<method args="o, del" name="getValueSource">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var valueSource = null;
+			if (this.value) {
+				valueSource = this;
+			}
+			else if (this.isContextValue) {
+				valueSource = this.getContextValue(o, del);
+			}
+			else {
+				var object = this.getObject(o, del);
+				if (object) {
+					if (this.isPropertyValue) {
+						valueSource = object.getProperty(this.propertyName);
+					}
+					else if (this.checkObjectDefinition) {
+						valueSource = object.objectDefinition;
+					}
+					else if (this.viewOptionType != null) {
+						for (var i = 0; i < object.objectDefinition.viewOptions.length; i++) {
+							if (object.objectDefinition.viewOptions[i].viewOptionType == this.viewOptionType) {
+								valueSource = object.objectDefinition.viewOptions[i];
+								break;
+							}
+						}
+					}
+					else if (this.checkNewObject || this.checkReadOnly || this.checkHasAccessRight) {
+						valueSource = object;
+					}
+				}
+			}
+			return valueSource;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the object that matches the value resolver criteria.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del delegate to call if the model object changes
+			@return cmc/foundation/ModelObject: the matching model object
+		-->
+		<method args="o, del" name="getObject">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var object = null;
+			if (o != null) {
+				if (this.parentProperty) {
+					if (this.resolvePrimaryParent) {
+						object = o.getParentPrimaryObject(this.parentType, del);
+						if (object != null && this.objectPath) {
+							object = object.getObject(this.objectPath, false, o, del, this.loadChildren);
+						}
+					}
+					else {
+						object = o.parentObject;
+						if (object != null && this.objectPath) {
+							object = object.getObject(this.objectPath, false, null, del, this.loadChildren);
+						}
+					}
+				}
+				else if (this.objectPath) {
+					object = o.getObject(this.objectPath, false, null, del, this.loadChildren);
+				}
+				else {
+					object = o;
+				}
+			}
+			return object;
+			]]>
+		</method>
+
+
+		<!---
+			@keywords private
+			Returns all the resolved values for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param boolean trim: "true" if we should check for trimable properties and trim them
+			@param cmc/foundation/EventHandler del delegate to call if the array of resolved values changes
+			@return array: an array of the resolved values
+		-->
+		<method args="o, trim, del" name="getValues">
+			<![CDATA[
+			if (typeof(trim) == "undefined") trim = false;
+			if (typeof(del) == "undefined") del = null;
+			var values = [];
+			if (this.value) {
+				values.push(this.value);
+				if (del) {
+					del.connect(this, "onvalue");
+				}
+			}
+			else if (this.isContextValue) {
+				var contextValue = this.getContextValue(o, del);
+				if (contextValue) {
+					values.push(contextValue.value);
+				}
+			}
+			else {
+				var objects = this.getObjects(o, del);
+				for (var i = 0; i < objects.length; i++) {
+					if (this.isPropertyValue) {
+						var value = objects[i].getPropertyValue(this.propertyName, null, trim);
+						if (del) {
+							var property = objects[i].getProperty(this.propertyName);
+							del.connect(property, "onvalue");
+						}
+						if (this.resolveDisplayName) {
+							var propertyDefinition = objects[i].objectDefinition.getPropertyDefinition(objects[i], this.propertyName, del);
+							if (propertyDefinition) {
+								var propValues = propertyDefinition.getPropertyValues(objects[i], del);
+								for (var j = 0; j < propValues.length; j++) {
+									if (propValues[j].value == value) {
+										value = propValues[j].displayName;
+										if (del) {
+											del.connect(propValues[i], "ondisplayName");
+										}
+										break;
+									}
+								}
+							}
+						}
+						values.push(value);
+					}
+					else if (this.checkObjectDefinition) {
+						values.push(objects[i].objectDefinition[this.propertyName]);
+						if (del) {
+							del.connect(objects[i].objectDefinition, "on" + this.propertyName);
+						}
+					}
+					else if (this.checkNewObject) {
+						values.push(objects[i].newObject ? "true" : "false");
+						if (del) {
+							del.connect(objects[i], "onnewObject");
+						}
+					}
+					else if (this.checkReadOnly) {
+						values.push(objects[i].readOnly ? "true" : "false");
+						if (del) {
+							del.connect(objects[i], "onreadOnly");
+						}
+					}
+					else if (this.checkHasAccessRight) {
+						values.push(objects[i].hasAccessRight ? "true" : "false");
+						if (del) {
+							del.connect(objects[i], "onhasAccessRight");
+						}
+					}
+					else if (this.viewOptionType != null) {
+						var value = "false";
+						for (var j = 0; j < objects[i].objectDefinition.viewOptions.length; j++) {
+							if (objects[i].objectDefinition.viewOptions[j].viewOptionType == this.viewOptionType) {
+								value = objects[i].objectDefinition.viewOptions[i].value ? "true" : "false";
+								if (del) {
+									del.connect(objects[i].objectDefinition.viewOptions[i], "onvalue");
+								}
+								break;
+							}
+						}
+						values.push(value);
+					}
+				}
+			}
+			return values;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the list objects that match the value resolver criteria.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del delegate to call if the array of objects changes
+			@return array: the array of related objects
+		-->
+		<method args="o, del" name="getObjects">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var objects = [];
+			if (o != null) {
+				if (this.parentProperty) {
+					var parentObject = null;
+					if (this.resolvePrimaryParent) {
+						parentObject = o.getParentPrimaryObject(this.parentType, del);
+						if (parentObject != null && this.objectPath) {
+							if (this.forceResolveAll) {
+								objects = this.getSortedObjects(parentObject, del);
+								parentObject = null;
+							}
+							else {
+								parentObject = parentObject.getObject(this.objectPath, false, o, del, this.loadChildren);
+							}
+						}
+					}
+					else {
+						parentObject = o.parentObject;
+						if (parentObject != null && this.objectPath) {
+							if (this.isPropertyValue || this.forceResolveAll) {
+								objects = this.getSortedObjects(parentObject, del);
+								parentObject = null;
+							}
+							else {
+								parentObject = parentObject.getObject(this.objectPath, false, null, del, this.loadChildren);
+							}
+						}
+					}
+					if (parentObject != null) {
+						objects.push(parentObject);
+					}
+				}
+				else if (this.objectPath) {
+					if (this.isPropertyValue || this.forceResolveAll) {
+						objects = this.getSortedObjects(o, del);
+					}
+					else {
+						var childObject = o.getObject(this.objectPath, false, null, del, this.loadChildren);
+						if (childObject != null) {
+							objects.push(childObject);
+						}
+					}
+				}
+				else {
+					objects.push(o);
+				}
+			}
+			return objects;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the array of sorted objects.
+			@param cmc/foundation/ModelObject o: the model object for which to return the sorted objects
+			@param cmc/foundation/EventHandler del delegate to call if the array of sorted objects changes
+			@return array: the sorted objects
+		-->
+		<method args="o, del" name="getSortedObjects">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var objects = o.getObjects(this.commonSequencePath != "" ? this.commonSequencePath : this.objectPath, del, null, true, this.loadChildren);
+			if (this.sortComparator != null) {
+				if (objects.length > 1) {
+					var caller = this;
+					require(["cmc/foundation/SortUtil"], function(SortUtil) {
+						SortUtil.Singleton.sort(objects, caller);
+					});
+					if (del) {
+						for (var i = 0; i < objects.length; i++) {
+							var sortPropertyObject = objects[i].getObject(this.sortComparator.sequencePropertyPath, false, null, del);
+							if (sortPropertyObject != null) {
+								var sortProperty = sortPropertyObject.getProperty(this.sortComparator.sequencePropertyName);
+								del.connect(sortProperty, "onvalue");
+							}
+						}
+					}
+				}
+				if (this.relativeObjectPath != "") {
+					var sortedObjects = objects;
+					objects = [];
+					for (var i = 0; i < sortedObjects.length; i++) {
+						var resolvedObjects = sortedObjects[i].getObjects(this.relativeObjectPath, del, null, true, this.loadChildren);
+						for (var j = 0; j < resolvedObjects.length; j++) {
+							objects.push(resolvedObjects[j]);
+						}
+					}
+				}
+			}
+			return objects;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Compare function for the values used by sort comparator
+		-->
+		<method args="o1, o2" name="compare">
+			<![CDATA[
+			return this.sortComparator.compare(o1, o2, this.sortAscending);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the context value object.
+			@param node n: the node from which to begin the search
+			@return cmc/foundation/ContextValue: the context value object
+		-->
+		<method args="n, del" name="getContextValue">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var contextValue = null;
+			if (this.isContextValue) {
+				if (n == null) {
+					n = this;
+				}
+				contextValue = ContextUtil.Singleton.findContextValue(n, (this.contextName), del);
+			}
+			return contextValue;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			this.getValues(o, false, del);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if the value defined by this value resolver can be resolved for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+		-->
+		<method args="o" name="isResolvable">
+			<![CDATA[
+			var resolvable = true;
+			if (this.isContextValue) {
+				var node = o;
+				if (o == null) {
+					node = this;
+				}
+				while (node) {
+					if (typeof (node.localContext) != "undefined") {
+						resolvable = false;
+						if (node.localContext == null || this.getContextValue(node) != null) {
+							resolvable = true;
+						}
+						break;
+					}
+					if (node.parent && node != node.parent) {
+						node = node.parent;
+					}
+					else {
+						node = null;
+					}
+				}
+				if (node == null) {
+					resolvable = this.getContextValue(null) != null;
+				}
+			}
+			return resolvable;
+			]]>
+		</method>
+	</Node>
+</Definitions>

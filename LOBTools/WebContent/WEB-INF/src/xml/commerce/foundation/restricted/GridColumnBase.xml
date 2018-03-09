@@ -1,0 +1,2191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		This class defines a grid column dragger which is used to drag and drop inside of a grid.
+	-->
+	<Component definitionName="cmc/foundation/GridColumnDragger" ignoreLayout="true" opacity="0.25" singletonDefinition="true" visible="false">
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Background color.
+		-->
+		<variable name="bgcolor" value="white"/>
+		<!---
+			A reference to the column that is being dragged.
+		-->
+		<variable name="dragColumn" value="${null}"/>
+		<!---
+			An array of the columns that are visible when the dragging takes place.
+		-->
+		<variable name="visibleColumns" value="${[]}"/>
+		<!---
+			The column that the dragColumn is dropped on. The value of dropColumn is updated while the dragging takes place.
+		-->
+		<variable name="dropColumn" value="${null}"/>
+
+		<Component height="${this.parent.height}" bgcolor="#efefef" name="background" width="${this.parent.width}"/>
+		<Component clip="true" height="${this.parent.height}" name="title" width="${this.parent.width}" fontstyle="bold" fgcolor="#464646">
+			<AxisLayout axis="x" inset="10"/>
+			<TextComponent name="requiredIndicator" resize="true" text="*" valign="middle"/>
+			<TextComponent name="titleText" resize="true" valign="middle"/>
+		</Component>
+
+		<DragState drag_axis="x" name="dragger"/>
+
+		<!---
+			This method is called by a cmc/foundation/GridColumn when it starts being dragged.
+
+			@param cmc/foundation/GridColumn column The column to start dragging.
+		-->
+		<method args="column" name="startDrag">
+			<![CDATA[
+			this.dragColumn = column;
+			this.visibleColumns = [];
+			var l = this.dragColumn.parent.columns.length;
+			for (var i = 0; i < l; i++) {
+				var c = this.dragColumn.parent.columns[i];
+				if (c.visible) {
+					this.visibleColumns.push(c);
+				}
+			}
+			this.visibleColumns;
+			this.title.titleText.setVariable("text", column.displayText);
+			this.setVariable("fgcolor", column.style.gridheadertextcolor);
+			this.title.titleText.setVariable("visible", column.titleVisible);
+			this.title.requiredIndicator.setVariable("visible", column.required);
+			var x = column.title.getVariableRelative("x", RootComponent.Singleton);
+			var y = column.title.getVariableRelative("y", RootComponent.Singleton);
+			this.setVariable('width', column.title.width);
+			this.setVariable('height', column.title.height);
+			this.setVariable('x', x);
+			this.setVariable('y', y);
+			this.bringToFront();
+			this.setVariable("visible", true);
+			this.dragger.setVariable("active", true);
+			]]>
+		</method>
+
+		<!---
+			This method is called by the cmc/foundation/GridColumn when the dragging is completed.
+		-->
+		<method args="e" name="stopDrag">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.dragger.setVariable("active", false);
+			this.setVariable("visible", false);
+			if (this.dragColumn) {
+				var columns = this.dragColumn.parent.columns;
+				for (var i = 0; i < columns.length; i++) {
+					columns[i].resizer.divider.setVariable("currentImage", 1);
+				}
+				if (this.dropColumn) {
+					var position = this.dragColumn.parent.getColumnPosition(this.dropColumn);
+					this.dragColumn.parent.setColumnPosition(this.dragColumn, position);
+					this.dragColumn.parent.savePreferences();
+					this.dragColumn = null;
+					this.dropColumn = null;
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			This method is called while a column is dragged in order to calculate the dropColumn and
+			highlight the appropriate columns of the grid. It is called by the cmc/foundation/GridColumn being dragged.
+		-->
+		<method name="whileDrag">
+			<![CDATA[
+			this.dropPosition = null;
+			if (this.dragColumn) {
+				var columns = this.visibleColumns;
+				var mouseX = this.dragColumn.parent.getMouse(('x')) - this.dragColumn.parent.clippedContent.gridContent.x;
+				var l = columns.length;
+				var dragRight = false;
+				for (var i = 0; i < l; i++) {
+					var c = columns[i];
+					var cBefore = columns[i + 1];
+					var cAfter = columns[i - 1];
+					if (this.dragColumn == c) {
+						dragRight = true;
+					}
+					c.resizer.divider.setVariable("currentImage", 3);
+					if (c != this.dragColumn) {
+						var leftX = c.x;
+						var middleX = leftX + (c.width / 2);
+						var rightX = leftX + c.width;
+						if (mouseX >= leftX && mouseX < middleX) {
+							if (i != 0 || c.draggable) {
+								if (dragRight) {
+									this.dropColumn = cAfter;
+								}
+								else {
+									this.dropColumn = c;
+								}
+								if (cAfter) {
+									cAfter.resizer.divider.setVariable("currentImage", 2);
+								}
+							}
+						}
+						else if (mouseX >= middleX && mouseX < rightX) {
+							if (i != l) {
+								if (dragRight) {
+									this.dropColumn = c;
+								}
+								else {
+									this.dropColumn = cBefore;
+								}
+								c.resizer.divider.setVariable("currentImage", 2);
+							}
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords abstract
+		<p>
+		cmc/foundation/GridColumn is the base class for all columns that appear in a {@link cmc/foundation/ObjectGrid}. This is an abstract class and must
+		be extended in order to define new grid widgets that can appear as columns in a cmc/foundation/ObjectGrid. These new grid widgets
+		should have their own cellEditors and cellViewers defined in column.
+		</p><p>
+		This class provides the functionality for sorting columns, dragging, filtering and setting visibility of the column.
+		The base class also contains the logic for determining whether or not a particular cmc/foundation/GridColumn is editable and
+		the alignment of the column.
+		</p><p>
+		Placing a cmc/foundation/GridColumn as a child of a cmc/foundation/ObjectGrid will create a new column in the grid. The columns will appear
+		in the order that they are defined as children of the parent grid in the source code. The column order can be changed
+		by the user by dragging and dropping the column headers in the grid.
+		</p><p>
+		cmc/foundation/GridColumn is responsible for defining which widget to use for viewing the uneditable version of the data, and
+		also the widget for editing the data. The cmc/foundation/GridColumn class binds the specified objectProperty to the
+		provided editor and viewer classes.
+		</p>
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/GridColumn" focusable="false">
+		<dependency localName="GridCellDescriptor" moduleName="cmc/foundation/GridCellDescriptor"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="GridColumnMenu" moduleName="cmc/foundation/GridColumnMenu"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="GridColumnClone" moduleName="cmc/foundation/GridColumnClone"/>
+		<dependency localName="GridCellDescriptorMap" moduleName="cmc/foundation/GridCellDescriptorMap"/>
+		<dependency localName="GridColumnDragger" moduleName="cmc/foundation/GridColumnDragger"/>
+		<!---
+			Indicates that this column can be sorted. The default value for this attribute is "true".
+		-->
+		<variable name="sortable" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that find and replace can be performed on this column. The default value for this attribute is "false".
+		-->
+		<variable name="findable" type="boolean" value="false"/>
+		<!---
+			Indicates that this column can be dragged to change the order of the column in the grid.
+			The default value for this attribute is "true".
+		-->
+		<variable name="draggable" type="boolean" value="true"/>
+		<!---
+			Indicates that this column can be resized.
+			The default value for this attribute is "true".
+		-->
+		<variable name="resizable" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Indicates that this column is currently being dragged.
+		-->
+		<variable name="dragging" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Initial dragging position of this column.
+		-->
+		<variable name="startDragX" value="${null}"/>
+		<!---
+			Indicates that this is a required column. The default value for this attribute is "false".
+			Required columns cannot be hidden by the user.
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			Indicates that this column will attempt to implicitly create the object described by {@link objectPath} if
+			no matching object is found.  This attribute will be ignored if multiple cell descriptors are declared.
+		-->
+		<variable name="implicitCreate" type="boolean" value="true"/>
+		<!---
+			Indicates that this column will invoke the {@link cmc/foundation/GetChildrenService} services associated with the primary
+			object referenced on the row.  The object definitions used for the request are those described by {@link objectPath},
+			and all the cell descriptors object paths.  If the object referenced on the row is not a primary object,
+			then no service requests are invoked.
+		-->
+		<variable name="loadChildren" type="boolean" value="false"/>
+		<!---
+			This text is displayed if no objects can be found that match {@link objectPath} or any of the cell descriptors
+			object paths.
+		-->
+		<variable name="noMatchText" type="string" value=""/>
+		<!---
+			This text is displayed if multiple objects are found that match {@link objectPath} or any of the cell descriptors
+			object paths.
+		-->
+		<variable name="multipleMatchText" type="string" value=""/>
+		<!---
+			<p>
+			This attribute is used to specify the path that is used to locate the property specified under the
+			propertyName attribute. In other words objectPath is used to find a child Management Center object
+			relative to the current object. If the property applies to the current object, then you do not need
+			to specify an objectPath.
+			</p><p>
+			When trying to retrieve a property in the properties view, the current object refers to the open object
+			which is typically the primary object.
+			</p><p>
+			When trying to retrieve a property in a list view, the current object refers to an object that is displayed in a row.
+			If the list view results from search results, then the current object in the row is always a primary object.
+			If the list view is a child list, then the current object is typically a reference object or a child object. For
+			the case where the child list is for reference objects, the objectPath is the path required to navigate
+			from the reference object  to its child object.
+			</p>
+		-->
+		<variable name="objectPath" type="string" value="${null}"/>
+		<!---
+			The name of the object property that is being displayed in this column. This is a required attribute.
+		-->
+		<variable name="propertyName" type="string" value="${null}"/>
+		<!---
+			The column's data type. Valid data types are "string", "datetime" and "number". The default value is "string".
+			The column's datatype will affect what value is returned by the {@link cmc/foundation/GridColumnBase#getCompareValue} method
+			when it extracts the value to use for sorting.
+		-->
+		<variable name="datatype" type="string" value="string"/>
+		<!---
+			Indicates that this column supports edit in place. The default value is "true."
+		-->
+		<variable name="editable" type="boolean" value="true"/>
+		<!---
+			This flag indicates if this column is visible when the table is initally loaded for a user. This flag will only affect the visibility of the
+			column to the user before saved preferences for this grid exist. If a column is added to the grid after there are saved preferences for this grid,
+			and the column is not {@link cmc/foundation/GridColumn#required required}, then this column will be hidden regardless of the value of the visible flag.
+			Users will need to use the configuration screen to show	the new column. The column will be shown/hidden to new users for whom saved preferences do
+			not exist according to the visible flag.
+		-->
+		<variable name="visible" value="true"/>
+		<!---
+			This attribute specifies the name of the view class used to create cell viewer instances for cells in this column.
+			Classes which extend cmc/foundation/GridColumn must provide a value for this attribute. This class is instantiated from the
+			createViewer method to display an uneditable representation of the object property as a cell in the grid.
+			The view class must have a setProperty() method.
+			@type string
+		-->
+		<variable name="cellViewerClass" type="module" value="${null}"/>
+		<!---
+			This attribute specifies the name of the view class used to create editor instances for cells in this column.
+			Classes which extend cmc/foundation/GridColumn and allow editing in place must provide this value. This class is
+			instantiated from the createEditor method to create an editor for the object property as a cell in the grid.
+			The view class must have a setProperty() method.
+			@type string
+		-->
+		<variable name="cellEditorClass" type="module" value="${null}"/>
+		<!--- 
+			This attribute specifies the name of the view class used to create the column editor for this column. 
+			The column editor is used in the Edit Column dialog to update multiple cells in this column. Classes which 
+			extend cmc/foundation/GridColumn and allow column editing must provide this value. The class must be prepared to accept 
+			two attributes: "column" and "selectedObjects". The "column" attribute is the cmc/foundation/GridColumn instance. 
+			The "selectedObjects" attribute is the array of {@link cmc/foundation/ModelObject model objects} that are currently 
+			selected in the {@link cmc/foundation/ObjectGrid grid}.
+		 -->
+		<variable name="columnEditorClass" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates where the column should be attached to the parent grid.
+		-->
+		<variable name="placement" value="columns"/>
+		<!---
+			@keywords private
+			Indicates that the column is currently sort in ascending order. The sort will be reversed if
+			sort is requested twice.
+		-->
+		<variable name="sortAscending" type="boolean" value="false"/>
+		<!---
+			The minimum width for this column.
+		-->
+		<variable initialValue="${40 + (this.enableFilter == true ? this.title.filterButton.width : 0)}" name="minwidth" type="number"/>
+		<!---
+			The text to display as the header of this column.
+		-->
+		<variable name="text" type="string" value=""/>
+		<!---
+			Indicates if the header text of this column is visible. Default value for this attribute is "true".
+		-->
+		<variable name="titleVisible" type="boolean" value="true"/>
+		<!---
+			The alignment for this column. Valid values are "left", "center" and "right".
+			The default is "left".
+		-->
+		<variable name="alignment" type="string" value="left"/>
+		<!---
+			@keywords private
+			Array of language columns created as clones of this column.
+		-->
+		<variable name="languageColumns" value="${[]}"/>
+		<!---
+			@keywords private
+			Array of language columns created as clones of this column that are pooled
+		-->
+		<variable name="languageColumnsPool" value="${[]}"/>
+		<!---
+			@keywords private
+			Indicates that this column is pooled.
+		-->
+		<variable name="pooled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Display text for this column. The "text" attribute will be appended with the language description if this is a language-sensitive property.
+			This attribute is modified by the updateDisplayText method.
+		-->
+		<variable name="displayText" type="string" value="${null}"/>
+		<!---
+			Indicates that this column is language-sensitive. language-sensitive columns will be replicated for each selected language.
+			The default for this attribute is false.
+		-->
+		<variable name="languageSensitive" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The input language associated with this column. This is an instance of {@link cmc/foundation/StoreLanguage}. If the input language is
+			specified, then the column title will be qualified with the language description.
+		-->
+		<variable name="language" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates whether to use language id while finding the model object for the given object path. This attribute is used only
+			when there is a value for the language attribute. The default for this attribute is false.
+		-->
+		<variable name="useLanguageSelector" type="boolean" value="false"/>
+		<!---
+			Indicates that the column filter is enabled. The list of possible filter values is created automatically based on the current values
+			that are displayed in the column cells. If the column filter is enabled, a column filter button will be created
+			for this column and placed in the bottom right hand corner of the column header.
+
+			The default value for this attribute is "false".
+		-->
+		<variable name="enableFilter" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The text used to truncate the column header when the width of a column is smaller than the header text.
+			The default string used is retrieved from a {@link cmc/foundation/ResourceBundle} class.
+		-->
+		<variable name="truncationText" type="string" value="${foundationResources.Singleton.gridTruncationText.string}"/>
+		<!---
+			@keywords private
+			This attribute specifies the name of the class used that defines the context menu when you right click
+			on the column header.
+			The default value is {@link cmc/foundation/GridColumnMenu}.
+		-->
+		<variable name="columnHeaderMenuClass" type="module" value="${GridColumnMenu}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="cellDescriptorMap" value="${null}"/>
+		<!---
+			@keywords private
+			The position of this column in the parent list of columns.
+		-->
+		<variable name="savedColumnPos" type="number"/>
+		<!---
+			@keywords private
+			The visible state of this column when it was disabled.
+		-->
+		<variable name="savedVisible" type="boolean"/>
+		<!---
+			@keywords private
+			Indicates that the column displays text with the HTML tags removed. The default value is false.
+		-->
+		<variable name="tagsRemoved" type="boolean" value="false"/>
+		<!---
+			A comma separated string of {@link cmc/foundation/Validator#validatorType} values.
+			When there is a validator error in the cell object
+			this column will check which {@link cmc/foundation/Validator} it was created by.
+			The error will be displayed in this column
+			if the error is created by a validator whose {@link cmc/foundation/Validator#validatorType} appears in the list.
+		-->
+		<variable name="validatorTypes" type="string" value=""/>
+
+		<!---
+			The column filter. The filters will only appear on the column (and update) if enableFilter is set to true.
+		-->
+		<GridColumnFilter column="${this.classroot}" name="columnFilter"/>
+
+		<!--- @keywords private
+			  Initialization method for the class.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			if (this.required && !this.visible) {
+				this.setVariable("visible", true);
+			}
+			if (this.draggable) {
+				this.startDragDel = new EventHandler.Class(this, "startDrag", this.title, "onmousedown");
+				this.stopDragDel = new EventHandler.Class(this, "stopDrag", this.title, "onmouseup");
+				this.trackMouseDel = new EventHandler.Class(this, "trackMouse");
+			}
+			var columns = this.parent.columns;
+			if (!columns) {
+				columns = [];
+				this.parent.columns = columns;
+			}
+			columns.push(this);
+			this.updateVisibility();
+			if (this.columnHeaderMenuClass) {
+				new this.columnHeaderMenuClass.Class(this, {
+					name: "menu",
+					column: this
+				});
+				this.menu.addView(this);
+			}
+			if (this.languageSensitive) {
+				this.updateLanguageSensitiveColumn();
+				this.useLanguageSelector = true;
+			}
+			this.updateDisplayText();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateLanguageSensitiveColumn">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.updateLanguageSensitiveColumnDel) {
+				this.updateLanguageSensitiveColumnDel = new EventHandler.Class(this, "updateLanguageSensitiveColumn");
+			}
+			this.updateLanguageSensitiveColumnDel.disconnectAll();
+			if (typeof (this.oView) == "undefined") {
+				this.oView = ModelUtil.Singleton.findObjectView(this);
+			}
+			var storeConfig = null;
+			if (this.oView) {
+				this.updateLanguageSensitiveColumnDel.connect(this.oView, "ono");
+				var o = this.oView.o;
+				if (o != null) {
+					storeConfig = ContextUtil.Singleton.findStoreConfig(o, this.updateLanguageSensitiveColumnDel);
+				}
+			}
+			else {
+				storeConfig = ContextUtil.Singleton.findStoreConfig(this.parent.model.oEditor, this.updateLanguageSensitiveColumnDel);
+			}
+			if (storeConfig != null) {
+				this.setVariable("language", storeConfig.defaultLanguage);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newPropertyName" name="setPropertyName">
+			<![CDATA[
+			this.propertyName = newPropertyName;
+			this.getCellDescriptorMap().setDefaultPropertyName(this.propertyName);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newObjectPath" name="setObjectPath">
+			<![CDATA[
+			this.objectPath = newObjectPath;
+			this.getCellDescriptorMap().setDefaultObjectPath(this.objectPath);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="getCellDescriptorMap">
+			<![CDATA[
+			if (this.cellDescriptorMap == null) {
+				this.cellDescriptorMap = new GridCellDescriptorMap.Class(this);
+				new GridCellDescriptor.Class(this, {
+					_default: true,
+					objectType: null,
+					objectPath: this.objectPath,
+					propertyName: this.propertyName
+				});
+			}
+			return this.cellDescriptorMap;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="object, cellDescriptor" name="getObjectPath">
+			<![CDATA[
+			var objectPath = null;
+			var childObjectDefinition = null;
+			var model = ModelUtil.Singleton.findModelForView(this);
+			if (cellDescriptor.objectPath) {
+				childObjectDefinition = model.getObjectDefinition(object, cellDescriptor.objectPath);
+			}
+			if (childObjectDefinition != null && childObjectDefinition.languageSensitive) {
+				if (this.language != null && this.useLanguageSelector) {
+					objectPath = cellDescriptor.objectPath + "[languageId=" + this.language.languageId + "]";
+				}
+				else {
+					var storeConfig = ContextUtil.Singleton.findStoreConfig(object);
+					if (storeConfig != null && storeConfig.defaultLanguage != null) {
+						var defaultLanguage = storeConfig.defaultLanguage;
+						objectPath = cellDescriptor.objectPath + "[languageId=" + defaultLanguage.languageId + "]";
+					}
+				}
+			}
+			else {
+				objectPath = cellDescriptor.objectPath;
+			}
+			return objectPath;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="object, delegate" name="isMultipleMatch">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			var multipleMatch = false;
+			if (!this.pooled) {
+				var cellDescriptor = null;
+				var cellDescriptors = this.getCellDescriptorMap().getCellDescriptors(object, delegate);
+				for (var i = 0; i < cellDescriptors.length; i++) {
+					var objects = object.getObjects(this.getObjectPath(object, cellDescriptors[i]), null, null, true);
+					if (objects.length > 1) {
+						cellDescriptor = null;
+						multipleMatch = true;
+						break;
+					}
+					if (!multipleMatch && objects.length == 1) {
+						if (cellDescriptor) {
+							cellDescriptor = null;
+							multipleMatch = true;
+							break;
+						}
+						else {
+							cellDescriptor = cellDescriptors[i];
+						}
+					}
+				}
+			}
+			return multipleMatch;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="object, delegate" name="getCellDescriptor">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			var cellDescriptor = null;
+			if (!this.pooled) {
+				var multipleMatch = false;
+				var cellDescriptors = this.getCellDescriptorMap().getCellDescriptors(object, delegate);
+				for (var i = 0; i < cellDescriptors.length; i++) {
+					var objects = object.getObjects(this.getObjectPath(object, cellDescriptors[i]), (this.implicitCreate && cellDescriptors.length == 1 ? null : delegate), null, true);
+					if (objects.length > 1) {
+						cellDescriptor = null;
+						multipleMatch = true;
+					}
+					if (!multipleMatch && objects.length == 1) {
+						if (cellDescriptor) {
+							cellDescriptor = null;
+							multipleMatch = true;
+						}
+						else {
+							cellDescriptor = cellDescriptors[i];
+						}
+					}
+				}
+				if (cellDescriptor == null && !multipleMatch && cellDescriptors.length == 1 && this.implicitCreate) {
+					cellDescriptor = cellDescriptors[0];
+				}
+			}
+			return cellDescriptor;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="object, updateObjectDel" name="getObject">
+			<![CDATA[
+			if (typeof(updateObjectDel) == "undefined") updateObjectDel = null;
+			if (this.pooled) {
+				return null;
+			}
+			var cellDescriptor = this.getCellDescriptor(object, updateObjectDel);
+			if (cellDescriptor != null && !cellDescriptor.disabled) {
+				return object.getObject(this.getObjectPath(object, cellDescriptor), true);
+			}
+			else {
+				if (updateObjectDel != null && cellDescriptor != null) {
+					updateObjectDel.connect(cellDescriptor, "ondisabled");
+				}
+				return null;
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="object, delegate" name="getPropertyName">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			if (this.pooled) {
+				return "";
+			}
+			var cellDescriptor = this.getCellDescriptor(object, delegate);
+			if (cellDescriptor != null) {
+				return cellDescriptor.propertyName;
+			}
+			else {
+				return "";
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="selectedObjects" name="getColumnEditorClass">
+			<![CDATA[
+			return this.columnEditorClass;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will return true only if all of the following conditions are met:
+			<ul>
+				<li>The column is defined as editable</li>
+				<li>A cellEditorClass is defined for the column; alternatively, a cellEditorClass not defined but 
+					the cellEditorClass of the cell descriptor of this column is defined and editable</li>
+				<li>The resolved property of the row object passed into the method exists</li>
+				<li>The resolved property of the row object passed into the method is not readOnly</li>
+			</ul>
+			@param cmc/foundation/ModelObject object Row object
+			@return boolean The method returns true if the cell is editable, false if it is not.
+		-->
+		<method args="object" name="isEditable">
+			<![CDATA[
+			var isEditable = false;
+			if (object != null && object.objectDefinition != null) {
+				var o = this.getObject(object);
+				if (o != null) {
+					var propertyName = this.getPropertyName(object);
+					var property = null;
+					if (propertyName) {
+						property = o.getProperty(propertyName);
+					}
+					isEditable = this.editable && property && !property.readOnly;
+					if (isEditable) {
+						var cellDescriptor = this.getCellDescriptor(object);
+						if (this.cellEditorClass == null) {
+							isEditable = false;
+							if (cellDescriptor != null && cellDescriptor.cellEditorClass != null && cellDescriptor.editable) {
+								isEditable = true;
+							}
+						}
+						else {
+							if (cellDescriptor != null && !cellDescriptor.editable) {
+								isEditable = false;
+							}
+						}
+					}
+				}
+			}
+			return isEditable;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="object, delegate" name="isDisabled">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			if (this.pooled) {
+				return true;
+			}
+			var cellDescriptor = this.getCellDescriptor(object, delegate);
+			return cellDescriptor != null && cellDescriptor.disabled;
+			]]>
+		</method>
+
+		<!--- @keywords private
+			  The destroy method for cmc/foundation/GridColumn.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateVisibilityDel) {
+				this.updateVisibilityDel.disconnectAll();
+				delete this.updateVisibilityDel;
+			}
+			if (this.startDragDel) {
+				this.startDragDel.disconnectAll();
+				delete this.startDragDel;
+			}
+			if (this.stopDragDel) {
+				this.stopDragDel.disconnectAll();
+				delete this.stopDragDel;
+			}
+			if (this.trackMouseDel) {
+				this.trackMouseDel.disconnectAll();
+				delete this.trackMouseDel;
+			}
+			var columns = this.parent.columns;
+			if (columns) {
+				for (var i = 0; i < columns.length; i++) {
+					if (columns[i] == this) {
+						columns.splice(i, 1);
+						break;
+					}
+				}
+			}
+			if (this.updateDisplayTextDel) {
+				this.updateDisplayTextDel.disconnectAll();
+				delete this.updateDisplayTextDel;
+			}
+			if (this.updateLanguageSensitiveColumnDel) {
+				this.updateLanguageSensitiveColumnDel.disconnectAll();
+				delete this.updateLanguageSensitiveColumnDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+
+			This method is used for performing filtering and sorting on the columns.
+
+			@param cmc/foundation/ModelObject o The model object.
+			@return string The displayed value for the property of the model object.
+		-->
+		<method args="o" name="getColumnFilterDisplayValue">
+			<![CDATA[
+			var displayValue = null;
+			var cellDescriptor = this.getCellDescriptor(o);
+			if (cellDescriptor) {
+				if (cellDescriptor.getColumnFilterDisplayValue) {
+					displayValue = cellDescriptor.getColumnFilterDisplayValue(o);
+				}
+				else if (cellDescriptor.propertyName) {
+					var property = o.getProperty(cellDescriptor.propertyName, cellDescriptor.objectPath);
+					if (property != null) {
+						displayValue = property.value;
+						if (property.propertyDefinition != null) {
+							var propertyValues = property.propertyDefinition.getPropertyValues(property.o);
+							for (var i = 0; i < propertyValues.length; i++) {
+								var propertyValue = propertyValues[i];
+								if (propertyValue.value == property.value) {
+									displayValue = propertyValue.displayName;
+								}
+							}
+						}
+					}
+				}
+			}
+			return displayValue;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			var cellDescriptor = this.getCellDescriptor(o, del);
+			if (cellDescriptor && cellDescriptor.propertyName) {
+				var property = o.getProperty(cellDescriptor.propertyName, cellDescriptor.objectPath);
+				if (property) {
+					del.connect(property, "onvalue");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+
+			This method checks that the specified object matches the filter object. It is invoked by {@link cmc/foundation/GridColumnFilter}.
+			@param cmc/foundation/ModelObject o The object to test
+			@param String displayValue The display value to be compared against
+		-->
+		<method args="o, displayValue" name="matchesFilter">
+			<![CDATA[
+			return this.getColumnFilterDisplayValue(o) == displayValue;
+			]]>
+		</method>
+
+		<!---
+			This method creates an instance of a cell viewer specified in the cellViewer property to display the
+			object's property in the grid. This method will be called automatically by the grid column.
+			The following parameters are passed to the constructor:
+			<ul>
+				<li>property: {@link cmc/foundation/ModelProperty}
+				<li>o: {@link cmc/foundation/ModelObject}
+				<li>name: "viewer"
+			</ul>
+
+			@param view parent The parent view.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will display.
+			@param cmc/foundation/ModelObject o The model object instance this cell represents.
+			@return view: The newly created instance of cellViewerClass. If there is no cellViewerClass defined, this method will return null.
+		-->
+		<method args="parent, property, o" name="createViewer">
+			<![CDATA[
+			var viewer = null;
+			var cellDescriptor = this.getCellDescriptor(parent.row.o);
+			if (cellDescriptor == null) {
+				cellDescriptor = this.getCellDescriptorMap()._defaultCellDescriptor;
+			}
+			return cellDescriptor.createViewer(parent, property, o);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Override this method to return additional initialization arguments for that will be used to create the viewer.
+			@return object additional initialization arguments
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return null;
+			]]>
+		</method>
+
+		<!---
+			This method creates an instance of an editor specified in the cellEditor property to edit the
+			object's property in the grid.  This method will be called automatically by the grid column.
+
+			The following parameters are passed to the cellEditorClass:
+			<ul>
+				<li>property: {@link cmc/foundation/ModelProperty}
+				<li>name: "editor"
+			</ul>
+			If the grid cell already has an editor, this method will unhide the editor and set its
+			property atttribute.
+
+			@param view parent The parent view.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will edit.
+			@param cmc/foundation/ModelProperty o The model object instance that this cell will edit.
+			@return view: The newly created instance of cellEditorClass. If there is no cellEditorClass defined, this method returns null.
+		-->
+		<method args="parent, property, o" name="createEditor">
+			<![CDATA[
+			var editor = null;
+			var cellDescriptor = this.getCellDescriptor(parent.row.o);
+			if (cellDescriptor != null && cellDescriptor.editable) {
+				editor = cellDescriptor.createEditor(parent, property, o);
+			}
+			else {
+				this.releaseEditor(parent);
+			}
+			return editor;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Override this method to return additional initialization arguments for that will be used to create the editor.
+			@return object additional initialization arguments
+		-->
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Override this method to return validation errors to be associated with this column for the specified object.
+			@param cmc/foundation/GridCell grid cell
+			@param cmc/foundation/EventHandler optional delegate
+			@return array array of validation errors
+		-->
+		<method args="cell, del" name="getValidationErrors">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var validationErrors = null;
+			var object = cell.row.o;
+			if (object != null && object.objectDefinition != null) {
+				var cellDescriptor = this.getCellDescriptor(object);
+				if (cellDescriptor != null) {
+					validationErrors = cellDescriptor.getValidationErrors(cell, del);
+				}
+			}
+			return validationErrors;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called by find and replace when it finds the searched for text in a cell in this column
+			to apply the visual treatment to said cell. 
+			This method must be implemented by those cmc/foundation/GridColumn who have their {@link cmc/foundation/GridColumn#findable}
+			flag set to true. 
+			@param cell cmc/foundation/GridCell The cell that contains the match.
+			@param number index The index of the match in the cell.
+			@param number length The length of the match in the cell. 
+		-->
+		<method args="cell, index, length" name="highlightWordInCell">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called by find and replace when it wants to undo the visual treatment it did for find and 
+			replace.
+			This method must be implemented by those cmc/foundation/GridColumn who have their {@link cmc/foundation/GridColumn#findable}
+			flag set to true. 
+			@param cell cmc/foundation/GridCell The cell to remove the formatting from.			
+		-->
+		<method args="cell" name="unhighlightCell">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the editor instance associated with a grid cell by hiding the editor
+			and unsetting its property attribute.
+			@param view parent The parent view.
+		-->
+		<method args="parent" name="releaseEditor">
+			<![CDATA[
+			if (parent.editor && parent.editor.visible) {
+				parent.editor.setVariable("visible", false);
+				parent.editor.setVariable("o", null);
+				parent.editor.setVariable("property", null);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the viewer instance associated with a grid cell by hiding the viewer
+			and unsetting its property and object attributes.
+			@param view parent The parent view.
+		-->
+		<method args="parent" name="releaseViewer">
+			<![CDATA[
+			if (parent.viewer && parent.viewer.visible) {
+				parent.viewer.setVariable("o", null);
+				parent.viewer.setVariable("property", null);
+				parent.viewer.setVariable("visible", false);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler handles changes to the column's header text.
+		-->
+		<handler name="ontext">
+			<![CDATA[
+			this.updateDisplayText();
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This handler handles changes to the column's header language.
+		-->
+		<handler name="onlanguage">
+			<![CDATA[
+			this.updateDisplayText();
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method update the column's header display text.
+		-->
+		<method args="e" name="updateDisplayText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.updateDisplayTextDel == "undefined")) {
+				this.updateDisplayTextDel = new EventHandler.Class(this, "updateDisplayText");
+			}
+			else {
+				this.updateDisplayTextDel.disconnectAll();
+			}
+			if (this.language != null) {
+				this.updateDisplayTextDel.connect(this.language, "onlanguageDescription");
+				this.setVariable("displayText", this.text + " (" + this.language.languageDescription + ")");
+			}
+			else {
+				this.setVariable("displayText", this.text);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<handler args="isVisible" name="onvisible">
+			<![CDATA[
+			this.handleOnVisible(isVisible);
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+
+			This handler is invoked when the column's visibility changes. Column visibility is changed when the user decides
+			to hide or display a column.
+
+			@param boolean isVisible When true, this column will be set to visible. If it is false, the column will be made invisible.
+		-->
+		<method args="isVisible" name="handleOnVisible">
+			<![CDATA[
+			if (isVisible) {
+				if (this.restoreWidth) {
+					this.setVariable('width', this.restoreWidth);
+					delete this.restoreWidth;
+				}
+				this.parent.refresh();
+			}
+			else {
+				if (this.width > 0) {
+					this.restoreWidth = this.width;
+					this.setVariable('width', 0);
+					if (ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+						this.parent.restoreFocus();
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.enablementCondition) {
+				if (typeof (this.updateVisibilityDel) == "undefined") {
+					this.updateVisibilityDel = new EventHandler.Class(this, "updateVisibility");
+				}
+				this.updateVisibilityDel.disconnectAll();
+				if (typeof (this.oView) == "undefined") {
+					this.oView = ModelUtil.Singleton.findObjectView(this);
+				}
+				var o = null;
+				if (this.oView) {
+					this.updateVisibilityDel.connect(this.oView, "ono");
+					o = this.oView.o;
+				}
+				this.enablementCondition.registerDelegate(o, this.updateVisibilityDel);
+				if (!this.enablementCondition.isEnabled(o)) {
+					if (!this.pooled) {
+						this.savedColumnPos = this.parent.columns.indexOf(this);
+						this.savedVisible = this.visible;
+						this.parent.disabledColumns.push(this);
+						this.parent.releaseColumn(this);
+						this.parent.refresh();
+					}
+				}
+				else {
+					if (this.pooled) {
+						for (var i = 0; i < this.parent.disabledColumns.length; i++) {
+							if (this.parent.disabledColumns[i] == this) {
+								this.parent.disabledColumns.splice(i, 1);
+								break;
+							}
+						}
+						this.parent.addColumn(this, this.savedVisible);
+						this.parent.setColumnPosition(this, this.savedColumnPos, true);
+						this.parent.refresh();
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+
+			Handler for changes to the column width.
+			@param number newWidth The new width for the column. The value will be ignored if it is less than or equal to zero.
+		-->
+		<handler args="newWidth" name="onwidth">
+			<![CDATA[
+			if (!this.visible && newWidth > 0) {
+				this.restoreWidth = newWidth;
+				this.setVariable('width', 0);
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method is called when a column is being dragged.
+		-->
+		<method args="e" name="startDrag">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.startDragX = this.getMouse('x');
+			Timer.addTimer(this.trackMouseDel, 100);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when a column is stopped being dragged.
+		-->
+		<method args="e" name="stopDrag">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			Timer.removeTimer(this.trackMouseDel);
+			this.dragging = false;
+			GridColumnDragger.Singleton.stopDrag(this);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method tracks the mouse movements while a column is being dragged.
+		-->
+		<method name="trackMouse">
+			<![CDATA[
+			if (!this.dragging && this.startDragX != this.getMouse('x')) {
+				this.dragging = true;
+				GridColumnDragger.Singleton.startDrag(this);
+			}
+			else if (this.dragging) {
+				GridColumnDragger.Singleton.whileDrag();
+			}
+			Timer.resetTimer(this.trackMouseDel, 100);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+
+			This method is called in order to sort by the columns' values. It will have no affect if the column is not sortable.
+		-->
+		<method name="doSort">
+			<![CDATA[
+			if (this.sortable) {
+				var oList = ModelUtil.Singleton.findObjectListForView(this);
+				oList.doSort(this);
+				this.setVariable("sortAscending", oList.sortAscending);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the sort compare value for the given object. String compare values are returned in lowercase.
+
+			@param cmc/foundation/ModelObject o The {@link cmc/foundation/ModelObject} that contains the property that is being sorted.
+			@return string/Number The value of the property of this object to be compared for sorting purposes.
+								  This will be a Number if the datatype of the column is defined as "number", and a
+								  string otherwise.
+		-->
+		<method args="o" name="getCompareValue">
+			<![CDATA[
+			var value = null;
+			var cellDescriptor = this.getCellDescriptor(o);
+			if (cellDescriptor && cellDescriptor.getCompareValue) {
+				value = cellDescriptor.getCompareValue(o);
+			}
+			else {
+				var datatype = this.datatype;
+				if (cellDescriptor && cellDescriptor.datatype != null) {
+					datatype = cellDescriptor.datatype;
+				}
+				if (datatype == "number") {
+					value = o.getPropertyValue(cellDescriptor.propertyName, cellDescriptor.objectPath);
+					value = Number(value);
+					if (isNaN(value)) {
+						value = null;
+					}
+				}
+				else {
+					value = this.getColumnFilterDisplayValue(o);
+					if (value == null || value == "") {
+						value = " ";
+					}
+					else {
+						value = value.toLowerCase();
+					}
+				}
+			}
+			return value;
+			]]>
+		</method>
+
+
+		<!---
+			@keywords private
+			The compare function used to sort the grid.
+
+			@param cmc/foundation/ModelObject o1 The first model object to compare.
+			@param cmc/foundation/ModelObject o2 The second model object to compare.
+			@param boolean sortAscending A boolean indicator of whether the required sort is into ascending order.
+			@return number If sortAscending is true, this method will return 1 when the value of o1 is greater than
+					       the value of o2 and -1 otherwise. If sortAscending is false, the comparison will return 1 if
+					       the value of o1 is less than the value of o2 and -1 otherwise. If the value of o1 is equal to the
+					       value of o2, this method will return 0.
+		-->
+		<method args="o1, o2, sortAscending" name="compare">
+			<![CDATA[
+			var result = 0;
+			var v1 = null;
+			if (o1._compareValue != null) {
+				v1 = o1._compareValue;
+			}
+			else {
+				v1 = this.getCompareValue(o1);
+				o1._compareValue = v1;
+			}
+			var v2 = null;
+			if (o2._compareValue != null) {
+				v2 = o2._compareValue;
+			}
+			else {
+				v2 = this.getCompareValue(o2);
+				o2._compareValue = v2;
+			}
+			if (v1 > v2) {
+				result = sortAscending ? 1 : -1;
+			}
+			else if (v1 < v2) {
+				result = sortAscending ? -1 : 1;
+			}
+			return result;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+
+			This method will clone the column for each selected language if this is a language-sensitive column.
+			This method creates an instance of {@link cmc/foundation/GridColumnClone} for each language selected.
+		-->
+		<method name="updateLanguageColumns">
+			<![CDATA[
+			if (this.languageSensitive) {
+				while (this.languageColumns.length > 0) {
+					var languageColumn = this.languageColumns.shift();
+					languageColumn.setVariable("language", null);
+					this.parent.releaseColumn(languageColumn);
+					this.languageColumnsPool.push(languageColumn);
+				}
+				var context = null;
+				if (this.parent.oView) {
+					var o = this.parent.oView.o;
+					if (o != null) {
+						context = ContextUtil.Singleton.findContext(o);
+					}
+				}
+				else {
+					context = ContextUtil.Singleton.findContext(this.parent.model.oEditor);
+				}
+				var inputLanguages = [];
+				if (context != null && context.storeConfig != null) {
+					inputLanguages = context.storeConfig.getLanguagesById(context.getContextValue("inputLanguageIds").value);
+				}
+				var columnPos = this.parent.columns.indexOf(this);
+				for (var i = 1; i < inputLanguages.length; i++) {
+					var languageColumn = null;
+					if (this.languageColumnsPool.length > 0) {
+						languageColumn = this.languageColumnsPool.pop();
+						languageColumn.setVariable("language", inputLanguages[i]);
+						languageColumn.setVariable('width', this.width);
+						this.parent.addColumn(languageColumn, this.visible);
+					}
+					else {
+						languageColumn = new GridColumnClone.Class(this.parent, {
+							originalColumn: this,
+							language: inputLanguages[i],
+							width: this.width,
+							visible: this.visible
+						});
+					}
+					this.languageColumns.push(languageColumn);
+					this.parent.setColumnPosition(languageColumn, columnPos + this.languageColumns.length, false);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method returns the value to be displayed in the cell.
+			
+			@param cmc/foundation/ModelObject o The model object instance this cell represents.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will display.
+			@return string The value to be displayed by the cell.
+		-->
+		<method args="o, property" name="getCellText">
+			<![CDATA[
+			return property.value;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, delegate" name="getAlignment">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			var alignment = this.alignment;
+			if (o != null && o.objectDefinition != null) {
+				var cellDescriptor = this.getCellDescriptor(o, delegate);
+				if (cellDescriptor) {
+					alignment = cellDescriptor.alignment;
+				}
+			}
+			return alignment;
+			]]>
+		</method>
+
+		<!---
+			Scroll horizontally to ensure that this column is visible.
+		-->
+		<method name="show">
+			<![CDATA[
+			var borderView = this.parent.borderView;
+			var left = -borderView.clippedContent.gridContent.x;
+			var right = left + borderView.clippedContent.width;
+			var scroll = 0;
+			var rx = this.x;
+			if (rx < left) {
+				scroll = rx - left;
+			}
+			else if (rx + this.width > right) {
+				scroll = rx + this.width - right;
+			}
+			if (scroll != 0) {
+				borderView.horizontalScroll.setPosRelative(scroll);
+			}
+			]]>
+		</method>		
+		
+		<Component height="${this.parent.height}" bgcolor="#efefef" name="background" width="${this.parent.width}"/>
+		
+		<Component clip="true" focusable="${this.parent.visible}" height="28" name="title" width="${this.parent.width - this.parent.resizer.width}">
+			<Component clip="true" height="${this.parent.height}" name="txtView" width="${this.parent.width - (this.classroot.enableFilter ? this.parent.filterButton.width : 0)}" fontstyle="bold">
+				<method name="init">
+					<![CDATA[
+					this.inherited(arguments);
+					this.updateLayoutDel = new EventHandler.Class(this, "updateLayout");
+					this.updateLayout();
+					]]>
+				</method>
+				
+				<method name="updateLayout">
+					<![CDATA[
+					this.updateLayoutDel.disconnectAll();
+					var requiredWidth = 4;
+					if (this.requiredText.visible) {
+						requiredWidth += this.requiredText.width;
+					}
+					if (this.txt.visible) {
+						requiredWidth += this.txt.getTextWidth();
+					}
+					if (requiredWidth > this.width) {
+						var pos = 4;
+						if (this.requiredText.visible) {
+							this.requiredText.setVariable("x", pos);
+							pos += this.requiredText.width;
+						}
+						if (this.txt.visible) {
+							this.txt.setVariable("x", pos);
+							this.truncationText.setVariable("visible", true);
+							this.txt.setVariable("width", Math.max(this.truncationText.x - this.txt.x, 0));
+						}
+						else {
+							this.truncationText.setVariable("visible", false);
+						}
+					}
+					else {
+						this.truncationText.setVariable("visible", false);
+						this.txt.setVariable("width", this.txt.getTextWidth());
+						var pos = 4;
+						if (this.classroot.alignment == "center") {
+							pos = (this.classroot.width - requiredWidth) / 2;
+						}
+						if (pos + requiredWidth - 2 > this.width) {
+							pos = this.width - requiredWidth + 2;
+						}
+						if (this.requiredText.visible) {
+							this.requiredText.setVariable("x", pos);
+							pos += this.requiredText.width;
+						}
+						if (this.txt.visible) {
+							this.txt.setVariable("x", pos);
+						}
+					}
+					this.updateLayoutDel.connect(this.requiredText, "onvisible");
+					this.updateLayoutDel.connect(this.requiredText, "onwidth");
+					this.updateLayoutDel.connect(this.txt, "onvisible");
+					this.updateLayoutDel.connect(this, "onwidth");
+					this.updateLayoutDel.connect(this.txt, "ontext");
+					this.updateLayoutDel.connect(this.truncationText, "onx");
+					]]>
+				</method>
+				<TextComponent name="requiredText" text="*" visible="${this.classroot.titleVisible &amp;&amp; this.classroot.required}" valign="middle"/>
+				<TextComponent name="txt" text="${this.classroot.displayText}" visible="${this.classroot.titleVisible}" valign="middle"/>
+				<TextComponent name="truncationText" text="${this.classroot.truncationText}" visible="false" width="${this.getTextWidth() + 4}" x="${this.parent.width - this.width}" valign="middle"/>
+			</Component>
+			<ColumnFilterButton align="right" column="${this.classroot}" width="21" name="filterButton" visible="${this.classroot.enableFilter}">
+				<handler name="onfocus">
+					<![CDATA[
+					this.classroot.show();
+					]]>
+				</handler>
+			</ColumnFilterButton>
+
+			<!--- keywords private -->
+			<handler name="onmouseover">
+				<![CDATA[
+				this.parent.background.setVariable("bgcolor", "#e6effb");
+				]]>
+			</handler>
+
+			<handler name="onmouseout">
+				<![CDATA[
+				this.parent.background.setVariable("bgcolor", "#efefef");
+				]]>
+			</handler>
+			
+			<!--- @keywords private -->
+			<handler name="onfocus">
+				<![CDATA[
+				this.classroot.parent.model.setVariable("activeSelectionView", this.classroot.parent);
+				this.classroot.show();
+				if (this.parent.menu) {
+					var caller = this;
+					require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+						ContextMenuUtil.Singleton.setAsDefault(caller.parent.menu);
+					});
+				}
+				if (!this.parent.indicator) {
+					new FocusIndicator.Class(this.parent, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this.parent.background
+					});
+				}
+				]]>
+			</handler>
+			
+			<!--- @keywords private -->
+			<handler name="onblur">
+				<![CDATA[
+				if (this.parent.menu) {
+					var caller = this;
+					require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+						ContextMenuUtil.Singleton.resetDefault(caller.parent.menu);
+					});
+				}
+				]]>
+			</handler>
+
+			<!---
+				@keywords private
+
+				Handle key down events.
+			-->
+			<handler args="code" name="onkeydown">
+				<![CDATA[
+				if (code == 32) {
+					this.parent.doSort();
+				}
+				else if (code == 40) {
+					if (this.classroot.enableFilter) {
+						this.filterButton.openList();
+					}
+				}
+				]]>
+			</handler>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.doSort();
+				]]>
+			</handler>
+		</Component>
+
+		<Component clickable="true" name="resizer" width="3" x="${this.parent.title.width}" y="${this.parent.title.y}" height="${this.parent.title.height}">
+			<!---
+				Indicates that the resizer is currently being dragged.
+			-->
+			<variable name="resizing" type="boolean" value="false"/>
+			<!---
+				Indicates that the mouse is hovering over the resizer.
+			-->
+			<variable name="hover" type="boolean" value="false"/>
+			<!---
+				The selected color for the resizer
+			-->
+			<variable name="selectedColor" type="string" value="${this.classroot.parent.headerSelectedColor}"/>
+
+			<handler name="onmouseover">
+				<![CDATA[
+				if (this.parent.resizable) {
+					this.hover = true;
+					CursorUtil.setCursorGlobal("col-resize");
+				}
+				]]>
+			</handler>
+
+			<handler name="onmouseout">
+				<![CDATA[
+				if (this.parent.resizable) {
+					this.hover = false;
+					CursorUtil.restoreCursor();
+				}
+				]]>
+			</handler>
+
+			<handler name="onmousedown">
+				<![CDATA[
+				if (this.parent.resizable) {
+					if (this.classroot.parent.panel) {
+						this.classroot.parent.panel.lockAvailableCalcs();
+					}
+					this.setVariable("resizing", true);
+					CursorUtil.lock();
+					this.parent.rs.setVariable("active", true);
+				}
+				]]>
+			</handler>
+
+			<handler name="onmouseup">
+				<![CDATA[
+				if (this.parent.resizable) {
+					this.setVariable("resizing", false);
+					CursorUtil.unlock();
+					if (this.hover) {
+						CursorUtil.setCursorGlobal("col-resize");
+					}
+					else {
+						CursorUtil.restoreCursor();
+					}
+					this.parent.rs.setVariable("active", false);
+					this.classroot.parent.savePreferences();
+					if (this.classroot.parent.panel) {
+						this.classroot.parent.panel.unlockAvailableCalcs();
+					}
+				}
+				]]>
+			</handler>
+			<Component name="divider" x="2" width="1" bgcolor="#c8c8c8" height="${this.parent.height}"/>
+		</Component>
+
+		<State name="rs">
+			<variable initialValue="${this.x - this.width + this.getMouse('x')}" name="xroffset"/>
+			<variable name="width" value="${Math.max(this.minwidth, this.immediateParent.getMouse('x') - this.xroffset)}"/>
+		</State>
+		<!--- @keywords private -->
+		<method args="objectPath" name="set_objectPath">
+			<![CDATA[
+			this.setObjectPath(objectPath);
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="propertyName" name="set_propertyName">
+			<![CDATA[
+			this.setPropertyName(propertyName);
+			]]>
+		</method>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		@keywords final
+
+		This class represents a cloned grid column created for columns that support multiple languages. Instances of this class
+		are created by the method {@link cmc/foundation/GridColumn#updateLanguageColumns()}.
+
+		Many of the attributes of the cloned grid column are constrained to the original grid column.
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridColumnClone">
+		<!---
+			A reference to the original column. This is a required attribute.
+		-->
+		<variable name="originalColumn"/>
+		<!---
+			Indicates that this column can be sorted. The default is "true". This is constrained to the value of the original
+			grid column.
+		-->
+		<variable name="sortable" value="${this.originalColumn.sortable}"/>
+		<!---
+			Indicates that this is a required column. Required columns cannot be hidden. This is constrained to the value of
+			the original grid column.
+		-->
+		<variable name="required" value="${this.originalColumn.required}"/>
+		<!---
+			@keywords private
+			Indicates that find and replace can be performed on this column. The default value for this attribute is "false". This is 
+			constrained to the value of the original grid column.
+		-->
+		<variable name="findable" type="boolean" value="${this.originalColumn.findable}"/>
+		<!---
+			Indicates whether to use language id while finding the model object for the given object path. This is constrained to the
+			value of the original grid column.
+		-->
+		<variable name="useLanguageSelector" type="boolean" value="${this.originalColumn.useLanguageSelector}"/>
+		<!---
+			Column data type. Valid data types are "string", "datetime" and "number". The default is "string". This is constrained
+			to the value of the original grid column.
+		-->
+		<variable name="datatype" value="${this.originalColumn.datatype}"/>
+		<!---
+			Indicates that this column supports edit in place. This is constrained to the value of the original grid column.
+		-->
+		<variable name="editable" value="${this.originalColumn.editable}"/>
+		<!---
+			The minimum width for this column.
+		-->
+		<variable name="minwidth" value="${this.originalColumn.minwidth}"/>
+		<!---
+			Display text for this column. This is constrained to the value of the original grid column.
+		-->
+		<variable name="text" value="${this.originalColumn.text}"/>
+		<!---
+			Indicates that the title is visible. This is constrained to the value of the original grid column.
+		-->
+		<variable name="titleVisible" value="${this.originalColumn.titleVisible}"/>
+		<!---
+			Alignment for this column. Valid values are "left", "center" and "right".
+			The default is "left". This is constrained to the value of the original grid column.
+		-->
+		<variable name="alignment" value="${this.originalColumn.alignment}"/>
+		<!---
+			Indicates that the column filter is enabled. This is constrained to the value of the original grid column.
+		-->
+		<variable name="enableFilter" value="${this.originalColumn.enableFilter}"/>
+		<!--- 
+			This attribute specifies the name of the view class used to create the column editor for this column. 
+			The column editor is used in the Edit Column dialog to update multiple cells in this column. Classes which 
+			extend cmc/foundation/GridColumn and allow column editing must provide this value. The class must be prepared to accept 
+			two attributes: "column" and "selectedObjects". The "column" attribute is the cmc/foundation/GridColumn instance. 
+			The "selectedObjects" attribute is the array of {@link cmc/foundation/ModelObject model objects} that are currently 
+			selected in the {@link cmc/foundation/ObjectGrid grid}. This is constrained to the value of the original grid column.
+		 -->
+		<variable name="columnEditorClass" value="${this.originalColumn.columnEditorClass}"/>
+		<!---
+			A comma separated string of {@link cmc/foundation/Validator#validatorType} values.
+			When there is a validator error in the cell object
+			this column will check which {@link cmc/foundation/Validator} it was created by.
+			The error will be displayed in this column
+			if the error is created by a validator whose {@link cmc/foundation/Validator#validatorType} appears in the list.
+		-->
+		<variable name="validatorTypes" type="string" value="${this.originalColumn.validatorTypes}"/>
+
+		<!---
+			This method creates an instance of a cell viewer to display the object's property in the grid.
+			It calls the createViewer method of the original grid column.
+
+			@param view parent The parent view.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will display.
+			@param cmc/foundation/ModelObject o The model object instance this cell represents.
+			@return The newly created instance of cellViewerClass. If there is no cellViewerClass defined, this method will return null.
+		-->
+		<method args="parent, property, obj" name="createViewer">
+			<![CDATA[
+			return this.originalColumn.createViewer(parent, property, obj);
+			]]>
+		</method>
+
+		<!---
+			This method creates an instance of the cell editor so that the property can be edited in the grid.
+			It calls the createEditor method of the original grid column.
+
+			@param view parent The parent view.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will edit.
+			@param cmc/foundation/ModelProperty o The model object instance that this cell will edit.
+			@return The newly created instance of cellEditorClass. If there is no cellEditorClass defined, this method returns null.
+		-->
+		<method args="parent, property, o" name="createEditor">
+			<![CDATA[
+			return this.originalColumn.createEditor(parent, property, o);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getCellDescriptorMap">
+			<![CDATA[
+			return this.originalColumn.getCellDescriptorMap();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="selectedObjects" name="getColumnEditorClass">
+			<![CDATA[
+			return this.originalColumn.getColumnEditorClass(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method calls the isEditable method of the original grid column.
+
+			@param cmc/foundation/ModelObject object Row object.
+			@return boolean The method returns true if the cell is editable, false if it is not.
+		-->
+		<method args="object" name="isEditable">
+			<![CDATA[
+			return this.originalColumn.isEditable(object);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method calls the getValidatoinErrors method of the original grid column.
+			@param cmc/foundation/GridCell grid cell
+			@param cmc/foundation/EventHandler optional delegate
+			@return array array of validation errors
+		-->
+		<method args="cell, del" name="getValidationErrors">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			return this.originalColumn.getValidationErrors(cell, del);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="newPropertyName" name="setPropertyName">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newObjectPath" name="setObjectPath">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			This method returns the value to be displayed in the cell.
+			
+			@param cmc/foundation/ModelObject o The model object instance this cell represents.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will display.
+			@return string The value to be displayed by the cell.
+		-->
+		<method args="o, property" name="getCellText">
+			<![CDATA[
+			return this.originalColumn.getCellText(o, property);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+
+			This handler is invoked when the column's visibility changes. Column visibility is changed when the user decides
+			to hide or display a column.
+
+			@param boolean isVisible When true, this column will be set to visible. If it is false, the column will be made invisible.
+		-->
+		<method args="isVisible" name="handleOnVisible">
+			<![CDATA[
+			if (isVisible) {
+				this.setVariable('width', this.originalColumn.restoreWidth ? this.originalColumn.restoreWidth : this.originalColumn.width);
+				this.parent.refresh();
+			}
+			else {
+				this.setVariable('width', 0);
+			}
+			]]>
+		</method>
+	</GridColumn>
+
+	<!---
+		@keywords private
+
+		This class defines a map that stores cmc/foundation/GridCellDescriptor objects for the grid.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/GridCellDescriptorMap">
+		<!---
+			@keywords private
+			An array that contains cmc/foundation/GridCellDescriptor types that resolves by objectType.
+		-->
+		<variable name="_cellDescriptors" value="${null}"/>
+		<!---
+			@keywords private
+			The default cell descriptor.
+		-->
+		<variable name="_defaultCellDescriptor" value="${null}"/>
+
+		<!---
+			@keywords private
+			The destructor method for this class.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			delete this._cellDescriptors;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method will return the cellDescriptor for a given objectDefinition
+			@param cmc/foundation/ModelObject object The row object whose cell descriptor is being sought.
+			@param cmc/foundation/EventHandler delegate: the delegate
+			@return cmc/foundation/GridCellDescriptor The cmc/foundation/GridCellDescriptor for the specified cmc/foundation/ObjectDefinition.
+		-->
+		<method args="object, delegate" name="getCellDescriptors">
+			<![CDATA[
+			if (typeof(delegate) == "undefined") delegate = null;
+			var objectDefinition = object.objectDefinition;
+			var cellDescriptors = [];
+			if (this._cellDescriptors) {
+				for (var i = 0; i < this._cellDescriptors.length; i++) {
+					var descriptor = this._cellDescriptors[i];
+					if ((descriptor.enablementCondition == null || descriptor.enablementCondition.isEnabled(object)) && (!descriptor.objectType || (objectDefinition && objectDefinition.matchesType(descriptor.objectType)))) {
+						cellDescriptors.push(this._cellDescriptors[i]);
+					}
+					if (delegate && descriptor.enablementCondition != null) {
+						descriptor.enablementCondition.registerDelegate(object, delegate);
+					}
+				}
+			}
+			if (cellDescriptors.length == 0) {
+				cellDescriptors.push(this._defaultCellDescriptor);
+			}
+			return cellDescriptors;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="cellDescriptor" name="add">
+			<![CDATA[
+			if (!this._cellDescriptors) {
+				this._cellDescriptors = [];
+			}
+			this._cellDescriptors.push(cellDescriptor);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="propertyName" name="setDefaultPropertyName">
+			<![CDATA[
+			this._defaultCellDescriptor.propertyName = propertyName;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="objectPath" name="setDefaultObjectPath">
+			<![CDATA[
+			this._defaultCellDescriptor.setVariable('objectPath', objectPath);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="disabled" name="setDefaultDisabled">
+			<![CDATA[
+			if (this._defaultCellDescriptor.disabled !== disabled) {
+				this._defaultCellDescriptor.setVariable("disabled", disabled);
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		Use this class to define alternate behaviors for grid cells found within the
+		same grid column. Multiple instances of this class can be declared as children of an instance
+		of {@link cmc/foundation/GridColumn}. For example, in the case where you have a grid that displays a heterogenous list
+		of object types, cell descriptors can be used to display a different property for each object type.
+		<p>The following example demonstrates the declaration of a grid column that will display the "fullPath" property of the "ManagedFileGroup"
+		child object if the row object's object type is "AttachmentAssetWithFileTypeGroup" and will display the "path" property if the row object's object type
+		is "AttachmentAssetWithURLType".
+		@START_CODE
+		<GridText name="assetPath" text="${attachmentResources.attachmentAsset_path}"  editable="true" width="264" required="true">
+			<GridCellDescriptor name="fileCell" objectType="AttachmentAssetWithFileTypeGroup" objectPath="ManagedFileGroup"  propertyName="fullPath"/>
+			<GridCellDescriptor name="urlCell" objectType="AttachmentAssetWithURLType"  propertyName="path" />
+		</GridText>
+		@END_CODE
+		<p>A single instance of {@link cmc/foundation/EnablementCondition} can be declared as a child of a cell descriptor. If
+		the enablement condition evaluates to false for a cell descriptor, then the cell descriptor will not be available.
+		The enablement condition is evaluated against the row object.</p>
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/GridCellDescriptor">
+		<!---
+			This attribute will be matched against the row object's object type and used to select the right cell descriptor.
+			If no object type is specified, then all row object's will match this cell descriptor. If there are multiple
+			cell descriptors with the same object type (or no object type), then the "objectPath" will be used to pick
+			the right cell descriptor. If the row object has a child object that matches the specified "objectPath"
+			then this cell descriptor will be selected. If no matches are found, then the cell will display the text
+			specified by the {@link cmc/foundation/GridColumn#multipleMatchText} attribute. If more than one matching object is found, then
+			the cell will display the text specified by the {@link cmc/foundation/GridColumn#noMatchText} attribute.
+		-->
+		<variable name="objectType" type="string" value="${null}"/>
+		<!---
+			This attribute is used to specify the path from the row object to the object that contains the
+			property specified by the "propertyName" attribute. Do not specify an object path if the property
+			is in the row object.
+		-->
+		<variable name="objectPath" type="string" value="${null}"/>
+		<!---
+			This attribute is used to specify the name of the property whose value will be displayed in the grid cell.
+		-->
+		<variable name="propertyName" type="string" value="${null}"/>
+		<!---
+			Set this attribute to "true" if you want to disable this grid cell when
+			this is the matching cell descriptor. A disabled grid cell will be blank and not editable.
+		-->
+		<variable name="disabled" type="boolean" value="false"/>
+		<!---
+			The column's data type. Valid data types are "string", "datetime" and "number".
+			The column's data type will affect what value is returned by the {@link cmc/foundation/GridColumn#getCompareValue} method
+			when it extracts the value to use for sorting.
+		-->
+		<variable name="datatype" type="string" value="${null}"/>
+		<!---
+			Indicates that this column supports edit in place. The default value is "true."
+		-->
+		<variable name="editable" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+		-->
+		<variable name="_default" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The enablement condition for this cell descriptor.
+		-->
+		<variable name="enablementCondition" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute specifies the name of the view class used to create cell viewer instances for cells that match this
+			cell descriptor.
+			@type string
+		-->
+		<variable name="cellViewerClass" type="module" value="${this.parent.cellViewerClass}"/>
+		<!---
+			@keywords private
+			This attribute specifies the name of the view class used to create editor instances for cells that match this cell descriptor.
+			@type string
+		-->
+		<variable name="cellEditorClass" type="module" value="${this.parent.cellEditorClass}"/>
+		<!---
+			The alignment for this cell descriptor. Valid values are "left", "center" and "right".
+		-->
+		<variable name="alignment" type="string" value="${this.parent.alignment}"/>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this._default) {
+				this.parent.getCellDescriptorMap()._defaultCellDescriptor = this;
+			}
+			else {
+				this.parent.getCellDescriptorMap().add(this);
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method creates an instance of a cell viewer specified in the cellViewer property to display the
+			object's property in the grid. This method will be called automatically by the grid column.
+			The following parameters are passed to the constructor:
+			<ul>
+				<li>property: {@link cmc/foundation/ModelProperty}
+				<li>o: {@link cmc/foundation/ModelObject}
+			</ul>
+
+			@param view parent The parent view.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will display.
+			@param cmc/foundation/ModelObject o The model object instance this cell represents.
+			@return view: The newly created instance of cellViewerClass. If there is no cellViewerClass defined, this method will return null.
+		-->
+		<method args="parent, property, o" name="createViewer">
+			<![CDATA[
+			var viewer = null;
+			if (this.cellViewerClass != null) {
+				var initArgs = this.getViewerInitArgs();
+				if (parent[this.cellViewerClass.moduleName]) {
+					viewer = parent[this.cellViewerClass.moduleName];
+					if (initArgs != null) {
+						for (var i in initArgs) {
+							if (initArgs[i] != viewer[i]) {
+								viewer.setVariable(i, initArgs[i]);
+							}
+						}
+					}
+					if (o != viewer.o) {
+						viewer.setVariable("o", o);
+					}
+					if (property != viewer.property) {
+						viewer.setVariable("property", property);
+					}
+					if (!viewer.visible) {
+						viewer.setVariable("visible", true);
+					}
+				}
+				else {
+					var args = {
+						name: this.cellViewerClass.moduleName,
+						property: property,
+						o: o
+					};
+					if (initArgs != null) {
+						for (var i in initArgs) {
+							args[i] = initArgs[i];
+						}
+					}
+					viewer = new this.cellViewerClass.Class(parent, args);
+					if (parent.menu) {
+						parent.menu.addView(viewer);
+					}
+					else if (parent.grid.menu) {
+						parent.grid.menu.addView(viewer);
+					}
+				}
+			}
+			if (parent.viewer && parent.viewer != viewer && parent.viewer.visible) {
+				parent.viewer.setVariable("o", null);
+				parent.viewer.setVariable("property", null);
+				parent.viewer.setVariable("visible", false);
+			}
+			parent.viewer = viewer;
+			return viewer;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Override this method to return additional initialization arguments for that will be used to create the viewer.
+			@return object additional initialization arguments
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return this.parent.getViewerInitArgs();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method creates an instance of an editor specified in the cellEditor property to edit the
+			object's property in the grid.  This method will be called automatically by the grid column.
+
+			The following parameters are passed to the cellEditorClass:
+			<ul>
+				<li>property: {@link cmc/foundation/ModelProperty}
+			</ul>
+			If the grid cell already has an editor, this method will unhide the editor and set its
+			property atttribute.
+
+			@param view parent The parent view.
+			@param cmc/foundation/ModelProperty property The model object property instance that this cell will edit.
+			@param cmc/foundation/ModelProperty o The model object property instance that this cell will edit.
+			@return view: The newly created instance of cellEditorClass. If there is no cellEditorClass defined, this method returns null.
+		-->
+		<method args="parent, property, o" name="createEditor">
+			<![CDATA[
+			var editor = null;
+			if (this.cellEditorClass != null) {
+				var initArgs = this.getEditorInitArgs();
+				if (parent[this.cellEditorClass.moduleName]) {
+					editor = parent[this.cellEditorClass.moduleName];
+					if (initArgs != null) {
+						for (var i in initArgs) {
+							if (initArgs[i] != editor[i]) {
+								editor.setVariable(i, initArgs[i]);
+							}
+						}
+					}
+					if (o != editor.o) {
+						editor.setVariable("o", o);
+					}
+					if (property != editor.property) {
+						editor.setVariable("property", property);
+					}
+					if (!editor.visible) {
+						editor.setVariable("visible", true);
+					}
+				}
+				else {
+					var args = {
+						name: this.cellEditorClass.moduleName,
+						property: property,
+						o: o
+					};
+					if (initArgs != null) {
+						for (var i in initArgs) {
+							args[i] = initArgs[i];
+						}
+					}
+					editor = new this.cellEditorClass.Class(parent, args);
+				}
+			}
+			if (parent.editor && parent.editor != editor && parent.editor.visible) {
+				parent.editor.setVariable("visible", false);
+				parent.editor.setVariable("o", null);
+				parent.editor.setVariable("property", null);
+			}
+			parent.editor = editor;
+			return editor;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Override this method to return additional initialization arguments for that will be used to create the editor.
+			@return object additional initialization arguments
+		-->
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return this.parent.getEditorInitArgs();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Override this method to return validation errors to be associated with this column for the specified object.
+			@param cmc/foundation/GridCell the grid cell
+			@param cmc/foundation/EventHandler optional delegate
+			@return array array of validation errors
+		-->
+		<method args="cell, del" name="getValidationErrors">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var validationErrors = null;
+			if (cell.editor && cell.editor.getValidationErrors) {
+				validationErrors = cell.editor.getValidationErrors(del);
+			}
+			return validationErrors;
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

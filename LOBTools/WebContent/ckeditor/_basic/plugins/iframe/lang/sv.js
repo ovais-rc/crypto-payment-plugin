@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","sv",{border:"Visa ramkant",noUrl:"Ange URL-adressen till IFrame-ramen",scrolling:"Aktivera rullningslister",title:"IFrame-ramsegenskaper",toolbar:"Infoga IFrame-ram",ibm:{title:"IFrame-ram"}});

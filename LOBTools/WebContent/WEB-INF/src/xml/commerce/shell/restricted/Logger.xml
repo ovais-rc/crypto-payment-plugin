@@ -1,0 +1,952 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		The logger instance. It is used to log messages. Messages can be buffered in memory and
+		sent to the server or debugger window in batches periodically.
+
+		The initial values of the following attributes can be set from the URL:
+
+		Attribute		URL parameter			Default value
+
+		enabled			logger.enabled			"false"
+		display			logger.display			"false"
+		nodecount		logger.nodecount		"false"
+		bufferSize		logger.bufferSize		1000
+		level			logger.level			"INFO"
+		flushInterval	logger.flushInterval	20
+		serverURL		logger.serverURL		"/cmc/LogMessages"
+		target			logger.target			"server"
+		sendImmediately	logger.sendImmediately	false
+		components		logger.components		null
+		
+		Below is an example of how cmc/shell/Logger can be used.  This example would log the methods entry as well as it's exit.  Additional 
+		information would also be logged about the object to be saved as well as the service transaction.
+		
+		@START_CODE
+		    <dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		
+			<method args="transaction, o" name="addSaveObject">
+				<![CDATA[
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addSaveObject(transaction, o)", [transaction, o]);
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/ServiceTransactionUtil", "addSaveObject(transaction, o)", "adding save object for service " + transaction.service.url + " " + o.logString());
+				}
+				
+				//content of addSaveObject method
+				
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/ServiceTransactionUtil", "addSaveObject");
+				}
+				]]>
+			</method>
+		@END_CODE
+	-->
+	<Node definitionName="cmc/shell/Logger" singletonDefinition="true">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="request" moduleName="dojo/request"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="LogTraceWindow" moduleName="cmc/shell/LogTraceWindow"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			@keywords private
+			The level and level value mapping.
+		 -->
+		<variable name="levelValues" value="${{}}"/>
+		<!---
+			@keywords private
+			Whether or not display the floating Logging and Tracing window after logon is successful. Default is not
+		-->
+		<variable name="display" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Whether or not display the node count when the logger is enabled or disabled. Default is not
+		-->
+		<variable name="nodecount" type="boolean" value="false"/>
+		<!---
+			Indicates that trace has been enabled.
+		-->
+		<variable name="enabled" type="boolean" value="false"/>
+		<!---
+			Indicates that performance trace has been enabled.
+		-->
+		<variable name="perfTraceEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Where to send the trace. 'server' means the traces will be sent to server. 'debugger' means the traces will
+			be printed in the local Debug Window. Default value is 'server'. This value can only be
+			set to 'debugger' if Debugger is enabled.
+		-->
+		<variable name="target" type="string" value="server"/>
+		<!---
+			@keywords private
+			Whether or not send the trace immediately. This option is only used when the target is 'debugger'. If target is 'debugger'
+			and this value is true, the trace will be printed in the Debug Window immediately instead of buffering it and send in batch.
+		-->
+		<variable name="sendImmediately" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The buffer size. Buffered messages are sent to the
+			server immediately if the number of buffered messages
+			equals or exceeds this value.
+		-->
+		<variable name="bufferSize" type="number" value="1000"/>
+		<!---
+			@keywords private
+			The time interval which buffered messages are sent to the
+			server (in seconds).
+		-->
+		<variable name="flushInterval" type="number" value="20"/>
+		<!---
+			@keywords private
+			The log level value. Messages with levels lower than the log
+			level are discarded. A log level of "OFF" (equivalent to
+			2^31 - 1) disables the logger and clears the buffer.
+			Other log levels include "SEVERE", "WARNING", "INFO",
+			"CONFIG", "FINE", "FINER", "FINEST" and "ALL". The corresponding
+			level values are: Math.pow(2, 31) - 1, 1000, 800, 700, 600, 500,
+			400, 300, -Math.pow(2, 31).
+		-->
+		<variable name="levelValue" type="number"/>
+
+		<!---
+			@keywords private
+			The server URL which buffered messages are sent to.
+		-->
+        <variable name="serverURL" type="string" value="${this.getInitialValue('logger.serverURL', this.getServerURLDefaultValue())}"/>
+        <!---
+			@keywords private
+        	 An array of the names of all components.
+         -->
+		<variable name="components" value="${[]}"/>	
+		<!---
+			@keywords private
+			A map keeps the specific level setting for components. Key the name of the component, value is one of the levels.
+			If a component does not have specific level in the map, this means it uses default level.
+		 -->
+		<variable name="componentsLevel" value="${{}}"/>
+		<!---
+			@keywords private
+			An array of pending flush requests. This array is used to serialize the flush requests to ensure that messages
+			are not interleaved in the log.
+		-->
+		<variable name="pendingFlushRequests" value="${[]}"/>
+		
+		
+		<!---
+			@keywords private
+			Initialize the /cmc/shell/Logger. Set level values, attribute defaults and initialize the delegates.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.levelValues = {
+				'OFF': Math.pow(2, 31) - 1,
+				'SEVERE': 1000,
+				'WARNING': 800,
+				'INFO': 700,
+				'CONFIG': 600,
+				'FINE': 500,
+				'FINER': 400,
+				'FINEST': 300,
+				'ALL': -Math.pow(2, 31)
+			};
+			this.flushDelegate = new EventHandler.Class(this, "flush");
+			this.setDisplay(this.getInitialValue("logger.display", false));
+			this.setLevel(this.getInitialValue("logger.level", "INFO"));
+			this.setTarget(this.getInitialValue("logger.target", "server"));
+			this.setSendImmediately(this.getInitialValue("logger.sendImmediately", "false"));
+			this.setBufferSize(this.getInitialValue("logger.bufferSize", "1000"));
+			this.setFlushInterval(this.getInitialValue("logger.flushInterval", "20"));
+			this.setServerURL(this.getInitialValue("logger.serverURL", this.getServerURLDefaultValue()));
+			this.setNodeCount(this.getInitialValue("logger.nodecount", false));
+			this.setPerfTraceEnabled(this.getInitialValue("logger.perfTraceEnabled", false));
+			this.initComponents(this.getInitialValue("logger.components", null));
+			if (this.display && !this.logTraceWindow) {
+				this.logTraceWindow = new LogTraceWindow.Class(RootComponent.Singleton, {
+					showDebuggerOptions: (this.target === "debugger")
+				});
+			}
+			this.setEnabled(this.getInitialValue("logger.enabled", false));
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the initial value from the URL parameters.
+			@param string name: the name of the attribute
+			@param expression defaultValue: the default value
+			@return string: The value for a key that appears in the request to the lps server
+		-->
+		<method args="name, defaultValue" name="getInitialValue">
+			<![CDATA[
+			var value = cmcConfig[name];
+			return (typeof value == "undefined" || value == null ? defaultValue : value);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Registers the build-in components as well as the passed in components.
+			New components can be passed in using URL parameter logger.components. Multiple components are separated using ",".
+			For example, logger.components=com.yourco.yourcomp1,com.yourco.yourcomp2
+			@param string passInComponents: URL parameter for components
+		-->
+		<method args="passInComponents" name="initComponents">
+			<![CDATA[
+			this.components = ['com.ibm.commerce.lobtools.foundation.view', 'com.ibm.commerce.lobtools.foundation.model', 'com.ibm.commerce.lobtools.foundation.service', 'com.ibm.commerce.lobtools.foundation.util', 'com.ibm.commerce.lobtools.foundation.shell'];
+			if (passInComponents != null) {
+				var newComponents = passInComponents.split(",");
+				for (var i = 0; i < newComponents.length; i++) {
+					var newComponent = newComponents[i];
+					if (newComponent != '') {
+						this.components.push(newComponents[i]);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the default value for the specified attribute.
+			@return string
+		-->
+		<method name="getServerURLDefaultValue">
+			<![CDATA[
+			var value = null;
+			value = "/cmc/LogMessages";
+			if (cmcConfig.serviceContextRoot) {
+				value = cmcConfig.serviceContextRoot + value;
+			}
+			else {
+				value = "/lobtools" + value;
+			}
+			return value;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets if display the 'Logging and Tracing' menu item on the application menu.
+			@param string/boolean display: true or false
+		 -->
+		<method args="display" name="setDisplay">
+			<![CDATA[
+			if ((typeof display == "string" && display == "true") || (typeof display == "boolean") && display) {
+				this.display = true;
+			}
+			else {
+				this.display = false;
+			}
+			if (this.enabled) {
+				this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setDisplay", "logger.dipslay=" + this.display);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets if enable the trace.
+			@params boolean enabled
+		 -->
+		<method args="enabled" name="setEnabled">
+			<![CDATA[
+			var numOfNodes = 0;
+			var logMsg = "";
+			if (typeof enabled != "undefined" && enabled != null && this.enabled != enabled) {
+				if ((typeof enabled == "string" && enabled == "true") || (typeof enabled == "boolean") && enabled) {
+					this.enabled = true;
+				}
+				else {
+					logMsg = "cmc/shell/Logger disabled. ";
+					if (this.nodecount == true) {
+						numOfNodes = this.countNodes(RootComponent.Singleton);
+						logMsg = logMsg + "Current NODE COUNT is: " + numOfNodes;
+					}
+					this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setEnabled", logMsg);
+					this.flush();
+					this.enabled = false;
+				}
+				this.resetTimer();
+				if (this.enabled) {
+					logMsg = "cmc/shell/Logger enabled. ";
+					if (this.nodecount == true) {
+						numOfNodes = this.countNodes(RootComponent.Singleton);
+						logMsg = logMsg + "Current NODE COUNT is: " + numOfNodes;
+					}
+					this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setEnabled", logMsg);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Sets if enable the Performance trace.
+			@params boolean enabled
+		 -->
+		<method args="enabled" name="setPerfTraceEnabled">
+			<![CDATA[
+			if (typeof enabled != "undefined" && enabled != null && this.perfTraceEnabled != enabled) {
+				if ((typeof enabled == "string" && enabled == "true") || (typeof enabled == "boolean") && enabled) {
+					this.perfTraceEnabled = true;
+					this.perfTrace("cmc/shell/Logger", "setPerfTraceEnabled", "Performance Trace enabled");
+				}
+				else {
+					this.perfTrace("cmc/shell/Logger", "setPerfTraceEnabled", "Performance Trace disabled");
+					this.perfTraceEnabled = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Creates the buffer.
+		-->
+		<method name="createBuffer">
+			<![CDATA[
+			var bufferLength = this.bufferSize + 10;
+			if (typeof (this.buffer) === "undefined" || this.buffer.length !== bufferLength) {
+				this.buffer = new Array(bufferLength);
+			}
+			else {
+				for (var i = 0; i < this.messageCount; i++) {
+					delete this.buffer[i];
+				}
+			}
+			this.messageCount = 0;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Clear the buffer.
+		-->
+		<method name="clearBuffer">
+			<![CDATA[
+			delete this.buffer;
+			delete this.messageCount;
+			]]>
+		</method>
+
+		
+		<!---
+			@keywords private
+			Reset or remove the flush timer, depending on configuration.
+		-->
+		<method name="resetTimer">
+			<![CDATA[
+			if (this.enabled && (this.target === "server" || this.target === "debugger" && !this.sendImmediately)) {
+				Timer.resetTimer(this.flushDelegate, this.flushInterval * 1000);
+			}
+			else {
+				Timer.removeTimer(this.flushDelegate);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets where to send the trace. It acccepts one of the two values:
+			'debugger' - message will print out in the debugger window.
+			'server' - message will send to log server and print out in trace file.
+			'debugger' option can only be set when the application is running in debug mode.
+			@param string target: server or debugger
+		 -->
+		<method args="target" name="setTarget">
+			<![CDATA[
+			if (target == 'debugger') {
+				this.flush();
+				this.target = 'debugger';
+			}
+			else {
+				this.setSendImmediately(false);
+				this.target = 'server';
+				this.resetTimer();
+			}
+			if (this.enabled) {
+				this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setTarget", "logger.target=" + this.target);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets if send the trace to debugger window immediately. Send immediately means print out the log message in debugger window right away
+			instead of caching it in the message buffer first.
+			@param string/boolean sendImmediately
+		 -->
+		<method args="sendImmediately" name="setSendImmediately">
+			<![CDATA[
+			if (this.target == 'debugger') {
+				if ((typeof sendImmediately == "string" && sendImmediately == "true") || (typeof sendImmediately == "boolean") && sendImmediately) {
+					if (this.enabled) {
+						this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setSendImmediatelyTarget", "logger.sendImmediately=true");
+					}
+					this.sendImmediately = true;
+					this.resetTimer();
+				}
+				else {
+					if (this.enabled) {
+						this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setSendImmediatelyTarget", "logger.sendImmediately=false");
+					}
+					this.sendImmediately = false;
+					this.resetTimer();
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the URL of the server to send the trace to.
+			@param string serverURL: URL of server to send trace to
+		 -->
+		<method args="serverURL" name="setServerURL">
+			<![CDATA[
+			if (typeof serverURL != "undefined" && serverURL != null && this.serverURL != serverURL) {
+				this.serverURL = serverURL;
+				if (this.enabled) {
+					this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setServerURL", "logger.serverURL=" + this.serverURL);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Sets the default log level.
+			@param string level: levels include "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST" and "ALL". 
+		 -->
+		<method args="level" name="setLevel">
+			<![CDATA[
+			this.setLevelValue(this.getLevelValue(level));
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the default log level value.
+			@param string level: level values are Math.pow(2, 31) - 1, 1000, 800, 700, 600, 500, 400, 300, -Math.pow(2, 31).
+		 -->
+		<method args="levelVal" name="setLevelValue">
+			<![CDATA[
+			this.levelValue = levelVal;
+			if (this.enabled) {
+				this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setLevel", "logger.level=" + this.levelValue);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the size of the message buffer. Size means how many messages the buffer can hold before flushing.
+			The range is from 100 to 5000.
+		 -->
+		<method args="bufferSize" name="setBufferSize">
+			<![CDATA[
+			if (typeof bufferSize != "undefined" && bufferSize != null) {
+				bufferSize = Number(bufferSize);
+				if (!isNaN(bufferSize)) {
+					if (bufferSize < 100) {
+						bufferSize = 100;
+					}
+					if (bufferSize > 5000) {
+						bufferSize = 5000;
+					}
+				}
+				this.bufferSize = bufferSize;
+				if (this.enabled) {
+					this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setBufferSize", "logger.bufferSize=" + this.bufferSize);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the flush interval (in seconds).
+			@param number flushInterval: The range is from 10 to 600.
+		 -->
+		<method args="flushInterval" name="setFlushInterval">
+			<![CDATA[
+			if (typeof flushInterval != "undefined" && flushInterval != null) {
+				flushInterval = Number(flushInterval);
+				if (!isNaN(flushInterval)) {
+					if (flushInterval < 10) {
+						flushInterval = 10;
+					}
+					if (flushInterval > 600) {
+						flushInterval = 600;
+					}
+					this.flushInterval = flushInterval;
+					if (this.enabled) {
+						this.flush();
+					}
+					if (this.enabled) {
+						this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setFlushInterval", "logger.flushInterval=" + this.flushInterval);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Flush the messages in the buffer to the server.
+		 -->
+		<method args="e" name="flush">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.buffer) != "undefined" && this.messageCount > 0) {
+				var flushStart = new Date();
+				this.buffer[this.messageCount++] = this.buildMsg(flushStart, "com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "flush", "sending " + this.messageCount + " messages to = " + this.serverURL);
+				if (this.target == 'debugger') {
+					for (var i = 0; i < this.messageCount; i++) {
+						console.log(this.buffer[i]);
+					}
+				}
+				else {
+					var msgs = "msgs=%3Cmsgs%3E";
+					for (var i = 0; i < this.messageCount; i++) {
+						msgs += this.buffer[i];
+					}
+					msgs += "%3C%2Fmsgs%3E";
+					this.pendingFlushRequests.push(msgs);
+					if (this.pendingFlushRequests.length == 1) {
+						this.doFlushRequest();
+					}
+				}
+				this.clearBuffer();
+			}
+			this.resetTimer();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Perform the next flush request in the list of pending flush requests.
+		-->
+		<method name="doFlushRequest">
+			<![CDATA[
+			if (this.pendingFlushRequests.length > 0) {
+				var queryString = "identityId=" + encodeURIComponent(ContextUtil.Singleton.findContextValue(null, "identityId").value) + "&";
+				queryString += this.pendingFlushRequests[0];
+				var logger = this;
+				request.post(logger.serverURL, {
+					data: queryString
+				}).then(function(data) {
+					logger.pendingFlushRequests.shift();
+					logger.doFlushRequest();
+				}, function(error) {
+					logger.pendingFlushRequests.shift();
+					logger.doFlushRequest();
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			Logs a message.
+			@param string loggerName: the logger name.
+			@param string level: the message level.
+			@param string sourceClass: the source class.
+			@param string sourceMethod: the source method.
+			@param string message: the message.
+			@param string parameters: the message parameters.
+		-->
+		<method args="loggerName, level, sourceClass, sourceMethod, message, parameters" name="log">
+			<![CDATA[
+			if (typeof(parameters) == "undefined") parameters = null;
+			if (this.isEnabled(loggerName, level)) {
+				var now = new Date();
+				var msg = this.buildMsg(now, loggerName, level, sourceClass, sourceMethod, message, parameters);
+				if (this.sendImmediately) {
+					console.log(msg);
+				}
+				else {
+					if (level == "SEVERE") {
+						console.log(message);
+					}
+					if (typeof (this.buffer) === "undefined") {
+						this.createBuffer();
+					}
+					this.buffer[this.messageCount++] = msg;
+					if (this.messageCount > this.bufferSize || level == "SEVERE") {
+						this.flush();
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Logs a performance related message for response time measurement.
+			Using the default loggername (com.ibm.commerce.lobtools.foundation.perf) and level (INFO). No "parameters"
+			@param string sourceClass: the source class.
+			@param string sourceMethod: the source method.
+			@param string message: the message.
+		-->
+		<method args="sourceClass, sourceMethod, message" name="perfTrace">
+			<![CDATA[
+			var now = new Date();
+			var msg = this.buildMsg(now, "com.ibm.commerce.lobtools.foundation.perf", "INFO", sourceClass, sourceMethod, message);
+			if (this.sendImmediately) {
+				console.log(msg);
+			}
+			else {
+				if (typeof (this.buffer) === "undefined") {
+					this.createBuffer();
+				}
+				this.buffer[this.messageCount++] = msg;
+				if (this.messageCount > this.bufferSize) {
+					this.flush();
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Builds the log messsage to be send.
+			This mehtod is called inside of log method to build the individual log message.
+			@param string currentTime: the current time.
+			@param string loggerName: the logger name.
+			@param string level: the message level.
+			@param string sourceClass: the source class.
+			@param string sourceMethod: the source method.
+			@param string message: the message.
+			@param string parameters: the message parameters.
+			@return string message
+		-->
+		<method args="currentTime, loggerName, level, sourceClass, sourceMethod, message, parameters" name="buildMsg">
+			<![CDATA[
+			if (typeof(parameters) == "undefined") parameters = null;
+			var msg;
+			if (this.target == 'debugger') {
+				msg = currentTime + " " + loggerName + " " + level + " " + sourceClass + " " + sourceMethod + " " + message;
+				var param = "";
+				if (typeof parameters != "undefined" && parameters != null) {
+					for (var i = 0; i < parameters.length; i++) {
+						param = param + " " + parameters[i];
+					}
+				}
+				msg = msg + param;
+			}
+			else {
+				msg = "%3Cmsg%20time%3D%22" + currentTime.getTime() + "%22%20logrName%3D%22" + encodeURIComponent(loggerName) + "%22%20lvl%3D%22" + level + "%22%20srcCls%3D%22" + encodeURIComponent(sourceClass) + "%22%20srcMthd%3D%22" + encodeURIComponent(sourceMethod) + "%22%3E%3Ctext%3E%3C%21%5BCDATA%5B" + this.encodeCDataSection(encodeURIComponent(message)) + "%5D%5D%3E%3C%2Ftext%3E";
+				var param = "";
+				if (typeof parameters != "undefined" && parameters != null) {
+					if (parameters.length > 0) {
+						for (var i = 0; i < parameters.length; i++) {
+							param = param + "%3Cparam%3E%3C%21%5BCDATA%5B" + this.encodeCDataSection(encodeURIComponent(parameters[i])) + "%5D%5D%3E%3C%2Fparam%3E";
+						}
+					}
+				}
+				msg = msg + param + "%3C%2Fmsg%3E";
+			}
+			return msg;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Gets the level value for the given level.
+			@param string level: For example, 'INFO' level will return 700.
+			@return number
+		 -->
+		<method args="level" name="getLevelValue">
+			<![CDATA[
+			if (typeof level == "number") {
+				return level;
+			}
+			else if (typeof this.levelValues[level] == "undefined") {
+				return parseInt(level);
+			}
+			else {
+				return this.levelValues[level];
+			}
+			]]>
+		</method>
+
+		<!---
+			Logs a method entry.
+			@param string loggerName: the logger name.
+			@param string level: the message level.
+			@param string sourceClass: the source class.
+			@param string sourceMethod: the source method.
+			@param string parameters: the message parameters.
+		-->
+		<method args="loggerName, sourceClass, sourceMethod, parameters" name="entering">
+			<![CDATA[
+			if (typeof(parameters) == "undefined") parameters = null;
+			var message = "ENTRY";
+			if (typeof parameters != "undefined" && parameters != null) {
+				if (!(parameters instanceof Array)) {
+					parameters = [parameters];
+				}
+				if (this.target != 'debugger') {
+					for (var i = 0; i < parameters.length; i++) {
+						message = message + " {" + i + "}";
+					}
+				}
+			}
+			this.log(loggerName, "FINER", "cmc/shell/Logger", sourceMethod, message, parameters);
+			]]>
+		</method>
+
+		<!---
+			Logs a method exit.
+			@param string loggerName: the logger name.
+			@param string level: the message level.
+			@param string sourceClass: the source class.
+			@param string sourceMethod: the source method.
+			@param string result: the result of the method.
+		-->
+		<method args="loggerName, sourceClass, sourceMethod, result" name="exiting">
+			<![CDATA[
+			if (typeof result == "undefined") {
+				this.log(loggerName, "FINER", "cmc/shell/Logger", sourceMethod, "RETURN");
+			}
+			else {
+				if (this.target != 'debugger') {
+					this.log(loggerName, "FINER", "cmc/shell/Logger", sourceMethod, "RETURN {0}", [result]);
+				}
+				else {
+					this.log(loggerName, "FINER", "cmc/shell/Logger", sourceMethod, "RETURN", [result]);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Method to open the Log and Trace window. This method is called when user select Logging and Tracing from application menu.
+		-->
+		<method name="loadLogTraceWindow">
+			<![CDATA[
+			if (!this.logTraceWindow) {
+				this.logTraceWindow = new LogTraceWindow.Class();
+			}
+			this.logTraceWindow.openWindow();
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Method to close the Log and Trace window. This method is called when user logs out.
+		-->
+		<method name="closeLogTraceWindow">
+			<![CDATA[
+			if (this.logTraceWindow) {
+				this.logTraceWindow.closeWindow();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			@param number nodecount
+		 -->
+		<method args="nodecount" name="setNodeCount">
+			<![CDATA[
+			if ((typeof nodecount == "string" && nodecount == "true") || (typeof nodecount == "boolean") && nodecount) {
+				this.nodecount = true;
+			}
+			else {
+				this.nodecount = false;
+			}
+			if (this.enabled) {
+				this.log("com.ibm.commerce.lobtools.foundation.util", "CONFIG", "cmc/shell/Logger", "setNodeCount", "logger.nodecount=" + this.nodecount);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			@param node
+			@return number count
+		 -->
+		<method args="node" name="countNodes">
+			<![CDATA[
+			var count = 1;
+			if ("subnodes" in node && node.childNodes !== null) {
+				for (var i = 0; i < node.childNodes.length; i++) {
+					count += this.countNodes(node.childNodes[i]);
+				}
+			}
+			return count;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if the specified level is enabled for the component.
+			For example, if the level setting for component 'com.ibm.commerce.lobtools.foundation.model' is 'CONFIG' and the
+			specified level is 'INFO', false will be returned. If the specified level is 'FINE', then true will be returned.
+			@param string component: component path
+			@param string level: specified level
+			@return boolean
+		 -->
+		<method args="component, level" name="isEnabled">
+			<![CDATA[
+			var thisLevelVal = this.levelValues[level];
+			if (thisLevelVal >= 1000) {
+				return true;
+			}
+			var levelVal = this.componentsLevel[component];
+			if (levelVal == null) {
+				levelVal = this.levelValue;
+			}
+			if (thisLevelVal >= levelVal) {
+				return true;
+			}
+			else {
+				return false;
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method encodes the end part of a CDATA section to avoid nested CDATA sections in the specified data.
+			@param string data: original string of data to be encoded
+			@return string the encoded string
+		-->
+		<method args="data" name="encodeCDataSection">
+			<![CDATA[
+			return StringUtil.Singleton.replace(data, "%5D%5D%3E", "%5D%5D%5D%5D%3E%3C%21%5BCDATA%5B%3E");
+			]]>
+		</method>
+	<method args="levelValue" name="set_levelValue">
+			<![CDATA[
+			this.setLevelValue(levelValue);
+			]]>
+		</method></Node>
+	<!---
+		The event timer instance. If enabled, the event timer will time user events such as mouse clicks and keyboard actions.
+		The timings will start when the user event is detected and continue until all of the services and deferred callbacks generated
+		by the user action are completed.
+	-->
+	<Node definitionName="cmc/shell/EventTimer" singletonDefinition="true">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		
+		<!--- @keywords private -->
+		<variable name="enabled" type="boolean" value="false"/>
+	
+		<!--- @keywords private -->
+		<variable name="currentEventId" type="number" value="${null}"/>
+
+		<!--- @keywords private -->
+		<variable name="eventTimeMap" value="${{}}"/>
+		
+		<!--- @keywords private -->
+		<method args="msg" name="start">
+			<![CDATA[
+			if (this.currentEventId == null) {
+				var currentTime = new Date();
+				this.currentEventId = currentTime.getTime();
+				this.eventTimeMap[this.currentEventId] = {
+					msg: msg,
+					objCount: 0
+				};
+			}
+			else {
+				this.appendMsg(msg);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="eventId" name="restart">
+			<![CDATA[
+			this.currentEventId = eventId;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="end">
+			<![CDATA[
+			if (this.currentEventId != null) {
+				this.eventTimeMap[this.currentEventId].endTime = new Date().getTime();
+				this.currentEventId = null;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="msg" name="appendMsg">
+			<![CDATA[
+			if (this.currentEventId != null) {
+				this.eventTimeMap[this.currentEventId].msg = this.eventTimeMap[this.currentEventId].msg + " " + msg;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="numOfObjects" name="updateObjCount">
+			<![CDATA[
+			if (this.currentEventId != null) {
+				this.eventTimeMap[this.currentEventId].objCount += numOfObjects;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onenabled">
+			<![CDATA[
+			if (!this.enabled) {
+				this.log();
+			}
+			]]>
+		</handler>		
+		
+		<!--- @keywords private -->
+		<method name="log">
+			<![CDATA[
+			var msg;
+			var event;
+			var tempArray = [];
+			var startTime;
+			var objCount;
+			for (var eventId in this.eventTimeMap) {
+				event = this.eventTimeMap[eventId];
+				event.startTime = eventId;
+				tempArray.push(event);
+			}
+			for (var i = tempArray.length - 1; i >= 0; i--) {
+				event = tempArray[i];
+				startTime = Number(event.startTime);
+				objCount = event.objCount > 0 ? ("/" + event.objCount + " object" + (event.objCount > 1 ? "s" : "")) : "";
+				if (event.endTime) {
+					msg = [DateUtil.Singleton.format(new Date(startTime), "MM/dd/yy HH:mm:ss.SSS "), event.msg, " (", (event.endTime - startTime), "ms", objCount, ")"].join("");
+					MessageLogger.Singleton.logStatus(msg);
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.perf", "INFO", "cmc/shell/EventTimer", "log", msg);
+				}
+			}
+			Logger.Singleton.flush();
+			this.eventTimeMap = {};
+			this.currentEventId = null;
+			]]>
+		</method>
+		
+	</Node>
+</Definitions>

@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>This class is the base class for the summary view for all flow element objects. The summary view of a flow
+		element is used to display text in the main flow diagram in Flow Builder beneath the flow element icon. Its purpose is
+		to provide the business user a quick summary or overview of the options that have been selected in the flow
+		element properties.</p>
+		
+		<p>New classes that extend from this base class must implement the <code>updateSummary</code> method. The method
+		should perform the logic required to determine the appropriate summary text for the business
+		user. The <code>setSummaryText<code> method must be called with the summary text before the
+		<code>updateSummary</code> method completes.</p>
+
+		<p>Any number of child instances of {@link cmc/foundation/FlowSummaryParam} can be created to reference child objects
+		or properties of the flow element. The <code>updateSummary</code> method can then obtain the values
+		from the <code>{@link cmc/foundation/FlowElementSummary#resolvedParams resolvedParams}</code> map referencing the
+		<code>cmc/foundation/FlowSummaryParam</code> by name.</p>
+		
+		<p>The following is an example of a new summary view that looks at the <code>supportLevel</code> property
+		of the Level of Support campaign element. If the value is not blank, set the summary text to show the value.
+		@START_CODE
+			<class name="extCustomLevelOfSupportSummary" extends="cmc/foundation/FlowElementSummary">
+				<FlowSummaryParam name="support" propertyName="supportLevel"/>
+			
+				<method name="updateSummary" args="e=null">
+					<![CDATA[
+						var summary = "";
+						if((this.resolvedParams["support"] != null) && (this.resolvedParams["support"] != "")) {
+							summary = "Support level is " + this.resolvedParams["support"]);
+						}
+						this.setSummaryText(summary);
+					]]>
+				</method>
+			</class>
+		@END_CODE
+		</p>
+		
+		<p>Implementations should not be instantiated directly. It should be specified in the
+		{@link cmc/foundation/FlowElementObjectDefinition#summaryClass summaryClass} attribute of a
+		{@link cmc/foundation/FlowElementObjectDefinition flow element object definition}.</p>
+		
+		@keywords abstract
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/FlowElementSummary" width="${this.parent.width}">
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Reference to the instance of cmc/foundation/FlowElementObjectDefinition that is being shown by the summary
+			@keywords private 
+		-->
+		<variable name="o"/>
+		<!---
+			Array of {@link cmc/foundation/FlowSummaryParams} for use in a summary
+			@keywords private
+		-->
+		<variable name="summaryParams" value="${[]}"/>
+		<!---
+			Map containing the resolved values of the defined child {@link cmc/foundation/FlowSummaryParam summary parameters}.
+			The key of the map is based on the name of the summary parameter. The value will be a string if the
+			parameter resolves to one value. Otherwise, the value will be an array of strings.
+		-->
+		<variable name="resolvedParams" value="${{}}"/>
+		<!---
+			Delegate that calls {@link cmc/foundation/FlowElementSummary#updateSummary}. Implementations of this
+			class may register any events to this delegate if the summary text needs to be refreshed
+			when the event occurs.
+		-->
+		<variable name="updateSummaryDel"/>
+	
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			if (typeof (this.updateSummaryDel) == 'undefined') {
+				this.updateSummaryDel = new EventHandler.Class(this, 'updateSummary');
+			}
+			this.setupParamsDel = new EventHandler.Class(this, "setupParametersDelegate");
+			CallbackUtil.Singleton.addDeferredCallback(this.setupParamsDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.setupParamsDel;
+			if (this.registerParamsDel) {
+				this.registerParamsDel.disconnectAll();
+				delete this.registerParamsDel;
+			}
+			this.updateSummaryDel.disconnectAll();
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Sets up a delegate to listen on the various object events. When events are triggered,
+			the delegate will call the <code>resolveAndUpdateSummary</code> method.
+			@keywords private
+		-->
+		<method args="e" name="setupParametersDelegate">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.registerParamsDel) {
+				this.registerParamsDel = new EventHandler.Class(this, "resolveAndUpdateSummary");
+			}
+			this.resolveAndUpdateSummary();
+			]]>
+		</method>
+
+		<!---
+			Goes through each defined cmc/foundation/FlowSummaryParam and tries to resolve its value
+			before calling the <code>updateSummary</code> method.
+			@keywords private
+		-->
+		<method args="e" name="resolveAndUpdateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.registerParamsDel.disconnectAll();
+			this.registerParamsDel.connect(this, "ono");
+			if (this.summaryParams) {
+				if (this.o) {
+					for (var i = 0; i < this.summaryParams.length; i++) {
+						var param = this.summaryParams[i];
+						var value = null;
+						var values = param.getValues(this.o, false, this.registerParamsDel);
+						if (values.length > 1) {
+							value = values;
+						}
+						else if (values.length == 1) {
+							value = values[0];
+						}
+						if (value == null) {
+							value = "";
+						}
+						this.resolvedParams[param.name] = value;
+					}
+					if (this.summary) {
+						this.updateSummary();
+					}
+				}
+				else {
+					this.resolvedParams = {};
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Returns a string of resolved values for the specified summary parameter. The values are obtained from
+			the {@link cmc/foundation/FlowElementSummary#resolvedParams resolvedParams} map.
+			
+			@param String param The name of the {@link cmc/foundation/FlowSummaryParam summary parameter}
+			@return String If the summary parameter is resolved and is a single value, the value is returned. If the summary parameter
+				resolves to an array, a comma-separated list of all the values is returned. An empty string is returned if the summary
+				parameter is unresolved.
+		-->
+		<method args="param" name="getValuesList">
+			<![CDATA[
+			var valueText = "";
+			var value = this.resolvedParams[param];
+			if (value != null) {
+				if (typeof (value) == "object") {
+					var names = "";
+					for (var i = 0; i < value.length; i++) {
+						if (value[i] != "") {
+							names += value[i];
+							if (i != value.length - 1) {
+								names += ", ";
+							}
+						}
+					}
+					valueText = names;
+				}
+				else {
+					valueText = value;
+				}
+			}
+			return valueText;
+			]]>
+		</method>
+
+		<!---
+			<p>Updates the summary text. This method is called when the defined properties on the
+			object have changed or when the object's child and reference objects are updated.
+			Campaign element summary classes should override this method and call the <code>setSummaryText</code>
+			method.</p>
+			
+			@param Object e An object passed by event. This value should be ignored.
+		-->
+		<method args="e" name="updateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			]]>
+		</method>
+
+		<Tooltip name="tooltip" text=""/>				
+		<TextComponent fontsize="11" multiline="true" name="summary" text="" width="${this.parent.width}">
+			<handler name="oninit">
+				<![CDATA[
+				this.classroot.updateSummary();
+				]]>
+			</handler>
+		</TextComponent>
+		
+		<!---
+			<p>This method sets the value of the summary text. 
+			
+			@param string t The desired summary text.
+		-->
+		<method args="t" name="setSummaryText">
+			<![CDATA[
+			this.summary.setVariable('text', t);
+			]]>
+		</method>
+		
+		<!---
+			<p>This method sets the tooltip of the summary text. 
+			
+			@param string t The desired summary text.
+		-->
+		<method args="t" name="setTooltipText">
+			<![CDATA[
+			this.tooltip.setVariable('text', t);
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		<p>Declares a summary parameter that will be resolved for use in the summary view. Instances
+		of cmc/foundation/FlowSummaryParam may only be declared as immediate children of a class extending from
+		{@link cmc/foundation/FlowElementSummary}.</p>
+		
+		<p>See {@link cmc/foundation/ValueResolver} for more information, including all possible options of using this class.</p>
+	-->
+	<ValueResolver classDefinition="true" definitionName="cmc/foundation/FlowSummaryParam">
+	
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var params = this.parent.summaryParams;
+			if (!params) {
+				params = [];
+				this.parent.summaryParams = params;
+			}
+			params.push(this);
+			]]>
+		</method>
+	</ValueResolver>
+
+</Definitions>

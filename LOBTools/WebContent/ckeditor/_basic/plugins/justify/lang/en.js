@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","en",{block:"Align Justified",center:"Align Center",left:"Align Left",right:"Align Right"});

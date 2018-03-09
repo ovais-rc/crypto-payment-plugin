@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014.  All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<_config:DataloadBusinessObjectConfiguration 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/search/config ../xsd/wc-indexload-item.xsd" 
+	xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/search/config">
+	
+  <_config:DataLoader className="com.ibm.commerce.foundation.server.services.indexload.loader.solr.SolrIndexLoadQueryLoader" >
+
+		<!--
+  			The following parallel indexing configuration can be used to split up evenly the dataset across multiple threads when used with the SolrIndexLoadQueryLoader.
+  			
+  			    ParallelThreads = number of threads used for parallel indexing; empty or 1 means no parallel indexing
+  			    ParallelLowerRangeSQL = SQL statement for determining the lower range value from the database
+  			    ParallelUpperRangeSQL = SQL statement for determining the upper range value from the database
+  			    ParallelNextRangeSQL = SQL statement for determining the next available identifier when an empty range id detected from the parallel range
+  			    ParallelLowerRange = if defined, it is an absolute number for the lower range and will override that from ParallelLowerRangeSQL
+  			    ParallelUpperRange = if defined, it is an absolute number for the upper range and will override that from ParallelUpperRangeSQL
+  			    ParallelPrefetchSize = if defined, the runtime will break up the entire data range into fragments to avoid overloading the database sort heap with too large of a query result set; default is 10000
+  			    ParallelDeltaUpdate = if set to true, the SQL result set will be merged into existing indexed document with a matching primary key
+  			
+  			Note that when using parallel indexing, the SQL defined below must be ordered by the KeyFieldName and a range condition
+  			bounded by %ParallelLowerRange% and %ParallelUpperRange% should be used against the key field column
+  			
+  			Variable name, which is enclosed by %, can be used in SQL tag below.  Its value can be passed in as a query parameter from the URL.
+  	-->
+  	<_config:property name="ParallelThreads" value="1" />
+  	<_config:property name="ParallelLowerRangeSQL" value="SELECT MIN(CATENTRY_ID) FROM CATENTRY" />
+  	<_config:property name="ParallelUpperRangeSQL" value="SELECT MAX(CATENTRY_ID) FROM CATENTRY" />
+  	<_config:property name="ParallelNextRangeSQL" value="SELECT MIN(CE.CATENTRY_ID) FROM CATENTRY CE WHERE CE.CATENTRY_ID &gt; ?" />
+  	<_config:property name="ParallelLowerRange" value="" />
+  	<_config:property name="ParallelUpperRange" value="" />
+  	<_config:property name="ParallelPrefetchSize" value="" />
+  	<_config:property name="ParallelDeltaUpdate" value="false" />
+
+  	<!--
+		     A multiplex reader, SolrIndexLoadQueryMultiplexReader, is used to transform multiple entries from the database
+		     table into a single index row with numerous dynamic index fields.
+		     
+		     It requires the index entity to have the "KeyFieldName" property defined and only one primary key field is supported
+		     at this time.  The database column that maps to this primary key index field will be used as the identifier for the index entry.
+
+		     Usage:
+		     - property "KeyFieldName" is the index field name for the primary key;
+		     - tag "query" is the database SQL query to be used, and must be ordered by the primary key field;
+		     - multiple "ColumnMapping" tags can be used, with each one maps the database table column (name) to an index field name (value);
+		     - "DynamicFields" section allows a list of dynamic fields to be defined.  Multiplexing will be applied to this field with
+		       the column name being the resolved value from "dynamicFieldName" and the value in this column being the resolved value from
+		       "dynamicFieldValue".  In addition, "dynamicFieldName" and "dynamicFieldValue" can be used as a template where other field
+		       variable names can be declared.  An optional parameter, "indexingMode", with its default value being "replace", is used to
+		       define the behavior for handling multiple values in this dynamic column.  Other supported operations are "append" and "sum",
+		       where "append" is for handling multi-value index field and "sum" is for adding up all the values.
+     -->
+    <_config:DataReader className="com.ibm.commerce.foundation.server.services.indexload.reader.solr.SolrIndexLoadQueryMultiplexReader">
+    	<_config:DynamicFields>
+      	<_config:DynamicField dynamicFieldName="inv_strlocqty_%storeId%_%ffmccenterId%" dynamicFieldValue="%quantity%" indexingMode="replace" />
+    	</_config:DynamicFields>
+    	<_config:property name="KeyFieldName" value="catentry_id" />
+    	<_config:property name="ExcludeFieldNames" value="storeId,ffmccenterId,quantity" />
+    	<_config:Query>
+    		<_config:SQL>
+    			SELECT INVENTORY.CATENTRY_ID, INVENTORY.STORE_ID, INVENTORY.FFMCENTER_ID, INVENTORY.QUANTITY
+				         FROM INVENTORY
+                WHERE INVENTORY.QUANTITYMEASURE = 'C62'
+				          AND INVENTORY.CATENTRY_ID IN (
+				       SELECT CATENTRY.CATENTRY_ID
+				         FROM CATENTRY, CATGPENREL
+				        WHERE CATGPENREL.CATALOG_ID = %catalogId%
+				          AND CATENTRY.MARKFORDELETE = 0
+				          AND CATENTRY.CATENTRY_ID = CATGPENREL.CATENTRY_ID
+				          AND CATENTRY.CATENTTYPE_ID = 'ItemBean'
+				          AND CATENTRY.CATENTRY_ID &gt;= %ParallelLowerRange%
+ 				     			AND CATENTRY.CATENTRY_ID &lt;= %ParallelUpperRange%)
+				        ORDER BY INVENTORY.CATENTRY_ID, INVENTORY.STORE_ID, INVENTORY.FFMCENTER_ID
+    		</_config:SQL>
+    		<_config:ColumnMapping columnName="CATENTRY_ID" indexFieldName="catentry_id" />
+    		<_config:ColumnMapping columnName="STORE_ID" indexFieldName="storeId" />
+    		<_config:ColumnMapping columnName="FFMCENTER_ID" indexFieldName="ffmccenterId" />
+    		<_config:ColumnMapping columnName="QUANTITY" indexFieldName="quantity" />
+    	</_config:Query>
+    </_config:DataReader>
+    
+   	<_config:BusinessObjectBuilder className="com.ibm.commerce.foundation.internal.server.services.indexload.builder.SolrIndexLoadMapObjectBuilder" >
+      <_config:BusinessObjectMediator className="com.ibm.commerce.foundation.internal.server.services.indexload.mediator.SolrIndexLoadBusinessObjectMediator">
+      </_config:BusinessObjectMediator>
+    </_config:BusinessObjectBuilder>
+    
+  </_config:DataLoader>
+  
+</_config:DataloadBusinessObjectConfiguration>

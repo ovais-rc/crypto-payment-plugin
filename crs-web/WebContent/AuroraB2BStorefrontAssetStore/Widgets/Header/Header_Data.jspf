@@ -1,0 +1,211 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<flow:ifEnabled feature="StoreLocator">
+<wcf:url var="StoreLocatorView" value="AjaxStoreLocatorDisplayView">
+	<wcf:param name="storeId"   value="${storeId}"  />
+	<wcf:param name="catalogId" value="${catalogId}"/>
+	<wcf:param name="langId" value="${langId}" />
+</wcf:url>
+</flow:ifEnabled>
+
+<wcf:url var="ContactUsViewURL" patternName="ContactUsURL" value="ContactUsView">
+	<wcf:param name="storeId"   value="${storeId}"  />
+	<wcf:param name="catalogId" value="${catalogId}"/>
+	<wcf:param name="langId" value="${langId}" />
+</wcf:url>
+
+<wcf:url var="MyAccountURL" value="AjaxLogonForm">
+  <wcf:param name="langId" value="${param.langId}" />
+  <wcf:param name="storeId" value="${param.storeId}" />
+  <wcf:param name="catalogId" value="${param.catalogId}" />
+  <wcf:param name="myAcctMain" value="1" />
+</wcf:url>
+
+<%-- CSR link is displayed only for CSR or if onBehalf session is already established --%>
+<c:if test="${env_shopOnBehalfEnabled_CSR eq 'true'}">
+		
+	<wcf:url var="CustomerServiceURL" value="CustomerServiceLandingPageView">
+	  <wcf:param name="langId" value="${param.langId}" />
+	  <wcf:param name="storeId" value="${param.storeId}" />
+	  <wcf:param name="catalogId" value="${param.catalogId}" />
+	</wcf:url>
+
+	<c:if test="${env_shopOnBehalfSessionEstablished eq 'true'}">
+		<c:set var="CustomerServiceURL" value="javascript:GlobalLoginShopOnBehalfJS.restoreCSRSessionAndRedirect('${CustomerServiceURL}');"/>
+	</c:if>
+</c:if>
+
+<%-- Build sign-in or sign-out links based on user type --%>
+<c:set var="person" value="${requestScope.person}"/>
+<c:if test="${empty person || person==null}">
+	<wcf:rest var="person" url="store/{storeId}/person/@self" scope="request">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	</wcf:rest>
+</c:if>
+<c:set var="userState" value="${person.registrationApprovalStatus}" scope="page"/>
+<c:set var="userLogonState" value="0" scope="page"/>
+<c:set var="userDisplayName" value="${CommandContext.user.displayName}" scope="page"/>
+<c:choose>
+	<c:when test="${env_shopOnBehalfSessionEstablished eq 'false' && (userType eq 'G' || userState eq 'PendingApproval')}" > 
+		<c:set var="SIGN_IN_OUT"><fmt:message bundle="${storeText}" key="HEADER_SIGN_IN_REGISTER"/></c:set>
+		<c:set var="userLogonState" value="0" scope="page"/>
+		<c:set var="SIGN_IN_OUT_ID">SignInLink</c:set>
+		<wcf:url var="Logon_LogoutURL" value="LogonForm">
+		  <wcf:param name="langId" value="${langId}" />
+		  <wcf:param name="storeId" value="${storeId}" />
+		  <wcf:param name="catalogId" value="${catalogId}" />
+		  <wcf:param name="myAcctMain" value="1" />
+		</wcf:url>
+		<flow:ifEnabled feature="SOAWishlist">
+		<c:set var="WishListDisplayURL" value="javascript:redirectToSignOn('WishList');"/>
+		</flow:ifEnabled>
+	
+		<%-- for MultipleActiveOrders  --%>
+		<flow:ifEnabled feature="MultipleActiveOrders"> 
+		<c:set var="SavedOrderListDisplayURL" value="javascript:redirectToSignOn('SavedOrderPage');"/>
+		</flow:ifEnabled>
+	</c:when>
+	<c:otherwise>
+		<c:set var="SIGN_IN_OUT"><fmt:message bundle="${storeText}" key="HEADER_SIGN_OUT"/></c:set>
+		<c:set var="userLogonState" value="1" scope="page"/>
+		<c:if test="${env_OnBehalfOf}">
+				<fmt:message bundle="${storeText}" key="HEADER_SIGN_OUT_USERNAME" var="SIGN_IN_OUT">
+					<fmt:param value="${userDisplayName}"/>
+				</fmt:message>
+		</c:if>
+
+		<c:set var="SIGN_IN_OUT_ID">SignOutLink</c:set>
+		<wcf:url var="logonURL" value="LogonForm"></wcf:url>
+		<wcf:url var="Logon_LogoutURLOriginal" value="Logoff">
+		  <wcf:param name="langId" value="${langId}" />
+		  <wcf:param name="storeId" value="${storeId}" />
+		  <wcf:param name="catalogId" value="${catalogId}" />
+		  <wcf:param name="myAcctMain" value="1" />
+		  <wcf:param name="URL" value="${logonURL}" />
+		  <wcf:param name="deleteCartCookie" value="true" />
+		</wcf:url>
+		<flow:ifEnabled feature="SOAWishlist">
+		<wcf:url var="WishListDisplayURL" value="WishListDisplayView">
+			<wcf:param name="listId" value="." />
+			<wcf:param name="storeId"   value="${storeId}"  />
+			<wcf:param name="catalogId" value="${catalogId}"/>
+			<wcf:param name="langId" value="${langId}" />
+		</wcf:url>
+		</flow:ifEnabled>
+		<flow:ifEnabled feature="MultipleActiveOrders"> 
+		<%-- for MultipleActiveOrders  --%>
+		<wcf:url var="SavedOrderListDisplayURL" value="ListOrdersDisplayView">
+			<wcf:param name="storeId"   value="${storeId}"  />
+			<wcf:param name="catalogId" value="${catalogId}"/>
+			<wcf:param name="langId" value="${langId}" />
+			<wcf:param name="myAcctMain" value="1" />   
+			<wcf:param name="page" value="savedorder"/>
+		</wcf:url>
+		</flow:ifEnabled>
+		<c:set var="Logon_LogoutURL" value="javascript:logout('${Logon_LogoutURLOriginal}');"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="key1" value="store/${storeId}/online_store"/>
+<c:set var="storeInfo" value="${cachedOnlineStoreMap[key1]}"/>
+<c:if test="${empty storeInfo}">
+	<wcf:rest var="queryStoreInfoResult" url="store/{storeId}/online_store" scope="request" cached="true">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	</wcf:rest>
+	<c:set var="storeInfo" value="${queryStoreInfoResult.resultList[0]}"/>
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${storeInfo}"/>
+</c:if>
+
+<c:set var="storeInfoContact" value="${storeInfo.contactInfo[0]}" />
+<c:forEach var="storeInfoContacts" items="${storeInfo.contactInfo}">
+   <c:if test="${storeInfoContacts.languageId == langId}">
+	  <c:set var="storeInfoContact" value="${storeInfoContacts}" />
+   </c:if>
+</c:forEach>
+<c:set var="storeInfoContactTelephone" value="${storeInfoContact.telephone1}" />
+
+<c:set var="subcategoryLimit" value="10"/>
+<c:set var="depthAndLimit" value="${subcategoryLimit + 1},${subcategoryLimit + 1}"/>
+<c:set var="lazyLoad" value=""/>
+<%-- check if overrideLazyLoadDepartmentsList attribute is set in parent JSP or if request parameter --%>
+<c:if test="${empty overrideLazyLoadDepartmentsList}">
+	<c:set var="overrideLazyLoadDepartmentsList" value="${param.overrideLazyLoadDepartmentsList}"/>
+</c:if>
+<c:if test="${!empty overrideLazyLoadDepartmentsList && overrideLazyLoadDepartmentsList == 'true'}">
+	<c:set var="lazyLoadDepartmentsList" value = "${!lazyLoadDepartmentsList}"/>
+</c:if>
+<c:if test="${lazyLoadDepartmentsList == 'true'}">
+	<c:set var="depthAndLimit" value=""/>
+	<c:set var="lazyLoad" value="true"/>
+</c:if>
+	<c:set var="key1" value="categoryview/@top"/>
+	<c:set var="categoryHierarchy" value="${cachedCategoryViewMap[key1]}"/>
+	<c:if test="${empty categoryHierarchy}">
+		<c:catch var="searchServerException">
+			<wcf:rest var="categoryHierarchy" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/@top" >
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="responseFormat" value="json"/>		
+				<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				<wcf:param name="depthAndLimit" value="${depthAndLimit}"/>
+				<c:forEach var="contractId" items="${env_activeContractIds}">
+					<wcf:param name="contractId" value="${contractId}"/>
+				</c:forEach>
+			</wcf:rest>
+			<wcf:set target = "${cachedCategoryViewMap}" key="${key1}" value="${categoryHierarchy}"/>
+		</c:catch>
+	</c:if>
+
+<jsp:useBean id="categoryURLMap" class="java.util.HashMap"/>
+<c:forEach var="department" items="${categoryHierarchy.catalogGroupView}">
+	<wcf:url var="categoryURL" value="Category3" patternName="CanonicalCategoryURL">
+		<wcf:param name="storeId" value="${storeId}"/>
+		<wcf:param name="catalogId" value="${catalogId}"/>		
+		<wcf:param name="langId" value="${langId}"/>
+		<wcf:param name="urlLangId" value="${urlLangId}"/>
+		<wcf:param name="categoryId" value="${department.uniqueID}"/>
+		<wcf:param name="pageView" value="${env_defaultPageView}"/>
+		<wcf:param name="beginIndex" value="0"/>
+	</wcf:url>
+
+	<c:set target="${categoryURLMap}" property="${department.uniqueID}" value="${categoryURL}"/>
+	<c:forEach var="category" items="${department.catalogGroupView}">
+		<wcf:url var="categoryURL" value="Category3" patternName="CategoryURL">
+			<wcf:param name="storeId" value="${storeId}"/>
+			<wcf:param name="catalogId" value="${catalogId}"/>
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="urlLangId" value="${urlLangId}"/>
+			<wcf:param name="categoryId" value="${category.uniqueID}"/>
+			<wcf:param name="top_category" value="${department.uniqueID}"/>
+			<wcf:param name="pageView" value="${env_defaultPageView}"/>
+			<wcf:param name="beginIndex" value="0"/>
+		</wcf:url>
+		<c:set target="${categoryURLMap}" property="${department.uniqueID}_${category.uniqueID}" value="${categoryURL}"/>
+		<c:forEach var="subcategory" items="${category.catalogGroupView}">
+			<wcf:url var="categoryURL" value="Category3" patternName="CategoryURLWithParentCategory">
+				<wcf:param name="storeId" value="${storeId}"/>
+				<wcf:param name="catalogId" value="${catalogId}"/>
+				<wcf:param name="langId" value="${langId}"/>
+				<wcf:param name="urlLangId" value="${urlLangId}"/>
+				<wcf:param name="categoryId" value="${subcategory.uniqueID}"/>
+				<wcf:param name="parent_category_rn" value="${category.uniqueID}"/>
+				<wcf:param name="top_category" value="${department.uniqueID}"/>
+				<wcf:param name="pageView" value="${env_defaultPageView}"/>
+				<wcf:param name="beginIndex" value="0"/>
+			</wcf:url>
+
+			<c:set target="${categoryURLMap}" property="${department.uniqueID}_${category.uniqueID}_${subcategory.uniqueID}" value="${categoryURL}"/>
+		</c:forEach>
+	</c:forEach>
+</c:forEach>

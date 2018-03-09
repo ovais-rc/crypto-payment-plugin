@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","ro",{bold:"Aldin",italic:"Cursiv",strike:"Tăiere",subscript:"Indice",superscript:"Exponent",underline:"Subliniere"});

@@ -1,0 +1,97 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ include file="/Widgets_701/Common/PDP_CatalogEntryData.jspf" %>
+
+<c:choose>
+	<c:when test="${!empty WCParam.productId}">
+		<c:set var="productId" value="${WCParam.productId}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="productId" value="${param.productId}" />
+	</c:otherwise>
+</c:choose>
+
+<c:if test="${!empty catalogNavigationView && !empty catalogNavigationView.catalogEntryView[0]}">
+	<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+</c:if>
+
+<c:choose>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'BundleBean'}">
+		<c:set var="type" value="bundle" />
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'PackageBean'}">
+		<c:set var="type" value="package" />
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'ItemBean'}">
+		<c:set var="type" value="item" />
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'ProductBean'}">
+		<c:set var="type" value="product" />
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'DynamicKitBean'}">
+		<c:set var="type" value="dynamickit" />
+		<c:if test="${empty catalogEntryDetails.components}">
+			<c:if test="${!empty catalogNavigationView && !empty catalogNavigationView.catalogEntryView[0]}">
+				<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			</c:if>			
+		</c:if>
+	</c:when>
+</c:choose>
+
+<wcf:useBean var="fullComponentsList" classname="java.util.ArrayList"/>
+<wcf:useBean var="components" classname="java.util.ArrayList"/>
+<c:forEach var="componentCatalogEntry" items="${catalogEntryDetails.components}">
+	<c:choose>
+		<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'DynamicKitBean'}">
+			<c:choose>
+				<c:when test="${not empty componentCatalogEntry.catalogEntryView.shortDescription}">
+					<c:set var="componentDescription" value="${componentCatalogEntry.shortDescription}"/>
+				</c:when>
+				<c:when test="${not empty componentCatalogEntry.name}">
+					<c:set var="componentDescription" value="${componentCatalogEntry.name}"/>
+				</c:when>
+			</c:choose>
+			<fmt:formatNumber var="componentQty" value="${componentCatalogEntry.quantity}" type="number" maxFractionDigits="0"/>
+			<c:if test="${componentQty > 1}">
+				<%-- output order item componentCatalogEntry quantity in the form of "5 x ComponentName" --%>
+				<wcst:message var="componentDescription" key="ITEM_COMPONENT_QUANTITY_NAME" bundle="${widgetText}"> 
+					<wcst:param><c:out value="${componentQty}" escapeXml="false"/></wcst:param>
+					<wcst:param><c:out value="${componentDescription}" escapeXml="false"/></wcst:param>
+				</wcst:message>
+			</c:if>				
+			<c:set var="hasDescription" value="true" />		
+			<c:forEach var="componentCatEntryAttr" items="${componentCatalogEntry.attributes}">
+				<wcf:useBean var="dkComponents" classname="java.util.ArrayList"/>
+				<c:set var="CatEntryAttrName" value="${componentCatEntryAttr.name}"/>
+				<c:set var="CatEntryAttrValue" value="${componentCatEntryAttr.values[0].value}"/>
+				<c:if test="${hasDescription == true}">
+					<wcf:set target="${dkComponents}" value="${componentDescription}" /> 	
+				</c:if>
+				<wcf:set target="${dkComponents}" value="${CatEntryAttrName}" />
+				<wcf:set target="${dkComponents}" value="${CatEntryAttrValue}" />
+				<wcf:set target="${fullComponentsList}" value="${dkComponents}" /> 
+				<c:remove var="dkComponents" />	
+				<c:set var="hasDescription" value="false" />
+			</c:forEach>	
+		</c:when>
+		<c:otherwise>
+			<c:set var="catalogEntryView" value="${componentCatalogEntry}"/>	
+			<jsp:useBean id="componentDetails" class="java.util.HashMap" type="java.util.Map"/>
+			<c:set target="${componentDetails}" property="uniqueID" value="${catalogEntryView.uniqueID}"/>
+			<c:set target="${componentDetails}" property="quantity" value="${(fn:contains(componentCatalogEntry.quantity,'.'))? fn:substringBefore(componentCatalogEntry.quantity,'.'): componentCatalogEntry.quantity }"/>
+			<wcf:set target="${components}" value="${componentDetails}"/>
+			<c:remove var="componentDetails"/>
+		</c:otherwise>
+	</c:choose>		
+</c:forEach>

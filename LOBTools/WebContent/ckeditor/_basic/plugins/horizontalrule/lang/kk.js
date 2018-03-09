@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("horizontalrule","kk",{toolbar:"Көлденең жолақ кірістіру"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","en",{bulletedlist:"Bulleted List",numberedlist:"Numbered List",ibm:{numberedTitle:"Numbered List",bulletedTitle:"Bulleted List",description:"Settings will be applied to the current list level",fontsize:"Font size:"}});

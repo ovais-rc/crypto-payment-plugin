@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("mathjax","pl",{title:"Formuły matematyczne w języku TeX",button:"Formuła matematyczna",dialogInput:"Wpisz kod TeX w tym miejscu",docUrl:"http://en.wikibooks.org/wiki/LaTeX/Mathematics",docLabel:"Dokumentacja TeX",loading:"Ładowanie...",pathName:"math"});

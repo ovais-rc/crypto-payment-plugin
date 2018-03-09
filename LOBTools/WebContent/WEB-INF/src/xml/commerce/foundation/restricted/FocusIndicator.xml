@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This class is used to create a focus indicator view for focusable widgets.  To use the cmc/foundation/FocusIndicator, create
+		an instance of this class on the widgets first onfocus call as shown in the sample below.
+		
+		Sample usage of usage in {@link cmc/foundation/InputText}:
+		@START_CODE
+			<handler name="onfocus" reference="inputText">
+			    <![CDATA[				
+			    if(!this["indicator"]){
+				    new FocusIndicator(this, {
+				    	name: "indicator",
+				    	focusableView: this.inputText,
+				    	indicatorView: this,
+				    	offset: 1
+				    });
+			    }
+				]]>
+			</handler>
+		@END_CODE
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/FocusIndicator" ignoreLayout="true" ignoreSize="true">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		
+		<!--- The view that will fire the onfocus and onblur events. This is a required attribute. -->
+		<variable name="focusableView" value="${null}"/>
+		<!--- The view that the indicator will be displayed on. This is a required attribute. -->
+		<variable name="indicatorView" value="${null}"/>
+		<!--- 
+			Used to create the indicator inside of the indicatorView by this amount of pixels. 
+			The default value is 0 and will create the indicator on top of the indicatorView boundaries
+		-->
+		<variable name="offset" type="number" value="0"/>
+		<!--- The focus indicator color -->
+		<variable name="focusIndicatorColor" type="string" value="#000000"/>
+		
+		
+		<DrawComponent name="top"/>
+		<DrawComponent name="bottom"/>
+		<DrawComponent name="left"/>
+		<DrawComponent name="right"/>
+				
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == this.focusableView) {
+				this.renderLines();
+			}
+			else {
+				this.setVariable('visible', false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Destroy delegates.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.renderLinesDel) {
+				this.renderLinesDel.disconnectAll();
+				delete this.renderLinesDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+				
+		<!--- @keywords private -->	
+		<method args="e" name="renderLines">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.renderLinesDel) {
+				this.renderLinesDel.disconnectAll();
+			}
+			else {
+				this.renderLinesDel = new EventHandler.Class(this, "renderLines");
+			}
+			if (this.visible) {
+				this.renderLinesDel.connect(this, "onfocusIndicatorColor");
+				var v = this.indicatorView;
+				do {
+					this.renderLinesDel.connect(v, "onx");
+					this.renderLinesDel.connect(v, "ony");
+					v = v.immediateParent;
+				}
+				while (v != null && !ViewUtil.Singleton.containsView(v, this));
+				this.renderLinesDel.connect(this.indicatorView, "onwidth");
+				this.renderLinesDel.connect(this.indicatorView, "onheight");
+				var relativeX = this.indicatorView.getVariableRelative("x", this);
+				var relativeY = this.indicatorView.getVariableRelative("y", this);
+				var pWidth = relativeX + this.indicatorView.width - 1 - this.offset;
+				this.top.setVariable("width", pWidth);
+				this.bottom.setVariable("width", pWidth);
+				var pHeight = relativeY + this.indicatorView.height - 1 - this.offset;
+				this.left.setVariable("height", pHeight);
+				this.right.setVariable("height", pHeight);
+				var strokeLength = 1;
+				var strokeSpacing = 2;
+				this.left.clear();
+				this.left.beginPath();
+				var h = relativeY + this.offset;
+				while (h < pHeight) {
+					this.left.moveTo(relativeX + this.offset, h);
+					this.left.lineTo(relativeX + this.offset, h + strokeLength);
+					h = h + strokeLength + strokeSpacing;
+				}
+				this.left.strokeStyle = this.focusIndicatorColor;
+				this.left.lineWidth = 0;
+				this.left.stroke();
+				this.bottom.clear();
+				this.bottom.beginPath();
+				var w = relativeX + this.offset;
+				while (w < pWidth) {
+					this.bottom.moveTo(w, pHeight);
+					this.bottom.lineTo(w + strokeLength, pHeight);
+					w = w + strokeLength + strokeSpacing;
+				}
+				this.bottom.strokeStyle = this.focusIndicatorColor;
+				this.bottom.lineWidth = 0;
+				this.bottom.stroke();
+				this.right.clear();
+				this.right.beginPath();
+				h = pHeight + 1;
+				while (h > relativeY + this.offset + 1) {
+					this.right.moveTo(pWidth, h);
+					this.right.lineTo(pWidth, h - strokeLength);
+					h = h - strokeLength - strokeSpacing;
+				}
+				this.right.strokeStyle = this.focusIndicatorColor;
+				this.right.lineWidth = 0;
+				this.right.stroke();
+				this.top.clear();
+				this.top.beginPath();
+				w = pWidth + 1;
+				while (w > relativeX + this.offset + 1) {
+					this.top.moveTo(w, this.offset + relativeY);
+					this.top.lineTo(w - strokeLength, this.offset + relativeY);
+					w = w - strokeLength - strokeSpacing;
+				}
+				this.top.strokeStyle = this.focusIndicatorColor;
+				this.top.lineWidth = 0;
+				this.top.stroke();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.focusableView" name="onblur">
+			<![CDATA[
+			this.setVariable('visible', false);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->				
+		<handler eventSource="this.focusableView" name="onfocus">
+			<![CDATA[
+			this.bringToFront();
+			this.setVariable('visible', true);
+			this.renderLines();
+			]]>
+		</handler>
+	</Component>
+</Definitions>

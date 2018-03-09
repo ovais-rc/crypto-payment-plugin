@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","pt",{error:"A acção de colar imagens não é actualmente suportada. Utilize a opção da barra de ferramentas 'Inserir imagem', em alternativa."});

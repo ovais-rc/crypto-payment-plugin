@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","bg",{label:"Стилове",panelTitle:"Стилове",panelTitle1:"Стилове на блокове",panelTitle2:"Стилове на подравняване",panelTitle3:"Стилове на обекти"});

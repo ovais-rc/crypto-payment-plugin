@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("blockquote","zh-tw",{toolbar:"區塊引文"});

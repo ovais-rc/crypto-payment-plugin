@@ -1,0 +1,456 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/DaysSelectCell" focusable="false">
+		<variable name="selector" value="${null}"/>
+		<variable name="labelText" type="string" value=""/>
+		
+		<AxisLayout axis="x" spacing="1"/>
+		<BaseCheckbox enabled="${this.classroot.selector.enabled}" name="input">
+			<handler name="onvalue">
+				<![CDATA[
+				if (this.classroot.selector) {
+					this.classroot.selector.setDaysValue();
+				}
+				]]>
+			</handler>
+		</BaseCheckbox>
+		<TextComponent fgcolor="${this.classroot.style.formlabeltextcolor}" name="label" text="${this.classroot.labelText}" y="${(this.parent.height - this.height) / 2}"/>
+	</FocusableComponent>
+	
+	<!--- @keywords private -->
+	<BaseValueComponent classDefinition="true" definitionName="cmc/foundation/BaseDaysSelect" focusable="false">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+
+		<variable name="_valuesInited" type="boolean" value="false"/>
+		
+		<handler name="onvalue">
+			<![CDATA[
+			if (this.days) {
+				this.initDaysOfTheWeek();
+			}
+			]]>
+		</handler>
+		
+		<method name="initDaysOfTheWeek">
+			<![CDATA[
+			this._valuesInited = false;
+			this.days.SUN.input.setValue(this.value.indexOf("U") >= 0);
+			this.days.MON.input.setValue(this.value.indexOf("M") >= 0);
+			this.days.TUE.input.setValue(this.value.indexOf("T") >= 0);
+			this.days.WED.input.setValue(this.value.indexOf("W") >= 0);
+			this.days.THU.input.setValue(this.value.indexOf("R") >= 0);
+			this.days.FRI.input.setValue(this.value.indexOf("F") >= 0);
+			this.days.SAT.input.setValue(this.value.indexOf("S") >= 0);
+			this._valuesInited = true;
+			]]>
+		</method>
+		
+		<method name="setDaysValue">
+			<![CDATA[
+			if (this.days && this.days._daysInited && this._valuesInited) {
+				var newValue = (this.days.MON.input.value ? "M" : "") + (this.days.TUE.input.value ? "T" : "") + (this.days.WED.input.value ? "W" : "") + (this.days.THU.input.value ? "R" : "") + (this.days.FRI.input.value ? "F" : "") + (this.days.SAT.input.value ? "S" : "") + (this.days.SUN.input.value ? "U" : "");
+				this.setVariable("value", newValue);
+			}
+			]]>
+		</method>
+		 
+		<Component name="days">
+			<variable name="_daysInited" type="boolean" value="false"/>
+		
+			<handler name="oninit">
+				<![CDATA[
+				this._daysInited = true;
+				this.classroot.initDaysOfTheWeek();
+				]]>
+			</handler>
+					
+			<AxisLayout axis="x" spacing="5">
+				<method args="e" name="update">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					if (!this.prefDel) {
+						this.prefDel = new EventHandler.Class(this, "update");
+						this.prefDel.connect(PreferenceManager.Singleton, "preferenceChanged");
+					}
+					var firstDay = PreferenceManager.Singleton.getPreference("CMCFirstDayOfWeek");
+					if (!this.locked && firstDay != null && firstDay != "") {
+						this.lock();
+						var length = this.components.length - 1;
+						while (this.components[0].name != firstDay) {
+							this.setLayoutOrder('first', this.components[length]);
+						}
+						this.locked = false;
+					}
+					this.inherited(arguments);
+					]]>
+				</method>
+			</AxisLayout>
+			
+			<DaysSelectCell labelText="${foundationResources.Singleton.sunday.string}" name="SUN" selector="${this.classroot}"/>
+			<DaysSelectCell labelText="${foundationResources.Singleton.monday.string}" name="MON" selector="${this.classroot}"/>
+			<DaysSelectCell labelText="${foundationResources.Singleton.tuesday.string}" name="TUE" selector="${this.classroot}"/>
+			<DaysSelectCell labelText="${foundationResources.Singleton.wednesday.string}" name="WED" selector="${this.classroot}"/>
+			<DaysSelectCell labelText="${foundationResources.Singleton.thursday.string}" name="THU" selector="${this.classroot}"/>
+			<DaysSelectCell labelText="${foundationResources.Singleton.friday.string}" name="FRI" selector="${this.classroot}"/>
+			<DaysSelectCell labelText="${foundationResources.Singleton.saturday.string}" name="SAT" selector="${this.classroot}"/>
+		</Component>
+		
+	</BaseValueComponent>
+	
+	<!--- @keywords private -->
+	<BaseDaysSelect classDefinition="true" definitionName="cmc/foundation/DaysSelect">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+	
+		<variable name="property" value="${null}"/>
+			
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					this.setVariable("value", "");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the widget with a new property value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = this.property.value;
+			if (value != this.value) {
+				this.setVariable("value", value);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Store the property value.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this.property) {
+				this.property.change(this.value);
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/DaysSelect", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + this.value + this.property.o.logString());
+				}
+			}
+			]]>
+		</method>
+		
+		<handler name="onvalue">
+			<![CDATA[
+			this.storeValue();
+			]]>
+		</handler>
+
+	 <method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method></BaseDaysSelect>
+	
+	<!--- @keywords private -->
+	<BaseDaysSelect classDefinition="true" definitionName="cmc/foundation/ChildObjectDaysSelect">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		
+		<!--- Reference to cmc/foundation/ModelObject that is the parent of the object being created and deleted. -->
+		<variable name="o" value="${null}"/>
+		
+		<variable name="sundayObjectType"/>
+		
+		<variable name="mondayObjectType"/>
+		
+		<variable name="tuesdayObjectType"/>
+		
+		<variable name="wednesdayObjectType"/>
+		
+		<variable name="thursdayObjectType"/>
+		
+		<variable name="fridayObjectType"/>
+		
+		<variable name="saturdayObjectType"/>
+		
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Set the parent {@link cmc/foundation/ModelObject}.
+			@param cmc/foundation/ModelObject newObject: New parent object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (typeof (this.o) == "undefined" || newObject != this.o) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.o = newObject;
+				if (this.o) {
+					this.updateValueDel.connect(this.o, "onchildObjects");
+					this.updateValue();
+				}
+			}
+			]]>
+		</method>
+		
+		<method args="objectType, dayValue" name="updateChildObject">
+			<![CDATA[
+			if (this.o) {
+				if (dayValue) {
+					var childObject = this.o.getObject(objectType, true);
+					if (childObject.implicitNewObject) {
+						childObject.setVariable("implicitNewObject", false);
+						childObject.openGroupObject.checkUnsavedChanges();
+					}
+				}
+				else {
+					var childObject = this.o.getObject(objectType);
+					if (childObject != null) {
+						childObject.deleteObject();
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the widget with a new property value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = "";
+			if (this.o) {
+				if (this.o) {
+					value = (this.o.getObject(this.mondayObjectType) != null ? "M" : "") + (this.o.getObject(this.tuesdayObjectType) != null ? "T" : "") + (this.o.getObject(this.wednesdayObjectType) != null ? "W" : "") + (this.o.getObject(this.thursdayObjectType) != null ? "R" : "") + (this.o.getObject(this.fridayObjectType) != null ? "F" : "") + (this.o.getObject(this.saturdayObjectType) != null ? "S" : "") + (this.o.getObject(this.sundayObjectType) != null ? "U" : "");
+				}
+				if (value != this.value) {
+					this.__updateValueLock = true;
+					this.setVariable("value", value);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create or delete the child model objects based on the current value of the cmc/foundation/BaseDaysSelect widget.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this.o) {
+				this.updateChildObject(this.mondayObjectType, this.value.indexOf("M") >= 0);
+				this.updateChildObject(this.tuesdayObjectType, this.value.indexOf("T") >= 0);
+				this.updateChildObject(this.wednesdayObjectType, this.value.indexOf("W") >= 0);
+				this.updateChildObject(this.thursdayObjectType, this.value.indexOf("R") >= 0);
+				this.updateChildObject(this.fridayObjectType, this.value.indexOf("F") >= 0);
+				this.updateChildObject(this.saturdayObjectType, this.value.indexOf("S") >= 0);
+				this.updateChildObject(this.sundayObjectType, this.value.indexOf("U") >= 0);
+			}
+			]]>
+		</method>
+		
+		<handler name="onvalue">
+			<![CDATA[
+			if (!this.__updateValueLock) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+		
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></BaseDaysSelect>
+	 
+		 
+	<!--- 
+		@keywords final
+		A day selector for use within an object properties panel. It allows a user to 
+		select a day in a week as the value of a specified property. The following examples declares an instance
+		of this class for the property with name "daysProperty". 
+		
+		@START_CODE
+			<PropertyDaysSelect promptText="Days Selector" propertyName="daysProperty"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyDaysSelect">
+		<dependency localName="DaysSelect" moduleName="cmc/foundation/DaysSelect"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		
+		<!--- 
+			When displayTimeZone value is true, the server time zone is shown after the property components prompt text.  Defaulted to true.
+		-->
+		<variable name="displayTimeZone" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new DaysSelect.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Adds server time zone after the prompt text
+		-->
+		<method args="e" name="updateNewPromptText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.displayTimeZone) {
+				var contextValue = ContextUtil.Singleton.findContextValue(null, "serverTimeZoneDisplayName", this.updateNewPromptTextDel);
+				this.setVariable("newPrompt", (this.newPrompt) ? this.newPrompt + "\n(" + contextValue.value + ")" : "");
+			}
+			]]>
+		</method>
+
+	</PropertyEditor>
+	
+	<!--- 
+		@keywords final
+		<p>A child object check boxes day selector for use within a properties view. It allows a user to select days in a week.</p>
+		 
+		<p>When the user selects a day in the week, an instance of the specified child object is created. 
+		When a business user clears the check box, the specified child object is deleted</p>
+		
+		<p>The following example demonstrates the declaration of the day selector that will create
+		and delete child objects with object type "WeekDay". The child object will have a property named
+		"day".
+		
+		@START_CODE
+			<PropertyChildObjectDaysSelect
+					objectType="WeekDay" propertyName="day"/>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyChildObjectDaysSelect">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ChildObjectDaysSelect" moduleName="cmc/foundation/ChildObjectDaysSelect"/>
+		
+		<!--- The object type of the object to be created.  -->
+		<variable name="objectType" type="string" value=""/>
+		
+		<!--- The name of the property that will be set to the value representing the day of the week. -->
+		<variable name="propertyName" type="string" value="day"/>
+		
+		<!--- The Sunday value of the object property. -->
+		<variable name="sundayValue" type="string" value="Sunday"/>
+		
+		<!--- The Monday value of the object property. -->
+		<variable name="mondayValue" type="string" value="Monday"/>
+		
+		<!--- The Tuesday value of the object property. -->
+		<variable name="tuesdayValue" type="string" value="Tuesday"/>
+		
+		<!--- The Wednesday value of the object property. -->
+		<variable name="wednesdayValue" type="string" value="Wednesday"/>
+		
+		<!--- The Thursday value of the object property. -->
+		<variable name="thursdayValue" type="string" value="Thursday"/>
+		
+		<!--- The Friday value of the object property. -->
+		<variable name="fridayValue" type="string" value="Friday"/>
+		
+		<!--- The Saturday value of the object property. -->
+		<variable name="saturdayValue" type="string" value="Saturday"/>
+		
+		<!--- 
+			When displayTimeZone value is true, the server time zone is shown after the property components prompt text.  Defaulted to true.
+		-->
+		<variable name="displayTimeZone" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new ChildObjectDaysSelect.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				enabled: parentComponent.enabled,
+				sundayObjectType: this.objectType + "[" + this.propertyName + "=" + this.sundayValue + "]",
+				mondayObjectType: this.objectType + "[" + this.propertyName + "=" + this.mondayValue + "]",
+				tuesdayObjectType: this.objectType + "[" + this.propertyName + "=" + this.tuesdayValue + "]",
+				wednesdayObjectType: this.objectType + "[" + this.propertyName + "=" + this.wednesdayValue + "]",
+				thursdayObjectType: this.objectType + "[" + this.propertyName + "=" + this.thursdayValue + "]",
+				fridayObjectType: this.objectType + "[" + this.propertyName + "=" + this.fridayValue + "]",
+				saturdayObjectType: this.objectType + "[" + this.propertyName + "=" + this.saturdayValue + "]"
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Adds server time zone after the prompt text
+		-->
+		<method args="e" name="updateNewPromptText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.displayTimeZone) {
+				var contextValue = ContextUtil.Singleton.findContextValue(null, "serverTimeZoneDisplayName", this.updateNewPromptTextDel);
+				this.setVariable("newPrompt", (this.newPrompt) ? this.newPrompt + "\n(" + contextValue.value + ")" : "");
+			}
+			]]>
+		</method>
+
+	</PropertiesComponent>
+
+</Definitions>

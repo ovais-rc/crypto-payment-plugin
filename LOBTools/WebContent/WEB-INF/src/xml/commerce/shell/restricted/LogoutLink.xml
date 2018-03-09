@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		This class implements the logout link displayed in the banner area.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/LogoutLink" focusable="false">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<FocusableBaseButton doesenter="true" name="logoutLinkButton">
+			<TextComponent fgcolor="${this.classroot.style.titletextcolor}" fontsize="13" name="logoutLinkText" text="${shellResources.Singleton.logoutLink.string}"/>
+
+			<!---
+				@keywords private
+				This method handles the onclick event of the log out link, and opens the
+				log out dialog according to the condition of all the opened tools. The tools
+				may contain unsaved changes.
+			-->
+			<handler name="onclick">
+				<![CDATA[
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LogoutLink", "onclick");
+				}
+				if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+					require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+						TransactionProgressDialog.Singleton.openWindow();
+					});
+				}
+				else {
+					if (ToolsController.Singleton.hasUnsavedChangesAllTools()) {
+						require(["cmc/shell/LogoutDialog"], function(LogoutDialog) {
+							LogoutDialog.Singleton.setVariable("currentState", "UNSAVEDCHANGES");
+						});
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LogoutLink", "onclick", "Opening the log out dialog with unsaved changes in the tools.");
+						}
+					}
+					else {
+						require(["cmc/shell/LogoutDialog"], function(LogoutDialog) {
+							LogoutDialog.Singleton.setVariable("currentState", "NORMAL");
+						});
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LogoutLink", "onclick", "Opening the log out dialog without unsaved changes.");
+						}
+					}
+					require(["cmc/shell/LogoutDialog"], function(LogoutDialog) {
+						LogoutDialog.Singleton.openWindow();
+					});
+				}
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LogoutLink", "onclick");
+				}
+				]]>
+			</handler>
+			
+			<!--- @keywords private -->
+			<method name="createFocusIndicator">
+				<![CDATA[
+				if (!this.parent.indicator) {
+					new FocusIndicator.Class(this.parent, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this,
+						focusIndicatorColor: "#ffffff"
+					});
+				}
+				]]>
+			</method>
+		</FocusableBaseButton>
+	</FocusableComponent>
+
+	<!---
+		This class implements the welcome text displayed in the banner area.
+	-->
+	<TextComponent classDefinition="true" definitionName="cmc/shell/WelcomeText">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateWelcomeTextDel = new EventHandler.Class(this, "updateWelcomeText");
+			this.updateWelcomeText();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateWelcomeText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateWelcomeTextDel.disconnectAll();
+			var logonIdContext = ContextUtil.Singleton.findContextValue(null, "logonId", this.updateWelcomeTextDel);
+			if (logonIdContext != null) {
+				this.updateWelcomeTextDel.connect(shellResources.Singleton.welcomeText, "onstring");
+				this.setVariable("text", shellResources.Singleton.welcomeText.string + " " + logonIdContext.value);
+			}
+			]]>
+		</method>
+	</TextComponent>
+
+</Definitions>

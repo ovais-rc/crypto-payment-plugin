@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		The cmc/foundation/TextViewer class will bind a {@link cmc/foundation/ModelProperty} with the {@link cmc/foundation/TextComponent} widget. 
+		The text will be refreshed to represent the value of the property.
+		
+		This text field is for internal use by properties view. 
+		{@link cmc/foundation/PropertyViewLongText} create an cmc/foundation/TextViewer instance for use in the properties view. 
+	-->
+	<TextComponent classDefinition="true" definitionName="cmc/foundation/TextViewer" focusable="true" multiline="true" resize="true" selectable="true" visible="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<!--- 
+			Reference to {@link cmc/foundation/ModelProperty} object that is being edited. 
+		-->
+		<variable name="property" value="${null}"/>
+		<!---
+			Indicates that the text should be interpreted as HTML.
+		-->
+		<variable name="html" type="boolean" value="false"/>
+		<!---
+			This is a dummy variable. This is defined just for the enablement condition code to work without errors.
+		-->
+		<variable name="enabled" type="boolean" value="true"/>
+		
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this
+				});
+			}
+			]]>
+		</handler>
+				
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this input box. Listeners are created to
+			watch the property value. If the property changes at anytime, the updateValue method will be called.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this input box.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValue();
+				}
+				else {
+					this.updateValueDel.disconnectAll();
+					this.setVariable('text', "");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Gets the display value from the properties value and sets it as the text to be displayed in the viewer.
+			@param cmc/foundation/EventHandler del An optional delegate to call when a change in property value is caused by the value service.
+			@returns string: display value
+		-->
+		<method args="del" name="getDisplayValue">
+			<![CDATA[
+			var value = this.property.value;
+			var displayValue = "";
+			if (this.property.propertyDefinition != null) {
+				var propertyValues = this.property.propertyDefinition.getPropertyValues(this.property.o, del);
+				for (var i = 0; i < propertyValues.length; i++) {
+					var propertyValue = propertyValues[i];
+					if (propertyValue.value == value) {
+						displayValue = propertyValue.displayName;
+						del.connect(propertyValue, "ondisplayName");
+					}
+				}
+			}
+			if (displayValue == "") {
+				displayValue = value;
+			}
+			return displayValue;
+			]]>
+		</method>
+		
+		<!--- 
+			Update and refresh the cmc/foundation/TextViewer value with a new {@link cmc/foundation/ModelProperty} value. 
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateValueDel.disconnectAll();
+			this.updateValueDel.connect(this.property, "onvalue");
+			var value = this.getDisplayValue(this.updateValueDel);
+			if (value != this.getText()) {
+				this.setVariable('text', value);
+			}
+			]]>
+		</method>
+	<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method></TextComponent>
+</Definitions>

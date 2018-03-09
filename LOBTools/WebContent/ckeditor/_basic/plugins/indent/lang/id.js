@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","id",{indent:"Tambah Inden",outdent:"Kurangi Inden"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","cs",{bold:"Tučné",italic:"Kurzíva",strike:"Přeškrtnutí",subscript:"Dolní index",superscript:"Horní index",underline:"Podtržené"});

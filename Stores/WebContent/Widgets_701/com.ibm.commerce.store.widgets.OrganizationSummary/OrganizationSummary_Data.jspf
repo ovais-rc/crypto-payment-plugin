@@ -1,0 +1,161 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%
+	//Check if orgEntityId is present in request parameter. When this widget is invoked directly ( say through Ajax call ), orgEntityId will be passed
+	//as request parameter. When this widget is used along with OrganizationList widget, the OrganizationList widget will set the orgEntityId as Request Attribute.
+%>
+
+
+<c:choose>
+	<c:when test="${!empty param.orgEntityId}">
+		<c:set var="orgEntityIdForSummary" value="${param.orgEntityId}" scope="request"/>
+	</c:when>
+	<c:when test="${!empty WCParam.orgEntityId}">
+		<c:set var="orgEntityIdForSummary" value="${WCParam.orgEntityId}" scope="request"/>
+	</c:when>
+</c:choose>
+
+<c:if test="${!empty orgEntityIdForSummary}">
+	<wcf:rest var="orgEntityDetails" url="store/${WCParam.storeId}/organization/${orgEntityIdForSummary}" scope="request">
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="profileName" value="IBM_Org_Entity_Details" />
+	</wcf:rest>
+
+<wcst:message bundle="${widgetText}" var = "orgEntityTypeDesc"  key="ORG_TYPE_ORGANIZATION"/>
+<c:if test="${orgEntityDetails.orgEntityType eq 'OU'}">
+	<wcst:message bundle="${widgetText}" var = "orgEntityTypeDesc"  key="ORG_TYPE_ORGANIZATIONAL_UNIT"/>
+</c:if>
+
+</c:if>
+
+<wcf:url var="OrganizationCreateEditView" value="OrganizationCreateEditView">
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="storeId" value="${WCParam.storeId}"/>
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+</wcf:url>
+
+<c:choose>
+	<c:when test="${locale == 'zh_CN'}">
+		<c:set var="addressFieldOrderForOrg" value="countryDisplayName,stateDisplayName,city,address1,zipCode" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="country,state,city,address1,zipCode" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1"/>
+	</c:when>
+	<c:when test="${locale == 'zh_TW'}">
+		<c:set var="addressFieldOrderForOrg" value="countryDisplayName,stateDisplayName,zipCode,city,address1" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="country,state,zipCode,city,address1" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1" scope="request"/>
+	</c:when>
+	<c:when test="${locale eq 'ar_EG'}">
+		<c:set var="addressFieldOrderForOrg" value="address1,city,stateDisplayName,zipCode,countryDisplayName" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="address1,city,state,zipCode,country" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1" scope="request"/>
+	</c:when>
+	<c:when test="${locale == 'ru_RU'}">
+		<c:set var="addressFieldOrderForOrg" value="address1,zipCode,city,stateDisplayName,countryDisplayName" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="address1,zipCode,city,state,country" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1" scope="request"/>
+	</c:when>
+	<c:when test="${locale == 'ja_JP' || locale == 'ko_KR'}">
+		<c:set var="addressFieldOrderForOrg" value="countryDisplayName,zipCode,stateDisplayName,city,address1" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="country,zipCode,state,city,address1" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1" scope="request"/>
+	</c:when>
+	<c:when test="${locale == 'de_DE' || locale == 'es_ES' || locale == 'fr_FR' || locale == 'it_IT' || locale == 'ro_RO'}">
+		<c:set var="addressFieldOrderForOrg" value="address1,zipCode,city,stateDisplayName,countryDisplayName" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="address1,zipCode,city,state,country" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,zipCode,country,email1" scope="request"/>
+	</c:when>
+	<c:when test="${locale == 'pl_PL'}">
+		<c:set var="addressFieldOrderForOrg" value="address1,zipCode,city,stateDisplayName,countryDisplayName" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="address1,zipCode,city,state,country" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1" scope="request"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="addressFieldOrderForOrg" value="address1,city,stateDisplayName,zipCode,countryDisplayName" scope="request"/>
+		<c:set var="addressFieldOrderForOrgEdit" value="address1,city,state,zipCode,country" scope="request"/>
+		<c:set var="mandatoryFields" value="address1,city,state,zipCode,country,email1" scope="request"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="contactInfoFieldsForOrg" value="email1,phone1,fax1" scope="request"/>
+
+<%-- Start creating address display list. Display state/country name instead of state/country code --%>
+<wcf:useBean var="addressFieldDisplayList" classname="java.util.ArrayList"/>
+<c:set var="selectedCountryCode" value="${orgEntityDetails.orgProperties['country']}"/>
+<c:set var="selectedStateCode" value="${orgEntityDetails.orgProperties['state']}"/>
+<c:set var="selectedCountryName" value="${selectedCountryCode}"/>
+<c:set var="selectedStateName" value="${selectedStateCode}"/>
+
+<c:if test="${empty orgEntityDetails}">
+	<%-- This is create org scenario.. Set country based on user locale. --%>
+	<c:set var="selectedCountryCode" value="${fn:split(locale, '_')[1]}" />
+</c:if>
+
+<c:set var="key1" value="store/${WCParam.storeId}/country/country_state_list+${langId}+${selectedCountryCode}"/>
+<c:set var="countryBean" value="${cachedOnlineStoreMap[key1]}" scope="request"/>
+<c:if test="${empty countryBean}">
+	<wcf:rest var="countryBean" url="store/{storeId}/country/country_state_list" cached="true" scope="request">
+		<wcf:var name="storeId" value="${WCParam.storeId}" />
+		<wcf:param name="langId" value="${langId}" />
+		<wcf:param name="countryCode" value="${selectedCountryCode}"/>
+	</wcf:rest>
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${countryBean}"/>
+</c:if>
+
+<%-- Country display name --%>
+<c:forEach var="country" items="${countryBean.countries}">
+	<c:if test="${country.code eq selectedCountryCode }">
+		<c:set value="${country.displayName}" var="selectedCountryName"/>
+	</c:if>
+</c:forEach>
+
+<%-- State display name --%>
+<c:forEach var="state" items="${countryBean.countryCodeStates}">
+	<c:if test="${state.code eq selectedStateCode}">
+		<c:set value="${state.displayName}" var="selectedStateName"/>
+	</c:if>
+</c:forEach>
+
+<c:if test="${param.requesttype eq 'ajax'}">
+	<%-- If its an AJAX call to refresh address details, then countries JSON object is not needed. So set the variable to true --%>
+	<c:set var="countryListSelectionHelperInitialized" value="true" scope="request"/>
+</c:if>
+<%-- Build country/state JSON object using the countryBean retrieved above --%>
+<%@ include file="/Widgets_701/Common/Address/AddressHelperCountrySelection.jspf" %>
+
+<c:forEach var="fieldName" items="${addressFieldOrderForOrg}">
+	<c:choose>
+		<c:when test="${fieldName eq 'stateDisplayName' && fn:length(selectedStateName) > 0}">
+			<wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(selectedStateName)}"/>
+		</c:when>
+		<c:when test="${fieldName eq 'countryDisplayName' && fn:length(selectedCountryName) > 0}">
+			<wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(selectedCountryName)}"/>
+		</c:when>
+		<c:otherwise>
+			<c:if test="${fn:length(orgEntityDetails.orgProperties[fieldName]) > 0}">
+				<wcf:set target="${addressFieldDisplayList}" value="${fn:escapeXml(orgEntityDetails.orgProperties[fieldName])}"/>
+			</c:if>
+		</c:otherwise>
+	</c:choose>
+</c:forEach>
+
+
+
+<script>
+	dojo.addOnLoad(function(){
+		// Set locale specific mandatory fields for script use
+		organizationSummaryJS.setMandatoryFields('${mandatoryFields}');
+	});
+</script>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","ru",{alt:"Разделитель страниц",toolbar:"Вставить разрыв страницы"});

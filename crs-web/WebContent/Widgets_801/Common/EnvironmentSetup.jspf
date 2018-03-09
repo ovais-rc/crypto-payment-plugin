@@ -1,0 +1,598 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+  *****
+  * This file retrieves and prepares a lot of information which are used by all the store JSP files.
+  *
+  *****
+--%>
+
+<%@ include file="../Common/JSTLEnvironmentSetup.jspf" %>
+
+<c:set var = "env_vfileColor" value="images/colors/color1/"/>
+<c:set var="env_escapeXmlFlag" value="true"/>
+<c:set var="env_WCMUsed" value="true"/>
+
+<%-- These are variables to use on pages --%>
+<c:set var="locale" value="${CommandContext.locale}" />
+<c:set var="langId" value="${CommandContext.languageId}" />
+<c:set var="storeId" value="${CommandContext.storeId}" />
+<c:set var="userType" value="${CommandContext.user.registerType}" />
+<c:set var="userId" value="${CommandContext.userId}"/>
+<c:set var="langId" value="${CommandContext.languageId}" scope="request" />
+<c:set var="urlLangId" value="${langId}" scope="request"/>
+
+<c:if test="${!empty WCParam.catalogId}">
+	<c:set var="catalogId"><c:out value="${WCParam.catalogId}"/></c:set>
+</c:if>
+
+<wcst:alias name="BackendConfig" var="backendConfig" />
+<%-- Determine if we are in preview mode. --%>
+<wcst:preview var="env_inPreview" />
+<c:if test="${empty searchHostNamePath}">
+	<c:set var="hostname" value="${backendConfig.searchServerHostname}"/>
+	<c:choose>
+		<c:when test="${env_inPreview}">
+			<c:set var="searchHostNamePath" value="https://${hostname}:${backendConfig.searchServerPreviewSecuredPort}"/>
+			<c:set var="searchContextPath" value="${backendConfig.searchServerPreviewContextPath}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="searchHostNamePath" value="https://${hostname}:${backendConfig.searchServerPort}"/>
+			<c:set var="searchContextPath" value="${backendConfig.searchServerContextPath}"/>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<wcst:alias name="ModuleConfig" var="configInst" />
+<wcst:mapper source="configInst" method="getWebModule" var="moduleConfig" />
+<wcst:mapper source="configInst" method="getValue" var="propertyConfig"/>
+<c:set var="restServerName" value="${propertyConfig['WebServer/HostName']}" scope="request"/>
+<c:choose>
+	<c:when test="${pageContext.request.secure}">
+		<c:choose>
+			<c:when test="${env_inPreview}">
+				<c:set var="restport" value="${moduleConfig['RestPreview'].SSLPort}"/>
+				<c:if test="${!empty restport}">
+					<c:set var="restport" value=":${moduleConfig['RestPreview'].SSLPort}"/>
+				</c:if>
+				<c:set var="restPrefix" value="https://${restServerName}${restport}${moduleConfig['RestPreview'].contextPath}" scope="request"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="restport" value="${moduleConfig['Rest'].SSLPort}"/>
+				<c:if test="${!empty restport}">
+					<c:set var="restport" value=":${moduleConfig['Rest'].SSLPort}"/>
+				</c:if>
+				<c:set var="restPrefix" value="https://${restServerName}${restport}${moduleConfig['Rest'].contextPath}" scope="request"/>
+			</c:otherwise>
+		</c:choose>
+	</c:when>
+	<c:otherwise>
+		<c:choose>
+			<c:when test="${env_inPreview}">
+				<c:set var="restport" value="${moduleConfig['RestPreview'].nonSSLPort}"/>
+				<c:if test="${!empty restport}">
+					<c:set var="restport" value=":${moduleConfig['RestPreview'].nonSSLPort}"/>
+				</c:if>
+				<c:set var="restPrefix" value="http://${restServerName}${restport}${moduleConfig['RestPreview'].contextPath}" scope="request"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="restport" value="${moduleConfig['Rest'].nonSSLPort}"/>
+				<c:if test="${!empty restport}">
+					<c:set var="restport" value=":${moduleConfig['Rest'].nonSSLPort}"/>
+				</c:if>
+				<c:set var="restPrefix" value="http://${restServerName}${restport}${moduleConfig['Rest'].contextPath}" scope="request"/>
+			</c:otherwise>
+		</c:choose>
+	</c:otherwise>
+</c:choose>
+
+<c:if test="${empty REST_CONFIG}">
+	<jsp:useBean id="REST_CONFIG" class="java.util.HashMap" scope="request"/>
+	<c:choose>
+		<c:when test="${pageContext.request.secure}">
+			<c:choose>
+				<c:when test="${env_inPreview}">
+					<c:if test="${empty secureRestPreviewConfig}">
+						<jsp:useBean id="secureRestPreviewConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${secureRestPreviewConfig}" property="schema" value="https"/>
+						<c:set target="${secureRestPreviewConfig}" property="host" value="${restServerName}"/>
+						<c:set target="${secureRestPreviewConfig}" property="port" value="${moduleConfig['RestPreview'].SSLPort}"/>
+						<c:set target="${secureRestPreviewConfig}" property="contextPath" value="${moduleConfig['RestPreview'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${secureRestPreviewConfig}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${empty secureRestConfig}">
+						<jsp:useBean id="secureRestConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${secureRestConfig}" property="schema" value="https"/>
+						<c:set target="${secureRestConfig}" property="host" value="${restServerName}"/>
+						<c:set target="${secureRestConfig}" property="port" value="${moduleConfig['Rest'].SSLPort}"/>
+						<c:set target="${secureRestConfig}" property="contextPath" value="${moduleConfig['Rest'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${secureRestConfig}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		<c:otherwise>
+			<c:choose>
+				<c:when test="${env_inPreview}">
+					<c:if test="${empty restPreviewConfig}">
+						<jsp:useBean id="restPreviewConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${restPreviewConfig}" property="schema" value="http"/>
+						<c:set target="${restPreviewConfig}" property="host" value="${restServerName}"/>
+						<c:set target="${restPreviewConfig}" property="port" value="${moduleConfig['RestPreview'].nonSSLPort}"/>
+						<c:set target="${restPreviewConfig}" property="contextPath" value="${moduleConfig['RestPreview'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${restPreviewConfig}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${empty restConfig}">
+						<jsp:useBean id="restConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${restConfig}" property="schema" value="http"/>
+						<c:set target="${restConfig}" property="host" value="${restServerName}"/>
+						<c:set target="${restConfig}" property="port" value="${moduleConfig['Rest'].nonSSLPort}"/>
+						<c:set target="${restConfig}" property="contextPath" value="${moduleConfig['Rest'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${restConfig}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<wcf:useBean var="cachedCatalogEntryDetailsMap" classname="java.util.HashMap" scope="request"/>
+<wcf:useBean var="cachedEntitledPriceMap" classname="java.util.HashMap" scope="request"/>
+<wcf:useBean var="cachedRangePriceMap" classname="java.util.HashMap" scope="request"/>
+<wcf:useBean var="cachedCategoryViewMap" classname="java.util.HashMap" scope="request"/>
+<wcf:useBean var="cachedOnlineStoreMap" classname="java.util.HashMap" scope="request"/>
+
+<c:if test="${not empty param.ajaxStoreDir }" >
+	<c:set var="jspStoreDir"><c:out value="${param.ajaxStoreDir}"/> </c:set>
+</c:if>
+
+<c:set var="key1" value="store/${storeId}/databean+IBM_Store_Details+${langId}+${jspStoreDir}"/>
+<c:set var="sdb" value="${cachedOnlineStoreMap[key1]}"/>
+
+<c:if test="${empty sdb}">
+	<wcf:rest var="sdb" url="store/{storeId}/databean" cached="true">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:param name="profileName" value="IBM_Store_Details" encode="true"/>
+		<wcf:param name="langId" value="${langId}" encode="true"/>
+		<wcf:param name="jspStoreDir" value="${jspStoreDir}" encode="true" />
+	</wcf:rest>
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${sdb}"/>
+</c:if>
+
+<%-- Determine whether store is B2B store type --%>
+<c:if test="${sdb.storeType == 'B2B' || sdb.storeType == 'BMH'}" >
+	<c:set var="env_b2bStore" value="true"/>
+</c:if>
+
+<c:set var="env_OnBehalfOf" value="false"/>
+<c:set var="env_useExternalCart" value="false"/>
+<c:set var="env_browseOnly" value="false"/>
+<wcst:mapper source="CommandContext" method="getContext" var="CmdContextGetContxt" />
+<flow:ifEnabled feature="on-behalf-of">
+	<c:if test="${empty extCartId}">
+		<c:set var="extContext" value="${CmdContextGetContxt['com.ibm.commerce.context.ExternalCartContext']}"/>
+		<wcst:mapper source="extContext" method="getAttribute" var="extContextGetAttr" />
+		<c:if test="${!empty extContext}">
+			<c:set var="extCartId" value="${extContextGetAttr['extCartId']}"/>
+			<c:if test="${extContextGetAttr['browseOnly']}">
+				<c:set var="browseOnly" value="true"/>
+			</c:if>
+		</c:if>
+	</c:if>
+	<c:if test="${CommandContext.forUserId != '' && CommandContext.stickyUserId == ''}">
+		<c:set var="env_OnBehalfOf" value="true"/>
+		<c:if test="${!empty extCartId }">
+			<c:set var="env_useExternalCart" value="true"/>
+		</c:if>
+		<c:if test="${!empty browseOnly }">
+			<c:set var="env_browseOnly" value="true"/>
+		</c:if>
+	</c:if>
+</flow:ifEnabled>
+<%-- Enable to allow selection of skus/attributes which are set to be buyable=false at widget level default value is false --%>
+<c:set var="buyablePurchasable" value="false" scope="request" />
+
+<%--
+	For CaaS, prefix the path of jspStoreImgDir and jsAssetsDir, so that it points to webserver. OOB it will be empty
+--%>
+<c:set var = "jsServerPath" value=""/>
+<c:set var = "cssServerPath" value=""/>
+
+<%-- URL pointing to the shared image directory.  Use this to reference images --%>
+<c:choose>
+<c:when test="${not empty param.ajaxStoreImageDir }" >
+	<c:set var="jspStoreImgDir" scope="request"><c:out value="${param.ajaxStoreImageDir}"/> </c:set>
+</c:when>
+<c:otherwise>
+	<c:set var="jspStoreImgDir" value="${jsServerPath}${sdb.jspStoreDirFilePath}" scope="request"/>
+</c:otherwise>
+</c:choose>
+
+<%-- WebAsset directory of the shared file directory.  Includes JSPs, HTML, Image files, etc --%>
+<c:set var="env_jspStoreDir" value="/${sdb.jspStoreDir}/" />
+
+<%-- Path used to retrieve the JavaScript assets.  Use this to reference your JavaScript files. --%>
+<c:set var="jsAssetsDir" value="${cssServerPath}${sdb.jspStoreDirFilePath}" scope="request"/>
+
+<%-- Path to Commerce Composer site level widgets. --%>
+<c:set var="env_siteWidgetsDir" value="/Widgets_801/" scope="request" />
+
+<%-- Path to IBM Widgets directory. Use this to reference JS, CSS, etc --%>
+<c:set var="jsIBMWidgetsAssetsPrefix" value="${staticIBMAssetAliasRoot}${env_siteWidgetsDir}"  scope="request"/>
+
+<%-- Path to IBM Widgets directory. Use this to reference images --%>
+<c:set var="jspIBMWidgetsImgPrefix" value="${staticIBMAssetAliasRoot}"  scope="request"/>
+
+<%--
+Example directories:
+storeImgDir - /wcsstore/<hostedstoredir>/
+storeDir - /<hostedstoredir>/
+jspStoreImgDir - /wcsstore/<sharedstorefrontassetstoredir>/
+jspStoreDir - /<sharedstorefrontassetstoredir>/
+--%>
+
+<c:set var="key1" value="store/${storeId}/currency_format+byCurrency+${CommandContext.currency}+-1+${langId}"/>
+<c:set var="currencyFormatterDB" value="${cachedOnlineStoreMap[key1]}"/>
+<c:if test="${empty currencyFormatterDB}">
+	<wcf:rest var="getCurrencyFormatResponse" url="store/{storeId}/currency_format" cached="true">
+		<wcf:var name="storeId" value="${storeId}" />
+		<wcf:param name="q" value="byCurrency" />
+		<wcf:param name="currency" value="${CommandContext.currency}" />
+		<wcf:param name="numberUsage" value="-1" />
+		<wcf:param name="langId" value="${langId}" />
+	</wcf:rest>
+	<c:set var="currencyFormatterDB" value="${getCurrencyFormatResponse.resultList[0]}" scope="request" />
+	<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${currencyFormatterDB}"/>
+</c:if>
+
+<%-- Set to context root where images can be found --%>
+<c:set var="env_imageContextPath" value="${staticIBMAssetContextRoot}" />
+<c:set var="env_customImageContextPath" value="${staticCustomAssetContextRoot}" />
+
+<%-- WCH cms --%>
+<flow:ifEnabled feature="WCHIntegration">
+	<%-- Path to subdirectory in WCH --%>
+	<c:set var="storeAssetsPath" value="StoreAssets"/>
+	<c:set var="ibmAssetsPath" value="IBMAssets"/>
+		
+	<%-- Persist wchDebugMode in cookie --%>
+	<c:choose>
+		<c:when test="${not empty WCParam.wchDebugMode}">
+			<%
+				javax.servlet.http.Cookie cookie = new javax.servlet.http.Cookie("WCH_DEBUG_MODE", (String)request.getParameter("wchDebugMode"));
+				cookie.setPath("/");
+				response.addCookie(cookie);
+			%>
+			<c:set var="useWCHDebugMode" value="${WCParam.wchDebugMode}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="useWCHDebugMode" value="${cookie.WCH_DEBUG_MODE.value}"/>
+		</c:otherwise>
+	</c:choose>
+	
+	<wcst:resolveContentURL var="resolvedStaticAssetsRoot" url="http://[cmsHost]" storeStaticAssets="${!useWCHDebugMode}" includeHostName="true" useCustomerTenantWCH="true" scope="request"/>
+	<c:if test="${not empty resolvedStaticAssetsRoot }">
+		<c:set var="jspStoreImgDir" value="${resolvedStaticAssetsRoot}/${storeAssetsPath}/${sdb.jspStoreDir}/" scope="request" />
+		<c:set var="jsAssetsDir" value="${resolvedStaticAssetsRoot}/${storeAssetsPath}/${sdb.jspStoreDir}/" scope="request" />
+	</c:if>
+	
+	<wcst:resolveContentURL var="resolvedStaticAssetsRoot" url="http://[cmsHost]" storeStaticAssets="${!useWCHDebugMode}" includeHostName="true" scope="request"/>
+	<c:if test="${not empty resolvedStaticAssetsRoot }">
+		<c:set var="jsIBMWidgetsAssetsPrefix" value="${resolvedStaticAssetsRoot}/${ibmAssetsPath}${env_siteWidgetsDir}" scope="request" />
+		<c:set var="jspIBMWidgetsImgPrefix" value="${resolvedStaticAssetsRoot}/${ibmAssetsPath}/" scope="request" />
+	</c:if>
+</flow:ifEnabled>
+
+
+<c:choose>
+	<c:when test="${CommandContext.locale eq 'iw_IL'}">
+		<c:set var="isBiDiLocale" value="true" scope="request"/>
+		<c:set var="shortLocale" value="he"/>
+	</c:when>
+	<c:when test="${CommandContext.locale eq 'ar_EG'}">
+		<c:set var="isBiDiLocale" value="true" scope="request"/>
+		<c:set var="shortLocale" value="${fn:substring(CommandContext.locale,0,2)}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="shortLocale" value="${fn:substring(CommandContext.locale,0,2)}"/>
+		<c:set var="isBiDiLocale" value="false" scope="request"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="env_currencyDecimal" value="${currencyFormatterDB.decimalPlaces}" />
+<c:set var="env_currencyCode" value="${currencyFormatterDB.currencyCode}" />
+
+<c:if test="${CommandContext.currency == 'KRW'}">
+	<c:set property="currencySymbol" value='&#8361;' target="${currencyFormatterDB}"/>
+</c:if>
+<c:if test="${CommandContext.currency == 'PLN'}">
+	<c:set property="currencySymbol" value='z&#322;' target="${currencyFormatterDB}"/>
+</c:if>
+<c:if test="${CommandContext.currency == 'TRY'}">
+	<%-- No longer necessary when Turkish Lira is displayable through Unicode --%>
+	<c:set property="currencySymbol" value="<IMG src='${env_imageContextPath}/images/turkish_lira.gif' align='bottom'>" target="${currencyFormatterDB}"/>
+</c:if>
+<c:if test="${CommandContext.currency == 'EGP' && locale != 'iw_IL'}">
+	<c:set property="currencySymbol" value="<SPAN dir=ltr> .&#1580;.&#1605;</SPAN>" target="${currencyFormatterDB}"/>
+</c:if>
+<c:if test="${CommandContext.currency == 'ILS' && locale == 'iw_IL'}">
+	<c:set property="currencySymbol" value="&#1513;&#1524;&#1495;" target="${currencyFormatterDB}"/>
+</c:if>
+
+<c:set var="env_CurrencySymbolToFormat" value="${currencyFormatterDB.currencySymbol}" />
+<wcst:alias name="StoreServer" var="isStoreServer" />
+<%-- Load the store bundles --%>
+<c:if test="${env_inPreview }">
+	<c:if test="${not empty cookie.WC_TOOLLOCALE.value }">
+		<fmt:setLocale value="${cookie.WC_TOOLLOCALE.value}"/>
+	</c:if>
+	<c:if test="${empty cookie.WC_TOOLLOCALE.value }">
+	<%--
+		The TOOLLOCALE will be empty if the preview launched from Accelerator
+	--%>
+		<fmt:setLocale value="${CommandContext.locale}" />
+	</c:if>
+	<c:choose>
+		<c:when test="${isStoreServer == 'true'}">
+			<wcst:setBundle basename="/Widgets_801/Properties/widgettext" var="ibmWidgetPreviewText" location="widget"/>
+			<wcst:setBundle basename="com.ibm.commerce.stores.widget.properties.widgettext" var="storeWidgetPreviewText" location="store"/>
+			<wcst:setBundle basename="com.ibm.commerce.stores.preview.properties.StorePreviewer" var="ibmPreviewText" location="widget"/>
+			<wcst:setBundle basename="com.ibm.commerce.stores.preview.properties.StorePreviewer" var="storePreviewText" location="store"/>
+		</c:when>
+		<c:otherwise>
+			<wcst:setBundle basename="/Widgets_801/Properties/widgettext" var="ibmWidgetPreviewText"/>
+			<wcst:setBundle basename="com.ibm.commerce.stores.preview.properties.StorePreviewer" var="ibmPreviewText"/>
+		</c:otherwise>
+	</c:choose>
+
+</c:if>
+<fmt:setLocale value="${CommandContext.locale}" />
+
+<c:choose>
+	<c:when test="${env_b2bStore}">
+		<c:choose>
+			<c:when test="${isStoreServer == 'true'}">
+				<wcst:setBundle basename="/Widgets_801/Properties/widgettext_B2B" var="ibmWidgetText" location="widget"/>
+				<wcst:setBundle basename="com.ibm.commerce.stores.widget.properties.widgettext_B2B" var="storeWidgetText" location="store"/>
+			</c:when>
+			<c:otherwise>
+				<wcst:setBundle basename="/Widgets_801/Properties/widgettext_B2B" var="ibmWidgetText"/>
+			</c:otherwise>
+		</c:choose>
+	</c:when>
+	<c:otherwise>
+		<c:choose>
+			<c:when test="${isStoreServer == 'true'}">
+				<wcst:setBundle basename="/Widgets_801/Properties/widgettext" var="ibmWidgetText" location="widget"/>
+				<wcst:setBundle basename="com.ibm.commerce.stores.widget.properties.widgettext" var="storeWidgetText" location="store"/>
+			</c:when>
+			<c:otherwise>
+				<wcst:setBundle basename="/Widgets_801/Properties/widgettext" var="ibmWidgetText"/>
+			</c:otherwise>
+		</c:choose>
+
+	</c:otherwise>
+</c:choose>
+<wcf:useBean var="widgetText" classname="java.util.ArrayList"/>
+<c:if test="${!empty storeWidgetText}">
+	<wcf:set target="${widgetText}" value="${storeWidgetText}"/>
+</c:if>
+<wcf:set target="${widgetText}" value="${ibmWidgetText}"/>
+
+<wcf:useBean var="widgetPreviewText" classname="java.util.ArrayList"/>
+<c:if test="${!empty storeWidgetPreviewText}">
+	<wcf:set target="${widgetPreviewText}" value="${storeWidgetPreviewText}"/>
+</c:if>
+<wcf:set target="${widgetPreviewText}" value="${ibmWidgetPreviewText}"/>
+
+<wcf:useBean var="previewText" classname="java.util.ArrayList"/>
+<c:if test="${!empty storePreviewText}">
+	<wcf:set target="${previewText}" value="${storePreviewText}"/>
+</c:if>
+<wcf:set target="${previewText}" value="${ibmPreviewText}"/>
+
+<c:if test="${env_inPreview && empty previewContext}">
+	<c:set var="previewContext" value="${CmdContextGetContxt['com.ibm.commerce.context.preview.PreviewContext']}"/>
+</c:if>
+<c:if test="${!empty previewContext}">
+	<c:set var="previewToken" value="${previewContext.properties['previewToken']}"/>
+</c:if>
+<c:if test="${empty previewToken}">
+	<c:set var="previewToken" value="${CmdContextGetContxt['previewToken']}"/>
+</c:if>
+<c:set var="env_storePreviewLink" value="${!empty previewContext && !empty previewContext.properties['previewToken']}"/>
+<c:if test="${empty env_hiddenFieldsList}">
+	<c:set var="env_hiddenFieldsList" value="" scope="request"/>
+</c:if>
+
+<%-- Constants used by subscriptions products --%>
+<c:set var="env_subsFulfillmentFrequencyAttrName" value="fulfillmentFrequency" scope="request"/>
+<c:set var="env_subsPaymentFrequencyAttrName" value="paymentFrequency" scope="request"/>
+<c:set var="env_subsTimePeriodAttrName" value="timePeriod" scope="request"/>
+
+<c:set var="sslPortForStores" value="${moduleConfig['Stores'].SSLPort}"/>
+<c:set var="nonSSLPortForStores" value="${moduleConfig['Stores'].nonSSLPort}"/>
+
+<%-- Build URL Prefixes - http[s]://hostname[:portNumber] --%>
+<c:if test="${!empty nonSSLPortForStores && nonSSLPortForStores != '80'}">
+	<c:set var="httpPort" value = ":${nonSSLPortForStores}"/>
+</c:if>
+<c:set var="urlPrefixForHTTP" value="http://${pageContext.request.serverName}" scope="request"/>
+
+<c:if test="${!empty sslPortForStores && sslPortForStores != '443'}">
+	<c:set var="httpsPort" value = ":${sslPortForStores}"/>
+</c:if>
+<c:set var="urlPrefixForHTTPS" value="https://${pageContext.request.serverName}${httpsPort}" scope="request"/>
+
+<c:set var="env_displayListPriceInProductPage" value="true" scope="request"/>
+<%-- Since this env file is included at lot of places, make sure that we construct HomePageURLWithLang SEO URL only once --%>
+<c:if test = "${empty env_TopCategoriesDisplayURL}">
+	<wcf:url var="TopCategoriesDisplayURLTemp" value="TopCategories1" patternName="HomePageURLWithLang">
+		<wcf:param name="langId" value="${langId}" />
+		<wcf:param name="storeId" value="${storeId}" />
+		<wcf:param name="catalogId" value="${catalogId}" />
+		<wcf:param name="urlLangId" value="${urlLangId}"/>
+	</wcf:url>
+	<%-- Put the variable in request scope, so that imported JSP's will find this var --%>
+	<c:set var="env_TopCategoriesDisplayURL" value="${TopCategoriesDisplayURLTemp}" scope="request"/>
+
+</c:if>
+
+<%-- Begin pagination control variables definition --%>
+<%-- set default pageSize and beginIndex --%>
+<c:set var="beginIndex" scope="request"><c:out value="${WCParam.beginIndex}" /> </c:set>
+<c:if test="${empty beginIndex}">
+	<c:set var="beginIndex" value = "0" scope="request"/>
+</c:if>
+
+<c:set var="pageSize" scope="request"><c:out value="${WCParam.pageSize}" /></c:set>
+<c:if test="${empty pageSize}">
+	<c:set var="pageSize" scope="request"><c:out value="${param.resultsPerPage}" /></c:set>
+	<c:if test="${empty pageSize}">
+		<c:set var="pageSize" value="12" scope="request"/>
+	</c:if>
+</c:if>
+<wcst:alias name="ConfigProperties" var="ConfigProperties" />
+<wcst:mapper source="ConfigProperties" method="getWebModule" var="configWebModuleMap" />
+<wcst:alias name="StoreModuleName" var="storeModuleName" />
+<c:if test="${empty env_webAlias}">
+	<c:set var="env_webAlias" value="${configWebModuleMap[storeModuleName].webAlias}"/>
+</c:if>
+<c:set var="storeContextPath" value="${configWebModuleMap[storeModuleName].contextPath}${configWebModuleMap[storeModuleName].urlMappingPath}" scope="request"/>
+<c:if test="${configWebModuleMap[storeModuleName].contextPath eq '/' }">
+	<c:set var="storeContextPath" value="${configWebModuleMap[storeModuleName].urlMappingPath}" scope="request"/>
+</c:if>
+<c:set var="env_displayRibbonAdInGridMode" value="true" scope="request"/>
+<%-- enable/disable to display SKU URL instead of product URL when the product has only one single SKU --%>
+<c:set var="env_displaySKUContextData" value="false" scope="request"/>
+<%@ include file="SterlingConfiguratorIntegrationSetup.jspf" %>
+
+<flow:ifEnabled feature="contractSelection">
+	<c:set var="env_contractSelection" value="true" scope="request"/>
+</flow:ifEnabled>
+<flow:ifDisabled feature="contractSelection">
+	<c:set var="env_contractSelection" value="false" scope="request"/>
+</flow:ifDisabled>
+<c:if test="${!empty CommandContext.currentTradingAgreementIdsAsString}">
+	<c:set var="env_activeContractIds" value="${fn:split(CommandContext.currentTradingAgreementIdsAsString, ';')}" scope="request"/>
+</c:if>
+<%--
+	orgListDisplayType - Controls how the list of organizations are displayed.
+	Valid values are dropDown, search, depends.
+	1. dropDown - Displays list of organizations in tree structure using select box. Use this option if number of organizaitons is less.
+	2. search - Displays search box to allow searching for organizations based on orgName. Use this option if number of organizations is more.
+	3. depends - When number of total organizations is < orgListPageSizeBreakPoint then it defaults to dropDown view, else it defaults to search mode.
+--%>
+<c:set var="orgListDisplayType" value="depends" scope="request"/>
+<c:set var="orgListPageSizeBreakPoint" value="20" scope="request"/>
+
+<%-- These variables are related to CustomerService page displayed to CSR --%>
+<c:set var="registeredCustomersResultListSize" value="20" scope="request"/>
+<c:set var="findOrdersResultListSize" value="20" scope="request"/>
+<c:set var="orderCommentsListSize" value="15" scope="request"/>
+<c:set var="env_preSelectCountryInSearchPage" value="false" scope="request"/>
+
+
+<c:set var="maxOrderItemsPerPage" value="20"/>
+<c:set var="maxOrderItemsToInspect" value="50"/>
+<c:set var="validOrderStatusForCancel" value="A,B,C,E,I,L,M,N,P,W"/>
+<c:set var="validOrderStatusForModify" value="A,B,C,E,I,L,M,N,P,W"/>
+
+<c:set var="profileShippingNickname" value="Default_Shipping_${storeId}"/>
+<c:set var="profileBillingNickname" value="Default_Billing_${storeId}"/>
+
+<%-- variables for buy on behalf  --%>
+<c:set var="env_shopOnBehalfEnabled_CSR" value="false"/>
+<c:set var="env_shopOnBehalfEnabled" value="false"/>
+<c:set var="env_shopOnBehalfSessionEstablished" value="false"/>
+
+<c:if test="${CommandContext.callerId != CommandContext.forUserId && !empty CommandContext.stickyUserId}">
+	 <c:set var="env_shopOnBehalfSessionEstablished" value="true"/> <%-- OnBehalf Session is established at this point of time --%>
+	 <%-- Check if it is b2b Administrator or CSR who has initiated the session --%>
+	 <c:set var="wcOnbehalfRoleCookieName" value="WC_OnBehalf_Role_${storeId}"/>
+	 <c:set var="wcOnbehalfRoleCookieVal" value="${cookie[wcOnbehalfRoleCookieName].value}" />
+	 <c:choose>
+		<c:when test="${!empty wcOnbehalfRoleCookieVal && wcOnbehalfRoleCookieVal eq 'CSR'}">
+			 <c:set var="env_shopOnBehalfEnabled_CSR" value="true"/>
+		</c:when>
+		<c:otherwise>
+			 <c:set var="env_shopOnBehalfEnabled" value="true"/>
+		</c:otherwise>
+	</c:choose>
+	 <%-- With the run as user set, the user display name cannot be based on the command context current user--%>
+	 <c:set var="userLoginCookie" value="WC_LogonUserId_${WCParam.storeId}"/>
+	 <c:if test="${!empty cookie[userLoginCookie].value}">
+		 <c:set var="userDisplayName" value="${cookie[userLoginCookie].value}"/>
+		 <%
+			  String decoded = java.net.URLDecoder.decode((String)pageContext.getAttribute("userDisplayName"), "UTF-8");
+			  if(decoded != null){
+				pageContext.setAttribute("userDisplayName", decoded);
+			  }
+		%>
+	 </c:if>
+	 <c:set var="env_buyOnBehalfAdminUserId" value="${CommandContext.callerId}"/>
+	 <c:set var="env_buyOnBehalfUserId" value="${CommandContext.forUserId}"/>
+</c:if>
+
+<c:if test="${!empty userType && userType ne 'G' && env_shopOnBehalfSessionEstablished eq false}">
+	<%-- Check if shop on behalf for buyer adminstrators / CSR / CSS can be enabled --%>
+	<%-- Get the roles for the user --%>
+	<wcf:rest var="userRoles" url="store/{storeId}/person/{personId}" scope="request">
+		<wcf:var name="storeId" value="${storeId}"/>
+		<wcf:var name="personId" value="${userId}"/>
+		<wcf:param name="responseFormat" value="json"/>
+		<wcf:param name="profileName" value="IBM_Assigned_Roles_Details"/>
+	</wcf:rest>
+	<c:if test="${!empty userRoles && !empty userRoles.rolesWithDetails}">
+		<c:forEach items="${userRoles.rolesWithDetails}" var="userRole">
+			<c:choose>
+				<c:when test="${userRole.roleId eq '-21' && env_b2bStore eq 'true'}">
+					<c:set var="env_shopOnBehalfEnabled" value="true"/>
+				</c:when>
+				<c:when test="${userRole.roleId eq '-3' || userRole.roleId eq '-14'}">
+					<c:set var="env_shopOnBehalfEnabled_CSR" value="true"/>
+				</c:when>
+			</c:choose>
+		</c:forEach>
+	</c:if>
+</c:if>
+
+<%-- if on-behalf-of-csr feature is disabled, then reset buy on behalf variables --%>
+<flow:ifDisabled feature="on-behalf-of-csr">
+	<c:if test = "${env_shopOnBehalfEnabled_CSR eq 'true'}">
+		<%--
+			 Even if onBehalfSession was established by some other means for CSR ( executing AjaxRunAsUserSetInSession command directly ),
+			 reset env_shopOnBehalfSessionEstablished to false.
+			 The reason to check for CSR user before resetting, is to make sure that we do not reset env_shopOnBehalfSessionEstablished set for B2BAdmin user.
+		--%>
+		<c:set var="env_shopOnBehalfSessionEstablished" value="false"/>
+	</c:if>
+	<%-- Reset to false. Feature is not enabled --%>
+	<c:set var = "env_shopOnBehalfEnabled_CSR" value="false"/>
+</flow:ifDisabled>
+
+<c:set var="userLogonState" value="0"/>
+<c:if test="${!empty userType && userType ne 'G' || env_shopOnBehalfSessionEstablished eq 'true'}">
+	<%-- User type is not guest OR CSR has started guest user session. So consider has registered user. --%>
+	<c:set var="userLogonState" value="1"/>
+</c:if>
+<c:set var="anonymousUser" value="false" scope="request"/>
+<c:if test="${CommandContext.user.userId eq '-1002'}">
+	<c:set var="anonymousUser" value="true" scope="request"/>
+</c:if>

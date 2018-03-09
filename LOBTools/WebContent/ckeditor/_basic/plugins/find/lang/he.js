@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("find","he",{find:"חיפוש",findOptions:"אפשרויות חיפוש",findWhat:"חיפוש:",matchCase:"התאמת רישיות",matchCyclic:"התאמה מעגלית",matchWord:"התאמת מילים שלמות",notFoundMsg:"התמליל שצוין לא נמצא.",replace:"החלפה",replaceAll:"החלפת הכל",replaceSuccessMsg:"%1 מופעים הוחלפו",replaceWith:"להחליף במלה:",title:"חיפוש והחלפה"});

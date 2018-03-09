@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+ 
+	<!---
+		@keywords private
+		
+		This class is the lower properties pane of Flow Builder that displays the properties views of
+		flow elements.
+	-->
+	<ActiveViewContainer classDefinition="true" closable="false" definitionName="cmc/foundation/PropertiesPane" maximizable="false" useCompactPadding="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<!--- @keywords private -->
+		<variable name="o" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="propertiesView" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="generalPropertiesView" value="${null}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.setVariable("bordersize", 0);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateViewTitleDel.disconnectAll();
+			delete this.updateViewTitleDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Setter for the {@link cmc/foundation/PropertiesPane#o model object}. This registers the listener on
+			the new object to hide the properties view if the object is destroyed by the model.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "hideProperties");
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+				}
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			Gets the properties view for the {@link cmc/foundation/PropertiesPane#o current object}.
+			@param string generalPropertiesClass Name of the properties class to use. If <code>null</code> or missing,
+				{@link cmc/foundation/ObjectDefinition#getPropertiesView} is called to resolve the appropriate properties class.
+			@returns cmc/foundation/FlowElementProperties The instantiated properties view class with {@link cmc/foundation/FlowElementProperties#headerIconResource}
+				and {@link cmc/foundation/FlowElementProperties#title} attributes set based on the current object.
+		-->
+		
+		
+		<!--- @keywords private -->
+		<method args="e" name="showProperties">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.showPropertiesDel) {
+				this.showPropertiesDel.disconnectAll();
+			}
+			else {
+				this.showPropertiesDel = new EventHandler.Class(this, "showProperties");
+			}
+			if (this.o && this.o.objectDefinition) {
+				this.showPropertiesDel.connect(this.o.objectDefinition, "ondisplayName");
+				if (this.generalPropertiesClass) {
+					var propertiesClass = this.generalPropertiesClass;
+					this.generalPropertiesClass = null;
+					if (this.generalPropertiesView == null) {
+						if (propertiesClass.Class) {
+							this.generalPropertiesView = new propertiesClass.Class(this, {
+								o: this.o,
+								inDetails: false
+							});
+						}
+						else {
+							this.generalPropertiesView = DefinitionUtil.createDefinitionInstance(propertiesClass, this, {
+								o: this.o,
+								inDetails: false
+							});
+						}
+					}
+					this.propertiesView = this.generalPropertiesView;
+					this.propertiesView.setVariable("o", this.o);
+					this.propertiesView.setVariable("headerIconResource", "wcfFlowBuilderStartHeader");
+					this.propertiesView.setVariable("title", this.o.objectDefinition.displayName);
+					this.setActiveView(this.propertiesView);
+					this.setVariable("visible", true);
+				}
+				else {
+					if (this.propertiesView == null || this.propertiesView.o != this.o) {
+						this.propertiesView = this.o.objectDefinition.getPropertiesView(this, this.o, false, this.showPropertiesDel);
+					}
+					if (this.propertiesView) {
+						this.propertiesView.setVariable("headerIconResource", this.o.objectDefinition.headerIcon);
+						this.propertiesView.setVariable("title", this.o.objectDefinition.displayName);
+						this.setActiveView(this.propertiesView);
+						this.setVariable("visible", true);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Hides the properties view and sets {@link cmc/foundation/PropertiesPane#o} to <code>null</code>.
+		-->
+		<method args="e" name="hideProperties">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.propertiesView) {
+				this.setVariable("visible", false);
+				this.setVariable("o", null);
+				this.propertiesView.setVariable("o", this.o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Shows the properties view for the given object.
+			@param pO cmc/foundation/ModelObject The model object to load
+			@param generalPropertiesClass cmc/foundation/FlowElementProperties Name of the properties class to load. If <code>null</code> or missing,
+				{@link cmc/foundation/PropertiesPane#getPropertiesView} is used to locate the right class.
+		-->
+		<method args="pO, generalPropertiesClass" name="loadProperties">
+			<![CDATA[
+			if (pO == null) {
+				return;
+			}
+			this.hideProperties();
+			this.setVariable("o", pO);
+			this.generalPropertiesClass = generalPropertiesClass;
+			this.showProperties();
+			]]>
+		</method>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></ActiveViewContainer>
+</Definitions>

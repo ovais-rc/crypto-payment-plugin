@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","ro",{clear:"Curăţare",highlight:"Evidenţiere",options:"Opţiuni culoare",selected:"Culoare selectată",title:"Selectare culoare",ibm:{currentColor:"Culoare curentă"}});

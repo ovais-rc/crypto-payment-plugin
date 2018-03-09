@@ -1,0 +1,224 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<c:set var="search01" value="'"/>
+<c:set var="search02" value='"'/>
+<c:set var="replaceStr01" value="\\\\'"/>
+<c:set var="replaceStr02" value='\\\\"'/>
+<c:set var="escapedSingleQuote" value="\\\\'"/>
+
+<%-- Fetches the nearest physical stores selected by the user from cookie --%>
+<c:set var="cookieVal" value="${cookie.WC_physicalStores.value}" />
+<c:set var="cookieVal" value="${fn:replace(cookieVal, '%2C', ',')}" />
+
+<%@ include file="/Widgets_701/Common/PDP_CatalogEntryData.jspf" %>
+<c:set var="catalogEntryId" value="${catalogEntryID}" />
+<c:set var="catalogEntryView" value="${catalogEntryDetails}"/>
+
+<c:set var="skus" value=""/>
+<c:choose>
+	<%-- If the catalog entry is a ProductBean --%>
+	<c:when test="${catalogEntryView.catalogEntryTypeCode eq 'ProductBean'}">
+		<c:choose>
+			<%-- If the catalog entry is a ProductBean and it has only one SKU, then it is as good as ItemBean.
+			So identify the uniqueID of the single SKU and mark it as ItemBean --%>
+			<c:when test="${catalogEntryView.hasSingleSKU}">
+				<c:set var="catalogEntryId" value="${catalogEntryView.sKUs[0].uniqueID}"/>
+				<c:set var="type" value="ItemBean"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="catalogEntryId" value="${catalogEntryView.uniqueID}"/>
+				<c:set var="firstSkuCatalogEntryId" value="${catalogEntryView.sKUs[0].uniqueID}"/>
+				<c:set var="type" value="${catalogEntryView.catalogEntryTypeCode}"/>
+				<%-- Pick the SKUs and the corresponding attributes --%>
+				<c:forEach var="sku" items="${catalogEntryView.sKUs}">
+					<c:if test="${!empty skus}">
+						<c:set var="skus" value="${skus},"/>
+					</c:if>
+					<c:set var="attributes" value=""/>
+					<c:forEach var="skuAttribute" items="${sku.attributes}">
+						<c:if test="${skuAttribute.usage eq 'Defining'}">
+							<c:if test="${!empty attributes}">
+								<c:set var="attributes" value="${attributes},"/>
+							</c:if>
+							<c:set var="attributes" value="${attributes}'${fn:replace(fn:replace(skuAttribute.name, search01, replaceStr01), search02, replaceStr02)}': '${fn:replace(fn:replace(skuAttribute.values[0].value, search01, replaceStr01), search02, replaceStr02)}'"/>
+						</c:if>
+					</c:forEach>
+					<c:set var="skus" value="${skus}{id: '${sku.uniqueID}', attributes: {${attributes}}}"/>
+				</c:forEach>
+			</c:otherwise>
+		</c:choose>
+	</c:when>
+	<c:otherwise>
+		<c:set var="catalogEntryId" value="${catalogEntryView.uniqueID}"/>
+		<c:set var="type" value="${catalogEntryView.catalogEntryTypeCode}"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="catEntryParams" value="{id: '${catalogEntryId}', type: '${type}', skus: [${skus}]}"/>
+<c:set var="onlineInventoryStatus" value="NA"/>
+<c:set var="storeCounter" value="0"/>
+<c:set var="showAvailabilityLink" value="${type eq 'ProductBean'}"/>
+<c:set var="showAvailability" value="${type eq 'ItemBean' or type eq 'PackageBean' or type eq 'DynamicKitBean' or type eq 'PredDynaKitBean'}"/>
+<c:if test="${showAvailability || !empty firstSkuCatalogEntryId}">
+	<c:choose>
+		<c:when test="${empty firstSkuCatalogEntryId}">
+			<c:set var="catalogEntryIdToUse" value="${catalogEntryId}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="catalogEntryIdToUse" value="${firstSkuCatalogEntryId}"/>
+		</c:otherwise>
+	</c:choose>
+
+	<%-- Fetches the inventory list for a particular item in online store and physical store using store ids--%>
+	<c:if test="${empty storeInventorySystem}">
+		<wcf:rest var="queryStoreInventoryConfigResult" url="store/{storeId}/configuration/{uniqueId}" cached="true">
+			<wcf:var name="storeId" value="${storeId}"/>
+			<wcf:var name="uniqueId" value="com.ibm.commerce.foundation.inventorySystem"/>
+			<wcf:param name="langId" value="${langId}" />
+		</wcf:rest>
+		<c:set var="storeInventorySystem" value="${queryStoreInventoryConfigResult.resultList[0].configurationAttribute[0].primaryValue.value}" scope="request"/>
+	</c:if>
+	
+	<c:if test="${storeInventorySystem != 'No inventory'}">
+		<c:catch var="inventoryException">
+			<wcf:rest var="itemInventoryList" url="store/{storeId}/inventoryavailability/{productIds}">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:var name="productIds" value="${catalogEntryIdToUse}" encode="true"/>
+				<wcf:param name="onlineStoreId" value="${storeId}"/>
+				<wcf:param name="physicalStoreId" value="${cookieVal}"/>
+			</wcf:rest>
+		</c:catch>
+	</c:if>
+	
+	<%-- If an exception is thrown, it means the store has no inventory --%>
+	<c:choose>
+		<c:when test="${empty inventoryException}">
+			<c:set var="hasInventory" value="true"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="hasInventory" value="false"/>
+		</c:otherwise>
+	</c:choose>
+	
+	<jsp:useBean id="inStoreInventoryNameMap" class="java.util.HashMap" type="java.util.Map"/>
+	<jsp:useBean id="inStoreInventoryStatusMap" class="java.util.HashMap" type="java.util.Map"/>
+	
+	<c:set var="physicalStores" value=""/>
+	
+	<%-- Iterates through the inventory list to get the online inventory status and physical store inventory status --%>
+	<c:forEach var="itemInventory" items="${itemInventoryList.InventoryAvailability}" varStatus="counter">
+		<c:choose>
+			<%-- Selects the online inventory status when online store name is not empty --%>
+			<c:when test="${!empty itemInventory.onlineStoreName}">
+				<c:if test="${!empty itemInventory.inventoryStatus}">
+				    <c:set var="onlineInventoryStatus" value="${itemInventory.inventoryStatus}"/>
+				</c:if>
+			</c:when>
+			<%-- Process the physical store inventory availability information when physical store name is not empty --%>
+			<c:when test="${!empty itemInventory.physicalStoreName}">
+				<c:set var="storeCounter" value="${storeCounter+1}"/>
+				
+				<c:choose>
+					<c:when test="${!empty(itemInventory.availabilityDateTime)}">
+						<c:catch>
+							<fmt:parseDate parseLocale="${dateLocale}" var="date" value="${itemInventory.availabilityDateTime}" pattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" timeZone="GMT" dateStyle="long"/>
+						</c:catch>
+						<c:if test="${empty date}">
+							<c:catch>
+								<fmt:parseDate parseLocale="${dateLocale}" var="date" value="${itemInventory.availabilityDateTime}" pattern="yyyy-MM-dd'T'HH:mm:ss'Z'" timeZone="GMT" dateStyle="long"/>
+							</c:catch>
+						</c:if>
+						<fmt:formatDate var="availableDate" value="${date}"/>
+					</c:when>
+					<c:otherwise>
+						<c:set var="availableDate" value=""/>
+					</c:otherwise>
+				</c:choose>
+				<c:choose>
+					<c:when test="${empty itemInventory.inventoryStatus}">
+						<c:set var="inventoryStatus" value="NA"/>
+						<wcst:message key="INV_STATUS_NA" var="inventoryStatusText" bundle="${widgetText}"/>
+						<wcst:message key="IMG_NAME_NA" var="imageName" bundle="${widgetText}"/>
+						<wcst:message key="IMG_INV_STATUS_NA" var="altText" bundle="${widgetText}"/>
+					</c:when>
+					<c:otherwise>
+						<c:set var="inventoryStatus" value="${itemInventory.inventoryStatus}"/>
+						<wcst:message key="INV_STATUS_${itemInventory.inventoryStatus}" var="inventoryStatusText" bundle="${widgetText}"/>
+						<wcst:message key="IMG_NAME_${itemInventory.inventoryStatus}" var="imageName" bundle="${widgetText}"/>
+						<wcst:message key="IMG_INV_STATUS_${itemInventory.inventoryStatus}" var="altText" bundle="${widgetText}"/>
+					</c:otherwise>
+				</c:choose>
+				<c:if test="${!empty physicalStores}">
+					<c:set var="physicalStores" value="${physicalStores},"/>
+				</c:if>
+				<c:set var="physicalStores" value="${physicalStores}{
+					id: '${itemInventory.physicalStoreId}',
+					name: '${fn:escapeXml(itemInventory.physicalStoreName)}', 
+					status: '${inventoryStatus}',
+					statusText: '${fn:escapeXml(inventoryStatusText)}',
+					image: 'widget_product_info/${imageName}',
+					altText: '${fn:escapeXml(altText)}',
+					availableDate: '${availableDate}',
+					availableQuantity: '${itemInventory.availableQuantity}'}"/>
+				<%-- Stores the physical store name and the status in the inStoreInventoryNameMap and inStoreInventoryStatusMap --%>
+				<c:set target="${inStoreInventoryNameMap}" property="${itemInventory.physicalStoreId}" value="${itemInventory.physicalStoreName}"/>
+				<c:set target="${inStoreInventoryStatusMap}" property="${itemInventory.physicalStoreId}" value="${inventoryStatus}"/>
+			</c:when>
+		</c:choose>
+	</c:forEach>
+</c:if>
+<%-- Pick 'Select Store' message if no physical store currently picked. Pick 'Change Store' if some physical store is picked already.  --%>
+<c:choose>
+	<c:when test="${storeCounter eq 0}">
+		<wcst:message key="INV_STATUS_CHECK_IN_STORES" var="invStatusCheckStores" bundle="${widgetText}"/>
+	</c:when>
+	<c:otherwise>
+		<wcst:message key="INV_STATUS_CHECK_OTHER_STORES" var="invStatusCheckStores" bundle="${widgetText}"/>
+	</c:otherwise>
+</c:choose>
+
+<%-- Pick the category ids--%>
+<c:if test="${!empty param.top_category}">
+	<c:set var="top_category" value="${param.top_category}"/>
+</c:if>
+<c:if test="${!empty WCParam.top_category}">
+	<c:set var="top_category" value="${WCParam.top_category}"/>
+</c:if>
+<c:if test="${!empty param.parent_category_rn}">
+	<c:set var="parent_category_rn" value="${param.parent_category_rn}"/>
+</c:if>
+<c:if test="${!empty WCParam.parent_category_rn}">
+	<c:set var="parent_category_rn" value="${WCParam.parent_category_rn}"/>
+</c:if>
+<c:if test="${!empty param.categoryId}">
+	<c:set var="categoryId" value="${param.categoryId}"/>
+</c:if>
+<c:if test="${!empty WCParam.categoryId}">
+	<c:set var="categoryId" value="${WCParam.categoryId}"/>
+</c:if>
+
+<%-- Store Locator URL --%>
+<wcf:url var="StoreLocatorView" value="AjaxStoreLocatorDisplayView">
+	<wcf:param name="langId" value="${langId}" />
+	<wcf:param name="storeId" value="${storeId}" />
+	<wcf:param name="catalogId" value="${catalogId}" />
+	<wcf:param name="top_category" value="${top_category}" />
+	<wcf:param name="parent_category_rn" value="${parent_category_rn}" />
+	<wcf:param name="categoryId" value="${categoryId}" />
+	<wcf:param name="fromPage" value="InventoryStatus" />
+</wcf:url>
+
+
+<%-- Keep the store specific parameters like storeId, catalogId and langId in json object format --%>
+<c:set var="storeParams" value="{storeId: '${fn:escapeXml(storeId)}',catalogId: '${fn:escapeXml(catalogId)}',langId: '${fn:escapeXml(langId)}'}"/>

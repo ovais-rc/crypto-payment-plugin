@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","hu",{toolbar:"Forrás",title:"Forrás"});

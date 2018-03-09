@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<_config:DataloadBusinessObjectConfiguration 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../../../WC/xml/config/xsd/wc-dataload-businessobject.xsd" 
+	xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config">
+
+  <_config:DataLoader className="com.ibm.commerce.foundation.dataload.BusinessObjectLoader">
+    <_config:DataReader className="com.ibm.commerce.foundation.dataload.datareader.UniqueIdReader" >
+
+    	    <_config:Query>
+    	      <_config:SQL>
+	    	    <![CDATA[
+	    	    	SELECT STOREENT_ID, TRADEPOSCN_ID AS OFFERPRICE_PRIECELIST_ID
+	    	    	FROM STORETPC 
+	    	    	WHERE STOREENT_ID IN (?) 
+	    	    	  AND STTPCUSG_ID IN 
+	    	    	  (SELECT STTPCUSG_ID FROM STTPCUSG WHERE IDENTIFIER = ?)
+    		    ]]>
+    	      </_config:SQL>
+    	      <_config:Param name="storeId" valueFrom="BusinessContext" type="list" >
+    	        <_config:ValueHandler className="com.ibm.commerce.foundation.dataload.config.RelatedStoreIdValueHandler" >
+	      			   <_config:Parameter name="storeRelationType" value="com.ibm.commerce.catalog" valueFrom="Fixed" />
+    	        </_config:ValueHandler>
+    	      </_config:Param>
+    	      <_config:Param name="IDENTIFIER" value="Master" />
+    	    </_config:Query>
+
+    	    <_config:Query>
+    	      <_config:SQL>
+	    	    <![CDATA[
+	    	    	SELECT CATOVRGRP_ID FROM CATOVRGRP WHERE STOREENT_ID IN (?)
+    		    ]]>
+    	      </_config:SQL>
+    	      <_config:Param name="STOREENT_ID" type="list" />
+    	    </_config:Query>
+
+    	    <_config:Query name="SelelctUniqueId">
+    	      <_config:SQL>
+	    	    <![CDATA[
+              SELECT CATENTRY.CATENTRY_ID, STORECENT.STOREENT_ID AS CURRENT_STOREENT_ID
+              FROM CATENTRY 
+                JOIN STORECENT ON (CATENTRY.CATENTRY_ID = STORECENT.CATENTRY_ID AND STORECENT.STOREENT_ID IN (?)) 
+              WHERE CATENTRY.MARKFORDELETE = 0 
+                AND EXISTS (SELECT 1 FROM CATGPENREL WHERE CATENTRY.CATENTRY_ID = CATGPENREL.CATENTRY_ID AND CATALOG_ID = ?)
+              ORDER BY CATENTRY.CATENTRY_ID
+    		    ]]>
+    	      </_config:SQL>
+
+    	      <_config:Param name="STOREENT_ID" type="singleQuerylist" />
+    	      <_config:Param name="catalogId" valueFrom="BusinessContext" />
+    	    </_config:Query>
+
+    </_config:DataReader>
+
+    <_config:BusinessObjectBuilder>
+      <_config:BusinessObjectMediator className="com.ibm.commerce.foundation.dataload.businessobjectmediator.AssociatedObjectMediator" >
+    	    <_config:Query>
+    	      <_config:SQL>
+    	    	<![CDATA[
+    				SELECT CATENTRY.CATENTRY_ID, PARTNUMBER,TRIM(CATENTTYPE_ID) AS CATENTTYPE_ID,
+    				  URL,MFNAME,MFPARTNUMBER,ONSPECIAL,BUYABLE,ONAUCTION,STARTDATE,ENDDATE,CATENTRY.AVAILABILITYDATE,FIELD1,FIELD2,FIELD3,FIELD4,
+    				  TRIM(NAME) AS NAME,SHORTDESCRIPTION,LONGDESCRIPTION,THUMBNAIL,FULLIMAGE,KEYWORD,
+    				  AUXDESCRIPTION1,AUXDESCRIPTION2,AVAILABLE,CATENTDESC.AVAILABILITYDATE AS AVAILABILITYDATE_LOCALE,PUBLISHED
+    				FROM CATENTRY LEFT OUTER JOIN CATENTDESC ON 
+    				 (CATENTRY.CATENTRY_ID=CATENTDESC.CATENTRY_ID AND LANGUAGE_ID = ?)
+    				WHERE CATENTRY.CATENTRY_ID in (?) 
+    	   		 ]]>
+    	      </_config:SQL>
+    	      <_config:Param name="langId" valueFrom="BusinessContext" />
+    	      <_config:Param name="CATENTRY_ID" />
+
+    	      <_config:ColumnMapping name="CATENTRY_ID" value="CatalogEntryId" >
+    	        <_config:ValueHandler className="com.ibm.commerce.catalog.dataload.handler.AttributeAndParentGategoryHandler" >
+	      			   <_config:Parameter name="langId" value="langId" valueFrom="BusinessContext" />
+	      			   <_config:Parameter name="attributeUsage" value="${attributeUsage,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="attributeList" value="${attributeList,}" valueFrom="Fixed" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="PARTNUMBER" value="PartNumber" />
+    	      <_config:ColumnMapping name="CATENTTYPE_ID" value="Type" >
+    	        <_config:ValueHandler className="com.ibm.commerce.foundation.dataload.config.ValueMapperHandler" >
+	      			   <_config:Parameter name="ProductBean" value="Product" valueFrom="Fixed" />
+	      			   <_config:Parameter name="ItemBean" value="Item" valueFrom="Fixed" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="URL" value="URL" >
+    	        <_config:ValueHandler className="com.ibm.commerce.catalog.dataload.handler.SEOURLHandler" >
+	      			   <_config:Parameter name="enabled" value="${seoUrlEnabled, false}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="simpleSEOURL" value="${simpleSEOURL, true}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="urlPrefix" value="${urlPrefix,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="langId" value="langId" valueFrom="BusinessContext" />
+	      			   <_config:Parameter name="storeId" value="storeId" valueFrom="BusinessContext" />
+	      			   <_config:Parameter name="productionServerHostName" value="${productionServerHostName,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="CATENTRY_ID" value="CATENTRY_ID" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="MFNAME" value="Manufacturer" />
+    	      <_config:ColumnMapping name="MFPARTNUMBER" value="ManufacturerPartNumber" />
+    	      <_config:ColumnMapping name="ONSPECIAL" value="OnSpecial" />
+    	      <_config:ColumnMapping name="BUYABLE" value="Buyable" />
+    	      <_config:ColumnMapping name="ONAUCTION" value="OnAuction" />
+    	      <_config:ColumnMapping name="STARTDATE" value="StartDate" />
+    	      <_config:ColumnMapping name="ENDDATE" value="EndDate" />
+    	      <_config:ColumnMapping name="AVAILABILITYDATE" value="AvailabilityDate" />
+    	      <_config:ColumnMapping name="FIELD1" value="Field1" />
+    	      <_config:ColumnMapping name="FIELD2" value="Field2" />
+    	      <_config:ColumnMapping name="FIELD3" value="Field3" />
+    	      <_config:ColumnMapping name="FIELD4" value="Field4" />
+    	      <_config:ColumnMapping name="NAME" value="Name" />
+    	      <_config:ColumnMapping name="SHORTDESCRIPTION" value="ShortDescription" />
+    	      <_config:ColumnMapping name="LONGDESCRIPTION" value="LongDescription" />
+    	      <_config:ColumnMapping name="THUMBNAIL" value="Thumbnail" >
+    	        <_config:ValueHandler className="com.ibm.commerce.catalog.dataload.handler.ImagePathHandler" >
+	      			   <_config:Parameter name="enabled" value="${imageUrlEnabled, false}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="imageUrlPrefix" value="${imageUrlPrefix,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="storeId" value="CURRENT_STOREENT_ID"  />
+	      			   <_config:Parameter name="productionServerHostName" value="${productionServerHostName,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="CATENTRY_ID" value="CATENTRY_ID" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="FULLIMAGE" value="FullImage" >
+    	        <_config:ValueHandler className="com.ibm.commerce.catalog.dataload.handler.ImagePathHandler" >
+	      			   <_config:Parameter name="enabled" value="${imageUrlEnabled, false}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="imageUrlPrefix" value="${imageUrlPrefix,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="storeId" value="CURRENT_STOREENT_ID" />
+	      			   <_config:Parameter name="productionServerHostName" value="${productionServerHostName,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="CATENTRY_ID" value="CATENTRY_ID" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="KEYWORD" value="Keyword" />
+    	      <_config:ColumnMapping name="AUXDESCRIPTION1" value="AuxDescription1" />
+    	      <_config:ColumnMapping name="AUXDESCRIPTION2" value="AuxDescription2" />
+    	      <_config:ColumnMapping name="AVAILABLE" value="Available" />
+    	      <_config:ColumnMapping name="AVAILABILITYDATE_LOCALE" value="AvailabilityDate_LocaleSpecific" />
+    	      <_config:ColumnMapping name="PUBLISHED" value="Published" />
+
+    	    </_config:Query>
+
+    	    <_config:Query>
+    	      <_config:SQL>
+    	    	<![CDATA[
+    				SELECT TRIM(NAME) AS NAME,SHORTDESCRIPTION,LONGDESCRIPTION,THUMBNAIL,FULLIMAGE,
+    				    KEYWORD,AUXDESCRIPTION1,AUXDESCRIPTION2,PUBLISHED
+    				FROM CATENTDESCOVR
+    				WHERE CATENTRY_ID IN (?) AND LANGUAGE_ID IN (?) AND CATOVRGRP_ID IN (?)
+
+    	   		 ]]>
+    	      </_config:SQL>
+    	      <_config:Param name="CATENTRY_ID" />
+    	      <_config:Param name="langId" valueFrom="BusinessContext" />
+    	      <_config:Param name="CATOVRGRP_ID" type="list" />
+    	      <_config:ColumnMapping name="NAME" value="Name" />
+    	      <_config:ColumnMapping name="SHORTDESCRIPTION" value="ShortDescription" />
+    	      <_config:ColumnMapping name="LONGDESCRIPTION" value="LongDescription" />
+    	      <_config:ColumnMapping name="THUMBNAIL" value="Thumbnail" >
+    	        <_config:ValueHandler className="com.ibm.commerce.catalog.dataload.handler.ImagePathHandler" >
+	      			   <_config:Parameter name="enabled" value="${imageUrlEnabled, false}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="imageUrlPrefix" value="${imageUrlPrefix,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="storeId" value="storeId" valueFrom="BusinessContext" />
+	      			   <_config:Parameter name="productionServerHostName" value="${productionServerHostName,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="CATENTRY_ID" value="CATENTRY_ID" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="FULLIMAGE" value="FullImage" >
+    	        <_config:ValueHandler className="com.ibm.commerce.catalog.dataload.handler.ImagePathHandler" >
+	      			   <_config:Parameter name="enabled" value="${imageUrlEnabled, false}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="imageUrlPrefix" value="${imageUrlPrefix,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="storeId" value="storeId" valueFrom="BusinessContext" />
+	      			   <_config:Parameter name="productionServerHostName" value="${productionServerHostName,}" valueFrom="Fixed" />
+	      			   <_config:Parameter name="CATENTRY_ID" value="CATENTRY_ID" />
+    	        </_config:ValueHandler>
+    	      </_config:ColumnMapping>
+    	      <_config:ColumnMapping name="KEYWORD" value="Keyword" />
+    	      <_config:ColumnMapping name="AUXDESCRIPTION1" value="AuxDescription1" />
+    	      <_config:ColumnMapping name="AUXDESCRIPTION2" value="AuxDescription2" />
+    	      <_config:ColumnMapping name="PUBLISHED" value="Published" />
+
+    	    </_config:Query>
+
+    	    <_config:Query>
+    	      <_config:SQL>
+    	    	<![CDATA[
+    				SELECT CATENTRY.PARTNUMBER AS PARENT_PART_NUMBER
+    				FROM CATENTREL  
+    				  JOIN CATENTRY ON (CATENTRY.CATENTRY_ID=CATENTREL.CATENTRY_ID_PARENT AND CATRELTYPE_ID = 'PRODUCT_ITEM')
+    				WHERE CATENTREL.CATENTRY_ID_CHILD in (?) 
+    	   		 ]]>
+    	      </_config:SQL>
+    	      <_config:Param name="CATENTRY_ID" />
+
+    	      <_config:ColumnMapping name="PARENT_PART_NUMBER" value="ParentPartNumber" />
+    	    </_config:Query>
+
+    	    <_config:Query>
+    	      <_config:SQL>
+    	    	<![CDATA[
+    	    	SELECT CURRENCY, PRICE FROM OFFER LEFT OUTER JOIN OFFERPRICE ON (OFFER.OFFER_ID = OFFERPRICE.OFFER_ID)
+    	    	WHERE CATENTRY_ID IN (?) AND CURRENCY = ? AND TRADEPOSCN_ID IN (?) AND PUBLISHED = 1
+    	   		 ]]>
+    	      </_config:SQL>
+    	      <_config:Param name="CATENTRY_ID" />
+    	      <_config:Param name="currency" valueFrom="BusinessContext" />
+    	      <_config:Param name="OFFERPRICE_PRIECELIST_ID" type="list" />
+
+    	      <_config:ColumnMapping name="PRICE" value="Price" />
+    	      <_config:ColumnMapping name="CURRENCY" value="CurrencyCode" />
+    	    </_config:Query>
+
+   	<_config:DataWriter className="com.ibm.commerce.foundation.dataload.datawriter.CSVWriter">
+        <_config:property name="CSVColumnList" value="${CSVColumnList,}" />
+        <_config:property name="formatPriceColumns" value="Price" />
+        <_config:Data>
+        <_config:column name="CatalogEntryId"  />
+        <_config:column name="PartNumber"  />
+        <_config:column name="Type"  />
+	      <_config:column name="ParentPartNumber" />
+	      <_config:column name="CurrencyCode" />
+	      <_config:column name="Price" />
+	      <_config:column name="URL" />
+	      <_config:column name="SEOURL" />
+	      <_config:column name="Name" />
+	      <_config:column name="ShortDescription" />
+	      <_config:column name="LongDescription" />
+	      <_config:column name="Thumbnail" />
+	      <_config:column name="FullImage" />
+	      <_config:column name="Keyword" />
+	      <_config:column name="AuxDescription1" />
+	      <_config:column name="AuxDescription2" />
+	      <_config:column name="Available" />
+	      <_config:column name="AvailabilityDate_LocaleSpecific" />
+	      <_config:column name="Published" />
+	      <_config:column name="Manufacturer" />
+	      <_config:column name="ManufacturerPartNumber" />
+	      <_config:column name="OnSpecial" />
+	      <_config:column name="Buyable" />
+	      <_config:column name="OnAuction" />
+	      <_config:column name="StartDate" />
+	      <_config:column name="EndDate" />
+	      <_config:column name="AvailabilityDate" />
+	      <_config:column name="Field1" />
+	      <_config:column name="Field2" />
+	      <_config:column name="Field3" />
+	      <_config:column name="Field4" />
+	      
+ 	      <_config:ColumnLoop start="1" end="${MaxParentCategoryCount,0}" variable="#">
+	        <_config:column name="ParentGroupIdentifier#" />
+	        <_config:column name="Sequence#" />
+ 	      </_config:ColumnLoop>
+ 	      <_config:ColumnLoop start="1" end="${MaxAttributeAndValueCount,0}" variable="#">
+	        <_config:column name="AttributeIdentifier#" />
+	        <_config:column name="ValueIdentifier#" />
+	        <_config:column name="Value#" />
+	        <_config:column name="AttributeUsage#" />
+ 	      </_config:ColumnLoop>
+	    </_config:Data>
+    </_config:DataWriter>
+      </_config:BusinessObjectMediator>
+    </_config:BusinessObjectBuilder>
+  </_config:DataLoader>
+
+</_config:DataloadBusinessObjectConfiguration>

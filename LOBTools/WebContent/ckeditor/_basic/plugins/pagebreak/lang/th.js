@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","th",{alt:"เส้นกั้นหน้า",toolbar:"แทรกเส้นกั้นหน้า"});

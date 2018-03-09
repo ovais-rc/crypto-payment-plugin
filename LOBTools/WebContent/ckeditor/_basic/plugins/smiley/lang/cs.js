@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","cs",{options:"Volby emotikon",title:"Emotikony",toolbar:"Vložit emotikonu"});

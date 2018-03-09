@@ -1,0 +1,843 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		Input text widget that is similar to  cmc/foundation/PropertyInputText but does not understand the object model.
+		@keywords private
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/marketing/EmailInputText" focusable="false" width="235">
+		<dependency localName="ExtendedHelpIcon" moduleName="cmc/foundation/ExtendedHelpIcon"/>
+		<dependency localName="mktPropertiesComponentPrompt" moduleName="cmc/marketing/PropertiesComponentPrompt"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Indicates that this properties view component is a required.
+			@keywords private
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			The prompt text for this properties view component.
+			@keywords private
+		-->
+		<variable name="promptText" type="string" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="helpText" type="string" value="${null}"/>
+		<!---
+			input text value
+			@keywords private
+		-->
+		<variable name="value" type="string" value=""/>
+		<!--- Amount of padding to add to the left of the input widget -->
+		<variable name="editorPadding" type="number" value="0"/>
+		<!--- Colour of the label text -->
+		<variable name="labelColor" value="${this.style.texthilitecolor}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayout");
+			this.createPrompt();
+			]]>
+		</handler>
+		
+		<method name="destroy">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			delete this.updateLayoutDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler recreates the prompt if the user changes their tooltip preference
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCEnableExtendedHelp") {
+				if (this.prompt.extendedHelpIcon) {
+					this.prompt.extendedHelpIcon.destroy();
+				}
+				this.prompt.prompt.destroy();
+				this.createPrompt();
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Creates the prompt.
+		-->
+		<method name="createPrompt">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var indent = 0;
+			var promptWidth = 164;
+			new mktPropertiesComponentPrompt.Class(this.prompt, {
+				name: "prompt",
+				width: 100,
+				multiline: true,
+				fgcolor: this.labelColor,
+				resize: true,
+				x: indent
+			});
+			if ((PreferenceManager.Singleton.getPreference("CMCEnableExtendedHelp") == "true") && (this.helpText != null && this.helpText != "")) {
+				new ExtendedHelpIcon.Class(this.prompt, {
+					name: "extendedHelpIcon",
+					helpText: this.helpText,
+					x: indent + this.prompt.prompt.width
+				});
+			}
+			this.updateLayout();
+			]]>
+		</method>
+		
+		<method name="updateLayout">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var extendedHelpIconHeight = 0;
+			var promptWidth = 164;
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.visible) {
+				promptWidth -= this.prompt.extendedHelpIcon.width;
+				extendedHelpIconHeight = this.prompt.extendedHelpIcon.height;
+				this.prompt.extendedHelpIcon.setVariable("x", promptWidth);
+				promptWidth -= 6;
+			}
+			var editorHeight = this.inputbox.height;
+			this.prompt.prompt.setVariable("width", promptWidth);
+			var promptY = 0;
+			var editorY = 0;
+			var extendedHelpIconY = 0;
+			var promptHeight = this.prompt.prompt.height;
+			var componentHeight = Math.max(Math.max(promptHeight, editorHeight), extendedHelpIconHeight);
+			var promptY = (componentHeight - promptHeight) / 2;
+			var editorY = (componentHeight - editorHeight) / 2;
+			var extendedHelpIconY = (componentHeight - extendedHelpIconHeight) / 2;
+			if (this.prompt.prompt.y != promptY) {
+				this.prompt.prompt.setVariable("y", promptY);
+			}
+			if (this.inputbox && this.inputbox.y != editorY) {
+				this.inputbox.setVariable("y", editorY);
+			}
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.y != extendedHelpIconY) {
+				this.prompt.extendedHelpIcon.setVariable("y", extendedHelpIconY);
+			}
+			this.updateLayoutDel.connect(this.prompt.prompt, "onheight");
+			this.updateLayoutDel.connect(this.inputbox, "onheight");
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Sets and updates the text in the input box.
+		-->
+		<method args="text" name="setText">
+			<![CDATA[
+			this.inputbox.setText(text);
+			]]>
+		</method>
+
+		<Component name="prompt"/>
+
+		<InputText name="inputbox" x="${this.parent.prompt.x + this.parent.prompt.width + 6 + this.classroot.editorPadding}">
+			<handler name="ontext">
+				<![CDATA[
+				this.classroot.setVariable("value", this.getText());
+				]]>
+			</handler>
+		</InputText>
+	</FocusableComponent>
+
+	<!--- @keywords private -->
+	<Node classDefinition="true" definitionName="cmc/marketing/Textlistitem">
+		<variable name="displayName" type="string"/>
+		<variable name="value" type="string"/>
+		<variable name="selected" type="boolean" value="false"/>
+		<variable name="hide" type="boolean" value="false"/>
+
+		<handler name="oninit">
+			<![CDATA[
+			this.parent.addValue(this);
+			if (this.selected) {
+				this.parent.selectItem(this.value);
+			}
+			]]>
+		</handler>
+	</Node>
+
+	<!---
+		@keywords private
+		Convenience class that extends {@link cmc/foundation/TextComponent} for prompt text.
+	-->
+	<TextComponent classDefinition="true" definitionName="cmc/marketing/Text" multiline="true"/>
+
+	<!---
+		@keywords final
+		
+		cmc/marketing/PropertyEmailTemplateRichTextEditor is a property editor and is used to create a rich text editor that binds to a property 
+		value {@link cmc/foundation/ModelProperty}. Use cmc/marketing/PropertyEmailTemplateRichTextEditor inside a {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}
+		for the properties view of an {@link cmc/marketing/EmailTemplatePrimaryObjectDefinition} object.
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/marketing/PropertyEmailTemplateRichTextEditor" minWidth="708" sizeToAvailableWidth="true">
+		<dependency localName="EmailTemplateRichTextEditor" moduleName="cmc/marketing/EmailTemplateRichTextEditor"/>
+		<!---
+			Name of the property that indicates whether the e-mail is plain text or HTML-based.
+			@deprecated This attribute is no longer used as plain text (HTML source) support is now built into
+				base rich text editor.
+		-->
+		<variable name="plainTextPropertyName" type="string" value="${null}"/>
+		<!---
+			Name of the property that indicates whether Coremetrics is being used.
+			@deprecated This attribute has been replaced by the more generic <code>analyticsPropertyName</code>
+				property. If {@link cmc/marketing/PropertyEmailTemplateRichTextEditor#analyticsPropertyName}
+				is provided, this attribute is ignored.
+		-->
+		<variable name="coremetricsPropertyName" type="string" value="${null}"/>
+		<!---
+			Name of the property that contains the name/value pair defined in
+			{@link cmc/marketing/PropertyEmailTemplateRichTextEditor#analyticsPropertyNVPName}. The
+			default value is <code>propertyFile</code>.
+		-->
+		<variable name="analyticsPropertyName" type="string" value="propertyFile"/>
+		<!---
+			The name of the name/value pair stored in {@link cmc/marketing/PropertyEmailTemplateRichTextEditor#analyticsPropertyName}
+			that indicates whether or not an analytics provider is being used. If analytics should be collected,
+			the value of the name/value pair must be the string <code>true</code>. The
+			default value is <code>cmTrack</code>.
+		-->
+		<variable name="analyticsPropertyNVPName" type="string" value="cmTrack"/>
+		<!---
+			The value of the name/value pair stored in {@link cmc/marketing/PropertyEmailTemplateRichTextEditor#analyticsPropertyName}.
+			If analytics should be collected, the value of the name/value pair must match this attribute value. The
+			default value is <code>true</code>.
+		-->
+		<variable name="analyticsPropertyNVPTrueValue" type="string" value="true"/>
+		<!---
+			The name of the analytics provider as defined in biConfig.xml. The
+			default value is <code>coremetrics</code>.
+		-->
+		<variable name="analyticsProvider" type="string" value="coremetrics"/>
+		<!---
+			<p>Array of strings that contain sets of search and replacement values. The length of this array must be an even
+			number and is in the format <code>['searchKey1', 'replacement1', 'searchKey2', 'replacement2', ... , 'searchKeyN', 'replacementN']</code>.
+			All values should be XML-encoded.</p>
+			
+			<p>Search key values are displayed in the rich text editor to the business user, where as replacement values are persisted on the server. The
+			search and replace action is performed when the user saves the e-mail template and the reverse is performed when the user loads an e-mail template.</p>
+			
+			<p>The default value is <code>['e-mail:Link', 'e-mail:CMLink', 'e-mail:EMSpot', 'e-mail:EMSpot cmaction=&amp;quot;1&amp;quot;', 'e-mail:Content', 'e-mail:Content cmaction=&amp;quot;1&amp;quot;']</code>.</p>
+		-->
+		<variable name="replacementArray" value="${['e-mail:Link', 'e-mail:CMLink', 'e-mail:EMSpot', 'e-mail:EMSpot cmaction=&quot;1&quot;', 'e-mail:Content', 'e-mail:Content cmaction=&quot;1&quot;']}"/>
+		<!--- @keywords private -->
+		<variable name="replacementArray__type" type="string" value="array"/>
+		<!---
+			<p>This flag controls the default protocol used when generating links to the store front. If this value is <code>true</code>, links
+			will be generated using regular HTTP (ie: http), by default. If this value is <code>false</code>, secure HTTP (ie: https) will be used,
+			by default.</p>
+			
+			<p>The protocol for each individual link can changed by the business user by modifying the <code>useHttp<code>
+			attribute on the <code>e-mail:Link</code> tag in the e-mail template. For example:
+			@START_CODE
+			<e-mail:Link type="shoppingCart" sku="ABC-123" name="Product X" emailaction="0" useHttp="false" />
+			<e-mail:Link type="product" sku="XYZ-789" name="Product Y" emailaction="0" useHttp="true" />
+			@END_CODE
+			The link to add Product X to the shopping cart will be generated using HTTPS and the link to show Product Y will be generated using HTTP.</p>
+			
+			<p>The default value for this flag is <code>false<code>.</p>
+		-->
+		<variable name="useHttpForLinks" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			var analyticsProperty = (this.analyticsPropertyName) ? this.analyticsPropertyName : this.coremetricsPropertyName;
+			var rte = new EmailTemplateRichTextEditor.Class(parentComponent, {
+				name: "editor",
+				o: parentComponent.o,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				enabled: parentComponent.enabled,
+				textAreaHeight: 140,
+				width: availableWidth,
+				analyticsPropertyName: analyticsProperty,
+				analyticsPropertyNVPName: this.analyticsPropertyNVPName,
+				analyticsPropertyNVPTrueValue: this.analyticsPropertyNVPTrueValue,
+				analyticsProvider: this.analyticsProvider,
+				replacementArray: this.replacementArray,
+				useHttpForLinks: this.useHttpForLinks
+			});
+			rte.setVariable("property", parentComponent.property);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="getPromptTarget" args="component">
+			<![CDATA[
+			return this.editor ? this.editor.richBorder : undefined;
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		Marketing extension of the  cmc/foundation/RichTextEditor. E-mail specific forms are added below the editor as well as
+		some pre- and post-processing of the data to support the &lt;e-mail/&gt; tags.
+		@keywords private
+	-->
+	<RichTextEditor classDefinition="true" definitionName="cmc/marketing/EmailTemplateRichTextEditor" editorPadding="7" usePercentageFontSizes="false">
+		<dependency localName="mktCategoryGrid" moduleName="cmc/marketing/CategoryGrid"/>
+		<dependency localName="ContentSpotGrid" moduleName="cmc/marketing/ContentSpotGrid"/>
+		<dependency localName="PromotionGrid" moduleName="cmc/marketing/PromotionGrid"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="ChildEMarketingSpotGrid" moduleName="cmc/marketing/ChildEMarketingSpotGrid"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="mktProductGrid" moduleName="cmc/marketing/ProductGrid"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			Flag to indicate whether or not an analytics provider is defined for the store
+			@keywords private
+		-->
+		<variable name="analyticsEnabled" type="boolean" value="false"/>
+		<!---
+			Flag to indicate whether or not to track e-mails with analytics provider
+			@keywords private
+		-->
+		<variable name="useAnalytics" type="boolean" value="false"/>
+		<!---
+			The name of the analytics provider as defined in biConfig.xml.
+		-->
+		<variable name="analyticsProvider" type="string" value=""/>
+		<!---
+			Name of the property that contains the name/value pair defined in
+			{@link cmc/marketing/PropertyEmailTemplateRichTextEditor#analyticsPropertyNameValuePair}.
+		-->
+		<variable name="analyticsPropertyName" type="string" value=""/>
+		<!---
+			The name of the name/value pair stored in {@link cmc/marketing/EmailTemplateRichTextEditor#analyticsPropertyName}
+			that indicates whether or not an analytics provider is being used. If analytics should be collected,
+			the value of the name/value pair must be the string <code>true</code>.
+		-->
+		<variable name="analyticsPropertyNVPName" type="string" value=""/>
+		<!---
+			The value of the name/value pair stored in {@link cmc/marketing/PropertyEmailTemplateRichTextEditor#analyticsPropertyName}.
+			If analytics should be collected, the value of the name/value pair must match this attribute value. The
+			default value is <code>true</code>.
+		-->
+		<variable name="analyticsPropertyNVPTrueValue" type="string" value="true"/>
+		<!---
+			<p>Array of strings that contain sets of search and replacement values. The length of this array must be an even
+			number and is in the format <code>['searchKey1', 'replacement1', 'searchKey2', 'replacement2', ... , 'searchKeyN', 'replacementN']</code>.
+			All values should be XML-encoded.</p>
+			
+			<p>Search key values are displayed in the rich text editor to the business user, where as replacement values are persisted on the server. The
+			search and replace action is performed when the user saves the e-mail template and the reverse is performed when the user loads an e-mail template.</p>
+		-->
+		<variable name="replacementArray" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="replacementArray__type" type="string" value="array"/>
+		<!---
+			<p>This flag controls the default protocol used when generating links to the store front. If this value is <code>true</code>, links
+			will be generated using regular HTTP (ie: http), by default. If this value is <code>false</code>, secure HTTP (ie: https) will be used,
+			by default.</p>
+			
+			<p>The protocol for each individual link can changed by the business user by modifying the <code>useHttp<code>
+			attribute on the <code>e-mail:Link</code> tag in the e-mail template. For example:
+			@START_CODE
+			<e-mail:Link type="shoppingCart" sku="ABC-123" name="Product X" emailaction="0" useHttp="false" />
+			<e-mail:Link type="product" sku="XYZ-789" name="Product Y" emailaction="0" useHttp="true" />
+			@END_CODE
+			The link to add Product X to the shopping cart will be generated using HTTPS and the link to show Product Y will be generated using HTTP.</p>
+			
+			<p>The default value for this flag is <code>false<code>.</p>
+		-->
+		<variable name="useHttpForLinks" type="boolean" value="false"/>
+		
+		<!---
+			Whether or not the Add to Wish List option should be shown. This flag is set by
+			{@link cmc/marketing/EmailTemplateRichTextEditor#updateShowWishList} and should not be changed directly.
+			@keywords private
+		-->
+		<variable name="showWishListOption" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<variable name="o"/>
+
+		<!--- @keywords private -->
+		<method args="args, parent" name="constructor">
+			<![CDATA[
+			this.updateValuesDel = new EventHandler.Class(this, "updateValues");
+			this.showWishListDel = new EventHandler.Class(this, "updateShowWishList");
+			this.o = null;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateShowWishList();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateValuesDel.disconnectAll();
+			delete this.updateValuesDel;
+			this.showWishListDel.disconnectAll();
+			delete this.showWishListDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Updates the {@link cmc/marketing/EmailTemplateRichTextEditor#showWishListOption} flag which controls whether or not the "Add to Wish List" item
+			is available. Wish lists are not supported on stores that are not direct to the consumer. These store types include "B2B", "BBB",
+			"BRH", "BRP", "BMH", "BMP", "CHS", "CPS", "SCS", "DPS", "DPX", "SCP", "SPS", "SHS", "HCP", and "PBS".
+			See the documentation for the STORE table in the WebSphere Commerce Information Center for more information about store types.
+		-->
+		<method args="e" name="updateShowWishList">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.showWishListDel.disconnectAll();
+			if (this.o) {
+				var storeTypeContextValue = ContextUtil.Singleton.findContextValue(this.o, "storeType", this.showWishListDel);
+				if (storeTypeContextValue != null) {
+					var b2bStores = ["B2B", "BBB", "BRH", "BRP", "BMH", "BMP", "CHS", "CPS", "SCS", "DPS", "DPX", "SCP", "SPS", "SHS", "HCP", "PBS"];
+					var showWishList = true;
+					for (var i = 0; i < b2bStores.length; i++) {
+						if (storeTypeContextValue.value == b2bStores[i]) {
+							showWishList = false;
+							break;
+						}
+					}
+					this.setVariable("showWishListOption", showWishList);
+					if (this.linkForm) {
+						var predefineSelector = this.linkForm.predefinedView.select.actionSelect;
+						predefineSelector.wishList.hide = !this.showWishListOption;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			this._modelObjectLock = true;
+			if (newObject !== this.o) {
+				this.updateValuesDel.disconnectAll();
+				this.o = newObject;
+				if (this.o != null) {
+					if (this.property && this.property.o != this.o) {
+						this.setVariable("property", null);
+					}
+					if (this.analyticsPropertyName != null) {
+						var trackProp = this.o.getProperty(this.analyticsPropertyName);
+						if (trackProp != null) {
+							this.updateValuesDel.connect(trackProp, "onvalue");
+						}
+					}
+					this.updateValues();
+					this.updateShowWishList();
+				}
+				if (this.linkForm) {
+					this.linkForm.predefinedView.productView.product.editor.setModelObject(this.o);
+					this.linkForm.predefinedView.categoryView.category.editor.setModelObject(this.o);
+					this.linkForm.predefinedView.shopcartView.item.editor.setModelObject(this.o);
+					this.linkForm.predefinedView.wishlistView.item.editor.setModelObject(this.o);
+					this.linkForm.predefinedView.couponView.coupon.editor.setModelObject(this.o);
+					this.contentSpotForm.content.editor.setModelObject(this.o);
+					this.emSpotForm.emspot.editor.setModelObject(this.o);
+					this.promotionForm.promotion.editor.setModelObject(this.o);
+					this.linkForm.predefinedView.unsubscribeView.url.setText("");
+					this.linkForm.predefinedView.unsubscribeView.urlText.setText("");
+					this.linkForm.urlView.url.setText("");
+					this.linkForm.urlView.urlText.setText("");
+					this.linkForm.linkName.setText("");
+				}
+			}
+			this._modelObjectLock = false;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateValues">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var sendEvent = (this._modelObjectLock == false);
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(this.o);
+			var analyticsEnabled = (storeConfig != null) && (storeConfig.analytics.isEnabled == 'true') && (storeConfig.analytics.provider == this.analyticsProvider);
+			if (sendEvent) {
+				this.setVariable("analyticsEnabled", analyticsEnabled);
+			}
+			else {
+				this.analyticsEnabled = analyticsEnabled;
+			}
+			if (analyticsEnabled && (this.analyticsPropertyName != null)) {
+				var propertyNVP = this.o.getPropertyValue(this.analyticsPropertyName);
+				var isUsingAnalytics = (propertyNVP.indexOf(this.analyticsPropertyNVPName + "=" + this.analyticsPropertyNVPTrueValue) != -1);
+				if (sendEvent) {
+					this.setVariable("useAnalytics", isUsingAnalytics);
+				}
+				else {
+					this.useAnalytics = isUsingAnalytics;
+				}
+			}
+			else {
+				if (sendEvent) {
+					this.setVariable("useAnalytics", false);
+				}
+				else {
+					this.useAnalytics = false;
+				}
+			}
+			]]>
+		</method>
+
+		<handler name="onuseAnalytics">
+			<![CDATA[
+			var analyticsProp = this.o.getProperty(this.analyticsPropertyName);
+			if (analyticsProp.dirty) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+
+		<!---
+			Escape &lt;e-mail/&gt; tags so the rich text editor displays them.
+			Also hide analytics logic from the user.
+			@param string text: the original text from the server
+			@returns string: The input text with escaped &lt;e-mail/&gt; tags
+			@keywords private
+		-->
+		<method args="text" name="preFilter">
+			<![CDATA[
+			if (this.useAnalytics && (this.replacementArray.length % 2 == 0)) {
+				for (var i = 0; i < this.replacementArray.length; i = i + 2) {
+					var strSearch = this.replacementArray[i + 1];
+					var strReplace = this.replacementArray[i];
+					text = StringUtil.Singleton.replace(text, strSearch, strReplace);
+				}
+			}
+			var startTag = "<e-mail:";
+			var endTag = "/>";
+			var start = "";
+			var middle = "";
+			var end = "";
+			var startIdx = text.indexOf(startTag);
+			var endIdx = text.indexOf(endTag, startIdx);
+			while ((startIdx != -1) && (endIdx != -1)) {
+				start = text.substring(0, startIdx);
+				middle = text.substring(startIdx + 1, endIdx);
+				middle = StringUtil.Singleton.replace(middle, "&", "&amp;");
+				middle = StringUtil.Singleton.replace(middle, "\"", "&quot;");
+				end = text.substring(endIdx + 2, text.length);
+				text = start + "&lt;" + middle + "/&gt;" + end;
+				startIdx = text.indexOf(startTag);
+				endIdx = text.indexOf(endTag, startIdx);
+			}
+			return text;
+			]]>
+		</method>
+
+		<!---
+			Unescape <e-mail/> tags before we send to the service as runtime expects them
+			@param string text: the escaped text from the rich text editor
+			@returns string: The input text with unescaped &lt;e-mail/&gt; tags
+			@keywords private
+		-->
+		<method args="text" name="postFilter">
+			<![CDATA[
+			if (this.useAnalytics && (this.replacementArray.length % 2 == 0)) {
+				for (var i = 0; i < this.replacementArray.length; i = i + 2) {
+					var strSearch = this.replacementArray[i];
+					var strReplace = this.replacementArray[i + 1];
+					text = StringUtil.Singleton.replace(text, strSearch, strReplace);
+				}
+			}
+			var startTag = "&lt;e-mail:";
+			var endTag = "/&gt;";
+			var start = "";
+			var middle = "";
+			var end = "";
+			var startIdx = text.indexOf(startTag);
+			var endIdx = text.indexOf(endTag, startIdx);
+			while ((startIdx != -1) && (endIdx != -1)) {
+				start = text.substring(0, startIdx);
+				middle = text.substring(startIdx + 4, endIdx);
+				middle = StringUtil.Singleton.replace(middle, "&amp;", "&");
+				middle = StringUtil.Singleton.replace(middle, "&quot;", "\"");
+				end = text.substring(endIdx + 5, text.length);
+				text = start + "<" + middle + "/>" + end;
+				startIdx = text.indexOf(startTag);
+				endIdx = text.indexOf(endTag, startIdx);
+			}
+			return text;
+			]]>
+		</method>
+
+		<AxisLayout axis="y" inset="8" spacing="8"/>
+		<Component name="insertContent" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing - this.classroot.editorPadding}">
+			<Text fgcolor="${this.classroot.parent.style.texthilitecolor}" package="cmc/marketing" text="${marketingResources.Singleton.insertContent.string}" width="${this.classroot.parent.promptWidth}"/>
+	
+			<BaseComboBox enabled="${this.classroot.enabled}" name="selector" x="${this.classroot.parent.promptWidth + this.classroot.parent.xspacing + this.classroot.editorPadding}">
+				<handler name="onvisible">
+					<![CDATA[
+					if (this.classroot.richInputText) {
+						this.classroot.richInputText.updateInputTextHeight();
+					}
+					]]>
+				</handler>
+				<Textlistitem displayName="${marketingResources.Singleton.firstName.string}" package="cmc/marketing" selected="true" value="firstName"/>
+				<Textlistitem displayName="${marketingResources.Singleton.lastName.string}" package="cmc/marketing" value="lastName"/>
+				<Textlistitem displayName="${marketingResources.Singleton.link.string}" package="cmc/marketing" value="link"/>
+				<Textlistitem displayName="${marketingResources.Singleton.contentSpotLabel.string}" package="cmc/marketing" value="contentSpot"/>
+				<Textlistitem displayName="${marketingResources.Singleton.emSpot.string}" package="cmc/marketing" value="emSpot"/>
+				<Textlistitem displayName="${marketingResources.Singleton.promotionCode.string}" package="cmc/marketing" value="promotionCode"/>
+			</BaseComboBox>
+		</Component>
+
+		<Component name="linkForm" visible="${(this.parent.insertContent.selector.selectedValue &amp;&amp; this.parent.insertContent.selector.selectedValue.value == 'link') &amp;&amp; true}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing - this.classroot.editorPadding}">
+			<AxisLayout axis="y" spacing="8"/>
+
+			<Component name="clickAction">
+				<Text fgcolor="${this.classroot.parent.style.texthilitecolor}" package="cmc/marketing" text="${marketingResources.Singleton.clickAction.string}" width="${this.classroot.parent.promptWidth}"/>
+				<BaseComboBox name="clickActionSelect" x="${this.classroot.parent.promptWidth + this.classroot.parent.xspacing + this.classroot.editorPadding}">
+					<Textlistitem displayName="${marketingResources.Singleton.selectPredefined.string}" package="cmc/marketing" selected="true" value="predefined"/>
+					<Textlistitem displayName="${marketingResources.Singleton.selectURL.string}" package="cmc/marketing" value="url"/>
+				</BaseComboBox>
+			</Component>
+			
+			<Component name="predefinedView" visible="${this.parent.clickAction.clickActionSelect.selectedValue &amp;&amp; this.parent.clickAction.clickActionSelect.selectedValue.value == 'predefined'}">
+				<AxisLayout axis="y" spacing="8"/>
+				<Component name="select">
+					<Text fgcolor="${this.classroot.parent.style.texthilitecolor}" package="cmc/marketing" text="${marketingResources.Singleton.selectPredefined.string}" width="${this.classroot.parent.promptWidth}"/>
+					<BaseComboBox name="actionSelect" x="${this.classroot.parent.promptWidth + this.classroot.parent.xspacing + this.classroot.editorPadding}">
+						<Textlistitem displayName="${marketingResources.Singleton.displayProduct.string}" package="cmc/marketing" selected="true" value="product"/>
+						<Textlistitem displayName="${marketingResources.Singleton.displayCategory.string}" package="cmc/marketing" value="category"/>
+						<Textlistitem displayName="${marketingResources.Singleton.issueCouponLink.string}" package="cmc/marketing" value="coupon"/>
+						<Textlistitem displayName="${marketingResources.Singleton.addShopCart.string}" package="cmc/marketing" value="shopcart"/>
+						<Textlistitem displayName="${marketingResources.Singleton.addInterestList.string}" name="wishList" package="cmc/marketing" value="wishlist"/>
+						<Textlistitem displayName="${marketingResources.Singleton.unsubscribe.string}" package="cmc/marketing" value="unsubscribe"/>
+					</BaseComboBox>
+				</Component>
+
+				<Component name="productView" visible="${this.parent.select.actionSelect.selectedValue &amp;&amp; this.parent.select.actionSelect.selectedValue.value == 'product'}">
+					<PropertyChildListEditor listClass="${mktProductGrid}" name="product" objectTypes="ChildProducts,ChildInheritedProducts" promptText="${marketingResources.Singleton.selectProduct.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+				</Component>
+
+				<Component name="categoryView" visible="${this.parent.select.actionSelect.selectedValue &amp;&amp; this.parent.select.actionSelect.selectedValue.value == 'category'}">
+					<PropertyChildListEditor listClass="${mktCategoryGrid}" name="category" objectTypes="ChildCatalogGroup,ChildInheritedCatalogGroup" promptText="${marketingResources.Singleton.selectCategory.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+				</Component>
+
+				<Component name="couponView" visible="${this.parent.select.actionSelect.selectedValue &amp;&amp; this.parent.select.actionSelect.selectedValue.value == 'coupon'}">
+					<AxisLayout axis="y" spacing="8"/>
+					<PropertyChildListEditor helpText="${marketingResources.Singleton.help_couponSelection.string}" listClass="${PromotionGrid}" name="coupon" objectTypes="ChildCoupon,ChildInheritedCoupon" promptText="${marketingResources.Singleton.coupon.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+					<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_url.string}" name="url" package="cmc/marketing" promptText="${marketingResources.Singleton.url.string}" required="true"/>
+					<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_url_text.string}" name="urlText" package="cmc/marketing" promptText="${marketingResources.Singleton.urlText.string}" required="true"/>
+				</Component>
+
+				<Component name="shopcartView" visible="${this.parent.select.actionSelect.selectedValue &amp;&amp; this.parent.select.actionSelect.selectedValue.value == 'shopcart'}">
+					<PropertyChildListEditor helpText="${marketingResources.Singleton.help_searchSKU.string}" listClass="${mktProductGrid}" name="item" objectTypes="ChildItems,ChildInheritedItems" promptText="${marketingResources.Singleton.selectItem.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+				</Component>
+
+				<Component name="wishlistView" visible="${this.parent.select.actionSelect.selectedValue &amp;&amp; this.parent.select.actionSelect.selectedValue.value == 'wishlist'}">
+					<PropertyChildListEditor helpText="${marketingResources.Singleton.help_searchSKU.string}" listClass="${mktProductGrid}" name="item" objectTypes="ChildItems,ChildInheritedItems" promptText="${marketingResources.Singleton.selectItem.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+				</Component>
+
+				<Component name="unsubscribeView" visible="${this.parent.select.actionSelect.selectedValue &amp;&amp; this.parent.select.actionSelect.selectedValue.value == 'unsubscribe'}">
+					<AxisLayout axis="y" spacing="8"/>
+					<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_url.string}" name="url" package="cmc/marketing" promptText="${marketingResources.Singleton.url.string}" required="true"/>
+					<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_url_text.string}" name="urlText" package="cmc/marketing" promptText="${marketingResources.Singleton.urlText.string}" required="true"/>
+				</Component>
+			</Component>
+			
+			<Component name="urlView" visible="${this.parent.clickAction.clickActionSelect.selectedValue &amp;&amp; this.parent.clickAction.clickActionSelect.selectedValue.value == 'url'}">
+				<AxisLayout axis="y" spacing="8"/>
+				<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_url.string}" name="url" package="cmc/marketing" promptText="${marketingResources.Singleton.url.string}" required="true"/>
+				<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_url_text.string}" name="urlText" package="cmc/marketing" promptText="${marketingResources.Singleton.urlText.string}"/>
+			</Component>
+
+			<EmailInputText editorPadding="${this.classroot.editorPadding}" helpText="${marketingResources.Singleton.help_email_linkname_reporting.string}" name="linkName" package="cmc/marketing" promptText="${marketingResources.Singleton.linkNameReporting.string}" visible="${this.classroot.analyticsEnabled}"/>
+
+			<BaseCheckbox name="recordClicks" text="${marketingResources.Singleton.recordClicks.string}" visible="${(this.parent.predefinedView.select.actionSelect.selectedValue &amp;&amp; this.parent.predefinedView.select.actionSelect.selectedValue.value != 'unsubscribe') || (this.parent.clickAction.clickActionSelect.selectedValue &amp;&amp; this.parent.clickAction.clickActionSelect.selectedValue.value == 'url')}" x="${this.classroot.parent.promptWidth + this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+		</Component>
+
+		<Component name="contentSpotForm" visible="${this.parent.insertContent.selector.selectedValue &amp;&amp; this.parent.insertContent.selector.selectedValue.value == 'contentSpot' &amp;&amp; true}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing - this.classroot.editorPadding}">
+			<PropertyChildListEditor listClass="${ContentSpotGrid}" name="content" objectTypes="ChildMarketingContentSpot,ChildInheritedMarketingContentSpot" promptText="${marketingResources.Singleton.contentSpotLabel.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+		</Component>
+
+		<Component name="emSpotForm" visible="${this.parent.insertContent.selector.selectedValue &amp;&amp; this.parent.insertContent.selector.selectedValue.value == 'emSpot' &amp;&amp; true}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing - this.classroot.editorPadding}">
+			<PropertyChildListEditor listClass="${ChildEMarketingSpotGrid}" name="emspot" objectTypes="ChildEMarketingSpot,ChildInheritedEMarketingSpot" promptText="${marketingResources.Singleton.emSpot.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+		</Component>
+		
+		<Component name="promotionForm" visible="${this.parent.insertContent.selector.selectedValue &amp;&amp; this.parent.insertContent.selector.selectedValue.value == 'promotionCode' &amp;&amp; true}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing - this.classroot.editorPadding}">
+			<PropertyChildListEditor listClass="${PromotionGrid}" name="promotion" objectTypes="ChildPromotion,ChildInheritedPromotion" promptText="${marketingResources.Singleton.promotion.string}" required="true" singleChild="true" xspacing="${this.classroot.parent.xspacing + this.classroot.editorPadding}"/>
+		</Component>		
+			
+		<Button text="${marketingResources.Singleton.insert.string}">
+			<handler name="onclick">
+				<![CDATA[
+				var selected = this.parent.insertContent.selector.getValue();
+				if (selected == "firstName") {
+					this.classroot.insertTextAtSelection("<e-mail:FirstName />");
+				}
+				else if (selected == "lastName") {
+					this.classroot.insertTextAtSelection("<e-mail:LastName />");
+				}
+				else if (selected == "link") {
+					var emailTagStart = "<e-mail:Link ";
+					var emailTagEnd = "/>";
+					var emailTag = "";
+					var recordClicks = this.parent.linkForm.recordClicks.value;
+					var linkName = this.parent.linkForm.linkName.value;
+					linkName = StringUtil.Singleton.replace(linkName, "\"", "");
+					linkName = StringUtil.Singleton.replace(linkName, "'", "");
+					if (this.parent.linkForm.clickAction.clickActionSelect.selectedValue.value == 'predefined') {
+						var selected = this.parent.linkForm.predefinedView.select.actionSelect.selectedValue.value;
+						if (selected == 'product') {
+							var sku = "";
+							var name = "";
+							var objects = this.parent.linkForm.predefinedView.productView.product.editor.list.oList.getMatchingModelObjects();
+							if (objects.length == 1) {
+								var obj = objects[0].getReferencedObject();
+								sku = obj.getPropertyValue("partnumber");
+								name = obj.getPropertyValue("name", "CatalogEntryDescription");
+							}
+							emailTag += "type=\"product\" sku=\"" + sku + "\" name=\"" + encodeURIComponent(name) + "\" ";
+							emailTag += (recordClicks) ? "emailaction=\"1\" " : "emailaction=\"0\" ";
+						}
+						else if (selected == 'category') {
+							var categoryId = "";
+							var name = "";
+							var objects = this.parent.linkForm.predefinedView.categoryView.category.editor.list.oList.getMatchingModelObjects();
+							if (objects.length == 1) {
+								var obj = objects[0].getReferencedObject();
+								categoryId = obj.getPropertyValue("catgroupId");
+								name = obj.getPropertyValue("name", "CatalogGroupDescription");
+							}
+							emailTag += "type=\"category\" categoryId=\"" + categoryId + "\" name=\"" + encodeURIComponent(name) + "\" ";
+							emailTag += (recordClicks) ? "emailaction=\"1\" " : "emailaction=\"0\" ";
+						}
+						else if (selected == 'coupon') {
+							var couponpromotion = "";
+							var url = "";
+							var urlText = "";
+							var objects = this.parent.linkForm.predefinedView.couponView.coupon.editor.list.oList.getMatchingModelObjects();
+							if (objects.length == 1) {
+								var obj = objects[0].getReferencedObject();
+								couponpromotion = obj.getPropertyValue("promotionId");
+								url = this.parent.linkForm.predefinedView.couponView.url.value;
+								urlText = this.parent.linkForm.predefinedView.couponView.urlText.value;
+							}
+							emailTag += "type=\"coupon\" couponpromotion=\"" + couponpromotion + "\" ";
+							emailTag += "url=\"" + url + "\" ";
+							emailTag += "text=\"" + encodeURIComponent(urlText) + "\" ";
+							emailTag += (recordClicks) ? "emailaction=\"1\" " : "emailaction=\"0\" ";
+						}
+						else if (selected == 'shopcart') {
+							var sku = "";
+							var name = "";
+							var objects = this.parent.linkForm.predefinedView.shopcartView.item.editor.list.oList.getMatchingModelObjects();
+							if (objects.length == 1) {
+								var obj = objects[0].getReferencedObject();
+								sku = obj.getPropertyValue("partnumber");
+								name = obj.getPropertyValue("name", "CatalogEntryDescription");
+							}
+							emailTag += "type=\"shoppingCart\" sku=\"" + sku + "\" name=\"" + encodeURIComponent(name) + "\" ";
+							emailTag += (recordClicks) ? "emailaction=\"1\" " : "emailaction=\"0\" ";
+						}
+						else if (selected == 'wishlist') {
+							var sku = "";
+							var name = "";
+							var objects = this.parent.linkForm.predefinedView.wishlistView.item.editor.list.oList.getMatchingModelObjects();
+							if (objects.length == 1) {
+								var obj = objects[0].getReferencedObject();
+								sku = obj.getPropertyValue("partnumber");
+								name = obj.getPropertyValue("name", "CatalogEntryDescription");
+							}
+							emailTag += "type=\"interestList\" sku=\"" + sku + "\" name=\"" + encodeURIComponent(name) + "\" ";
+							emailTag += (recordClicks) ? "emailaction=\"1\" " : "emailaction=\"0\" ";
+						}
+						else if (selected == 'unsubscribe') {
+							var url = this.parent.linkForm.predefinedView.unsubscribeView.url.value;
+							var urlText = this.parent.linkForm.predefinedView.unsubscribeView.urlText.value;
+							emailTag += "type=\"unsubscribe\" url=\"" + url + "\" text=\"" + encodeURIComponent(urlText) + "\" emailaction=\"2\" ";
+						}
+					}
+					else if (this.parent.linkForm.clickAction.clickActionSelect.selectedValue.value == 'url') {
+						var url = this.parent.linkForm.urlView.url.value;
+						var urlText = this.parent.linkForm.urlView.urlText.value;
+						emailTag += "type=\"URLClickAction\" url=\"" + url + "\" text=\"" + encodeURIComponent(urlText) + "\" ";
+						emailTag += (recordClicks) ? "emailaction=\"1\" " : "emailaction=\"0\" ";
+					}
+					if (this.classroot.analyticsEnabled) {
+						emailTag += "linkname=\"" + linkName + "\" ";
+					}
+					emailTag += "useHttp=\"" + this.classroot.useHttpForLinks + "\"";
+					this.classroot.insertTextAtSelection(emailTagStart + emailTag + emailTagEnd);
+				}
+				else if (selected == "contentSpot") {
+					var name = "";
+					var objects = this.parent.contentSpotForm.content.editor.list.oList.getMatchingModelObjects();
+					if (objects.length == 1) {
+						var obj = objects[0].getReferencedObject();
+						name = obj.getPropertyValue("name");
+					}
+					this.classroot.insertTextAtSelection("<e-mail:Content name=\"" + name + "\" display=\"" + "Email Content Display" + "\"/>");
+				}
+				else if (selected == "emSpot") {
+					var name = "";
+					var objects = this.parent.emSpotForm.emspot.editor.list.oList.getMatchingModelObjects();
+					if (objects.length == 1) {
+						var obj = objects[0].getReferencedObject();
+						name = obj.getPropertyValue("name");
+					}
+					this.classroot.insertTextAtSelection("<e-mail:EMSpot name=\"" + name + "\" display=\"" + "Email EMSpot Display" + "\"/>");
+				}
+				else if (selected == "promotionCode") {
+					var promotionId = "";
+					var adminName = "";
+					var objects = this.parent.promotionForm.promotion.editor.list.oList.getMatchingModelObjects();
+					if (objects.length == 1) {
+						var obj = objects[0].getReferencedObject();
+						promotionId = obj.getPropertyValue("promotionId");
+						adminName = obj.getPropertyValue("adminName");
+					}
+					this.classroot.insertTextAtSelection("<e-mail:PromotionCode promotionId=\"" + promotionId + "\" name=\"" + adminName + "\"/>");
+				}
+				]]>
+			</handler>
+		</Button>
+		<Component height="5"/>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></RichTextEditor>
+	
+	<!---
+		@keywords private
+	 -->
+	<PropertiesComponentPrompt classDefinition="true" definitionName="cmc/marketing/PropertiesComponentPrompt" text="${this.getPromptText(this.parent.parent.promptText, this.parent.parent.required)}"/>
+
+</Definitions>

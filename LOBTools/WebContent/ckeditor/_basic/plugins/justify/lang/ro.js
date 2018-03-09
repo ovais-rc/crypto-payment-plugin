@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","ro",{block:"Aliniere stânga-dreapta",center:"Aliniere în centru",left:"Aliniere la stânga",right:"Aliniere la dreapta"});

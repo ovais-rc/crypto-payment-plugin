@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","eu",{options:"Emotikonoen aukerak",title:"Emotikonoak",toolbar:"Txertatu emotikonoa"});

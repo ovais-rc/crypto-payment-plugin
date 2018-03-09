@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","ru",{options:"Параметры значков настроения",title:"Значки настроения",toolbar:"Вставить значок настроения"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","kk",{options:"Көңіл-күй таңбалары параметрлері",title:"Көңіл-күй таңбалары",toolbar:"Эмограмма енгізу"});

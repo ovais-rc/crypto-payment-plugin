@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","ja",{label:"スタイル",panelTitle:"スタイル",panelTitle1:"ブロック・スタイル",panelTitle2:"インライン・スタイル",panelTitle3:"オブジェクト・スタイル"});

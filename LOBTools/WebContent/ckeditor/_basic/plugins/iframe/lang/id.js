@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","id",{border:"Tampilkan tepian frame",noUrl:"Ketikkan URL iframe",scrolling:"Aktifkan bar gulir",title:"Properti IFrame",toolbar:"Masukkan IFrame",ibm:{title:"IFrame"}});

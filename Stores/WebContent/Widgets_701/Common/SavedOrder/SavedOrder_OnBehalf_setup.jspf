@@ -1,0 +1,52 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%-- By default shoppers must be allowed to edit their orders and not allowed to lock them --%>
+<c:set var="isOrderEditable" value="true"/>
+<c:set var="canLockOrder" value="false"/>
+<c:set var="isOrderDeletable" value="true"/>
+<c:choose>
+  <%-- If the order is already locked, it can only be edited by the current editor of the order.
+   Other admins are allowed to take over lock --%>
+  <c:when test="${order.locked eq true}">
+     <%-- Order becomes read only when locked --%>
+     <c:set var="isOrderEditable" value="false"/>
+     <c:set var="isOrderDeletable" value="false"/>
+     <%-- Order is editable if locked by the current caller--%>
+     <c:choose>
+        <c:when test="${(env_shopOnBehalfSessionEstablished eq true) and (env_buyOnBehalfAdminUserId eq order.orderEditor.uniqueID)}">
+           <c:set var="isOrderEditable" value="true"/>
+           <c:set var="lockedByCurrentUser" value="true"/>
+           <c:set var="isOrderDeletable" value="true"/>
+        </c:when>
+        <c:otherwise>
+            <%-- Shop on behalf session is established, admin can take over the lock--%>
+            <c:if test="${env_shopOnBehalfSessionEstablished eq true}">
+                <c:set var="lockedByCurrentUser" value="false"/>
+                <c:set var="showLockInformation" value="true"/>
+                <c:set var="canLockOrder" value="true"/>
+            </c:if>
+        </c:otherwise>
+     </c:choose>
+  </c:when>
+  <c:otherwise>
+    <%--Order is not locked. Check if we are in an on behalf mode or normal shopper mode. --%>
+    <c:choose>
+        <c:when test="${env_shopOnBehalfSessionEstablished eq true}">
+           <%--Admins should only be allowed to see the order if they have not locked it--%>
+           <c:set var="isOrderEditable" value="false"/>
+           <c:set var="canLockOrder" value="true"/>
+        </c:when>
+     </c:choose>
+  </c:otherwise>
+</c:choose>

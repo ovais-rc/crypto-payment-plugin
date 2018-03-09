@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	<!---
+		@keywords private
+		
+		This class defines a grid column for use with the descriptive allowed values attribute grid on the properties
+		page of a catalog entry.
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/catalog/DescriptiveAttributeValueColumn" findable="false">
+		<dependency localName="AttributeAllowedValuesComboBoxEditor" moduleName="cmc/catalog/AttributeAllowedValuesComboBoxEditor"/>
+		<dependency localName="AttributeAllowedValuesComboBoxViewer" moduleName="cmc/catalog/AttributeAllowedValuesComboBoxViewer"/>
+					
+		<!---
+			@keywords private
+		-->
+		<variable name="cellViewerClass" value="${AttributeAllowedValuesComboBoxViewer}"/>
+		
+		<!---
+			@keywords private
+		-->		
+		<variable name="cellEditorClass" value="${AttributeAllowedValuesComboBoxEditor}"/>	
+			
+		<!---
+			Not useful in the context of allowed value descriptive attributes.
+			@keywords private
+		-->		
+		<variable name="columnEditorClass" value="${null}"/>
+		
+	</GridColumn>
+	
+	<!---
+		@keywords private
+		
+		Combo box viewer class to display the attribute value of an attribute and will be
+		displayed while the grid is in view mode.
+	-->
+	<GridComboBoxViewer classDefinition="true" definitionName="cmc/catalog/AttributeAllowedValuesComboBoxViewer">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<!---
+			Update and refresh cmc/foundation/GridComboBoxViewer value with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var displayValue = this.getDisplayName(this.property.value);
+			if (this.text != displayValue) {
+				this.setVariable("text", displayValue);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get display name for attribute 
+		-->
+		<method args="attrValId" name="getDisplayName">
+			<![CDATA[
+			var displayName = null;
+			if (attrValId && this.property.o) {
+				var attributeAllowedValueType = null;
+				var attributeDataType = this.property.o.getPropertyValue("attrDataType", "AttributeDictionaryAttributes");
+				if (attributeDataType == "String") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeStringValueAlias";
+					this.datatype = "string";
+				}
+				else if (attributeDataType == "Integer") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeIntegerValueAlias";
+					this.datatype = "number";
+				}
+				else if (attributeDataType == "Float") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeFloatValueAlias";
+					this.datatype = "number";
+				}
+				if (attributeDataType != null) {
+					var definingAttributeAllowedValue = this.property.o.getObject("AttributeDictionaryAttributeWithAllowedValuesAlias/" + attributeAllowedValueType + "[attrValId=" + attrValId + "]");
+					displayName = definingAttributeAllowedValue.getPropertyValue("value", "AttributeDictionaryAttributeValueDescription");
+					if (attributeDataType == "Float") {
+						displayName = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(displayName, 1);
+					}
+					displayName = StringUtil.Singleton.escapeText(displayName);
+				}
+			}
+			return displayName;
+			]]>
+		</method>
+		
+	</GridComboBoxViewer>
+	
+	<!---
+		This class represents a combo box used for selecting an allowed attribute value.
+		
+		@keywords private
+	-->
+	<GridComboBoxEditor classDefinition="true" definitionName="cmc/catalog/AttributeAllowedValuesComboBoxEditor">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="NumericValuesComparator" moduleName="cmc/catalog/NumericValuesComparator"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<dependency localName="StringValuesComparator" moduleName="cmc/catalog/StringValuesComparator"/>
+		<!---
+			Creates the combo box and adds the attribute values from the attribute specified in the
+			property.  The current selection is then set for the combo box from the value.
+		-->
+		<method args="e" name="createComboBox">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property != null) {
+				if (!this.propValueDel) {
+					this.propValueDel = new EventHandler.Class(this, "createComboBox");
+				}
+				else {
+					this.propValueDel.disconnectAll();
+				}
+				this._initializingComboBox = true;
+				this.values = [];
+				var defaultValue = null;
+				var o = this.property.o;
+				var attributeObject = o.getObject("AttributeDictionaryAttributes");
+				var attributeValueDefs = attributeObject.objectDefinition.getChildDefinitions("AttributeDictionaryAttributeValueAlias");
+				attributeObject.loadChildren(attributeValueDefs);
+				var attributeAllowedValueType = null;
+				var attributeDataType = o.getPropertyValue("attrDataType", "AttributeDictionaryAttributes");
+				if (attributeDataType == "String") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeStringValueAlias";
+					this.datatype = "string";
+				}
+				else if (attributeDataType == "Integer") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeIntegerValueAlias";
+					this.datatype = "number";
+				}
+				else if (attributeDataType == "Float") {
+					attributeAllowedValueType = "AttributeDictionaryAttributeFloatValueAlias";
+					this.datatype = "number";
+				}
+				if (attributeDataType != null) {
+					var definingAttributeAllowedValues = null;
+					definingAttributeAllowedValues = o.getObjects("AttributeDictionaryAttributeWithAllowedValuesAlias/" + attributeAllowedValueType, this.propValueDel);
+					var size = definingAttributeAllowedValues.length;
+					for (var i = 0; i < size; i++) {
+						var allowedValue = definingAttributeAllowedValues[size - 1 - i];
+						var itemValue = allowedValue.getPropertyValue("attrValId");
+						if (itemValue && itemValue.length > 0) {
+							var languageSelector = "";
+							if (this.parent.column.language != null) {
+								languageSelector = "[languageId=" + this.parent.column.language.languageId + "]";
+							}
+							var displayNameProperty = allowedValue.getProperty("value", "AttributeDictionaryAttributeValueDescription" + languageSelector);
+							if (displayNameProperty == null) {
+								this.addItem("", itemValue);
+								this.propValueDel.connect(allowedValue, "onchildObjects");
+							}
+							else {
+								this.propValueDel.connect(displayNameProperty, "onvalue");
+								var displayName = displayNameProperty.value;
+								if (attributeDataType == "Float") {
+									displayName = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(displayName, 1);
+								}
+								displayName = StringUtil.Singleton.escapeText(displayName);
+								this.addItem(displayName, itemValue);
+								if (allowedValue.getPropertyValue("default") == "true") {
+									defaultValue = itemValue;
+								}
+							}
+						}
+						else {
+							var attrValIdProperty = allowedValue.getProperty("attrValId");
+							this.propValueDel.connect(attrValIdProperty, "onvalue");
+						}
+					}
+					if (attributeDataType == "String") {
+						var caller = this;
+						require(["cmc/foundation/SortUtil"], function(SortUtil) {
+							SortUtil.Singleton.sort(caller.values, StringValuesComparator.Singleton);
+						});
+					}
+					else {
+						var caller = this;
+						require(["cmc/foundation/SortUtil"], function(SortUtil) {
+							SortUtil.Singleton.sort(caller.values, NumericValuesComparator.Singleton);
+						});
+					}
+				}
+				if ((this.property.value == null || this.property.value == "") && defaultValue != null) {
+					this.selectItem(defaultValue);
+					this.property.change(defaultValue);
+				}
+				else {
+					this.selectItem(this.property.value);
+				}
+				this._initializingComboBox = false;
+			}
+			]]>
+		</method>
+	</GridComboBoxEditor>
+	
+	<!---
+		@keywords private
+		Use this class to display allowed values of an attribute dictionary attributes. 
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/catalog/AttributeAllowedValuesComboBoxCellDescriptor">
+		<dependency localName="AttributeAllowedValuesComboBoxEditor" moduleName="cmc/catalog/AttributeAllowedValuesComboBoxEditor"/>
+		<dependency localName="AttributeAllowedValuesComboBoxViewer" moduleName="cmc/catalog/AttributeAllowedValuesComboBoxViewer"/>
+	
+		<!---
+			@keywords private
+			Use {@link cmc/foundation/GridTextViewer} to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${AttributeAllowedValuesComboBoxViewer}"/>
+		<!---
+			@keywords private
+			Use {@link cmc/foundation/GridTextEditor} to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${AttributeAllowedValuesComboBoxEditor}"/>	
+	</GridCellDescriptor>	
+</Definitions>

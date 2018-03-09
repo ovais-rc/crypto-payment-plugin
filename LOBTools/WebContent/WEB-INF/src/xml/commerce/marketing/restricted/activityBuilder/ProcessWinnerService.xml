@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>This custom service to the URL /cmc/ActivityProcessWinner is used to process a winner.</p>
+	-->
+	<CustomService classDefinition="true" definitionName="cmc/marketing/ProcessWinnerService" displayName="${marketingResources.Singleton.createNewActivityFromWinner.string}" url="/cmc/ActivityProcessWinner">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<!--- The object type of the family that the activity belongs to. -->
+		<variable name="familyObjectType" type="string" value="WebActivityFamily"/>
+		
+		<FalseEnablementCondition conditionId="falseCondition"/>
+
+		<!---
+			@keywords private
+			Parse the specified data element and apply the properties to the
+			specified object. This method is called when an element named "object"
+			is found in the service response XML.
+			@param cmc/foundation/ModelObject o: the model object
+			@param XML e: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="o, e, reqIdentifier" name="parseObject">
+			<![CDATA[
+			var model = o.model;
+			var newActivityIdNode = XMLUtil.getFirstElement(e, "newActivityId");
+			var activityId = newActivityIdNode.firstChild.nodeValue;
+			newActivityIdNode.parentNode.removeChild(newActivityIdNode);
+			var familyIdNode = XMLUtil.getFirstElement(e, "familyId");
+			var familyId = familyIdNode.firstChild.nodeValue;
+			familyIdNode.parentNode.removeChild(familyIdNode);
+			this.inherited(arguments);
+			var familyObjectDefinition = model.getObjectDefinition(null, this.familyObjectType);
+			if (familyObjectDefinition != null) {
+				var familyObject = model.findObject(null, familyObjectDefinition, familyId);
+				if (familyObject) {
+					familyObject.setGetChildrenServicesStale(null);
+					if (familyObject.childModelObjectLists.length > 0) {
+						familyObject.loadChildren();
+					}
+				}
+			}
+			var newO = model.loadObject(null, model.getObjectDefinition(null, o.objectType), activityId);
+			newO.getProperty(newO.objectDefinition.idProperty).setVariable("value", activityId);
+			newO.refreshObject(false);
+			newO.openGroupObject.setVariable("open", true);
+			model.oEditor.selectOpenObject(newO.openGroupObject);
+			]]>
+		</method>
+		
+	</CustomService>
+		
+</Definitions>

@@ -1,0 +1,3 @@
+define('dojo/nls/dojomobile_ROOT',{
+'dojox/mobile/nls/messages':{"CarouselNext":"Next","PageIndicatorLabel":"page $0 of $1","CarouselPrevious":"Previous","_localized":{"he":1,"zh-tw":1,"pt-pt":1,"nl":1,"kk":1,"tr":1,"bg":1,"ko":1,"el":1,"hr":1,"hu":1,"es":1,"eu":1,"bs":1,"uk":1,"id":1,"ca":1,"ro":1,"fi":1,"ru":1,"it":1,"fr":1,"cs":1,"ja":1,"sk":1,"da":1,"sl":1,"pl":1,"mk":1,"de":1,"sr":1,"sv":1,"pt":1,"ar":1,"zh":1,"nb":1,"th":1}}
+});

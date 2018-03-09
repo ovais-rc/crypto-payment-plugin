@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","sl",{closed:"Obvestilo je zaprto."});

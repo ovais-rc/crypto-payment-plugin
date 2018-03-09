@@ -1,0 +1,177 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<flow:ifEnabled feature="Analytics">
+<c:if test="${fn:contains(catEntryDisplayUrl, '?')}">
+	<c:set var="cmcrurl" value="${fn:replace(cmcrurl, '?', '&')}" />	
+	<c:if test="${!empty cmcrurl}"> 
+		<c:set var="cmcrurl_productImageLink" value="${cmcrurl}-productImageLink"/>
+		<c:set var="cmcrurl_productNameLink" value="${cmcrurl}-productNameLink"/>
+	</c:if>
+</c:if>
+</flow:ifEnabled>
+
+<c:choose>
+	<c:when test="${disableProductCompare == 'false'}">
+		<c:set var="showCompareBox" value="true" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="showCompareBox" value="false" />
+	</c:otherwise>
+</c:choose>
+<c:if test="${type eq 'package' || type eq 'bundle' || type eq 'dynamickit' || type eq 'preddynakit'}">
+	<c:set var="showCompareBox" value="false" />
+</c:if>
+
+<div id="CatalogEntryProdImg_${catalogEntryID}" class="product_image">
+	<div dataci_product="<c:out value='${param.pgl_widgetId}_${partNumber}'/>" class="image" id="ci_product_<c:out value='${param.pgl_widgetId}_${partNumber}'/>">
+		<a ${ShowProductInNewWindow} id="catalogEntry_img${catalogEntryID}"
+				href="${fn:escapeXml(catEntryDisplayUrl)}${fn:escapeXml(cmcrurl_productImageLink)}"
+				title="${altImgText}" >
+			<img alt="" src="${imgSource}"/>
+			<c:forEach var="adRibbon" items="${adRibbonMap}">
+				<c:set var="adRibbonStyle" value="RibbonAdDefault ${fn:replace(adRibbon.key , '\"' , '_')}"/>
+				<div class="${fn:escapeXml(adRibbonStyle)}">${adRibbon.value}</div>
+			</c:forEach>
+		</a>
+	</div>
+</div>
+<div class="product_info">
+	<div class="product_name">
+		<c:if test="${not empty searchScore}">
+			<div class="searchScore">[<wcst:message key='SEARCH_SCORE' bundle="${widgetText}"/> <c:out value="${searchScore}"/>]</div>
+		</c:if>
+		<a aria-hidden="true" tabindex="-1" id="WC_CatalogEntryDBThumbnailDisplayJSPF_${catalogEntryID}_link_9b" ${ShowProductInNewWindow} href="${fn:escapeXml(catEntryDisplayUrl)}${fn:escapeXml(cmcrurl_productNameLink)}"><c:out value="${highlightedName}" escapeXml="${env_escapeXmlFlag}"/></a>
+	</div>
+	<div class="product_price" id="product_price_${catalogEntryID}">
+			<%@include file = "/Widgets_801/Common/PriceDisplay/PriceDisplay.jspf" %>
+	</div>
+</div>
+
+
+<c:choose>
+	<c:when test="${showCompareBox eq 'true'}">
+		<div id="compare_${fn:escapeXml(catalogEntryID)}" class="compare_target">
+			<input id="comparebox_${fn:escapeXml(catalogEntryID)}" type="checkbox" name="comparebox_${fn:escapeXml(catalogEntryID)}" value="${fn:escapeXml(catalogEntryID)}"
+				onchange="javascript:shoppingActionsJS.addOrRemoveFromCompare('${fn:escapeXml(catalogEntryID)}',this.checked)"/>
+			<label for="comparebox_${fn:escapeXml(catalogEntryID)}"><wcst:message key="COMPARE" bundle="${widgetText}"/></label>
+			<a id="compareButton_${fn:escapeXml(catalogEntryID)}" href="javascript:shoppingActionsJS.compareProducts(<c:out value='${categoryIds}'/>,'${WCParam.manufacturer}');" role="button" aria-label="<wcst:message key="COMPARE" bundle="${widgetText}"/>"><wcst:message key="COMPARE" bundle="${widgetText}"/></a>
+		</div>
+	</c:when>
+	<c:otherwise>
+		<div id="compare_${fn:escapeXml(catalogEntryID)}" class="compare_target compare_target_hidden">
+			<input id="comparebox_${fn:escapeXml(catalogEntryID)}" type="checkbox" name="comparebox_${fn:escapeXml(catalogEntryID)}" value="${fn:escapeXml(catalogEntryID)}"
+				onchange="javascript:shoppingActionsJS.addOrRemoveFromCompare('${fn:escapeXml(catalogEntryID)}',this.checked)"/>
+			<label for="comparebox_${fn:escapeXml(catalogEntryID)}"><wcst:message key="COMPARE" bundle="${widgetText}"/></label>
+			<a id="compareButton_${fn:escapeXml(catalogEntryID)}" href="javascript:shoppingActionsJS.compareProducts(<c:out value='${categoryIds}'/>,'${WCParam.manufacturer}');" role="button" aria-label="<wcst:message key="COMPARE" bundle="${widgetText}"/>"><wcst:message key="COMPARE" bundle="${widgetText}"/></a>
+		</div>
+	</c:otherwise>
+</c:choose>
+<c:if test="${showCompareBox eq 'true' and param.fromPage ne 'compare'}">
+	<script>
+		if($("#comparebox_${fn:escapeXml(catalogEntryID)}").checked){
+			$( document ).ready(function() {
+				$("#comparebox_${fn:escapeXml(catalogEntryID)}").checked = '';
+			});
+		}
+	</script>
+</c:if>
+
+<c:if test="${param.showAddToCart == 'true' && enableSKUListView != 'true'}">		
+    <c:choose>
+        <c:when test="${(requestScope.bundleKitAvailable eq 'true') or (requestScope.productAvailable eq 'true') or (requestScope.dynamicKitAvailable eq 'true')}" >
+            <flow:ifDisabled feature="HidePurchaseButton">
+                <c:choose>											
+                    <c:when test="${(type == 'dynamickit' || type == 'preddynakit') && showDynamicKit == 'true'}">
+                        <%@ include file="CatalogEntryDisplayForDynamicKits_ImageView.jspf" %>
+                    </c:when>
+                    <c:when test="${type == 'item' || type == 'package' || type == 'product'}">
+                        <c:choose>
+                            <c:when test="${!hasAssociations}" >
+                                <%-- APPLEPAY BEGIN --%>
+                                <flow:ifEnabled feature="ApplePay">
+                                    <div class="product_option">
+                                        <a class="apple-pay-button left apple-pay-plp" id="applePayButtonDiv_${fn:escapeXml(catalogEntryID)}" wairole="button" role="button" aria-label="<wcst:message key="APPLE_PAY_BUTTON" bundle="${widgetText}"/>" onclick="javascript: applePayButtonClicked('entitledItem_<c:out value='${catalogEntryID}'/>', document.getElementById('quantity_<c:out value='${catalogEntryID}'/>').value, null, 'plp');" href="javascript:void(0);"></a>
+                                        <div class="clear_float"></div>
+                                    </div>
+                                </flow:ifEnabled>
+                                <%-- APPLEPAY END --%>	
+                                <div class="product_option">
+                                    <a id="listViewAdd2Cart_${fn:escapeXml(catalogEntryID)}" href="javascript:setCurrentId('listViewAdd2Cart_${fn:escapeXml(catalogEntryID)}');shoppingActionsJS.Add2ShopCartAjax('entitledItem_${fn:escapeXml(catalogEntryID)}',document.getElementById('quantity_${fn:escapeXml(catalogEntryID)}') != null ? document.getElementById('quantity_${fn:escapeXml(catalogEntryID)}').value : 1, false)" onKeyPress="javascript:MessageHelper.setFocusElement('listViewAdd2Cart_${fn:escapeXml(catalogEntryID)}');" class="button primary" wairole="button" role="button" title="<wcst:message key='ADD_TO_CART' bundle='${widgetText}' />">
+                                        <wcst:message key="ADD_TO_CART" bundle="${widgetText}"/>
+                                    </a>	
+                                </div>
+                            </c:when>
+                            <c:otherwise>	
+                                <%-- APPLEPAY BEGIN --%>
+                                <flow:ifEnabled feature="ApplePay">
+                                    <div class="product_option">
+                                        <a class="apple-pay-button" id="applePayButtonDiv_${fn:escapeXml(catalogEntryID)}" wairole="button" role="button" aria-label="<wcst:message key="APPLE_PAY_BUTTON" bundle="${widgetText}"/>" onclick="javascript: applePayButtonClicked('entitledItem_<c:out value='${catalogEntryID}'/>', document.getElementById('quantity_<c:out value='${catalogEntryID}'/>').value, null, 'ma', 'entitledItem_<c:out value='${productDetailsPageCatalogEntryID}'/>', ${associationIndex});" href="javascript:void(0);"></a>
+                                        <div class="clear_float"></div>
+                                    </div>
+                                    <div class="item_spacer_8px"></div>
+                                </flow:ifEnabled>
+                                <%-- APPLEPAY END --%>	
+                                <div class="product_option">
+                                    <a id="addBothToCartBtn_${fn:escapeXml(catalogEntryID)}" href="javascript:setCurrentId('addBothToCartBtn_${fn:escapeXml(catalogEntryID)}');MerchandisingAssociationJS.addBoth2ShopCart('entitledItem_<c:out value='${productDetailsPageCatalogEntryID}'/>','entitledItem_${fn:escapeXml(catalogEntryID)}',document.getElementById('quantity_${fn:escapeXml(catalogEntryID)}').value,${associationIndex});" class="button primary" wairole="button" role="button" title="<wcst:message key="MA_ADD_BOTH_TO_CART" bundle="${widgetText}"/>">
+                                        <wcst:message key="MA_ADD_BOTH_TO_CART" bundle="${widgetText}"/>
+                                    </a>
+                                </div>
+                            </c:otherwise>
+                        </c:choose>
+                        <input type="hidden" id="ProductInfoName_${catalogEntryID}" value="<c:out value='${highlightedName}' escapeXml='${env_escapeXmlFlag}'/>"/>
+		                <input type="hidden" id="ProductInfoImage_${catalogEntryID}" value="${fn:escapeXml(productThumbNailImage)}"/>
+                    </c:when>
+                    <c:otherwise>						
+                        <c:if test="${hasAssociations}" >								
+                            <div class="product_option">
+                                <a id="viewFullDetailsLink_${fn:escapeXml(catalogEntryID)}" href="${fn:escapeXml(productDisplayUrl)}${fn:escapeXml(cmcrurl_productFullDetailsLink)}" class="button primary" wairole="button" role="button" title="<wcst:message key="QI_VIEW_FULL_DETAILS" bundle="${widgetText}"/>">
+                                    <wcst:message key="QI_VIEW_FULL_DETAILS" bundle="${widgetText}"/>
+                                </a>
+                            </div>
+                        </c:if>
+                    </c:otherwise>
+                </c:choose>
+            </flow:ifDisabled> 
+        </c:when>
+        <c:otherwise>
+            <div class="product_option disabled">
+                <div onclick="" class="button primary">
+                    <wcst:message key="PD_UNAVAILABLE" bundle="${widgetText}"/>
+                </div>	
+            </div>
+        </c:otherwise>
+    </c:choose>
+</c:if>
+
+<c:if test="${param.showRemoveButton == 'true'}">
+    <c:choose>
+        <c:when test="${sharedWishList}">
+            <div class="product_option">
+                <a class="button secondary" wairole="button" role="button" href="<c:out value="${interestItemDeleteURL}"/>" id="WC_CatalogEntryDBThumbnailDisplayJSPF_<c:out value='${catEntryIdentifier}'/>_links_14" waistate:controls="MiniShoppingCart">
+                    <span class="remove">&nbsp;</span>
+                    <wcst:message bundle="${widgetText}" key="WISHLIST_REMOVE" />
+                </a>
+            </div>
+        </c:when>
+        <c:otherwise>
+            <div class="product_option">
+                <a class="button secondary" wairole="button" role="button" href="javaScript:MultipleWishLists.removeItem('<c:out value='${param.giftListItemID}'/>')" id="WC_CatalogEntryDBThumbnailDisplayJSPF_<c:out value='${catEntryIdentifier}'/>_links_14">
+                    <span class="remove">&nbsp;</span>
+                    <wcst:message bundle="${widgetText}" key="WISHLIST_REMOVE" />
+                </a>
+            </div>
+        </c:otherwise>
+    </c:choose>
+</c:if>

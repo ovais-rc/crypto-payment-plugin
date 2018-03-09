@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("newpage","zh-tw",{toolbar:"新建頁面"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("mathjax","de",{title:"Mathematik in TeX",button:"Mathematik",dialogInput:"TeX hier schreiben",docUrl:"http://en.wikibooks.org/wiki/LaTeX/Mathematics",docLabel:"TeX-Dokumentation",loading:"wird geladen...",pathName:"Mathematik"});

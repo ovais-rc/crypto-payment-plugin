@@ -1,0 +1,575 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		Spell checking dialog.
+	-->
+	<Dialog definitionName="cmc/foundation/SpellCheckDialog" singletonDefinition="true" title="${foundationResources.Singleton.spellCheckDialogTitle.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="SpellCheckListItem" moduleName="cmc/foundation/SpellCheckListItem"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="VerticalScrollbar" moduleName="cmc/foundation/VerticalScrollbar"/>
+		<!---
+			@keywords private
+			This is a required attribute.
+		-->
+		<variable name="propertyEditor" value="${null}"/>
+		<!---
+			@keywords private
+			{@link cmc/foundation/Inputtext} or {@link cmc/foundation/Richinputtext}
+			This is a required attribute.
+		-->
+		<variable name="inputField" value="${null}"/>
+		<!---
+			@keywords private
+			A list of elements to keep track of the misspelled words
+		-->
+		<variable name="misspelledWords" value="${[]}"/>
+		<!---
+			@keywords private
+			Which word in the list is currently being analyzed
+		-->
+		<variable name="wordCount" type="number" value="0"/>
+		<!---
+			@keywords private
+			Cursor position in the inputField at time of spell check launch
+		-->
+		<variable name="selectionPosition" type="number" value="0"/>
+		<!---
+			@keywords private
+			Selection size in the inputField at time of spell check launch
+		-->
+		<variable name="selectionSize" type="number" value="0"/>
+		<!---
+			@keywords private
+			Language object of property or if not language sensitive then the stores default language
+		-->
+		<variable name="languageObj" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates if replace buttons are enabled 
+		-->
+		<variable name="replaceEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Indicates if the messageView should be visible or the spellingView 
+		-->
+		<variable name="showMessage" type="boolean" value="true"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="listItems" value="${[]}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="availableItems" value="${[]}"/>
+		
+		<TextComponent multiline="true" name="messageView" visible="${this.classroot.showMessage}" width="${this.classroot.spellingView.width}"/>
+		<Component name="spellingView" visible="${!this.classroot.showMessage}">
+			<AxisLayout axis="x" spacing="10"/>
+			<Component name="textView">
+				<AxisLayout axis="y"/>
+				<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.spellCheckMisspelledWordLabel.string}" width="175"/>
+				<InputText name="misspelledWord" width="175">
+					<handler name="ontext">
+						<![CDATA[
+						if (this.classroot.misspelledWords.length > this.classroot.wordCount) {
+							this.classroot.setVariable("replaceEnabled", this.classroot.misspelledWords[this.classroot.wordCount].word != this.getText());
+						}
+						]]>
+					</handler>
+             		<handler args="kc" name="onkeydown">
+						<![CDATA[
+						if (kc == 13 && this.classroot.misspelledWords.length > this.classroot.wordCount && this.classroot.misspelledWords[this.classroot.wordCount].word != this.getText()) {
+							this.classroot.replaceWord();
+						}
+						]]>
+					</handler>
+				<handler name="onfocus">
+						<![CDATA[
+						this.classroot.spellingView.textView.suggestionList.clearSelection();
+						]]>
+					</handler></InputText>
+				<TextComponent fgcolor="${this.classroot.style.texthilitecolor}" multiline="true" text="${foundationResources.Singleton.spellCheckSuggestionLabel.string}" width="175"/>
+				<BaseList height="100" name="suggestionList" scrollBarClass="${VerticalScrollbar}" width="175">
+					<handler name="onselect">
+						<![CDATA[
+						this.classroot.spellingView.textView.misspelledWord.setText(this.getSelection().value);
+						]]>
+					</handler>
+             		<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13 && this.getSelection() != null) {
+							this.classroot.spellingView.textView.misspelledWord.setText(this.getSelection().value);
+							this.classroot.replaceWord();
+						}
+						]]>
+					</handler>
+					<!--- @keywords private	-->
+					<handler name="onfocus">
+						<![CDATA[
+						if (!this.parent.indicator) {
+							new FocusIndicator.Class(this.parent, {
+								name: "indicator",
+								focusableView: this,
+								indicatorView: this
+							});
+						}
+						]]>
+					</handler>
+				</BaseList>
+             </Component>
+             <Component name="buttonsView">
+             	<AxisLayout axis="y"/>
+             	<Button enabled="${this.classroot.replaceEnabled}" name="replaceButton" text="${foundationResources.Singleton.spellCheckReplaceButton.string}">
+             		<handler name="onclick">
+						<![CDATA[
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/SpellCheckDialog replaceButton");
+						this.classroot.replaceWord();
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+						]]>
+					</handler>
+             	</Button>
+             	<Button enabled="${this.classroot.replaceEnabled}" name="replaceAllButton" text="${foundationResources.Singleton.spellCheckReplaceAllButton.string}">
+             		<handler name="onclick">
+						<![CDATA[
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/SpellCheckDialog replaceAllButton");
+						var misspelledWord = this.classroot.misspelledWords[this.classroot.wordCount].word;
+						for (var i = this.classroot.wordCount; i < this.classroot.misspelledWords.length; i++) {
+							var replacedWord = this.classroot.misspelledWords[i];
+							if (misspelledWord == replacedWord.word) {
+								this.classroot.updateInputField(replacedWord, i);
+								replacedWord.skip = true;
+							}
+						}
+						this.classroot.wordCount++;
+						this.classroot.runSpellCheckingSession();
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+						]]>
+					</handler>
+             	</Button>
+             	<Button name="skipButton" text="${foundationResources.Singleton.spellCheckSkipButton.string}">
+             		<handler name="onclick">
+						<![CDATA[
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/SpellCheckDialog skipButton");
+						this.classroot.wordCount++;
+						this.classroot.runSpellCheckingSession();
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+						]]>
+					</handler>
+             	</Button>
+             	<Button name="skipAllButton" text="${foundationResources.Singleton.spellCheckSkipAllButton.string}">
+             		<handler name="onclick">
+						<![CDATA[
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/SpellCheckDialog skipAllButton");
+						for (var i = this.classroot.wordCount + 1; i < this.classroot.misspelledWords.length; i++) {
+							if (this.classroot.misspelledWords[this.classroot.wordCount].word == this.classroot.misspelledWords[i].word) {
+								this.classroot.misspelledWords[i].skip = true;
+							}
+						}
+						this.classroot.wordCount++;
+						this.classroot.runSpellCheckingSession();
+						if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+						]]>
+					</handler>
+             	</Button>
+             </Component> 
+		</Component>
+		<Component name="buttonSection" placement="footer">
+			<Button name="spellCheckCancelButton" text="${foundationResources.Singleton.spellCheckCloseButton.string}" primary="false"><handler name="onclick">
+					<![CDATA[
+					this.classroot.closeWindow();
+					]]>
+				</handler></Button>
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>	
+		
+		<!--- 
+			@keywords private
+			Method to replace misspelled word with a new word.
+		-->
+		<method name="replaceWord">
+			<![CDATA[
+			var replacedWord = this.misspelledWords[this.wordCount];
+			this.updateInputField(replacedWord, this.wordCount);
+			this.wordCount++;
+			this.runSpellCheckingSession();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Method to open the spell check dialog when user clicks Spell Check option in context menu.
+			@param {@link cmc/foundation/ObjectProperties} propertyEditor: property editor
+			@param {@link cmc/foundation/Inputtext} inputField: this can also be a {@link cmc/foundation/Richinputtext}
+			@param languageObj: language object to get locale
+			@param selectionPosition: cursor selection position of inputField
+			@param selectionSize: cursor selection size of inputField
+		-->
+		<method args="propertyEditor, inputField, languageObj, selectionPosition, selectionSize" name="openSpellCheckDialog">
+			<![CDATA[
+			this.openWindow();
+			this.setVariable("showMessage", true);
+			this.messageView.setVariable('text', foundationResources.Singleton.spellCheckProcessingMsg.string);
+			FocusUtil.setFocus(this.buttonSection.spellCheckCancelButton);
+			this.spellingView.textView.misspelledWord.setText("");
+			this.clearSuggestionList();
+			this.misspelledWords = [];
+			this.propertyEditor = propertyEditor;
+			this.inputField = inputField;
+			this.languageObj = languageObj;
+			var text = this.inputField.getText();
+			this.selectionPosition = selectionPosition;
+			this.selectionSize = selectionSize;
+			if (selectionSize != 0) {
+				text = text.slice(selectionPosition, selectionPosition + selectionSize);
+			}
+			var caller = this;
+			require(["cmc/foundation/GetMisspelledWordsService"], function(GetMisspelledWordsService) {
+				GetMisspelledWordsService.Singleton.doRequest(caller, {
+					text: text,
+					editorLocale: StringUtil.Singleton.replace(caller.languageObj.localeName, "_", "-")
+				});
+			});
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Close dialog.  Also updates the propertyEditor and sets focus back to the inputField.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			if (this.propertyEditor.property) {
+				this.propertyEditor.storeValue();
+			}
+			this.setVariable("showMessage", true);
+			this.messageView.setVariable('text', "");
+			this.spellingView.textView.misspelledWord.setText("");
+			this.clearSuggestionList();
+			this.misspelledWords = [];
+			this.propertyEditor = null;
+			this.languageObj = null;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			FocusUtil.setFocus(this.inputField);
+			this.inputField.widget.inputTextNode.setSelectionRange(this.selectionPosition, this.selectionPosition + this.selectionSize);
+			this.selectionPosition = 0;
+			this.selectionSize = 0;
+			this.inputField = null;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Runs the misspelled word session
+		-->
+		<method name="runSpellCheckingSession">
+			<![CDATA[
+			this.clearSuggestionList();
+			this.spellingView.textView.misspelledWord.setText("");
+			while (this.wordCount < this.misspelledWords.length && this.misspelledWords[this.wordCount].skip) {
+				this.wordCount++;
+			}
+			if (this.wordCount < this.misspelledWords.length) {
+				var misspelledWord = this.misspelledWords[this.wordCount];
+				this.spellingView.textView.misspelledWord.setText(misspelledWord.word);
+				this.highlightCurrentWord();
+				var caller = this;
+				require(["cmc/foundation/GetMisspelledSuggestionsService"], function(GetMisspelledSuggestionsService) {
+					GetMisspelledSuggestionsService.Singleton.doRequest(caller, {
+						misspelledWord: misspelledWord.word,
+						editorLocale: StringUtil.Singleton.replace(caller.languageObj.localeName, "_", "-")
+					});
+				});
+				this.setVariable("showMessage", false);
+				FocusUtil.setFocus(this.spellingView.textView.misspelledWord);
+			}
+			else {
+				if (this.misspelledWords.length == 0) {
+					this.messageView.setVariable('text', foundationResources.Singleton.spellCheckNoMisspelledWordsMsg.string);
+				}
+				else {
+					this.messageView.setVariable('text', foundationResources.Singleton.spellCheckCompleteMsg.string);
+				}
+				this.setVariable("showMessage", true);
+				FocusUtil.setFocus(this.buttonSection.spellCheckCancelButton);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Highlight the currently misspelled word in the inputField
+		-->
+		<method name="highlightCurrentWord">
+			<![CDATA[
+			var misspelledWord = this.misspelledWords[this.wordCount];
+			this.inputField.widget.inputTextNode.setSelectionRange(misspelledWord.position, misspelledWord.position + misspelledWord.word.length);
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Updates list of suggestions
+		-->	
+		<method args="suggestions" name="showSuggestions">
+			<![CDATA[
+			var misspelledWord = this.misspelledWords[this.wordCount];
+			if (misspelledWord) {
+				this.clearSuggestionList();
+				misspelledWord.suggestions = suggestions;
+				var item;
+				for (var i = 0; i < suggestions.length; i++) {
+					if (this.availableItems.length > 0) {
+						item = this.availableItems.shift();
+						item.setVariable("visible", true);
+					}
+					else {
+						item = new SpellCheckListItem.Class(this.spellingView.textView.suggestionList);
+					}
+					item.setVariable("value", suggestions[i]);
+					item.setVariable("text", suggestions[i]);
+					this.listItems.push(item);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Clears suggestions in list
+		-->		
+		<method name="clearSuggestionList">
+			<![CDATA[
+			var item;
+			while (this.listItems.length > 0) {
+				item = this.listItems.pop();
+				item.setVariable("visible", false);
+				item.setVariable("value", null);
+				item.setVariable("text", "");
+				this.availableItems.unshift(item);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Updates the inputField with the new word.
+		-->
+		<method args="replacedWord, replacedWordCount" name="updateInputField">
+			<![CDATA[
+			var newWord = this.spellingView.textView.misspelledWord.getText();
+			var position = replacedWord.position;
+			this.inputField.replaceText(position, position + replacedWord.word.length, newWord);
+			var color = this.formatArray[position];
+			this.formatArray.splice(position, replacedWord.word.length);
+			for (var a = 0; a < newWord.length; a++) {
+				this.formatArray.splice(position, 0, color);
+			}
+			var offset = newWord.length - replacedWord.word.length;
+			for (var i = replacedWordCount + 1; i < this.misspelledWords.length; i++) {
+				this.misspelledWords[i].position = this.misspelledWords[i].position + offset;
+			}
+			if (this.selectionSize != 0) {
+				this.selectionSize = this.selectionSize + offset;
+			}
+			]]>
+		</method>
+	</Dialog>
+	
+	<!---
+		@keywords private
+		This class declares a spell check service that is extended by {@link cmc/foundation/GetMisspelledWordsService} and {@link cmc/foundation/GetMisspelledSuggestionsService}.
+	-->
+	<Service classDefinition="true" definitionName="cmc/foundation/SpellCheckService" retryOnError="true" sendIdentity="true" sendLocale="true" sendWorkspaceContext="false">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="SpellCheckDialog" moduleName="cmc/foundation/SpellCheckDialog"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		
+		<!---
+			@keywords private
+			This method is called when a service response is successfully returned from the server. This does
+			not necessarily mean that the service completed successfully, it just means that there were no
+			communication errors. The specified dataset contains the response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceComplete">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/SpellCheckService", "serviceComplete(ds)", [ds]);
+			}
+			if (ds.requestIdentifier == this.requestIdentifier && SpellCheckDialog.Singleton.visible) {
+				this.inherited(arguments);
+			}
+			else {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "INFO", "cmc/foundation/SpellCheckService", "serviceComplete", "service response was ignored.");
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "CONFIG", "cmc/foundation/SpellCheckService", "serviceComplete", this.url);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/SpellCheckService", "serviceComplete");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			if (ds.requestIdentifier == this.requestIdentifier && SpellCheckDialog.Singleton.visible) {
+				SpellCheckDialog.Singleton.setVariable("showMessage", true);
+				SpellCheckDialog.Singleton.messageView.setVariable('text', foundationResources.Singleton.replaceValues("spellCheckFailureMsg", [SpellCheckDialog.Singleton.languageObj.languageDescription]));
+				FocusUtil.setFocus(SpellCheckDialog.Singleton.buttonSection.spellCheckCancelButton);
+			}
+			]]>
+		</method>
+	</Service>
+	
+	<!---
+		@keywords private
+		This class declares a service that returns the misspelled words in a block of text.
+	-->
+	<SpellCheckService definitionName="cmc/foundation/GetMisspelledWordsService" singletonDefinition="true" url="/cmc/GetMisspelledWords">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/> 
+				
+		<!---
+			This method is called when an element named "values"
+			is found in the service response XML.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/GetMisspelledWordsService", "parseValues(requestParent,e,requestIdentifier)", [requestParent]);
+			}
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				if (nodes[i].nodeName == "misspelledWord") {
+					var wordNodes = nodes[i].childNodes;
+					var word = "";
+					var position = 0;
+					for (var t = 0; t < wordNodes.length; t++) {
+						var wordNode = wordNodes[t];
+						var wordKey = wordNode.nodeName;
+						var wordTextNode = wordNode.firstChild;
+						if (wordTextNode != null && (wordTextNode.nodeType == 3 || wordTextNode.nodeType == 4)) {
+							if (wordKey == "word") {
+								word = wordTextNode.nodeValue;
+							}
+							else if (wordKey == "position") {
+								position = parseInt(wordTextNode.nodeValue);
+							}
+						}
+					}
+					if (requestParent.selectionSize != 0) {
+						position = position + requestParent.selectionPosition;
+					}
+					requestParent.misspelledWords.push({
+						word: word,
+						position: position,
+						skip: false
+					});
+				}
+			}
+			requestParent.wordCount = 0;
+			requestParent.runSpellCheckingSession();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/GetMisspelledWordsService", "parseValues(requestParent,e,requestIdentifier)");
+			}
+			]]>
+		</method>
+	</SpellCheckService>
+	
+	<!---
+		@keywords private
+		This class declares a service that returns the possible suggestions for a misspelled word.
+	-->
+	<SpellCheckService definitionName="cmc/foundation/GetMisspelledSuggestionsService" singletonDefinition="true" url="/cmc/GetMisspelledSuggestions">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		
+		<!---
+			This method is called when an element named "values"
+			is found in the service response XML.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/GetMisspelledSuggestionsService", "parseValues(requestParent,e,requestIdentifier)", [requestParent]);
+			}
+			var suggestions = [];
+			var nodes = e.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				if (node.nodeName == "suggestion") {
+					var textNode = node.firstChild;
+					if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+						suggestions.push(textNode.nodeValue);
+					}
+				}
+			}
+			requestParent.showSuggestions(suggestions);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.service", "cmc/foundation/GetMisspelledSuggestionsService", "parseValues(requestParent,e,requestIdentifier)");
+			}
+			]]>
+		</method>
+	</SpellCheckService>
+	
+	<!---
+		@keywords private
+		
+		{@link cmc/foundation/SpellCheckDialog} misspelled word suggestion list items.
+	-->
+	<BaseTextListItem classDefinition="true" definitionName="cmc/foundation/SpellCheckListItem">
+		<dependency localName="SpellCheckDialog" moduleName="cmc/foundation/SpellCheckDialog"/>
+		<!---
+			Handle double click event.
+		-->
+		<handler name="ondblclick">
+			<![CDATA[
+			SpellCheckDialog.Singleton.spellingView.textView.misspelledWord.setText(this.value);
+			SpellCheckDialog.Singleton.replaceWord();
+			]]>
+		</handler>
+	</BaseTextListItem>
+</Definitions>

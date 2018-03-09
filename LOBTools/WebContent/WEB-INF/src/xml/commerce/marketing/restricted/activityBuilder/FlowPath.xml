@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<FlowPath classDefinition="true" contextMenuClass="${mktFlowElementContextMenu}" definitionName="cmc/marketing/FlowPath" objectClass="${mktFlowElement}">
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="mktFlowElementContextMenu" moduleName="cmc/marketing/FlowElementContextMenu"/>
+		<dependency localName="mktFlowElement" moduleName="cmc/marketing/FlowElement"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<!---
+			Percentage of the time this path is traveled in a branch. This value comes from the "pctg" property of the object.
+			@keywords private
+		-->
+		<variable name="pathPercent" type="string" value=""/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.pathInfo.icon.setVariable("imageSet", "pathIcon");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.winnerDel) {
+				this.winnerDel.disconnectAll();
+				delete this.releaseModelObjectDel;
+			}
+			if (this.experimentValidateDel) {
+				this.experimentValidateDel.disconnectAll();
+				delete this.experimentValidateDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.winnerDel) {
+				this.winnerDel.disconnectAll();
+			}
+			else {
+				this.winnerDel = new EventHandler.Class(this, "updateWinner");
+			}
+			if (this.experimentValidateDel) {
+				this.experimentValidateDel.disconnectAll();
+			}
+			else {
+				this.experimentValidateDel = new EventHandler.Class(this, "updatePercent");
+			}
+			this.inherited(arguments);
+			if (this.o) {
+				var winnerProp = this.o.getProperty("winner");
+				this.winnerDel.connect(winnerProp, "onvalue");
+				var percentProp = this.o.getProperty("pctg");
+				this.experimentValidateDel.connect(percentProp, "onvalue");
+				if (this.parentFlowElement && this.parentFlowElement.o) {
+					var branchTypeProp = this.parentFlowElement.o.getProperty("branchtype");
+					this.experimentValidateDel.connect(branchTypeProp, "onvalue");
+				}
+				this.updatePercent();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateWinner">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.parentFlowElement && this.parentFlowElement.oList) {
+				var winnerProp = this.o.getProperty("winner");
+				if (winnerProp.dirty && winnerProp.value == "true") {
+					var siblings = FlowUtils.Singleton.getSortedElements(this.o.parentObject);
+					for (var i = 0; i < siblings.length; i++) {
+						if (siblings[i] != this.o) {
+							if (siblings[i].getPropertyValue("winner") != "false") {
+								siblings[i].setPropertyValue("winner", "", "false");
+							}
+						}
+					}
+				}
+				this.parentFlowElement.updateBranch();
+				var siblingPaths = this.parentFlowElement.getChildren();
+				for (var i = 0; i < siblingPaths.length; i++) {
+					siblingPaths[i].updatePathIcon();
+				}
+			}
+			this.updatePathIcon();
+			]]>
+		</method>
+
+		<!---
+			Sets or unsets the winner flag on this path
+			@param string winner Either "true" or "false".
+			@keywords private
+		-->
+		<method args="winner" name="markAsWinner">
+			<![CDATA[
+			if (this.o && this.parentFlowElement && this.parentFlowElement.oList) {
+				var winnerProp = this.o.getProperty("winner");
+				winnerProp.change(winner);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updatePercent">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.parentFlowElement && this.parentFlowElement.o) {
+				this.parentFlowElement.o.validate();
+				var percentProp = this.o.getProperty("pctg");
+				var branchType = this.parentFlowElement.o.getPropertyValue("branchtype");
+				if (branchType == "random") {
+					var percent = percentProp.value;
+					var percentString = (percent != "") ? marketingResources.Singleton.replaceValues("percentValue", [percent]) : "";
+					this.setVariable("pathPercent", percentString);
+				}
+				else {
+					this.setVariable("pathPercent", "");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Updates all the path images including the icon and path backgrounds.
+			@keywords private
+		-->
+		<method args="e" name="updatePathIcon">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && this.parentFlowElement && this.parentFlowElement.o) {
+				var parentState = "";
+				if (this.parentFlowElement.o.objectType == "branch") {
+					parentState = this.parentFlowElement.o.getPropertyValue("state");
+				}
+				var experimentHasWinner = false;
+				var winnerSequence = 0;
+				var siblings = FlowUtils.Singleton.getSortedElements(this.o.parentObject);
+				for (var i = 0; i < siblings.length; i++) {
+					var isWinner = siblings[i].getPropertyValue("winner");
+					if (isWinner == "true") {
+						experimentHasWinner = true;
+						winnerSequence = Number(siblings[i].getPropertyValue("sequence"));
+						break;
+					}
+				}
+				var isThisWinner = this.o.getPropertyValue("winner");
+				if (this.siblingSequence == 0) {
+					this.leftJoint.setVariable("currentImage", 1);
+					this.rightJoint.setVariable("currentImage", 1);
+				}
+				if (parentState == "inactive") {
+					if (this.siblingSequence != 0) {
+						this.background.setVariable("currentImage", 2);
+						this.pathInfo.icon.setVariable("currentImage", 2);
+						this.leftJoint.setVariable("currentImage", 3);
+						this.rightJoint.setVariable("currentImage", 3);
+					}
+					else {
+						this.background.setVariable("currentImage", 1);
+						this.pathInfo.icon.setVariable("currentImage", 1);
+					}
+					this.leftTopVertical.setVariable("currentImage", 2);
+					this.leftBottomVertical.setVariable("currentImage", 2);
+					this.rightTopVertical.setVariable("currentImage", 2);
+					this.rightBottomVertical.setVariable("currentImage", 2);
+				}
+				else if (experimentHasWinner) {
+					if (isThisWinner != "true") {
+						this.background.setVariable("currentImage", 2);
+						this.pathInfo.icon.setVariable("currentImage", 2);
+						var thisSequence = Number(this.o.getPropertyValue("sequence"));
+						if (thisSequence > winnerSequence) {
+							if (this.siblingSequence != 0) {
+								this.leftJoint.setVariable("currentImage", 3);
+								this.rightJoint.setVariable("currentImage", 3);
+							}
+							this.leftTopVertical.setVariable("currentImage", 2);
+							this.leftBottomVertical.setVariable("currentImage", 2);
+							this.rightTopVertical.setVariable("currentImage", 2);
+							this.rightBottomVertical.setVariable("currentImage", 2);
+						}
+						else {
+							if (this.siblingSequence != 0) {
+								this.leftJoint.setVariable("currentImage", 2);
+								this.rightJoint.setVariable("currentImage", 2);
+							}
+							this.leftTopVertical.setVariable("currentImage", 1);
+							this.leftBottomVertical.setVariable("currentImage", 1);
+							this.rightTopVertical.setVariable("currentImage", 1);
+							this.rightBottomVertical.setVariable("currentImage", 1);
+						}
+					}
+					else {
+						if (this.siblingSequence != 0) {
+							this.leftJoint.setVariable("currentImage", 2);
+							this.rightJoint.setVariable("currentImage", 2);
+						}
+						this.background.setVariable("currentImage", 1);
+						this.pathInfo.icon.setVariable("currentImage", 3);
+						this.leftTopVertical.setVariable("currentImage", 1);
+						this.leftBottomVertical.setVariable("currentImage", 2);
+						this.rightTopVertical.setVariable("currentImage", 1);
+						this.rightBottomVertical.setVariable("currentImage", 2);
+					}
+				}
+				else {
+					if (this.siblingSequence != 0) {
+						this.leftJoint.setVariable("currentImage", 2);
+						this.rightJoint.setVariable("currentImage", 2);
+					}
+					this.background.setVariable("currentImage", 1);
+					this.pathInfo.icon.setVariable("currentImage", 1);
+					this.leftTopVertical.setVariable("currentImage", 1);
+					this.leftBottomVertical.setVariable("currentImage", 1);
+					this.rightTopVertical.setVariable("currentImage", 1);
+					this.rightBottomVertical.setVariable("currentImage", 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<TextComponent fontsize="11" placement="container" text="${this.classroot.pathPercent}" visible="${this.text != ''}"/>
+	</FlowPath>
+	
+</Definitions>

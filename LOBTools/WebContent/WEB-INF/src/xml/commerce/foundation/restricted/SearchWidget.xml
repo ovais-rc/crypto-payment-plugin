@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- 
+		@keywords private
+		
+		Business Object Editor main search widget.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/SearchWidget" height="28" width="308" bgcolor="#ffffff">
+		<dependency localName="AdvancedSearchActionDefinition" moduleName="cmc/foundation/AdvancedSearchActionDefinition"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<!---
+			Reference to the business object editor. This is a required attribute.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			Array of search definitions.
+		-->
+		<variable name="searchDefinitions" value="${[]}"/>
+		<!---
+			Current definition.
+		-->
+		<variable name="currentDefinition" value="${null}"/>
+		<!---
+			Default search definition.
+		-->
+		<variable name="defaultDefinition" value="${null}"/>
+		<!---
+			Current search options for this search widget.
+		-->
+		<variable name="searchOptions" value="${{}}"/>
+
+		<Component name="searchTextArea" height="${this.parent.height}" width="${this.parent.searchButton.x}">
+			<Component clickable="true" name="currentSearchIcon" x="10" valign="middle">
+				<Tooltip name="currentSearchTip" />
+			</Component>
+			<InputTextComponent name="searchText" width="${this.parent.width - this.x - 15}" x="${15 + this.parent.currentSearchIcon.width}" valign="middle">
+				<!--- @keywords private -->
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<handler args="kc" name="onkeydown">
+					<![CDATA[
+					if (kc == 13) {
+						this.classroot.doSearch();
+					}
+					]]>
+				</handler>
+				
+				<handler name="oninit">
+					<![CDATA[
+					this.setVariable('enabled', this.classroot.oEditor && this.classroot.oEditor.isStoreSelected);
+					]]>
+				</handler>
+				
+				<handler eventSource="this.classroot.oEditor" name="onisStoreSelected">
+					<![CDATA[
+					this.setVariable('enabled', this.classroot.oEditor.isStoreSelected);
+					]]>
+				</handler>
+			</InputTextComponent>
+		</Component>
+		<Component height="${this.parent.height}" width="1" bgcolor="#b7b8b9" x="${this.parent.searchButton.x - 7}"/>
+		<Component height="${this.parent.height}" width="1" bgcolor="#b7b8b9" x="${this.parent.searchButton.x + 26}"  visible="${this.parent.searchButton.actionDefinitions != null &amp;&amp; this.parent.searchButton.actionDefinitions.length > 1}"/>
+		<ActionListButton enabled="${this.classroot.oEditor.isStoreSelected}" name="searchButton" x="${this.parent.width - this.width - (this.actionDropdown.visible ? 8 : 7)}" valign="middle">
+			<variable name="buttonResource" value="searchButtonResource"/>
+			<variable name="dropdownResource" value="searchDropdownResource"/>
+			<variable name="dropdownOffset" value="17"/>
+			<variable name="displaySelectedIndicator" value="true"/>
+			
+			<Tooltip extendedText="${foundationResources.Singleton.searchButtonTipExtendedHelp.string}" linkURL="tasks/ttfsearch.htm" text="${foundationResources.Singleton.searchButtonTip.string}"/>
+			
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				this.actionList.setVariable("attach", "bottomleft");
+				this.actionList.setVariable("attachtarget", this.classroot);
+				]]>
+			</method>
+			
+			<method args="definition" name="doAction">
+				<![CDATA[
+				if (!definition && this.classroot.currentDefinition == null) {
+					this.classroot.currentDefinition = this.classroot.defaultDefinition;
+				}
+				else if (definition && definition != this.parent.advancedSearchActionDefinition) {
+					this.classroot.currentDefinition = definition;
+				}
+				this.parent.updateSearchIcon();
+				if (definition && definition == this.parent.advancedSearchActionDefinition) {
+					this.classroot.advancedSearchActionDefinition.dialog.openWindow();
+				}
+				else {
+					if (typeof (definition) == "undefined" || definition == null) {
+						this.classroot.doSearch(this.classroot.currentDefinition);
+					}
+				}
+				]]>
+			</method>
+		</ActionListButton>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateSearchDefinitions();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateSearchDefinitionsDel) {
+				this.updateSearchDefinitionsDel.disconnectAll();
+				delete this.updateSearchDefinitionsDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateSearchDefinitions">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateSearchDefinitionsDel) {
+				this.updateSearchDefinitionsDel.disconnectAll();
+			}
+			else {
+				this.updateSearchDefinitionsDel = new EventHandler.Class(this, "updateSearchDefinitions");
+			}
+			var searchDefinitions = [];
+			this.defaultDefinition = this.oEditor.model.defaultSearchDefinition;
+			for (var i = 0; i < this.oEditor.model.searchDefinitions.length; i++) {
+				var def = this.oEditor.model.searchDefinitions[i];
+				if (def.listClass_moduleName != null) {
+					if (def.enablementCondition == null || def.enablementCondition.isEnabled(null)) {
+						searchDefinitions.push(def);
+						if (def == this.defaultDefinition) {
+							this.currentDefinition = null;
+						}
+					}
+					else {
+						if (this.defaultDefinition == def) {
+							this.defaultDefinition = null;
+						}
+						if (this.currentDefinition == def) {
+							this.currentDefinition = null;
+						}
+					}
+					if (def.enablementCondition != null) {
+						def.enablementCondition.registerDelegate(null, this.updateSearchDefinitionsDel);
+					}
+				}
+			}
+			var advancedSearchDefinitions = [];
+			for (var i = 0; i < searchDefinitions.length; i++) {
+				var def = searchDefinitions[i];
+				if (def.advancedSearchContentClass_moduleName != null) {
+					advancedSearchDefinitions.push(def);
+				}
+			}
+			if (advancedSearchDefinitions.length > 0) {
+				if (!this.advancedSearchActionDefinition) {
+					new AdvancedSearchActionDefinition.Class(this, {
+						name: "advancedSearchActionDefinition",
+						searchDefinitions: advancedSearchDefinitions,
+						addSeparatorBefore: true,
+						oEditor: this.oEditor
+					});
+				}
+				else {
+					this.advancedSearchActionDefinition.setVariable("searchDefinitions", advancedSearchDefinitions);
+				}
+				searchDefinitions.push(this.advancedSearchActionDefinition);
+			}
+			this.searchButton.setVariable("actionDefinitions", searchDefinitions);
+			if (this.defaultDefinition == null) {
+				this.defaultDefinition = searchDefinitions[0];
+			}
+			if (this.currentDefinition == null) {
+				this.searchButton.setVariable("defaultActionDefinition", this.defaultDefinition);
+				this.searchButton.actionList.setVariable("value", this.defaultDefinition);
+				this.searchTextArea.searchText.setVariable("text", "");
+				this.setVariable("currentDefinition", this.defaultDefinition);
+				this.updateSearchIcon();
+			}
+			this.searchDefinitions = searchDefinitions;
+			]]>
+		</method>
+		
+		<!--- Reset this search widget to the model's default search definition. -->
+		<method name="reset">
+			<![CDATA[
+			this.currentDefinition = null;
+			this.updateSearchDefinitions();
+			this.updateSearchIcon();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="updateSearchIcon">
+			<![CDATA[
+			var icon = "";
+			var tooltip = "";
+			var displayName = "";
+			if (this.currentDefinition != null) {
+				icon = this.currentDefinition.icon;
+				tooltip = this.currentDefinition.tooltip;
+				displayName = this.currentDefinition.displayName;
+			}
+			this.searchTextArea.currentSearchIcon.setVariable("imageSet", icon == '' ? null : icon);
+			this.searchTextArea.currentSearchIcon.currentSearchTip.setVariable("extendedText", tooltip);
+			this.searchTextArea.currentSearchIcon.currentSearchTip.setVariable("text", displayName);
+			]]>
+		</method>
+		
+		<!---
+			Invoke a new search request for the specified search definition.
+			@param cmc/foundation/SearchDefinition definition: the search definition
+			@param object options: search options
+		-->
+		<method args="definition, options" name="doSearch">
+			<![CDATA[
+			if (typeof(definition) == "undefined") definition = null;
+			if (typeof(options) == "undefined") options = null;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/SearchWidget", "doSearch", "options: " + options);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/SearchWidget doSearch: " + this.searchTextArea.searchText.getText());
+			if (options == null) {
+				var searchText = this.searchTextArea.searchText.getText();
+				this.searchOptions = {};
+				this.searchOptions.searchText = searchText;
+			}
+			else {
+				this.searchOptions = options;
+			}
+			if (definition == null) {
+				definition = this.currentDefinition;
+			}
+			MessageLogger.Singleton.clearStatusMessage();
+			this.oEditor.model.doSearch(definition.searchType, this.searchOptions);
+			this.oEditor.navigationTree.searchResultsTree.setVariable("searchDefinition", definition);
+			this.oEditor.navigationTree.searchResultsTree.setVariable("selected", true);
+			this.oEditor.navigationTree.searchResultsTree.changeFocus(null);
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "CONFIG", "cmc/foundation/SearchWidget", "END doSearch", "options: " + options);
+			}
+			]]>
+		</method>
+	</Component>
+
+</Definitions>

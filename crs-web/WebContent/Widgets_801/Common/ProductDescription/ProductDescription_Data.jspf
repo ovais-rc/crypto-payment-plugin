@@ -1,0 +1,1396 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- START ProductDescription_Data.jsp --%>
+<c:choose>
+	<c:when test="${!empty param.productId}">
+		<c:set var="productId" value="${param.productId}" />
+	</c:when>
+	<c:when test="${!empty WCParam.productId}">
+		<c:set var="productId" value="${WCParam.productId}" />
+	</c:when>
+</c:choose>
+
+<c:choose>
+	<c:when test="${!empty param.hasAssociations}">
+		<c:set var="hasAssociations" value="${param.hasAssociations}"/>
+	</c:when>
+</c:choose>
+
+<c:set var="productDetailsPageCatalogEntryID" value="${param.productDetailsPageCatalogEntryID}"/>
+<c:set var="associationIndex" value="${param.associationIndex}"/>
+
+<c:set var="disableProductCompare" value="false" scope="request"/>
+<c:if test="${param.showCompareBox == 'false' || param.disableProductCompare == 'true'}">
+	<c:set var="disableProductCompare" value = "true" />
+</c:if>
+
+<c:set var="search" value='"'/>
+<c:set var="replaceCmprStr" value=""/>
+<c:set var="search01" value="'"/>
+<c:set var="replaceStr01" value="'"/>
+<c:set var="replaceStr02" value="\\'"/>
+
+
+<c:if test="${empty catalogEntryDetails}">	
+	<c:if test="${!empty productId}">
+		<%-- Try to get it from our internal hashMap --%>
+		<c:set var="key1" value="${productId}+getCatalogEntryViewAllByID"/>
+		<c:set var="catalogEntryDetails" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+		<c:if test="${empty catalogEntryDetails}">
+			<c:catch var="searchServerException">
+				<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${productId}" >	
+					<wcf:param name="langId" value="${langId}"/>
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="responseFormat" value="json"/>		
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				</wcf:rest>
+				<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+				<wcf:set target = "${cachedCatalogEntryDetailsMap}" key="${key1}" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			</c:catch>
+		</c:if>
+	</c:if>
+
+	<c:if test="${empty productId && !empty WCParam.partNumber}">
+		<c:set var="key1" value="${WCParam.partNumber}+getCatalogEntryViewAllByPartnumber"/>
+		<c:set var="catalogEntryDetails" value="${cachedCatalogEntryDetailsMap[key1]}"/>
+		<c:if test="${empty catalogEntryDetails}">
+			<c:catch var="searchServerException">
+				<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/${WCParam.partNumber}" >	
+					<wcf:param name="langId" value="${langId}"/>
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="responseFormat" value="json"/>		
+					<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+				</wcf:rest>
+				<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+				<wcf:set target = "${cachedCatalogEntryDetailsMap}" key="${key1}" value="${catalogNavigationView.catalogEntryView[0]}"/>
+			</c:catch>
+		</c:if>
+	</c:if>
+
+	<c:if test="${!empty catalogNavigationView && !empty catalogNavigationView.catalogEntryView[0]}">
+		<c:set var="catalogEntryDetails" value="${catalogNavigationView.catalogEntryView[0]}"/>
+	</c:if>
+</c:if>
+
+<c:set var="type" value="${fn:toLowerCase(catalogEntryDetails.catalogEntryTypeCode)}" />
+<c:set var="type" value="${fn:replace(type,'bean','')}" />
+<c:set var="catalogEntryID" value="${catalogEntryDetails.uniqueID}" />
+<c:set var="shortDescription" value="${catalogEntryDetails.shortDescription}" />
+<c:set var="longDescription" value="${catalogEntryDetails.longDescription}" />
+<c:set var="name" value="${catalogEntryDetails.name}" />
+<c:set var="partnumber" value="${catalogEntryDetails.partNumber}" />
+<c:set var="manufacturerName" value="${catalogEntryDetails.manufacturer}" />
+<c:set var="entitledItems" value="${catalogEntryDetails.sKUs}"/>
+<c:set var="numberOfSKUs" value="${catalogEntryDetails.numberOfSKUs}"/>
+<c:set var="attributes" value="${catalogEntryDetails.attributes}"/>
+
+
+<c:forEach var="attribute" items="${attributes}" varStatus="count">
+	<c:if test="${attribute.storeDisplay eq true && attribute.usage ne 'Defining'}">
+		<c:set var="adRibbonStyle" value="${attribute.identifier}"/>
+		<c:set var="adRibbonText" value=""/>
+		<c:forEach var="e" items="${attribute.values}">
+			<c:set var="adRibbonText" value="${e.value}"/>
+		</c:forEach>
+		<c:set target="${adRibbonMap}" property="${adRibbonStyle}" value="${adRibbonText}"/>
+	</c:if>
+</c:forEach>
+
+<wcf:useBean var="swatchImagesList" classname="java.util.ArrayList"/>
+<c:forEach items="${catalogEntryDetails.attachments}" var="attachment">
+	<c:if test="${attachment.usage == 'SWATCH_IMAGE'}">
+		<c:set var="attchName" value="${attachment.name}" />
+		<c:set var="attchIdentifier" value="${attachment.identifier}" />
+		<wcf:useBean var="swatchDetails" classname="java.util.HashMap" />
+		<c:set target="${swatchDetails}" property="name" value="${attchName}"/>
+		<c:set target="${swatchDetails}" property="identifier" value="${attchIdentifier}"/>
+		<c:set target="${swatchDetails}" property="assetPath" value="${attachment.attachmentAssetPath}"/>
+		<wcf:set target="${swatchImagesList}" value="${swatchDetails}"/>
+		<c:remove var="swatchDetails"/>
+	</c:if>
+</c:forEach>
+
+<c:if test="${not empty param.displayAttachments and param.displayAttachments}">
+	<wcf:useBean var="attachmentsList" classname="java.util.ArrayList"/>
+	<c:forEach items="${catalogEntryDetails.attachments}" var="attachment">
+		<c:set var="fetchAttachments" value="true" />
+		<%-- if usage is specified, only display attachment of the specified usage. --%>
+		<c:choose>
+			<c:when test="${!empty param.usage}">
+			    <c:if test="${param.usage ne attachment.usage}">
+				    <c:set var="fetchAttachments" value="false" />
+			    </c:if>
+			</c:when>
+			<c:when test="${!empty param.excludeUsageStr}">
+				<%-- checks the usage type of this attachment and see if should exclude this attachment from display --%>
+	            <c:forTokens items="${param.excludeUsageStr}" delims="," var="usageType">
+				    <c:if test="${usageType == attachment.usage}">
+					    <c:set var="fetchAttachments" value="false" />
+				    </c:if>
+			    </c:forTokens>
+			</c:when>
+		</c:choose>
+			
+		<c:if test="${fetchAttachments}">
+			<c:set var="mimeType" value="${attachment.mimeType}" />
+			<c:set var="mimePart" value="" />
+		
+			<c:forTokens items="${mimeType}" delims="/" var="mimePartFromType" end="0">
+				<c:set var="mimePart" value="${mimePartFromType}" />
+			</c:forTokens>
+
+			<c:choose>
+				<c:when test="${(fn:startsWith(attachment.attachmentAssetPath, 'http://') || fn:startsWith(attachment.attachmentAssetPath, 'https://'))}">
+					<wcst:resolveContentURL var="resolvedPath" url="${attachment.attachmentAssetPath}" mimeTypeVar="resolvedMimeType" mimeSubtypeVar="resolvedMimeSubtype"/>
+					<c:set var="assetPath" value="${resolvedPath}"/>
+					<c:if test="${!empty resolvedMimeType}">
+						<c:set var="mimeType" value="${resolvedMimeType}"/>
+						<c:set var="mimePart" value="${resolvedMimeType}"/>
+						<c:if test="${!empty resolvedMimeSubtype}">
+							<c:set var="mimeType" value="${resolvedMimeType}/${resolvedMimeSubtype}"/>
+						</c:if>
+					</c:if>
+				</c:when>
+				<c:when test="${mimePart eq 'uri' || empty mimePart}">
+					<c:set var="assetPath" value="${attachment.attachmentAssetPath}"/>
+				</c:when>
+				<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '/store/0/storeAsset')}">
+					<c:set var="assetPath" value="${storeContextPath}${attachment.attachmentAssetPath}"/>
+				</c:when>
+				<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '[extContentURI]') && env_inPreview}">
+					<c:set var="assetPathTemp" value="${fn:substringAfter(attachment.attachmentAssetPath, '/StoreImageServlet')}"/>
+					<c:set var="assetPath" value="${staticAssetContextRoot}/StoreImageServlet${assetPathTemp}"/>
+				</c:when>
+				<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '[extContentURI]')}">
+					<c:set var="assetPath" value="${fn:replace(attachment.attachmentAssetPath, '[extContentURI]', '')}"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="assetPath" value="${staticAssetContextRoot}/${attachment.attachmentAssetPath}"/>
+				</c:otherwise>
+			</c:choose>
+			
+			<c:set var="url_parts" value="${fn:split(assetPath, '/')}" />
+			<c:set var="fileType_parts" value="${fn:split(url_parts[fn:length(url_parts)-1], '.')}" />
+			<c:set var="fileType" value="${fn:toLowerCase(fileType_parts[fn:length(fileType_parts)-1])}" />
+	    
+			<c:set var="attachmentType" value="default"/>
+			<c:if test="${not empty fileType}">	
+				<c:if test="${fileType eq 'txt'|| fileType eq 'text'|| fileType eq 'csv'|| fileType eq 'vsd'|| fileType eq 'msg'}">
+					<c:set var="attachmentType" value="text"/>
+				</c:if>
+				<c:if test="${fileType eq 'html' || fileType eq 'htm' || mimeType eq 'text/html'}">
+					<c:set var="attachmentType" value="html"/>
+				</c:if>
+				<c:if test="${fileType eq 'gif'|| fileType eq 'jpeg'|| fileType eq 'jpg'|| fileType eq 'jpe'|| fileType eq 'png'|| fileType eq 'ps'}">
+					<c:set var="attachmentType" value="image"/>
+				</c:if>
+				<c:if test="${fileType eq 'pdf' || mimeType eq 'application/pdf'}">
+					<c:set var="attachmentType" value="pdf"/>
+				</c:if>
+				<c:if test="${fileType eq 'postscript'|| fileType eq 'msword'|| fileType eq 'doc'|| fileType eq 'docx'|| fileType eq 'rtf'|| fileType eq 'odt'}">
+					<c:set var="attachmentType" value="doc"/>
+				</c:if>
+				<c:if test="${fileType eq 'vnd.ms-powerpoint'|| fileType eq 'ppt'|| fileType eq 'pptx'|| fileType eq 'odp'}">
+					<c:set var="attachmentType" value="presentation"/>
+				</c:if>
+				<c:if test="${fileType eq 'vnd.ms-excel'|| fileType eq 'xls'|| fileType eq 'xlsx'|| fileType eq 'ods'}">
+					<c:set var="attachmentType" value="spreadsheet"/>
+				</c:if>
+				<c:if test="${fileType eq 'wav'|| fileType eq 'ra'|| fileType eq 'x-pn-realaudio-plugin'}">
+					<c:set var="attachmentType" value="audio"/>
+				</c:if>
+				<c:if test="${fileType eq 'mpg'|| fileType eq 'mp4'|| fileType eq 'mov'|| fileType eq 'avi'|| fileType eq 'qt'|| fileType eq 'rpm'|| fileType eq 'swf'|| fileType eq 'movie' || mimeType eq 'video/mpeg' ||mimeType eq 'video/quicktime'|| mimeType eq 'video/x-msvideo'|| mimeType eq 'application/x-shockwave-flash'}">
+					<c:set var="attachmentType" value="video"/>
+				</c:if>
+				<c:if test="${fileType eq 'x-gzip'|| fileType eq 'zip'|| fileType eq 'rar'|| fileType eq 'tar'|| fileType eq 'gtar'|| fileType eq 'x-tar'|| fileType eq 'jar'|| fileType eq 'class'}">
+					<c:set var="attachmentType" value="archive"/>
+				</c:if>
+			</c:if>
+			<c:if test="${empty fileType}">
+				<c:set var="attachmentType" value="webpage"/>
+			</c:if>
+			<c:set var="attchImage" value="${jspStoreImgDir}${env_vfileColor}${attachmentType}_icon.png" />
+			<c:set var="attchName" value="${attachment.name}" />
+			<c:set var="attchShortDesc" value="${attachment.shortdesc}" />
+			<c:set var="description" value="${attchShortDesc}"/>
+			<c:set var="attchLongDesc" value="${attachment.longdesc}" />
+			<c:if test="${empty description and not empty attchLongDesc}">
+				<c:set var="description" value="${attchLongDesc}"/>
+			</c:if>
+			<c:choose>
+				<c:when test="${empty mimePart || mimeType == 'content/unknown' || mimeType == 'text/html'}">
+					<c:set var="linkName" value="${assetPath}"/>
+				</c:when>
+				<c:otherwise>
+					<wcst:message key="DOWNLOAD_{0}" var="linkName" bundle="${widgetText}">
+						<wcst:param value="${fn:toUpperCase(attachmentType)}"/>
+					</wcst:message>
+				</c:otherwise>
+			</c:choose>
+			
+			<wcf:useBean var="attachmentDetails" classname="java.util.HashMap" />
+			<c:set target="${attachmentDetails}" property="name" value="${attchName}"/>
+			<c:set target="${attachmentDetails}" property="linkName" value="${linkName}"/>
+			<c:set target="${attachmentDetails}" property="assetPath" value="${assetPath}"/>
+			<c:set target="${attachmentDetails}" property="image" value="${attchImage}"/>
+			<c:set target="${attachmentDetails}" property="attachmentType" value="${fn:toUpperCase(attachmentType)}"/>
+			<c:set target="${attachmentDetails}" property="description" value="${description}"/>
+			
+			<wcf:set target="${attachmentsList}" value="${attachmentDetails}"/>
+			<c:remove var="attachmentDetails"/>
+			<c:remove var="attachmentType"/>
+			<c:remove var="attchImage"/>
+		</c:if>
+	</c:forEach>
+</c:if>
+<c:set var="thumbNail" value="${catalogEntryDetails.thumbnail}" />
+<c:set var="fullImage" value="${catalogEntryDetails.fullImage}" />
+
+<c:forEach var="metadata" items="${catalogEntryDetails.metaData}" varStatus="status2">
+	<c:if test="${metadata.key == 'ThumbnailPath'}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(metadata.value, 'http://') || fn:startsWith(metadata.value, 'https://'))}">
+				<wcst:resolveContentURL var="thumbNail" url="${metadata.value}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(metadata.value, '/store/0/storeAsset')}">
+				<c:set var="thumbNail" value="${storeContextPath}${metadata.value}" />		
+			</c:when>
+			<c:otherwise>
+				<c:set var="thumbNail" value="${env_customImageContextPath}/${metadata.value}" />
+			</c:otherwise>
+		</c:choose>
+	</c:if>
+	<c:if test="${metadata.key == 'FullImagePath'}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(metadata.value, 'http://') || fn:startsWith(metadata.value, 'https://'))}">
+				<wcst:resolveContentURL var="fullImage" url="${metadata.value}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(metadata.value, '/store/0/storeAsset')}">
+				<c:set var="fullImage" value="${storeContextPath}${metadata.value}" />
+			</c:when>
+			<c:otherwise>
+				<c:set var="fullImage" value="${env_customImageContextPath}/${metadata.value}" />
+			</c:otherwise>
+		</c:choose>
+	</c:if>
+</c:forEach>
+
+<c:if test="${not empty originalSearchCatEntry.metaData.score}">
+	<fmt:formatNumber var="searchScore" type="number" maxFractionDigits="15" groupingUsed="true" value="${originalSearchCatEntry.metaData.score}" />
+</c:if>
+
+<c:if test="${numberOfSKUs > 0}">
+	<c:set var="firstItemID" value="${entitledItems[0].uniqueID}"/>
+</c:if>
+
+<wcst:alias name="StoreHelper" var="priceMode">
+	<wcf:param name="parameter" value=""/>
+	<wcf:param name="parameter" value="${storeId}"/>
+</wcst:alias>
+
+<c:if test="${empty calculatedPriceFlag}">
+	<c:choose>
+		<c:when test="${priceMode == '0'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+		<c:when test="${priceMode == '1'}">
+			<c:set var="calculatedPriceFlag" value="false"/>
+		</c:when>
+		<c:when test="${priceMode == '2'}">
+			<c:set var="calculatedPriceFlag" value="true"/>
+		</c:when>
+	</c:choose>
+</c:if>
+
+<c:choose>
+ <c:when test="${calculatedPriceFlag == 'true'}">
+ 
+ 
+ <c:set var="catentrykey1" value="${catalogEntryID}"/>
+		<c:set var="maximumItemPrice" value="${cachedEntitledPriceMap[catentrykey1]}"/>
+		<c:if test="${empty maximumItemPrice}">
+			<c:set var="maximumPrice" value=""  />
+			<c:choose>
+				<c:when test="${type eq 'product'}">
+				 	<c:catch>
+						<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+							<wcf:var name="storeId" value="${WCParam.storeId}" />
+							<wcf:param name="q" value="byCatalogEntryIds"/>
+							<c:forEach var="entitledItem" items="${entitledItems}">
+								<wcf:param name="catalogEntryId" value="${entitledItem.uniqueID}" />
+							</c:forEach>
+							<wcf:param name="currency" value="${env_currencyCode}"/>
+							<wcf:param name="checkEntitlement" value="false"/>
+						</wcf:rest>
+						<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+					</c:catch>
+					<c:if test="${null!=entitledPrices}">
+						<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+					  		<c:if test="${idx.index == 0}">
+				   				<c:set var="maximumPrice" value="${unitPrice.price.value}" />
+				   	  		</c:if>
+				   	 		 <c:if test="${!empty unitPrice.price.value && unitPrice.price.value > maximumPrice}">
+				   				<c:set var="maximumPrice" value="${unitPrice.price.value}" />
+				   	  		</c:if>
+						</c:forEach>
+						</c:forEach>
+					</c:if>
+				</c:when>
+				<c:when test="${type eq 'bundle'}">
+					<c:set var="components" value="${catalogEntryDetails.components}"/>
+					<c:set var="bundlePrice" value="0"/>
+					<c:catch>
+						<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+							<wcf:var name="storeId" value="${WCParam.storeId}" />
+							<wcf:param name="q" value="byCatalogEntryIds"/>
+							<c:forEach var="component" items="${components}">
+								<wcf:param name="catalogEntryId" value="${component.uniqueID}" />
+							</c:forEach>
+							<wcf:param name="currency" value="${env_currencyCode}"/>
+							<wcf:param name="checkEntitlement" value="false"/>
+						</wcf:rest>
+						<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+					</c:catch>
+					
+					<c:if test="${null!=entitledPrices}">
+						<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+							<c:if test="${!empty entitledPrice.UnitPrice}">
+								<c:set var="bundlePrice" value="${bundlePrice + unitPrice.price.value}"/>
+							</c:if>
+						</c:forEach>
+						</c:forEach>
+					</c:if>
+					<c:set var="maximumPrice" value="${bundlePrice}" />
+				</c:when>
+			
+			
+			<c:when test="${type eq 'package' || type eq 'item'}">
+				<c:catch>
+					<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+						<wcf:var name="storeId" value="${WCParam.storeId}" />
+						<wcf:param name="q" value="byCatalogEntryIds"/>
+						<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+						<wcf:param name="currency" value="${env_currencyCode}"/>
+						<wcf:param name="checkEntitlement" value="false"/>
+					</wcf:rest>
+					<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+				</c:catch>
+					<c:if test="${null!=entitledPrices}">
+					<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+						<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+							<c:if test="${!empty entitledPrice.UnitPrice}">
+								<c:set var="maximumPrice" value="${unitPrice.price.value}"/>
+							</c:if>
+						</c:forEach>
+					</c:forEach>
+					</c:if>
+			</c:when>
+			
+			<c:when test="${catalogEntryDetails.catalogEntryTypeCode eq 'DynamicKitBean' || catalogEntryDetails.catalogEntryTypeCode eq 'PredDynaKitBean'}">
+			<c:catch>
+				<wcf:rest var="entitledPricesResult" url="/store/{storeId}/price">
+					<wcf:var name="storeId" value="${WCParam.storeId}" />
+					<wcf:param name="q" value="byCatalogEntryIds"/>
+					<wcf:param name="catalogEntryId" value="${catalogEntryDetails.uniqueID}" />
+					<wcf:param name="currency" value="${env_currencyCode}"/>
+					<wcf:param name="checkEntitlement" value="false"/>
+					<wcf:param name="dynamicKitAsItem" value="false"/>
+				</wcf:rest>
+				<c:set var="entitledPrices" value="${entitledPricesResult.EntitledPrice}"/>
+			</c:catch>
+			
+			<c:if test="${null!=entitledPrices}">
+				<c:forEach var="entitledPrice" items="${entitledPrices}" varStatus="idx">
+					<c:forEach var="unitPrice" items="${entitledPrice.UnitPrice}" >
+						<c:if test="${!empty entitledPrice.UnitPrice}">
+							<c:set var="maximumPrice" value="${unitPrice.price.value}"/>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:if>
+		</c:when>
+		</c:choose>
+			<c:if test="${!empty maximumPrice}">
+				<c:set var="maximumItemPrice" value="${maximumPrice}"/>
+				<wcf:set target = "${cachedEntitledPriceMap}" key="${catalogEntryID}" value="${maximumItemPrice}"/>
+			</c:if>
+		</c:if>
+ </c:when>
+ <c:otherwise>
+ 	<c:forEach var="prices" items="${catalogEntryDetails.price}">
+	<c:if test="${prices.usage == 'Offer'}">
+		<c:set var="maximumItemPrice" value="${prices.maximumValue.value}"/>
+		<c:if test="${empty maximumItemPrice}">						
+			<c:set var="maximumItemPrice" value="${prices.value}"/>
+		</c:if>
+	</c:if>
+</c:forEach>
+ </c:otherwise>
+ </c:choose>
+
+
+<c:choose>
+	<c:when test="${!empty thumbNail}">	<!-- added -->
+		<c:set var="productThumbNailImage" value="${thumbNail}"/>
+		<c:set var="productThumbNail160Image" value="${thumbNail}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="productThumbNailImage" value="${hostPath}${jspStoreImgDir}images/NoImageIcon_sm.jpg"/>
+		<c:set var="productThumbNail160Image" value="${hostPath}${jspStoreImgDir}images/NoImageIcon_sm.jpg"/>
+	</c:otherwise>
+</c:choose>
+
+
+<%-- Find out all the subscription related attributes if any --%>
+<c:set var="isRecurrable" value="true"/>
+<c:if test="${catalogEntryDetails.disallowRecurringOrder == '1'}">
+	<c:set var="isRecurrable" value="false"/>
+</c:if>
+<c:set var="isSubscription" value="false"/>
+<c:if test="${!empty catalogEntryDetails.subscriptionTypeCode && catalogEntryDetails.subscriptionTypeCode != 'NONE'}">
+	<c:set var="isSubscription" value="true"/>
+</c:if>
+<c:set var="fulfillmentFrequency" value=""/>
+<c:set var="fulfillmentFrequencyAttrName" value=""/>
+<c:set var="paymentFrequency" value=""/>
+<c:set var="paymentFrequencyAttrName" value=""/>
+<c:set var="aValidTimePeriod" value=""/>
+<wcf:useBean var="validTimePeriodAttrValues" classname="java.util.HashMap" scope="page" />
+
+<div id="entitledItem_<c:out value='${catalogEntryID}'/>" style="display:none;">
+	[
+	<c:if test="${type == 'product'}">
+		<%-- SwatchCode start --%>
+		<c:if test="${!empty entitledItems}">
+		<%-- Find out if we have angle image attachments in the product, if there is then we should retrieve that for all items. --%>
+		<%-- Otherwise, we can use a lighter service. --%>
+		<c:set var="hasAngleImages" value="false" />
+		<c:set var="allAttachments" value="${catalogEntryDetails.attachments}" />
+		<c:forEach var="anAttachment" items="${allAttachments}">
+			<c:if test="${'ANGLEIMAGES_THUMBNAIL' eq anAttachment.usage}">
+				<c:set var="hasAngleImages" value="true" />
+			</c:if>
+		</c:forEach>
+
+		<c:set var="exprBuilder_PD" value="getCatalogEntryViewPriceWithAttributesByID"/>
+		<c:set var="searchProfile_PD" value="IBM_findCatalogEntryPriceWithAttributes_PriceMode"/>
+		<c:if test="${hasAngleImages}">
+			<c:set var="exprBuilder_PD" value="getCatalogEntryViewDetailsWithAttachmentsByID"/>
+			<c:set var="searchProfile_PD" value="IBM_findCatalogEntryDetailsWithAttachments"/>
+		</c:if>
+
+
+		</c:if>
+		<%-- SwatchCode end --%>
+
+		<c:forEach var='entitledItem' items='${entitledItems}' varStatus='outerStatus'>
+			<c:if test="${entitledItem.buyable eq 'true' || buyablePurchasable eq 'true'}">
+				<c:set var="sku" value="${entitledItem}"/>
+				<c:set var="skuID" value="${entitledItem.uniqueID}"/>
+				<c:if test="${not empty param.imageDisplayItemID && empty default_sku && skuID == param.imageDisplayItemID}">
+					<c:set var="default_sku" value="${sku}"/>
+				</c:if>
+				
+				{
+				"catentry_id" : "<c:out value='${skuID}' />",
+				"buyable" : "<c:out value='${entitledItem.buyable}' />",
+				"productId" : "<c:out value='${catalogEntryID}' />",
+				"Attributes" :	{
+					<c:set var="hasAttributes" value="false"/>											
+					<c:forEach var="definingAttrValue2" items="${sku.attributes}" varStatus="innerStatus">
+						<c:if test="${definingAttrValue2.identifier == env_subsFulfillmentFrequencyAttrName}">
+							<c:set var="fulfillmentFrequency" value="${definingAttrValue2.values[0].value}"/>
+							<c:set var="fulfillmentFrequencyAttrName" value="${definingAttrValue2.name}"/>
+						</c:if>
+						<c:if test="${definingAttrValue2.identifier == env_subsPaymentFrequencyAttrName}">
+							<c:set var="paymentFrequency" value="${definingAttrValue2.values[0].value}"/>
+							<c:set var="paymentFrequencyAttrName" value="${definingAttrValue2.name}"/>
+						</c:if>
+						<c:if test="${definingAttrValue2.identifier == env_subsTimePeriodAttrName}">
+							<c:set var="aValidTimePeriod" value="${definingAttrValue2.values[0].value}"/>
+							<c:set property="${definingAttrValue2.values[0].value}" value="${definingAttrValue2.values[0].value}" target="${validTimePeriodAttrValues}"/>	
+						</c:if>
+						<c:if test="${definingAttrValue2.usage == 'Defining'}">
+							<c:if test='${hasAttributes eq "true"}'>,</c:if>
+							"<c:out value="${fn:replace(fn:replace(definingAttrValue2.name, search01, replaceStr01), search, replaceStr02)}_|_${fn:replace(fn:replace(definingAttrValue2.values[0].value, search01, replaceStr01), search, replaceStr02)}" />":"<c:out value='${innerStatus.count}' />"
+							<c:set var="hasAttributes" value="true"/>
+						</c:if>
+					</c:forEach>
+					},
+					
+					<%-- SwatchCode start --%>										
+					<c:choose>
+						<c:when test="${!empty entitledItem.thumbnail}">
+							<c:choose>
+								<c:when test="${(fn:startsWith(entitledItem.thumbnail, 'http://') || fn:startsWith(entitledItem.thumbnail, 'https://'))}">
+									<wcst:resolveContentURL var="thumbnailImage" url="${entitledItem.thumbnail}"/>
+								</c:when>
+								<c:otherwise>
+									<c:set var="thumbnailImage" value="${entitledItem.thumbnail}" />
+								</c:otherwise>
+							</c:choose>
+							<c:choose>
+								<c:when test="${(fn:startsWith(entitledItem.fullImage, 'http://') || fn:startsWith(entitledItem.fullImage, 'https://'))}">
+									<wcst:resolveContentURL var="itemFullImage" url="${entitledItem.fullImage}"/>
+								</c:when>
+								<c:otherwise>
+									<c:set var="itemFullImage" value="${entitledItem.fullImage}" />
+								</c:otherwise>
+							</c:choose>
+						</c:when>
+						<c:otherwise>
+							<c:set var="thumbnailImage" value="${jspStoreImgDir}images/NoImageIcon_sm.jpg" />
+							<c:set var="itemFullImage" value="${jspStoreImgDir}images/NoImageIcon.jpg" />
+						</c:otherwise>
+					</c:choose>
+					
+					"ItemImage" : "<c:out value='${itemFullImage}' />",
+					"ItemImage467" : "<c:out value='${itemFullImage}' />",
+					"ItemThumbnailImage" : "<c:out value='${thumbnailImage}' />"
+					<c:if test="${fn:length(entitledItem.attachments) > 0}">
+						,"ItemAngleThumbnail" : {
+						<c:set var="imageCount" value="0" />
+						<c:forEach var="itemAttachment" items="${entitledItem.attachments}" varStatus="status1">
+							<c:if test="${itemAttachment.usage == 'ANGLEIMAGES_THUMBNAIL'}">
+								<c:if test='${imageCount gt 0}'>,</c:if>
+								<c:set var="imageCount" value="${imageCount+1}" />
+								<c:choose>
+									<c:when test="${(fn:startsWith(itemAttachment.attachmentAssetPath, 'http://') || fn:startsWith(itemAttachment.attachmentAssetPath, 'https://'))}">
+										<wcst:resolveContentURL var="resolvedPath" url="${itemAttachment.attachmentAssetPath}"/>
+									</c:when>
+									<c:when test="${fn:startsWith(itemAttachment.attachmentAssetPath, '[extContentURI]') && env_inPreview}">
+										<c:set var="assetPathTemp" value="${fn:substringAfter(itemAttachment.attachmentAssetPath, '/StoreImageServlet')}"/>
+										<c:set var="resolvedPath" value="${env_customImageContextPath}/StoreImageServlet${assetPathTemp}"/>
+									</c:when>
+									<c:when test="${fn:startsWith(itemAttachment.attachmentAssetPath, '[extContentURI]')}">
+										<c:set var="resolvedPath" value="${fn:replace(itemAttachment.attachmentAssetPath, '[extContentURI]', '')}"/>
+									</c:when>
+									<c:otherwise>
+										<c:set var="resolvedPath" value="${env_customImageContextPath}/${itemAttachment.attachmentAssetPath}" />
+									</c:otherwise>
+								</c:choose>
+								"image_${imageCount}" : "<c:out value='${resolvedPath}' />"
+							</c:if>
+						</c:forEach>
+						},
+						"ItemAngleFullImage" : {
+						<c:set var="imageCount" value="0" />
+						<c:forEach var="itemAttachment" items="${entitledItem.attachments}" varStatus="status2">
+							<c:set var="imgSource" value="${itemAttachment.attachmentAssetPath}" />
+							<c:if test="${itemAttachment.usage == 'ANGLEIMAGES_FULLIMAGE'}">
+								<c:if test='${imageCount gt 0}'>,</c:if>
+								<c:set var="imageCount" value="${imageCount+1}" />
+								<c:choose>
+									<c:when test="${(fn:startsWith(imgSource, 'http://') || fn:startsWith(imgSource, 'https://'))}">
+										<wcst:resolveContentURL var="imgSource" url="${imgSource}"/>
+									</c:when>
+									<c:when test="${fn:startsWith(imgSource, '[extContentURI]') && env_inPreview}">
+										<c:set var="assetPathTemp" value="${fn:substringAfter(imgSource, '/StoreImageServlet')}"/>
+										<c:set var="imgSource" value="${env_customImageContextPath}/StoreImageServlet${assetPathTemp}"/>
+									</c:when>
+									<c:when test="${fn:startsWith(imgSource, '[extContentURI]')}">
+										<c:set var="imgSource" value="${fn:replace(imgSource, '[extContentURI]', '')}"/>
+									</c:when>
+									<c:otherwise>
+										<c:set var="imgSource" value="${env_customImageContextPath}/${imgSource}" />
+									</c:otherwise>
+								</c:choose>
+								"image_${imageCount}" : "<c:out value='${imgSource}' />"
+							</c:if>
+						</c:forEach>
+						}
+					</c:if>
+
+					<%-- SwatchCode end --%>
+				}<c:if test='${!outerStatus.last}'>,</c:if>
+			</c:if>
+		</c:forEach>
+		
+	</c:if>
+	<c:if test="${type == 'package' || type == 'bundle' || type == 'item' || type == 'dynamickit' || type == 'preddynakit'}">
+		{
+		"catentry_id" : "<c:out value='${catalogEntryID}'/>",
+		"Attributes" :	{ }
+		}
+	</c:if>
+	]
+</div>
+
+<%-- 
+***
+*	Start: Product Descriptive and Defining Attributes
+* 	
+* Defining attributes are properties of SKUs.  They are used for SKU resolution.
+***
+--%>
+
+<wcf:useBean var="descriptiveAttributeList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="descriptiveAttributeMap" classname="java.util.HashMap"/>
+
+<wcf:useBean var="subsFulfillmentFrequencyAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="subsPaymentFrequencyAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="subsTimePeriodAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="swatchAttrList" classname="java.util.ArrayList"/>
+
+<wcf:useBean var="definingAttributeList" classname="java.util.ArrayList"/>
+
+<c:choose>
+	<c:when test="${type eq 'product'}">
+		<c:if test="${numberOfSKUs eq 1}">
+			<%-- 
+			If there is only one SKU then let's just display the attributes of the one item as text without selection.
+			Also, initialize the JavaScript code to simulate attribute selections made already.
+			--%>
+			<c:forEach var="attribute" items="${entitledItems[0].attributes}">
+				<c:if test="${attribute.usage eq 'Defining'}">
+					<c:choose>
+						<c:when test="${attribute.identifier eq env_subsTimePeriodAttrName}">
+							<c:set var="isValidValue" value="false"/>
+							<c:forEach var="validValue" items="${validTimePeriodAttrValues}">
+								<c:if test="${attribute.values[0].value == validValue.value}">
+									<c:set var="isValidValue" value="true"/>
+								</c:if>
+							</c:forEach>
+							
+							<c:set var="attributeUOMKey" value="QI_ATTR_UOM_ANN" />
+							<c:forEach var="extValue" items="${attribute.values[0].extendedValue}">
+								<c:if test="${extendedValue.key == 'UnitOfMeasure'}">
+									<c:set var="attributeUOMKey" value="QI_ATTR_UOM_${extValue.value}" />
+								</c:if>
+							</c:forEach>
+							<wcst:message var="displayValue" key="${attributeUOMKey}" bundle="${widgetText}">
+								<wcst:param value="${attribute.values[0].value}" />
+							</wcst:message>
+							
+							<c:if test="${isValidValue}">
+								<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+								<wcf:set target="${listValues}" value="${fn:replace(attribute.name, search01, replaceStr01)}" />
+								<wcf:set target="${listValues}" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}" />
+								<wcf:set target="${listValues}" value="${fn:replace(displayValue, search01, replaceStr01)}" />
+								<wcf:set target="${definingAttributeList}" value="${listValues}" />
+								<c:remove var="listValues"/>
+							</c:if>
+						</c:when>
+						<c:when test="${attribute.identifier != env_subsFulfillmentFrequencyAttrName && attribute.identifier != env_subsPaymentFrequencyAttrName}">
+							<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+							<wcf:set target="${listValues}" value="${fn:replace(attribute.name, search01, replaceStr01)}" />
+							<wcf:set target="${listValues}" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}" />
+							
+							<!-- UoM Replacement -->
+							<c:choose>
+								<c:when test="${attribute.values[0].unitID != 'C62' && !empty attribute.values[0].unitOfMeasure}">
+									<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+										<wcst:param value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}" />
+										<wcst:param value="${attribute.values[0].unitOfMeasure}" />
+									</wcst:message>
+								</c:when>
+								<c:otherwise>
+									<c:set var="displayValue" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}"/>
+								</c:otherwise>
+							</c:choose>
+							
+							<wcf:set target="${listValues}" value="${displayValue}" />
+							
+							<wcf:set target="${definingAttributeList}" value="${listValues}" />
+							<c:remove var="listValues"/>
+						</c:when>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+		</c:if>
+
+		<c:forEach var="attribute" items="${catalogEntryDetails.attributes}" varStatus="aStatus">
+			<c:if test="${ attribute.usage=='Descriptive' and attribute.displayable}" >
+				<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+				<c:choose>
+					<c:when test="${ !empty attribute.image1 }" >
+						<wcf:set target="${listValues}" value="${attribute.name}"/>
+						<wcf:set target="${listValues}" value="${attribute.values[0].value}"/>											
+						<wcf:set target="${listValues}" value="${attribute.image1}" />
+						
+					</c:when>
+					<c:otherwise >
+						<wcf:set target="${listValues}" value="${attribute.name}" />
+						<wcf:set target="${listValues}" value="${attribute.values[0].value}" />
+					</c:otherwise>
+				</c:choose>
+				<wcf:set target="${descriptiveAttributeList}" value="${listValues}"/>
+				<c:remove var="listValues"/>
+			</c:if>
+			<c:if test="${(attribute.usage eq 'Defining') and (numberOfSKUs gt 1)}" >
+				<c:set var="swatchEnabled" value="false"/>
+				
+				<c:forEach var="attrValue" items="${attribute.values}"> 
+						<c:if test="${!empty attrValue.image1}">
+						
+								<c:if test="${!empty attrValue.value}">
+									<c:set var="swatchEnabled" value="true"/>
+								</c:if>			
+						</c:if>						
+				</c:forEach>		
+
+				<c:choose>
+					<c:when test="${attribute.identifier == env_subsFulfillmentFrequencyAttrName}">
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+						<wcf:set target="${listValues}" value="${fn:replace(attribute.name, search01, replaceStr01)}"/>
+						<wcf:set target="${listValues}" value="${fn:replace(fulfillmentFrequency, search01, replaceStr01)}"/>		
+						<wcf:set target="${subsFulfillmentFrequencyAttrList}" value="${listValues}" />
+						<c:remove var="listValues"/>
+					</c:when>
+					<c:when test="${attribute.identifier == env_subsPaymentFrequencyAttrName}">
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+						<wcf:set target="${listValues}" value="${fn:replace(attribute.name, search01, replaceStr01)}"/>
+						<wcf:set target="${listValues}" value="${fn:replace(paymentFrequency, search01, replaceStr01)}"/>
+						<wcf:set target="${subsPaymentFrequencyAttrList}" value="${listValues}" />
+						<c:remove var="listValues"/>
+					</c:when>
+					<c:when test="${attribute.identifier == env_subsTimePeriodAttrName}">
+						<wcf:useBean var="values" classname="java.util.ArrayList"/>
+						<wcf:useBean var="displayValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+						<c:forEach var="allowedValue" items="${attribute.values}" varStatus="vStatus">
+							<c:set var="isValidValue" value="false"/>
+							<c:forEach var="validValue" items="${validTimePeriodAttrValues}">
+								<c:if test="${allowedValue.value == validValue.value}">
+									<c:set var="isValidValue" value="true"/>
+								</c:if>
+							</c:forEach>
+							
+							<c:set var="attributeUOMKey" value="PD_ATTR_UOM_ANN" />
+							<c:forEach var="extValue" items="${allowedValue.extendedValue}">
+								<c:if test="${extendedValue.key == 'UnitOfMeasure'}">
+									<c:set var="attributeUOMKey" value="PD_ATTR_UOM_${extValue.value}" />
+								</c:if>
+							</c:forEach>
+							<wcst:message var="displayValue" key="${attributeUOMKey}" bundle="${widgetText}">
+								<wcst:param value="${allowedValue.value}" />
+							</wcst:message>
+							
+							<c:if test="${isValidValue}">
+								<wcf:set target="${values}" value="${fn:replace(allowedValue.value, search01, replaceStr01)}" />
+								<wcf:set target="${displayValues}" value="${fn:replace(displayValue, search01, replaceStr01)}" />
+							</c:if>
+						</c:forEach>
+						
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr02)}"/>
+						<wcf:set target="${listValues}" value="${values}"/>
+						<wcf:set target="${listValues}" value="${displayValues}"/>
+						<wcf:set target="${subsTimePeriodAttrList}" value="${listValues}" />
+						<c:remove var="values" />
+						<c:remove var="displayValues" />
+						<c:remove var="listValues" />
+					</c:when>
+					<c:when test="${swatchEnabled}">
+						<wcf:useBean var="swatchValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="swatchDisplayValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="swatchImages" classname="java.util.ArrayList" />
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+						<c:set var="attributeCount" value="${fn:length(catalogEntryDetails.attributes)}"/>
+						
+						<c:if test="${attributeCount > 1 && empty doNotDisable}">
+							<c:set var="doNotDisable" value="${fn:replace(attribute.name, search01, replaceStr01)}"/>
+						</c:if>
+
+						<c:forEach var="swatchValue" items="${attribute.values}">
+							<c:set var="isSwatchAttachmentFound" value="false"/>
+							<c:set var="swatchAttachmentIdentifier" value="${partnumber}_${attribute.identifier}_${swatchValue.identifier}"/>
+							<c:forEach var="swatchAttachment" items="${swatchImagesList}">
+								<c:if test="${fn:containsIgnoreCase(swatchAttachment.identifier, swatchAttachmentIdentifier) && !isSwatchAttachmentFound}">
+									<wcf:set target="${swatchValues}" value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+									
+									<!-- UoM Replacement -->
+									<c:choose>
+										<c:when test="${swatchValue.unitID != 'C62' && !empty swatchValue.unitOfMeasure}">
+											<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+												<wcst:param value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+												<wcst:param value="${swatchValue.unitOfMeasure}" />
+											</wcst:message>
+										</c:when>
+										<c:otherwise>
+											<c:set var="displayValue" value="${fn:replace(swatchValue.value, search01, replaceStr01)}"/>
+										</c:otherwise>
+									</c:choose>
+									<wcf:set target="${swatchDisplayValues}" value="${displayValue}" />
+																		
+									<c:choose>
+										<c:when test="${(fn:startsWith(swatchAttachment.assetPath, 'http://') || fn:startsWith(swatchAttachment.assetPath, 'https://'))}">
+											<wcst:resolveContentURL var="resolvedPath" url="${swatchAttachment.assetPath}"/>
+											<wcf:set target="${swatchImages}" value="${resolvedPath}" />
+										</c:when>
+										<c:when test="${fn:startsWith(swatchAttachment.assetPath, '/store/0/storeAsset')}">
+											<wcf:set target="${swatchImages}" value="${storeContextPath}${swatchAttachment.assetPath}" />
+										</c:when>
+										<c:when test="${fn:startsWith(swatchAttachment.assetPath, '[extContentURI]') && env_inPreview}">
+											<c:set var="assetPathTemp" value="${fn:substringAfter(swatchAttachment.assetPath, '/StoreImageServlet')}"/>
+											<wcf:set target="${swatchImages}" value="${env_customImageContextPath}/StoreImageServlet${assetPathTemp}" />
+										</c:when>
+										<c:when test="${fn:startsWith(swatchAttachment.assetPath, '[extContentURI]')}">
+											<wcf:set target="${swatchImages}" value="${fn:replace(swatchAttachment.assetPath, '[extContentURI]', '')}" />
+										</c:when>
+										<c:otherwise>
+											<wcf:set target="${swatchImages}" value="${env_customImageContextPath}/${swatchAttachment.assetPath}" />
+										</c:otherwise>
+									</c:choose>
+									<c:set var="isSwatchAttachmentFound" value="true"/>
+								</c:if>
+							</c:forEach>
+							<c:if test="${!isSwatchAttachmentFound}">
+									<c:if test="${!empty swatchValue.image1path}">
+										<wcf:set target="${swatchValues}" value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+										
+										<!-- UoM Replacement -->
+										<c:choose>
+											<c:when test="${swatchValue.unitID != 'C62' && !empty swatchValue.unitOfMeasure}">
+												<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+													<wcst:param value="${fn:replace(swatchValue.value, search01, replaceStr01)}" />
+													<wcst:param value="${swatchValue.unitOfMeasure}" />
+												</wcst:message>
+											</c:when>
+											<c:otherwise>
+												<c:set var="displayValue" value="${fn:replace(swatchValue.value, search01, replaceStr01)}"/>
+											</c:otherwise>
+										</c:choose>
+										<wcf:set target="${swatchDisplayValues}" value="${displayValue}" />
+										
+										<c:choose>
+											<c:when test="${(fn:startsWith(swatchValue.image1path, 'http://') || fn:startsWith(swatchValue.image1path, 'https://'))}">
+												<wcst:resolveContentURL var="resolvedPath" url="${swatchValue.image1path}"/>
+												<wcf:set target="${swatchImages}" value="${resolvedPath}" />
+											</c:when>
+											<c:when test="${fn:startsWith(swatchValue.image1path, '/store/0/storeAsset')}">
+												<wcf:set target="${swatchImages}" value="${storeContextPath}${swatchValue.image1path}" />
+											</c:when>
+											<c:otherwise>
+												<wcf:set target="${swatchImages}" value="${swatchValue.image1path}" />
+											</c:otherwise>
+										</c:choose>
+									</c:if>
+							</c:if>							
+						</c:forEach>
+						
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr02)}"/>
+						<wcf:set target="${listValues}" value="${swatchValues}"/>
+						<wcf:set target="${listValues}" value="${swatchImages}"/>				
+						<wcf:set target="${listValues}" value="${swatchDisplayValues}"/>
+						<wcf:set target="${listValues}" value="${default_sku}"/>
+						<wcf:set target="${swatchAttrList}" value="${listValues}" />
+						<c:remove var="swatchValues" />
+						<c:remove var="swatchDisplayValues" />
+						<c:remove var="swatchImages" />
+						<c:remove var="listValues" />
+					</c:when>
+					<c:otherwise>
+						<wcf:useBean var="attributeValues" classname="java.util.ArrayList" />
+						<wcf:useBean var="attributeDisplayValues" classname="java.util.ArrayList" />
+						<c:forEach var="allowedValue" items="${attribute.values}">
+							<%-- For each allowedValue, go through the attributes of the SKUs of the catalogEntry to figure out if the allowedValue attributes
+							match those of the SKU whose buyable flag is false--%>
+							<c:forEach var="sku" items="${catalogEntryDetails.sKUs}">
+								<c:if test="${sku.buyable eq 'true' || buyablePurchasable eq 'true'}">
+									<%-- Buyable SKU --%>
+									<c:forEach var="skuAttributes" items="${sku.attributes}">
+										<c:if test="${attribute.name == skuAttributes.name}">
+											<%-- Check if the same attribute is being compared --%>
+											<c:forEach var="skuAttributeValues" items="${skuAttributes.values}">										
+												<c:if test="${skuAttributeValues.uniqueID == allowedValue.uniqueID}">
+													<%-- ID of SKU matches the allowedValue's ID --%>									
+													<c:set var="isBuyable" value="true"/>
+												</c:if>
+											</c:forEach>
+										</c:if>
+									</c:forEach>
+								</c:if>
+							</c:forEach>
+							<c:if test="${isBuyable eq 'true' || buyablePurchasable eq 'true'}">							
+								<%-- Display allowedValue --%>						
+								
+								<!-- UoM Replacement -->
+								<c:choose>
+									<c:when test="${allowedValue.unitID != 'C62' && !empty allowedValue.unitOfMeasure}">
+										<wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+											<wcst:param><c:out value="${fn:replace(allowedValue.value, search01, replaceStr01)}" escapeXml="false"/></wcst:param>
+											<wcst:param><c:out value="${allowedValue.unitOfMeasure}" escapeXml="false"/></wcst:param>
+										</wcst:message>
+									</c:when>
+									<c:otherwise>
+										<c:set var="displayValue" value="${fn:replace(allowedValue.value, search01, replaceStr01)}"/>
+									</c:otherwise>
+								</c:choose>
+								
+								<%-- Display allowedValue --%>
+								<wcf:set target="${attributeDisplayValues}" value="${displayValue}" />
+								<wcf:set target="${attributeValues}" value="${fn:replace(allowedValue.value, search01, replaceStr01)}" />
+							</c:if>
+							<c:remove var="isBuyable"/>
+						</c:forEach>
+						<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+						<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr02)}" />
+						<wcf:set target="${listValues}" value="${attributeValues}" />
+						<wcf:set target="${listValues}" value="${attributeDisplayValues}" />
+						<wcf:set target="${definingAttributeList}" value="${listValues}" />
+						<c:remove var="attributeValues" />
+						<c:remove var="attributeDisplayValues" />
+						<c:remove var="listValues" />
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+		</c:forEach>
+	</c:when>
+
+	<c:when test="${type eq 'item'}">
+		<c:forEach var="attribute" items="${catalogEntryDetails.attributes}" varStatus="aStatus">
+			<c:if test="${attribute.usage eq 'Defining'}">
+				<wcf:useBean var="attributeValues" classname="java.util.ArrayList" />
+				<c:if test="${attribute.identifier != env_subsFulfillmentFrequencyAttrName && attribute.identifier != env_subsPaymentFrequencyAttrName}">
+					<c:choose>
+						<c:when test="${attribute.identifier == env_subsTimePeriodAttrName}">						
+							<c:forEach var="allowedValue" items="${attribute.values}" varStatus="vStatus">							
+								<c:set var="attributeUOMKey" value="PD_ATTR_UOM_ANN" />
+								<c:forEach var="extValue" items="${allowedValue.extendedValue}">
+									<c:if test="${extendedValue.key == 'UnitOfMeasure'}">
+										<c:set var="attributeUOMKey" value="PD_ATTR_UOM_${extValue.value}" />
+									</c:if>
+								</c:forEach>
+								<wcst:message var="displayValue" key="${attributeUOMKey}" bundle="${widgetText}">
+									<wcst:param value="${allowedValue.value}" />
+								</wcst:message>
+								
+								<wcf:set target="${attributeValues}" value="${fn:replace(displayValue, search01, replaceStr01)}" />
+							</c:forEach>
+						</c:when>
+						<c:otherwise>
+							<wcf:set target="${attributeValues}" value="${fn:replace(attribute.values[0].value, search01, replaceStr01)}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<wcf:useBean var="listValues" classname="java.util.ArrayList" capacity="3"/>
+				<wcf:set target="${listValues}" value="${fn:replace(fn:replace(attribute.name, search01, replaceStr01), search, replaceStr02)}" />
+				<wcf:set target="${listValues}" value="${attributeValues}" />
+				<wcf:set target="${definingAttributeList}" value="${listValues}" />
+				<c:remove var="attributeValues" />
+				<c:remove var="listValues" />
+			</c:if>
+		</c:forEach>
+	</c:when>
+</c:choose>
+<%-- 
+***
+*	End: Product Descriptive and Defining Attributes
+***
+--%>
+
+<%-- 
+	Loop through all the SKUs and see if any one of them is marked 'buyable'. 
+	Even if one of them is buyable, we show Add to Cart button.. Buyable flag set at product level is ignored 
+--%>
+<c:if test="${empty requestScope.bundleId and empty requestScope.packageId}">
+	<c:set var="bundleKitAvailable" value="false" scope="request"/> <%-- set default value to false --%>
+</c:if>
+<c:set var="productAvailable" value="false" scope="request"/> <%-- set default value to false --%>
+<c:set var="dynamicKitAvailable" value="false" scope="request"/> <%-- set default value to false --%>
+<c:if test="${!empty maximumItemPrice}">
+	<%-- We have price... Continue with other checks --%>
+	<c:choose>
+		<c:when test="${type eq 'bundle' or type eq 'package'}">
+			<%--For bundle and package check the buyable flag at the bundle or pacakge level instead of looping through each individual components --%>
+			<c:set var="bundleKitAvailable" value="${catalogEntryDetails.buyable}" scope="request"/>
+		</c:when>
+		<c:otherwise>
+			<%-- It is not a Subscription item OR Subscription products with the well known 3 attributes set properly --%>
+			<c:if test="${!isSubscription || (fulfillmentFrequency != '' && paymentFrequency != '' && aValidTimePeriod != '')}" >
+				<c:choose>
+					<%-- If it is a product iterate through all its SKUs --%>
+					<c:when test="${type eq 'product'}">
+						<c:forEach var="entitledItem" items="${entitledItems}">
+							<c:if test = "${entitledItem.buyable eq 'true' || buyablePurchasable eq 'true'}">
+								<c:set var="productAvailable" value="true" scope="request"/> <%-- We have one item which is marked as buyable..Show AddToCart button --%>
+							</c:if>
+						</c:forEach>
+					</c:when>
+					<c:otherwise>
+						<%-- Since it is an item, pick from buyable field --%>
+						<c:set var="productAvailable" value="${catalogEntryDetails.buyable}" scope="request"/>
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<%-- For dynamic kit, check the buyable flag directly at the details level instead of looping through each individual components --%>
+<c:if test="${type eq 'dynamickit' || type eq 'preddynakit'}">
+	<c:set var="dynamicKitAvailable" value="${catalogEntryDetails.buyable}" scope="request"/>
+</c:if>
+
+<c:set var="buyable" value="${catalogEntryDetails.buyable}"/>
+
+<c:set var="singleSKU" value="false"/>
+<c:choose>
+	<c:when test="${type == 'bundle'}">
+		<c:set var="singleSKU" value="${catalogEntryDetails.hasSingleSKU}"/>
+	</c:when>
+	<c:when test="${type == 'product'}">
+		<c:set var="singleSKU" value="${catalogEntryDetails.hasSingleSKU}"/>
+	</c:when>
+	<c:when test="${type == 'dynamickit' || type == 'preddynakit'}">
+	    <c:set var="dynamicKitConfigurable" value="${catalogEntryDetails.dynamicKitConfigurable}"/>
+	    <c:set var="parentDynamicKitConfigurable" value="${catalogEntryDetails.parentDynamicKitConfigurable}"/>
+	    <c:if test="${parentDynamicKitConfigurable eq '0' }">
+	        <c:set var="dynamicKitConfigurable" value="0"/>
+	    </c:if>
+	    <c:choose>
+            <c:when test="${dynamicKitConfigurable eq '1'}">
+                <c:set var="dynamicKitConfigurable" value="true"/>
+            </c:when>
+            <c:otherwise>
+                <c:set var="dynamicKitConfigurable" value="false"/>
+            </c:otherwise>
+        </c:choose>
+		<c:set var="singleSKU" value="false"/>
+		<c:set var="isDKConfigurable" value="${!empty catalogEntryDetails.dynamicKitModelReference && dynamicKitConfigurable}"/>
+		<c:if test="${empty isDKConfigurable}">
+			<c:set var="isDKConfigurable" value="false"/>
+		</c:if>
+
+		<c:if test="${empty isDKPreConfigured}">
+			<%-- determine if the kit is pre-configured or not --%>
+			<c:set var="isDKPreConfigured" value="${catalogEntryDetails.dynamicKitDefaultConfigurationComplete}" scope="request"/>
+			<c:if test="${isDKPreConfigured == '1'}">
+				<c:set var="isDKPreConfigured" value="true"/>				
+			</c:if>
+		</c:if>
+	</c:when>
+</c:choose>
+
+<c:if test="${!empty WCParam.categoryId && empty globalbreadcrumbs}">
+	<%--Retrieve the breadcrumb hierarchy from the CatalogNavigationView based on the categoryId --%>
+	<c:catch var="searchServerException">
+		<wcf:rest var="bcCategoryCatalogNavigationView1" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byCategory/${WCParam.categoryId}" >	
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="currency" value="${env_currencyCode}"/>
+			<wcf:param name="responseFormat" value="json"/>		
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<wcf:param name="profileName" value="IBM_BreadCrumbByCategoryUniqueId" />
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+	</c:catch>
+	<c:set var="globalbreadcrumbs" value="${bcCategoryCatalogNavigationView1}" scope="request"/>
+</c:if>
+
+<c:if test="${!empty globalbreadcrumbs}">
+	<c:set var="searchBreadcrumb" value="${globalbreadcrumbs.breadCrumbTrailEntryViewExtended[0]}"/>
+	
+	<%-- Find the best matching breadcrumb for category page based on all the paths returned by search service --%>
+	<c:if test="${!empty WCParam.top_category || !empty WCParam.parent_category_rn || !empty WCParam.categoryId}">
+		<c:set var="exactHierarchyFound" value="false"/>
+		<c:set var="expectedHierarchy" value=""/>
+		<c:choose>
+			<c:when test="${empty WCParam.searchTerm}">
+				<%-- Catalog browsing page --%>
+				<c:if test="${!empty WCParam.top_category5}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category5}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category5}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category4}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category4}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category4}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category3}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category3}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category3}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category2}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category2}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category2}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.parent_category_rn && WCParam.top_category != WCParam.parent_category_rn}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.parent_category_rn}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.parent_category_rn}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.categoryId && WCParam.categoryId != WCParam.parent_category_rn && WCParam.categoryId != WCParam.top_category}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.categoryId}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.categoryId}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:when>
+			<c:otherwise>
+				<%-- Search results page --%>
+				<c:if test="${!empty WCParam.categoryFacetHierarchyPath}">
+					<c:set var="expectedHierarchy" value="${WCParam.categoryFacetHierarchyPath}"/>
+				</c:if>
+			</c:otherwise>
+		</c:choose>
+		
+		<c:forEach var="aFullBreadcrumb" items="${globalbreadcrumbs.breadCrumbTrailEntryViewExtended}">
+			<c:set var="currentHierarchy" value=""/>
+			<c:forEach var="breadcrumbKey" begin="0" end="${fn:length(aFullBreadcrumb)}">
+				<c:set var="breadcrumbKeyStr">${breadcrumbKey}</c:set>
+				<c:set var="aBreadcrumbEntry" value="${aFullBreadcrumb[breadcrumbKeyStr]}"/>
+				<c:if test="${aBreadcrumbEntry.type_ == 'FACET_ENTRY_CATEGORY'}">
+					<c:choose>
+						<c:when test="${empty currentHierarchy}">
+							<c:set var="currentHierarchy" value="${aBreadcrumbEntry.value}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="currentHierarchy" value="${currentHierarchy},${aBreadcrumbEntry.value}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+			<c:choose>
+				<c:when test="${currentHierarchy eq expectedHierarchy}">
+					<c:set var="exactMatchBreadcrumb" value="${aFullBreadcrumb}"/>
+				</c:when>
+				<c:when test="${fn:contains(currentHierarchy, expectedHierarchy)}">
+					<c:set var="bestMatchBreadcrumb" value="${aFullBreadcrumb}"/>
+				</c:when>
+			</c:choose>
+		</c:forEach>
+	</c:if>
+	<c:choose>
+		<c:when test="${!empty exactMatchBreadcrumb}">
+			<c:set var="searchBreadcrumb" value="${exactMatchBreadcrumb}"/>
+		</c:when>
+		<c:when test="${!empty bestMatchBreadcrumb}">
+			<c:set var="searchBreadcrumb" value="${bestMatchBreadcrumb}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="searchBreadcrumb" value="${globalbreadcrumbs.breadCrumbTrailEntryView}"/>
+		</c:otherwise>
+	</c:choose>
+
+	<c:forEach var="searchBreadcrumbKey" begin="0" end="${fn:length(searchBreadcrumb)}">
+			<c:set var="searchBreadcrumbKeyStr">${searchBreadcrumbKey}</c:set>
+			<c:set var="breadcrumb" value="${searchBreadcrumb[searchBreadcrumbKeyStr]}"/>
+			<c:if test="${breadcrumb.type_ == 'FACET_ENTRY_CATEGORY'}">
+			
+			 <c:choose>
+				<c:when test="${empty searchTopCategory5Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 7}">
+					<c:set var="searchTopCategory5Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategory4Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 6}">
+					<c:set var="searchTopCategory4Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategory3Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 5}">
+					<c:set var="searchTopCategory3Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategory2Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 4}">
+					<c:set var="searchTopCategory2Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategoryId && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7  && fn:length(searchBreadcrumb) >= 3}">
+					<c:set var="searchTopCategoryId" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchParentCategoryId && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 2}">
+					<c:set var="searchParentCategoryId" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+			</c:choose>
+			</c:if>
+	</c:forEach>
+</c:if>
+
+
+<c:choose>
+	<%-- Use the context parameters if they are available; usually in a subcategory --%>
+	<c:when test="${empty WCParam.categoryId || (!empty param.emsName && param.fromWidget ne 'CatalogEntryList')}">
+		<%-- categoryId is empty..just display product URL --%>
+		<c:set var="patternName" value="ProductURL"/>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<c:set var="categoryId" value="${WCParam.categoryId}" />
+	</c:when>
+	<c:when test="${!empty searchTopCategory5Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="top_category3" value="${searchTopCategory3Id}" />
+			<c:set var="top_category4" value="${searchTopCategory4Id}" />
+			<c:set var="top_category5" value="${searchTopCategory5Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith7LevelCategory"/>
+	</c:when>
+	<c:when test="${!empty searchTopCategory4Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="top_category3" value="${searchTopCategory3Id}" />
+			<c:set var="top_category4" value="${searchTopCategory4Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith6LevelCategory"/>
+	</c:when>
+	<c:when test="${!empty searchTopCategory3Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="top_category3" value="${searchTopCategory3Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith5LevelCategory"/>
+	</c:when>
+	<c:when test="${!empty searchTopCategory2Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith4LevelCategory"/>
+	</c:when>
+	<c:when test="${searchParentCategoryId == WCParam.categoryId}">
+			<%-- CategoryId is present..but it is same as parent category Id --%>
+			<c:set var="parent_category_rn" value="${searchTopCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWithCategory"/>
+			<c:if test="${!empty top_category && top_category != searchParentCategoryId}">
+				<c:set var="patternName" value="ProductURLWithParentCategory"/>
+			</c:if>
+	</c:when>
+	<c:when test="${!empty searchParentCategoryId && !empty searchTopCategoryId}">
+		<%-- both parent and top category are present.. display full product URL --%>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<c:set var="categoryId" value="${WCParam.categoryId}" />
+		<c:set var="patternName" value="ProductURLWithParentAndTopCategory"/>
+		<c:if test="${top_category == parent_category_rn}">
+			<%-- But both top and parent category are same..display only parent category in product URL --%>
+			<c:set var="patternName" value="ProductURLWithParentCategory"/>
+		</c:if>
+	</c:when>
+	<c:when test="${!empty searchParentCategoryId}">
+		<%-- parent category is not empty..use product URL with parent category --%>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<c:set var="categoryId" value="${WCParam.categoryId}" />
+		<c:set var="patternName" value="ProductURLWithParentCategory"/>
+	</c:when>
+	<c:when test="${!empty WCParam.categoryId}">
+			<c:set var="parent_category_rn" value="${searchTopCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWithCategory"/>
+	</c:when>
+	<%-- Store front main page; usually eSpots, parents unknown --%>
+	<c:otherwise>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<%-- Just display productURL without any category info --%>
+		<c:set var="patternName" value="ProductURL"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var = "categoryId_local" value = "${WCParam.categoryId}"/>
+<c:if test = "${param.useClickInfoURL == 'true'}">
+  <c:set var = "categoryId_local" value = ""/>
+</c:if>
+
+<c:set var="listProductIdForURL" value="${productId}"/>
+<c:if test="${env_displaySKUContextData && singleSKU}">
+  <c:set var="listProductIdForURL" value="${catalogEntryDetails.singleSKUCatalogEntryID}"/>
+</c:if>
+<c:if test="${empty WCParam.searchTerm && param.fromWidget eq 'CatalogEntryList' && not empty param.imageDisplayItemID}">
+	<%-- If on a category page using the CatalogEntryList widget and featured image is set, use the feature image SKU ID as productId --%>
+	<c:set var="listProductIdForURL" value="${param.imageDisplayItemID}"/>
+</c:if>
+
+<wcf:url var="productDisplayUrl" patternName="${patternName}" value="Product2">
+	<wcf:param name="catalogId" value="${catalogId}"/>
+	<wcf:param name="storeId" value="${storeId}"/>
+	<wcf:param name="productId" value="${listProductIdForURL}"/>
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="errorViewName" value="ProductDisplayErrorView"/>
+	<wcf:param name="categoryId" value="${categoryId_local}" />
+	<wcf:param name="top_category5" value="${top_category5}" />
+	<wcf:param name="top_category4" value="${top_category4}" />
+	<wcf:param name="top_category3" value="${top_category3}" />
+	<wcf:param name="top_category2" value="${top_category2}" />
+	<wcf:param name="top_category" value="${top_category}" />
+	<wcf:param name="parent_category_rn" value="${parent_category_rn}" />
+	<wcf:param name="urlLangId" value="${urlLangId}" />
+</wcf:url>
+
+<c:choose>
+	<c:when test = "${param.useClickInfoURL == 'true'}" >
+		<c:url var="ClickInfoURL" value="${param.clickInfoURL}">
+			<c:param name="URL" value="${productDisplayUrl}" />
+		</c:url>
+		<%-- Replace productDisplayUrl with clickInfoURL --%>
+		<c:set var = "productDisplayUrl" value = "${env_absoluteUrl}${ClickInfoURL}" />
+	</c:when>
+	<c:when test="${! empty experimentId}">
+		<wcf:url var="productDisplayUrl" value="ClickInfo">
+			<wcf:param name="storeId" value="${WCParam.storeId}"/>
+			<wcf:param name="evtype" value="CpgnClick" />
+			<wcf:param name="mpe_id" value="${mpe_id}" />
+			<wcf:param name="intv_id" value="${intv_id}" />
+			<wcf:param name="experimentId" value="${experimentId}" />
+			<wcf:param name="testElementId" value="${testElementId}" />
+			<wcf:param name="expDataType" value="CatalogEntryId" />
+			<wcf:param name="expDataUniqueID" value="${productId}" />
+			<wcf:param name="URL" value="${catEntryDisplayUrl}" />
+		</wcf:url>
+	</c:when>
+</c:choose>
+
+<%-- END ProductDescription_Data.jsp --%>

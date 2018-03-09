@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","cs",{keystrokeForContextMenu:"Další volby získáte klepnutím pravým tlačítkem s klávesou Ctrl",keystrokeForContextMenuMac:"Další volby získáte klepnutím pravým tlačítkem s klávesou Cmd"});

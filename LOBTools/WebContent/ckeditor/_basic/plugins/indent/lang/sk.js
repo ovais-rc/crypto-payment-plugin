@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","sk",{indent:"Zvýšiť odsadenie",outdent:"Znížiť odsadenie"});

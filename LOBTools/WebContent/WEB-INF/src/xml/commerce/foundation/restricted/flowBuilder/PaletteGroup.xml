@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!--- 
+		Represents a single group of elements of the palette. A header with the group name is shown over
+		a two column list of PaletteElement's. As input to the class, a datapath to a Group of Elements
+		must be provided. The input reference datapath is assumed to have the format:
+		@START_CODE
+		<Group resourceBundle="resources" name="key">
+			<Element objectType="element1"/>
+			<Element objectType="element2"/>
+		</Group>
+		@END_CODE
+		
+		<p>The <code>name</code> attribute for the Group tag is used to look up the translated display string for the header using the
+		provided <code>resourceBundle</code>. The <code>objectType</code> refers to the object type defined a the element's
+		{@link cmc/foundation/FlowElementObjectDefinition}.</p>
+		
+		<p>The {@link cmc/foundation/PaletteElement palette elements} will also be defined as a {@link cmc/foundation/DragSource} with targetKey 'flowelement'. It is left for the
+		user to define a corresponding {@link cmc/foundation/DropTarget} to listen for these sources.</p>
+		
+		Sample usage:
+		@START_CODE
+			<PaletteGroup datapath="datapathNode"/>
+		@END_CODE
+		
+		@keywords private
+	-->
+	<BaseTabElement classDefinition="true" clip="true" definitionName="cmc/foundation/PaletteGroup" minheight="38">
+		<variable name="groupXML" type="expression" value="null"/>
+		<dependency localName="DragSource" moduleName="cmc/foundation/DragSource"/>
+		<dependency localName="PaletteElement" moduleName="cmc/foundation/PaletteElement"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			The x position of the text field in the header area relative to the expand/collapse icon. Default is 4.
+			@keywords private
+		-->
+		<variable name="text_x" value="4"/>
+		
+		<!--- The text to show in the tooltip. -->
+		<variable name="helpText" type="string" value=""/>
+		<!--- The relative URL to additional help. -->
+		<variable name="helpLink" type="string" value=""/>
+		<!---
+			The size of the border around the content. Default is 2.
+			@keywords private
+		-->
+		<variable name="inset" value="2"/>
+		<!--- The height of the content area that is shown/hidden when this tab is opened/closed. -->
+		<variable name="contentHeight" value="${this.container.contentBackground.contentBorder.elements.height + 2 * this.inset + 2}"/>
+        
+		<handler name="oninit">
+			<![CDATA[
+			var helpTextNode = this.groupXML.getAttribute("helpText");
+			var helpLinkNode = this.groupXML.getAttribute("helpLink");
+			if (helpLinkNode) {
+				this.setVariable("helpLink", helpLinkNode);
+			}
+			var resourceBundle = this.groupXML.getAttribute("resourceBundle");
+			if (resourceBundle) {
+				this.updatePaletteGroupText();
+			}
+			else {
+				this.setVariable("text", this.groupXML.getAttribute('name'));
+				if (helpTextNode) {
+					this.setVariable("helpText", helpTextNode);
+				}
+			}
+			]]>
+		</handler>
+        
+		<!---
+			Closes this tab.
+			@param number h absolute height to resize this tab to
+			@param number d length of the animation in millisecs
+		-->
+		<method args="h, d" name="close">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("contentvisible", false);
+			]]>
+		</method>
+		
+		<!---
+			Resizes this tab.
+			@param number h absolute height to resize this tab to
+			@param number d length of the animation in millisecs
+		-->
+		
+
+  		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updatePaletteGroupTextDel) {
+				this.updatePaletteGroupTextDel.unregisterAll();
+				delete this.updatePaletteGroupTextDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<handler name="oncontentvisible">
+			<![CDATA[
+			this.header.bkgnd._callShow();
+			var iconNum = this.contentvisible ? 2 : 1;
+			this.header.twisty.setVariable("currentImage", iconNum);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updatePaletteGroupText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var resourceBundle = this.groupXML.getAttribute("resourceBundle");
+			var group = this;
+			require([resourceBundle], function(resourceBundleModule) {
+				if (!group.updatePaletteGroupTextDel) {
+					group.updatePaletteGroupTextDel = new EventHandler.Class(group, "updatePaletteGroupText");
+				}
+				else {
+					group.updatePaletteGroupTextDel.unregisterAll();
+				}
+				var nameKey = resourceBundleModule.Singleton[group.groupXML.getAttribute("name")];
+				group.setVariable("text", nameKey.string);
+				var helpTextNode = group.groupXML.getAttribute("helpText");
+				if (helpTextNode) {
+					var helpTextKey = resourceBundleModule.Singleton[helpTextNode];
+					if (helpTextKey) {
+						group.setVariable("helpText", helpTextKey.string);
+					}
+				}
+			});
+			]]>
+		</method>
+
+		<Component height="${this.classroot.minheight}" name="header" width="${this.parent.width}">
+			<Component name="topline" bgcolor="#F2F1EF" width="${this.parent.width}" height="8"/>
+			<Component clickable="true" imageSet="wcfPaletteExpandCollapseIcon" name="twisty" x="10" y="${((this.parent.height - this.parent.topline.height - this.height) / 2) + this.parent.topline.height}">
+				<handler name="onclick">
+					<![CDATA[
+					EventUtil.trigger(this.parent.bkgnd, "onclick");
+					]]>
+				</handler>
+			</Component>
+			<TextComponent name="txt" text="${this.classroot.text}" x="${this.parent.twisty.x + this.parent.twisty.width + this.classroot.text_x}" y="${((this.parent.height - this.parent.topline.height - this.height) / 2) + this.parent.topline.height}"/>
+			<BaseButton height="${this.classroot.minheight}" name="bkgnd" width="${this.parent.width}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.parent.toggleTab(this.classroot);
+					FocusUtil.setFocus(this.classroot, false);
+					]]>
+				</handler>
+			</BaseButton>
+			<Tooltip enabled="${this.classroot.helpText != ''}" linkURL="${this.classroot.helpLink}" text="${this.classroot.helpText}"/>
+			<handler name="oninit">
+				<![CDATA[
+				this.bringToFront();
+				]]>
+			</handler>
+		</Component>
+		
+		<Component bgcolor="#ffffff" name="container" stretchable="true" visible="${this.classroot.contentvisible}" width="${this.parent.width}">
+			<Component bgcolor="#ffffff" clip="true" height="${Math.max(this.parent.height - 2 * this.classroot.inset, 0)}" name="contentBackground" width="${Math.max(this.parent.width - 2 * this.classroot.inset, 0)}" x="${this.classroot.inset}" y="${this.classroot.inset}">
+				
+				<Component bgcolor="#ffffff" height="${this.parent.height - 2}" name="contentBorder" width="${this.parent.width - 2}" x="1" y="1">
+					<Component clip="true" name="elements" width="${this.parent.width}">
+						<method name="init">
+							<![CDATA[
+							this.inherited(arguments);
+							if (this.classroot.groupXML != null) {
+								var children = this.classroot.groupXML.childNodes;
+								if (children) {
+									for (var i = 0; i < children.length; i++) {
+										if ("Element" == children[i].nodeName) {
+											var element = new PaletteElement.Class(this, {
+												elementXML: children[i],
+												clickable: true,
+												width: 32,
+												height: 32
+											});
+											new DragSource.Class(element, {
+												targetKeys: ['flowelement'],
+												dragAndDropManager: DndManager.Singleton
+											});
+										}
+									}
+								}
+							}
+							]]>
+						</method>
+						<WrappingLayout axis="x" spacing="2" xinset="10" yinset="5">
+							<handler name="oninit">
+								<![CDATA[
+								this.update();
+								]]>
+							</handler>
+  						</WrappingLayout>
+						
+					</Component>
+					<VerticalScrollbar align="right" name="scrollbar" scrolltarget="${this.parent.elements}" visible="${this.scrollable}"/>
+				</Component>
+			</Component>
+		</Component>
+		<ResizeLayout axis="y" spacing="0"/>
+	</BaseTabElement>
+	
+</Definitions>

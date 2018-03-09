@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>The flow connector class used in {@link cmc/price/FlowBuilder price rule builder}. 
+	-->
+	<BaseFlowConnector classDefinition="true" definitionName="cmc/price/PriceRuleFlowConnector">
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		
+		<method args="dragSources" name="isEnabled">
+			<![CDATA[
+			var enable = this.inherited(arguments);
+			if (!enable) {
+				return false;
+			}
+			else {
+				var parentFlowPath = FlowUtils.Singleton.getParentFlowPath(this);
+				if (parentFlowPath) {
+					var parentFlowElement = this.getFlowElement();
+					var draggedObjectType = null;
+					if (dragSources.length == 1 && dragSources[0].dragObject.objectType) {
+						draggedObjectType = dragSources[0].dragObject.objectType;
+					}
+					else if (dragSources.length == 1 && dragSources[0].flowElement.o.objectType) {
+						draggedObjectType = dragSources[0].flowElement.o.objectType;
+					}
+					else {
+						return false;
+					}
+					if (FlowUtils.Singleton.getElementDepth(this) == 1 && this.hasCoordinatorOnRootPath()) {
+						return parentFlowElement == null && draggedObjectType == "roundingPrice";
+					}
+					else if (FlowUtils.Singleton.getElementDepth(this) == 2 && this.hasCoordinatorOnRootPath()) {
+						return draggedObjectType == "nestedPriceRule" && FlowUtils.Singleton.getSortedElements(parentFlowPath.o).length == 0;
+					}
+					else if (FlowUtils.Singleton.getElementDepth(this) == 1 && this.hasDynamicKitBranchOnRootPath()) {
+						return false;
+					}
+					else if (FlowUtils.Singleton.getElementDepth(this) == 2 && this.hasDynamicKitBranchOnRootPath()) {
+						return draggedObjectType == "nestedPriceRule" && FlowUtils.Singleton.getSortedElements(parentFlowPath.o).length == 0;
+					}
+					if (draggedObjectType == "coordinatorBranch" || draggedObjectType == "dynamicKitBranch") {
+						return FlowUtils.Singleton.getElementDepth(this) == 1 && FlowUtils.Singleton.getSortedElements(parentFlowPath.o).length == 0;
+					}
+					var movedBranch = null;
+					if (dragSources[0].flowElement) {
+						for (var i = 0; i < dragSources.length; i++) {
+							if (dragSources[i].flowElement.o && dragSources[i].flowElement.isBranch()) {
+								movedBranch = dragSources[i].flowElement;
+								break;
+							}
+						}
+					}
+					if (movedBranch) {
+						var ancestor = this;
+						while (ancestor != null && ancestor != RootComponent.Singleton) {
+							if (ancestor == movedBranch) {
+								return false;
+							}
+							ancestor = ancestor.parent;
+						}
+					}
+				}
+				return true;
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="hasCoordinatorOnRootPath">
+			<![CDATA[
+			if (this.parentFlow.flowPath) {
+				var elements = FlowUtils.Singleton.getSortedElements(this.parentFlow.flowPath.o);
+				for (var i = 0; i < elements.length; i++) {
+					if (elements[i].objectType == 'coordinatorBranch') {
+						return true;
+					}
+				}
+			}
+			return false;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="hasDynamicKitBranchOnRootPath">
+			<![CDATA[
+			if (this.parentFlow.flowPath) {
+				var elements = FlowUtils.Singleton.getSortedElements(this.parentFlow.flowPath.o);
+				for (var i = 0; i < elements.length; i++) {
+					if (elements[i].objectType == 'dynamicKitBranch') {
+						return true;
+					}
+				}
+			}
+			return false;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="sources" name="handleDroppedElements">
+			<![CDATA[
+			this.parentFlow.o.lock();
+			var parentPath = FlowUtils.Singleton.getParentFlowPath(this);
+			if (parentPath) {
+				var parentPathObj = parentPath.o;
+				var parentFlowElement = this.getFlowElement();
+				if ((parentFlowElement != null) && sources[0].flowElement) {
+					if (sources[0].flowElement.o == parentFlowElement.o) {
+						this.parentFlow.o.unlock(true);
+						this.parentFlow.o.updateChildObjects();
+						return;
+					}
+				}
+				for (var i = 0; i < sources.length; i++) {
+					var newObject = null;
+					var insertSequence;
+					if (parentFlowElement == null) {
+						insertSequence = FlowUtils.Singleton.getNextSequenceNumber(parentPathObj);
+					}
+					else {
+						insertSequence = FlowUtils.Singleton.getNextSequenceNumber(parentPathObj, parentFlowElement.o);
+					}
+					if (sources[i].flowElement) {
+						var moveObj = sources[i].flowElement.o;
+						newObject = parentPathObj.model.createNewObject(null, parentPathObj, true, moveObj);
+						newObject.setPropertyValue("sequence", null, insertSequence);
+						moveObj.deleteObject();
+					}
+					else {
+						var objectType = sources[i].dragObject.objectType;
+						var objectDef = parentPathObj.model.getObjectDefinition(parentPathObj, objectType);
+						var branchType = "";
+						if ((objectDef.elemTemplateType == "Branch" || objectDef.objectType == "coordinatorBranch") && (parentFlowElement != null)) {
+							this.parentFlow.unselectAll();
+							var parentFlowElementType = parentFlowElement.o.objectDefinition.elemTemplateType;
+							var siblings = parentPath.getChildren();
+							for (var i = 0; i < siblings.length; i++) {
+								if (siblings[i] == parentFlowElement) {
+									var j = i + 1;
+									while ((j < siblings.length) && (siblings[j].o.objectDefinition.elemTemplateType == parentFlowElementType)) {
+										siblings[j].select();
+										j++;
+									}
+									break;
+								}
+							}
+							parentFlowElement.select();
+							parentFlowElement.addElementsToBranch(branchType, objectType);
+						}
+						else {
+							newObject = parentPathObj.model.createNewObject(objectDef, parentPathObj);
+							newObject.setPropertyValue("sequence", null, insertSequence);
+							if (objectDef.elemTemplateType == "Branch" || objectDef.objectType == "coordinatorBranch" || objectDef.objectType == "dynamicKitBranch") {
+								var pathObjectDefinition = newObject.model.getObjectDefinition(newObject, parentPathObj.objectType);
+								insertSequence = FlowUtils.Singleton.getNextSequenceNumber(newObject);
+								var topFlowObj = newObject.model.createNewObject(pathObjectDefinition, newObject);
+								topFlowObj.setPropertyValue("sequence", null, insertSequence);
+								if (objectDef.objectType == "dynamicKitBranch") {
+									topFlowObj.setPropertyValue("name", null, "nonDKPriceRulePath");
+								}
+								insertSequence = FlowUtils.Singleton.getNextSequenceNumber(newObject);
+								var botFlowObj = newObject.model.createNewObject(pathObjectDefinition, newObject);
+								botFlowObj.setPropertyValue("sequence", null, insertSequence);
+								if (objectDef.objectType == "dynamicKitBranch") {
+									botFlowObj.setPropertyValue("name", null, "dKPriceRulePath");
+								}
+								newObject.updateChildObjects();
+								topFlowObj.updateChildObjects();
+								botFlowObj.updateChildObjects();
+							}
+						}
+					}
+				}
+			}
+			this.parentFlow.o.unlock(true);
+			this.parentFlow.o.updateChildObjects();
+			this.parentFlow.unselectAll();
+			]]>
+		</method>
+	</BaseFlowConnector>
+</Definitions>

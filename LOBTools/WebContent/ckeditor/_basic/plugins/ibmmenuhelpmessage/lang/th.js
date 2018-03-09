@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","th",{keystrokeForContextMenu:"Ctrl + คลิกขวาสำหรับอ็อพชันเพิ่มเติม",keystrokeForContextMenuMac:"Cmd + คลิกขวาสำหรับอ็อพชันเพิ่มเติม"});

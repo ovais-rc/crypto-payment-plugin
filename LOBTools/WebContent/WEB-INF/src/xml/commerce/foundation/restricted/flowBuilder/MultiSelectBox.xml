@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!--- @keywords private -->
+	<Component bgcolor="#00a6a0" classDefinition="true" definitionName="cmc/foundation/MultiSelectBox" ignoreLayout="true" opacity="0.15" visible="false">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="CursorUtil" moduleName="cmc/foundation/CursorUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+
+		<!--- @keywords private -->
+		<variable name="selectArea" value="${null}"/>
+	
+		<!--- @keywords private -->
+		<variable name="selecting" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="enabled" type="boolean" value="true"/>
+		<!--- @keywords private -->
+		<variable name="callback" value="${null}"/>
+
+		<handler name="oninit">
+			<![CDATA[
+			this.trackMouseDel = new EventHandler.Class(this, "trackMouse");
+			this.mouseDownDel = new EventHandler.Class(this, "mouseDown");
+			this.mouseUpDel = new EventHandler.Class(this, "mouseUp");
+			if (this.selectArea) {
+				this.selectArea.setVariable("clickable", true);
+				this.mouseDownDel.connect(this.selectArea, "onmousedown");
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			Timer.removeTimer(this.trackMouseDel);
+			this.trackMouseDel.disconnectAll();
+			delete this.trackMouseDel;
+			this.mouseDownDel.disconnectAll();
+			delete this.mouseDownDel;
+			this.mouseUpDel.disconnectAll();
+			delete this.mouseUpDel;
+			]]>
+		</method>
+		
+		<handler eventSource="this.selectArea" name="onmouseover">
+			<![CDATA[
+			CursorUtil.showHandCursor(false);
+			]]>
+		</handler>
+		
+		<handler eventSource="this.selectArea" name="onmouseout">
+			<![CDATA[
+			CursorUtil.showHandCursor(true);
+			]]>
+		</handler>
+		
+		<handler name="onselectArea">
+			<![CDATA[
+			this.mouseDownDel.disconnectAll();
+			if (this.selectArea) {
+				this.mouseDownDel.connect(this.selectArea, "onmousedown");
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="e" name="mouseDown">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.enabled) {
+				this.startX = RootComponent.Singleton.getMouse("x");
+				this.startY = RootComponent.Singleton.getMouse("y");
+				Timer.addTimer(this.trackMouseDel, 50);
+				this.mouseUpDel.connect(MouseUtil, "onmouseup");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="mouseUp">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			Timer.removeTimer(this.trackMouseDel);
+			this.mouseUpDel.disconnectAll();
+			if (this.selecting) {
+				this.selecting = false;
+				if (this.callback) {
+					this.callback.selectAreaCreated();
+				}
+				this.setVariable("visible", false);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="trackMouse">
+			<![CDATA[
+			if (this.selecting) {
+				var mouseX = RootComponent.Singleton.getMouse("x");
+				var mouseY = RootComponent.Singleton.getMouse("y");
+				var newX = 0;
+				var newY = 0;
+				var newWidth = 0;
+				var newHeight = 0;
+				if (mouseX > this.startX) {
+					newX = this.startX;
+					newWidth = mouseX - this.startX;
+				}
+				else {
+					newX = mouseX;
+					newWidth = this.startX - mouseX;
+				}
+				if (mouseY > this.startY) {
+					newY = this.startY;
+					newHeight = mouseY - this.startY;
+				}
+				else {
+					newY = mouseY;
+					newHeight = this.startY - mouseY;
+				}
+				this.setVariable('x', newX);
+				this.setVariable('y', newY);
+				this.setVariable('width', newWidth);
+				this.setVariable('height', newHeight);
+			}
+			else if (this.startX != RootComponent.Singleton.getMouse("x") || this.startY != RootComponent.Singleton.getMouse("y")) {
+				this.selecting = true;
+				this.setVariable('x', this.startX);
+				this.setVariable('y', this.startY);
+				this.setVariable('width', 0);
+				this.setVariable('height', 0);
+				this.setVariable("visible", true);
+			}
+			Timer.resetTimer(this.trackMouseDel, 50);
+			]]>
+		</method>
+		
+	</Component>
+	
+</Definitions>

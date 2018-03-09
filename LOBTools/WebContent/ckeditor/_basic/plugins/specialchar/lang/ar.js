@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","ar",{options:"اختيارات الحروف الخاصة",title:"حروف خاصة",toolbar:"ادراج حروف خاصة"});

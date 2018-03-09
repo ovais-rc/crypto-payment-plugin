@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseScrollBar">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<variable name="scrolltarget" value="null" type="expression"/>
+		<variable name="axis" value="y" type="string"/>
+		<variable name="scrollmax" type="number" value="null"/>
+		<variable name="pagesize" type="number" value="null"/>
+		<variable name="stepsize" value="10" type="number"/>
+		<variable name="scrollable" value="true" type="boolean"/>
+		<variable name="usemousewheel" value="true" type="boolean"/>
+        <variable name="mousewheelactive" value="false" type="boolean"/>
+        <variable name="enabled" value="true" type="boolean"/>
+		<variable name="_enabled" value="${this.enabled &amp;&amp; this.scrollable &amp;&amp; ((typeof(this.parent._enabled) == 'undefined') || this.parent._enabled)}" type="boolean"/>
+        <variable name="otherScrollBar" value="null" type="expression"/>
+		<variable name="thumb" value="null" type="expression"/>
+		<State name="heightConstraint">
+			<variable name="height" value="${this.otherScrollBar &amp;&amp; this.otherScrollBar.visible ? this.immediateParent.height - this.otherScrollBar.height : this.immediateParent.height}"/>
+        </State>
+		<State name="widthConstraint">
+			<variable name="width" value="${this.otherScrollBar &amp;&amp; this.otherScrollBar.visible ? this.immediateParent.width - this.otherScrollBar.width : this.immediateParent.width}"/>
+		</State>
+
+		<method name="init">
+			<![CDATA[
+			var autoalign = false;
+			if (!this.scrolltarget) {
+				for (var i = 0; i < this.immediateParent.childComponents.length; i++) {
+					var c = this.immediateParent.childComponents[i];
+					if (!(c instanceof exports.Class)) {
+						if (!this.scrolltarget) this.scrolltarget = c;
+					}
+					else if (c != this) {
+						this.setVariable("otherScrollBar", c);
+					}
+				}
+				if (this.axis == "y") {
+					this.setVariable("align", "right");
+				}
+				else {
+					this.setVariable("valign", 'bottom');
+				}
+				autoalign = true;
+			}
+
+			if (this.axis == "x" && !this.hasSetWidth) {
+				this.widthConstraint.setVariable("active", true);
+			}
+
+			if (this.axis == "y" && !this.hasSetHeight) {
+				this.heightConstraint.setVariable("active", true);
+			}
+
+			var sizeEvent = "on" + ((this.axis == "x") ? "width" : "height");
+			EventUtil.connect(this.scrolltarget.immediateParent, sizeEvent, this, "updateClipSize");
+
+			if (this.scrollmax == null) {
+				EventUtil.connect(this.scrolltarget, sizeEvent, this, "updateTargetSize");
+				this.scrollmax = this.scrolltarget[(this.axis == "x") ? "width" : "height"];
+				if (autoalign && this.otherScrollBar) {
+					this.scrollmax += this[(this.axis == "x") ? "height" : "width"];
+				}
+			}
+			else {
+				EventUtil.connect(this, "onscrollmax", this, "updateClipSize");
+			}
+			EventUtil.connect(this.scrolltarget, "on" + this.axis, this, "updateTargetPosition");
+			EventUtil.connect(this.scrolltrack, sizeEvent, this, "updateClipSize");
+			this.updateClipSize();
+            this.inherited(arguments);
+            this._initcomplete = true;
+            this._showEnabled();
+			]]>
+		</method>
+
+		<method name="updateTargetSize">
+			<![CDATA[
+			if (this.scrolltarget){
+				var newScrollMax = this.scrolltarget[this.axis == "x" ? "width" : "height"];
+				if (this.otherScrollBar && this.otherScrollBar.visible) {
+					newScrollMax += this[this.axis == "x" ? "height" : "width"];
+				}
+				this.setVariable("scrollmax", newScrollMax);
+				this.updateClipSize();
+			}
+            ]]>
+        </method>
+
+		<method name="updateClipSize">
+			<![CDATA[
+			this.updateThumbSize();
+			if (this.scrolltarget.immediateParent[this.axis == "x" ? "width" : "height"] - this.scrollmax < 0) {
+				var visible_size = this.scrolltarget[this.axis] + this.scrollmax;
+				if (visible_size < this.scrolltarget.immediateParent[this.axis == "x" ? "width" : "height"]) {
+					var newpos = this.scrolltarget.immediateParent[this.axis == "x" ? "width" : "height"] - this.scrollmax;
+					this.scrolltarget.setVariable(this.axis, newpos);
+				}
+				else {
+					this.updateThumbPosition();
+				}
+				this.pagesize = this[this.axis == "x" ? "width" : "height"];
+			}
+			]]>
+		</method>
+
+		<method name="updateTargetPosition">
+			<![CDATA[
+			this.updateThumbPosition();
+			]]>
+        </method>
+
+		<method name="updateThumbPosition">
+			<![CDATA[
+			var newPos = 0;
+			if (this.scrollmax > 0)  {
+				var dimension = this.axis == "x" ? "width" : "height";
+				newPos = Math.min(Math.ceil((-this.scrolltarget[this.axis]/this.scrollmax) * this.scrolltrack[dimension]),
+							(this.scrolltrack[dimension])-this.thumb[dimension]);
+            }
+			this.thumb.setVariable(this.axis, newPos);
+			]]>
+		</method>
+
+		<method name="set__enabled" args="value">
+			<![CDATA[
+			this._enabled = value;
+			if (this._initcomplete) {
+				this._showEnabled();
+			}
+			EventUtil.trigger(this, "on_enabled", value);
+			]]>
+		</method>
+
+		<method name="_showEnabled">
+			<![CDATA[
+			if (!this._enabled) {
+				this.thumb.setVariable(this.axis == "x" ? "width" : "height", 0);
+			}
+			else {
+				this.updateThumbSize();
+			}
+			this.thumb.setVariable("visible", this._enabled);
+			if (this.scrolltarget) {
+				this.scrolltarget.setVariable(this.axis, 0);
+			}
+			]]>
+		</method>
+
+		<method name="updateThumbSize">
+            <![CDATA[
+			if (this.scrollmax <= this.scrolltarget.immediateParent[this.axis == "x" ? "width" : "height"]) {
+				if (this.scrollable) {
+					this.setVariable("scrollable", false);
+					if (this.otherScrollBar) {
+                        this.otherScrollBar.updateTargetSize();
+					}
+				}
+			}
+			else {
+				if (!this.scrollable) {
+					this.setVariable("scrollable", true);
+					if (this.otherScrollBar) {
+						this.otherScrollBar.updateTargetSize();
+					}
+					else {
+						var newScrollMax = this.scrolltarget[this.axis == "x" ? "width" : "height"];
+						if (newScrollMax != this.scrollmax) {
+							this.setVariable("scrollmax", newScrollMax);
+						}
+					}
+				}
+				var newSize = 0;
+				var dimension = this.axis == "x" ? "width" : "height";
+				if (this.scrollmax > 0) {
+					newSize = Math.floor((this.scrolltarget.immediateParent[dimension]/this.scrollmax)*this.scrolltrack[dimension]);
+				}
+				if (newSize < 14) {
+					newSize = 14;
+				}
+				this.thumb.setVariable(dimension, newSize);
+			}
+			]]>
+		</method>
+
+		<method name="setPosRelative" args="change">
+			<![CDATA[
+			var newPos = this.scrolltarget[this.axis] - change;
+			if (newPos > 0) {
+				newPos = 0;
+			}
+			var max = Math.max(this.scrollmax - this.scrolltarget.immediateParent[this.axis == "x" ? "width" : "height"], 0);
+			if (newPos < -max) {
+				newPos = -max;
+			}
+			this.scrolltarget.setVariable(this.axis, newPos);
+			]]>
+		</method>
+
+		<method name="step" args="n">
+			<![CDATA[
+			this.setPosRelative(n*this.stepsize);
+			]]>
+		</method>
+
+		<method name="page" args="n">
+			<![CDATA[
+			this.setPosRelative(n*this.pagesize);
+			]]>
+		</method>
+	</Component>
+	
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseScrollThumb">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<variable name="target" value="null"/>
+		<variable name="axis" value="" type="string"/>
+		<variable name="trackscroll" value="0" type="number"/>
+		<variable name="targetscroll" value="0" type="number"/>
+		<variable name="dragging" value="false" type="boolean"/>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.classroot.thumb = this;
+			]]>
+		</method>
+		
+		<handler name="onmousedown">
+			<![CDATA[
+			this.startDrag();
+			]]>
+		</handler>
+
+		<handler name="onmouseup">
+			<![CDATA[
+			this.stopDrag();
+			]]>
+		</handler>
+
+		<method name="startDrag">
+			<![CDATA[
+			if (!this.dragging) {
+				this.dragging = true;
+				var scrollBar = this.classroot;
+				EventUtil.disable(scrollBar, "updateTargetPosition");
+				var dimension = scrollBar.axis == "x" ? "width" : "height";
+				this.trackscroll = this.immediateParent[dimension] - this[dimension];
+				this.targetscroll = scrollBar.scrollmax - scrollBar.scrolltarget.immediateParent[dimension];
+				this[scrollBar.axis + "thumbdrag"].setVariable("active", true);
+			}
+			]]>
+		</method>
+
+		<method name="stopDrag">
+			<![CDATA[
+			if (this.dragging) {
+				this.dragging = false;
+				this[this.classroot.axis + "thumbdrag"].setVariable("active", false);
+				EventUtil.enable(this.classroot, "updateTargetPosition");
+			}
+			]]>
+		</method>
+		
+		<State name="ythumbdrag">
+			<variable name="doffset" initialValue="${this.getMouse('y')}"/>
+		    <variable name="y" value="${this.thumbControl(this.immediateParent.getMouse('y'))}"/>
+		</State>
+		
+		<State name="xthumbdrag">
+			<variable name="doffset" initialValue="${this.getMouse('x')}"/>
+			<variable name="x" value="${this.thumbControl(this.immediateParent.getMouse('x'))}"/>
+		</State>
+		
+		<method name="thumbControl" args="mousepos">
+			<![CDATA[
+			var thumbpos = mousepos - this.doffset;
+			if (thumbpos <= 0) {
+				thumbpos = 0;
+			}
+			else if (thumbpos > this.trackscroll) {
+				thumbpos = this.trackscroll;
+			}
+		    var pos = Math.round(-thumbpos / this.trackscroll * this.targetscroll);
+			if (pos != this.classroot.scrolltarget[this.classroot.axis]) {
+				this.classroot.scrolltarget.setVariable(this.classroot.axis, pos);
+			}
+			return thumbpos;
+			]]>
+		</method>
+	</Component>
+	
+	<RepeaterButton classDefinition="true" definitionName="cmc/foundation/BaseScrollArrow">
+		<variable name="direction" value="1" type="number"/>
+		<handler name="onmousedown">
+			<![CDATA[
+			this.classroot.step(this.direction);
+			]]>
+		</handler>
+		<handler name="onmousestilldown">
+			<![CDATA[
+			this.classroot.step(this.direction);
+			]]>
+		</handler>
+	</RepeaterButton>
+	
+	<RepeaterButton classDefinition="true" definitionName="cmc/foundation/BaseScrollTrack">
+		<variable name="direction" value="1" type="number"/>
+		<handler name="onmousedown">
+			<![CDATA[
+			this.classroot.page(this.direction);
+			]]>
+		</handler>
+		<handler name="onmousestilldown">
+			<![CDATA[
+			this.classroot.page(this.direction);
+			]]>
+		</handler>
+	</RepeaterButton>
+</Definitions>

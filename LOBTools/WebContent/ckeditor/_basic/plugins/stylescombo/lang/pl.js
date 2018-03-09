@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","pl",{label:"Style",panelTitle:"Style",panelTitle1:"Style blokowe",panelTitle2:"Style wstawiane",panelTitle3:"Style obiektów"});

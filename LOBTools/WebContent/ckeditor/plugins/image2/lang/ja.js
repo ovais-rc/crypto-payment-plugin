@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("image2","ja",{alt:"代替テキスト",btnUpload:"サーバーに送信",captioned:"表題付きイメージ",captionPlaceholder:"表題",infoTab:"イメージ情報",lockRatio:"比率の固定",menu:"イメージ・プロパティー",pathName:"イメージ",pathNameCaption:"表題",resetSize:"サイズのリセット",resizer:"クリック・アンド・ドラッグでサイズ変更",title:"イメージ・プロパティー",uploadTab:"アップロード",urlMissing:"イメージのソース URL がありません。"});

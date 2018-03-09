@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!--- 
+		This class holds some basic attributes for element diagram in flow builder.
+		@keywords private 
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/Element">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<!--- @keywords private -->
+		<variable name="complete" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<variable name="selected" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="hoverBorderColour" type="string" value="#e6effb"/>
+		<!--- @keywords private -->
+		<variable name="hoverFillColour" type="string" value="#e6effb"/>
+		<!--- @keywords private -->
+		<variable name="selectBorderColour" type="string" value="#4178be"/>
+		<!--- @keywords private -->
+		<variable name="selectFillColour" type="string" value="#4178be"/>
+		<!--- @keywords private -->
+		<variable name="parentFlow" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<variable name="o" value="${null}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			if (this.parentFlow == null) {
+				this.parentFlow = FlowUtils.Singleton.getParentFlow(this);
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.updateCompleteDel) {
+				this.updateCompleteDel.disconnectAll();
+				delete this.updateCompleteDel;
+			}
+			if (this.checkSelectedDel) {
+				this.checkSelectedDel.disconnectAll();
+				delete this.checkSelectedDel;
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="unselect">
+			<![CDATA[
+			if (this.MainView) {
+				this.selected = false;
+				this.setIconBackground(null, null);
+				this.parentFlow.unselected(this);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="select">
+			<![CDATA[
+			if (this.MainView) {
+				this.selected = true;
+				this.setIconBackground(this.selectBorderColour, this.selectFillColour);
+				this.parentFlow.selected(this);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="checkSelected">
+			<![CDATA[
+			if (!this.checkSelectedDel) {
+				this.checkSelectedDel = new EventHandler.Class(this, "checkSelected");
+			}
+			else {
+				this.checkSelectedDel.disconnectAll();
+			}
+			if (this.parentFlow.flowBuilder.propertiesPane == null) {
+				this.checkSelectedDel.connect(this.parentFlow.flowBuilder, "onpropertiesPane");
+			}
+			else {
+				if (this.o != null) {
+					this.checkSelectedDel.connect(this.parentFlow.flowBuilder.propertiesPane, "ono");
+					if (this.o == this.parentFlow.flowBuilder.propertiesPane.o && !this.selected) {
+						this.parentFlow.unselectAll();
+						this.select();
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="borderColour, fillColour" name="setIconBackground">
+			<![CDATA[
+			this.MainView.iconcontentview.iconcontent.wrapper.setVariable('bgcolor', borderColour);
+			this.MainView.iconcontentview.iconcontent.wrapper.iconview.setVariable('bgcolor', fillColour);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="loadProperties">
+			<![CDATA[
+			this.parentFlow.unselectAll();
+			this.select();
+			this.parentFlow.loadProperties(this);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateComplete">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.updateCompleteDel) {
+				this.updateCompleteDel = new EventHandler.Class(this, "updateComplete");
+			}
+			else {
+				this.updateCompleteDel.disconnectAll();
+			}
+			if (this.o) {
+				this.updateCompleteDel.connect(this.o, "onvalidationErrors");
+				var propertyMap = this.o.propertyMap;
+				for (var key in propertyMap) {
+					var property = propertyMap[key];
+					this.updateCompleteDel.connect(property, "onvalidationErrors");
+				}
+			}
+			this.setVariable("complete", this.isComplete());
+			]]>
+		</method>
+		
+		
+		<!--- @keywords private -->
+		<method name="isComplete">
+			<![CDATA[
+			if (this.o) {
+				if (this.o.getValidationErrors().length > 0) {
+					return false;
+				}
+				var propertyMap = this.o.propertyMap;
+				for (var key in propertyMap) {
+					var property = propertyMap[key];
+					if (property.getValidationErrors().length > 0) {
+						return false;
+					}
+				}
+			}
+			return true;
+			]]>
+		</method>
+
+	</Component>
+	
+</Definitions>

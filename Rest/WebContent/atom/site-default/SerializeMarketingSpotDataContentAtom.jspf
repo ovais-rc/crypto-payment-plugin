@@ -1,0 +1,336 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+  * This SerializeMarketingSpotDataContentAtom.jspf file is built as a snippet to display marketing content in
+  * an e-Marketing Spot in an Atom Feed.
+--%>
+
+<entry xml:lang="${locale}">
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:author:name is a optional element if feed:author:name is provided --%>
+
+<%--
+<author>
+<name></name>
+<uri></uri>
+<email></email>
+</author>
+--%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:category is an optional element --%>
+
+<%-- <category term="" /> --%>
+
+<c:set var="TargetURL" value="" />
+<c:set var="imgURL" value=""/>
+<content type="html">
+	
+	<%-- Detect custom URLs and set the urlPrefix accordingly. --%>
+	<c:set var="urlPrefix" value="" />
+	<c:if test="${(fn:startsWith(marketingSpotData.marketingContent.url, 'http://')==false) &&
+		(fn:startsWith(marketingSpotData.marketingContent.url, 'https://')==false) &&
+		(fn:startsWith(marketingSpotData.marketingContent.url, 'mailto://')==false)}" >
+		<c:set var="urlPrefix" value="${dynamicContextRoot}/" />
+	</c:if>
+
+	<%-- Set up the URL to call when clicking on the image. --%>
+	<c:url value="${urlPrefix}${marketingSpotData.marketingContent.url}" var="ContentURL">
+		<c:if test="${!empty param.errorViewName}" >
+			<c:param name="errorViewName" value="${param.errorViewName}" />
+			<c:if test="${!empty param.orderId}">
+				<c:param name="orderId" value="${param.orderId}"/>
+			</c:if>
+		</c:if>
+	</c:url>
+
+	<c:url value="${ClickInfoCommand}" var="ClickInfoURL">
+		<c:param name="evtype" value="CpgnClick" />
+		<c:param name="mpe_id" value="${marketingSpotDatas.marketingSpotIdentifier.uniqueID}" />
+		<c:param name="intv_id" value="${marketingSpotData.activityIdentifier.uniqueID}" />
+		<c:param name="storeId" value="${storeId}" />
+		<c:param name="catalogId" value="${catalogId}" />
+		<c:forEach var="contentDescription" items="${marketingSpotData.marketingContent.marketingContentDescription}" begin="0" end="0">
+			<c:param name="langId" value="${contentDescription.language}" />
+		</c:forEach>
+		<c:forEach var="expResult" items="${marketingSpotData.experimentResult}" begin="0" end="0">
+			<c:param name="experimentId" value="${expResult.experiment.uniqueID}" />
+			<c:param name="testElementId" value="${expResult.testElement.uniqueID}" />
+			<c:param name="expDataType" value="${marketingSpotData.dataType}" />
+			<c:param name="expDataUniqueID" value="${marketingSpotData.uniqueID}" />
+		</c:forEach>
+		<c:param name="URL" value="${ContentURL}" />
+	</c:url>
+
+	<c:choose>
+		<c:when test="${clickInfoEnabled}">
+			<c:set var="TargetURL" value="${ClickInfoURL}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="TargetURL" value="${ContentURL}" />
+		</c:otherwise>
+	</c:choose>
+
+	<%-- Find the appropriate language  for the assets and description --%>
+	<c:set var="attachmentAssetIndex" value="0"/>
+	<c:set var="attachmentDescriptionIndex" value="0"/>
+	<c:set var="marketingDescriptionIndex" value="0"/>
+	
+	<c:set var="foundLanguage" value="false"/>
+	<%-- Check if there are any attachment assets --%>
+	<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentAsset) > 0}">
+		<%-- Go through each asset and scan the list of languages specified --%>
+		<%-- Take the first asset found with the current selected language --%>
+		<%-- If no language specific asset is found, use the first asset as the default --%>
+		<c:forEach var="i" begin="0" end="${fn:length(marketingSpotData.marketingContent.attachment.attachmentAsset)-1}">
+			<c:forEach var="language" items="${marketingSpotData.marketingContent.attachment.attachmentAsset[i].language}">
+				<c:if test="${(language == langId) && (!foundLanguage)}">
+					<c:set var="foundLanguage" value="true"/>
+					<c:set var="attachmentAssetIndex" value="${i}"/>
+				</c:if>
+			</c:forEach>
+		</c:forEach>
+	</c:if>
+	
+	<c:set var="foundLanguage" value="false"/>
+	<%-- Check if there are any attachment descriptions --%>
+	<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentDescription) > 0}">
+		<%-- Go through each description and find the description associated with the current language --%>
+		<%-- If no language specific description is found, use the default English description --%>
+		<c:forEach var="i" begin="0" end="${fn:length(marketingSpotData.marketingContent.attachment.attachmentDescription)-1}">
+			<c:forEach var="language" items="${marketingSpotData.marketingContent.attachment.attachmentDescription[i].language}">
+				<c:if test="${(language == langId) && (!foundLanguage)}">
+					<c:set var="foundLanguage" value="true"/>
+					<c:set var="attachmentDescriptionIndex" value="${i}"/>
+				</c:if>
+			</c:forEach>
+		</c:forEach>
+	</c:if>
+	
+	<c:set var="foundLanguage" value="false"/>
+	<%-- Check if there are any attachment descriptions --%>
+	<c:if test="${fn:length(marketingSpotData.marketingContent.marketingContentDescription) > 0}">
+		<%-- Go through each description and find the description associated with the current language --%>
+		<%-- If no language specific description is found, use the default English description --%>
+		<c:forEach var="i" begin="0" end="${fn:length(marketingSpotData.marketingContent.marketingContentDescription)-1}">
+			<c:forEach var="language" items="${marketingSpotData.marketingContent.marketingContentDescription[i].language}">
+				<c:if test="${(language == langId) && (!foundLanguage)}">
+					<c:set var="foundLanguage" value="true"/>
+					<c:set var="marketingDescriptionIndex" value="${i}"/>
+				</c:if>
+			</c:forEach>
+		</c:forEach>
+	</c:if>
+		
+	<c:choose>
+		<%-- Begin: File --%>
+		<c:when test="${marketingSpotData.marketingContent.marketingContentFormat.name == 'File'}">
+			<c:choose>
+				<%--Display the content image, with optional click information.  --%>
+				<c:when test="${(marketingSpotData.marketingContent.mimeType eq 'image') || (marketingSpotData.marketingContent.mimeType eq 'images')}">
+					<c:if test="${!empty marketingSpotData.marketingContent.url}">
+						<c:out value="<a href=\"${TargetURL}\" ${clickOpenBrowser} >" />
+					</c:if>
+					
+					<%-- Check if there are any attachment assets --%>
+					<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentAsset) > 0}">
+						<c:set var="imgURL" value="${staticAssetContextRoot}/${marketingSpotData.marketingContent.attachment.attachmentAsset[attachmentAssetIndex].rootDirectory}/${marketingSpotData.marketingContent.attachment.attachmentAsset[attachmentAssetIndex].attachmentAssetPath}"/>
+						<c:out value="<img src=\"" /><c:out value="${imgURL}"/><c:out value="\"" />
+						
+						<%-- Check if there are any attachment descriptions --%>
+						<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentDescription) > 0}">
+							<c:out value="alt=\"" /><c:out value="${marketingSpotData.marketingContent.attachment.attachmentDescription[attachmentDescriptionIndex].shortDescription}"/><c:out value="\"" />
+						</c:if>
+						
+						<c:out value="border=\"0\" />" />
+					</c:if>
+					
+					<c:if test="${!empty marketingSpotData.marketingContent.url}">	           
+						<c:out value="</a>" />
+					</c:if>
+				</c:when>
+				
+				<%-- Display the content: flash, audio, or other. --%>
+				<c:when test="${(marketingSpotData.marketingContent.mimeType eq 'application') ||
+					(marketingSpotData.marketingContent.mimeType eq 'applications') || 
+					(marketingSpotData.marketingContent.mimeType eq 'text') ||
+					(marketingSpotData.marketingContent.mimeType eq 'textyv') || 
+					(marketingSpotData.marketingContent.mimeType eq 'video') ||
+					(marketingSpotData.marketingContent.mimeType eq 'audio') ||
+					(marketingSpotData.marketingContent.mimeType eq 'model')}">		
+					
+					<%-- Check if there are any attachment assets --%>
+					<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentAsset) > 0}">
+						
+ 						<c:set var="attachmentAsset" value="${marketingSpotData.marketingContent.attachment.attachmentAsset[attachmentAssetIndex]}"/>
+						<c:choose>
+							<c:when test="${(attachmentAsset.mimeType eq 'application/x-shockwave-flash')}" >
+								<c:set var="imgURL" value="${staticAssetContextRoot}/${attachmentAsset.rootDirectory}/${attachmentAsset.attachmentAssetPath}"/>
+								<c:out value="<object data=\"" /><c:out value="${imgURL}"/><c:out value="\" type=\"application/x-shockwave-flash\">" />
+								<c:out value="<param name=\"movie\" value=\"" /><c:out value="${staticAssetContextRoot}/${attachmentAsset.rootDirectory}/${attachmentAsset.attachmentAssetPath}" /><c:out value="\">" />
+								<c:out value="<param name=\"quality\" value=\"high\">" />
+								<c:out value="<param name=\"bgcolor\" value=\"#FFFFFF\">" />
+								<c:out value="<param name=\"pluginurl\" value=\"http://www.macromedia.com/go/getflashplayer\">" />
+								<c:out value="<param name=\"wmode\" value=\"opaque\">" />
+								<c:out value="</object>" />
+							</c:when>
+			
+							<c:otherwise>
+								<c:out value="<a href=\"" /><c:out value="${staticAssetContextRoot}/${attachmentAsset.attachmentAssetPath}"/><c:out value="\" target=\"_blank\">" />
+								<c:set var="imgURL" value="${staticAssetContextRoot}/${marketingSpotData.marketingContent.attachment.attachmentUsage.image}"/>
+								<c:out value="<img src=\"" /><c:out value="${imgURL}" /><c:out value="\"" />
+								
+								<%-- Check if there are any attachment descriptions --%>
+								<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentDescription) > 0}">
+									<c:out value="alt=\"" /><c:out value="${marketingSpotData.marketingContent.attachment.attachmentDescription[attachmentDescriptionIndex].shortDescription}"/><c:out value="\"" />
+								</c:if>
+								
+								<c:out value="border=\"0\" />" />
+								<c:out value="</a>" />
+							</c:otherwise>
+						</c:choose>
+			
+						<%-- Display the content text, with optional click information.  --%>	                      
+						<c:if test="${!empty marketingSpotData.marketingContent.url}">
+							<c:out value="<a href=\"${TargetURL}\" ${clickOpenBrowser} >" />
+						</c:if>
+						
+						<%-- Check if there are any content descriptions --%>
+						<c:if test="${fn:length(marketingSpotData.marketingContent.marketingContentDescription) > 0}">
+							<c:out value="${marketingSpotData.marketingContent.marketingContentDescription[i].marketingText}" />
+						</c:if>
+						
+						<c:if test="${!empty marketingSpotData.marketingContent.url}">
+							<c:out value="</a>" />
+						</c:if>
+					</c:if>
+				</c:when>
+				
+				<%-- Content type is File, but no image or known mime type is associated, so display a link to the URL. Display the content text, with optional click information.  --%>
+				<c:otherwise>
+					
+					<%-- Check if there are any attachment assets --%>
+					<c:if test="${fn:length(marketingSpotData.marketingContent.attachment.attachmentAsset) > 0}">
+						<c:out value="<a href=\"" /><c:out value="${staticAssetContextRoot}/${marketingSpotData.marketingContent.attachment.attachmentAsset[attachmentAssetIndex].attachmentAssetPath}" /><c:out value="\" target=\"_new\"> " />
+						<c:out value="${marketingSpotData.marketingContent.attachment.attachmentAsset[attachmentAssetIndex].attachmentAssetPath}"/>
+						<c:out value="</a>" />
+					</c:if>
+					
+					<c:if test="${!empty marketingSpotData.marketingContent.url}">
+						<c:out value="<a href=\"${TargetURL}\" ${clickOpenBrowser} >" />
+					</c:if>
+					
+					<%-- Check if there are any attachment descriptions --%>
+					<c:if test="${fn:length(marketingSpotData.marketingContent.marketingContentDescription) > 0}">
+						<c:if test="${!empty marketingSpotData.marketingContent.marketingContentDescription[marketingDescriptionIndex].marketingText}">
+							<br/>
+							<c:out value="${marketingSpotData.marketingContent.marketingContentDescription[marketingDescriptionIndex].marketingText}" />
+						</c:if>
+					</c:if>
+					
+					<c:if test="${!empty marketingSpotData.marketingContent.url}">	           
+						<c:out value="</a>" />
+					</c:if> 			       	
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		<%-- End: File --%>
+
+		<%-- Display the content text, with optional click information.  --%>
+		<c:when test="${marketingSpotData.marketingContent.marketingContentFormat.name == 'Text'}">
+			<c:if test="${!empty marketingSpotData.marketingContent.url}">
+				<c:out value="<a href=\"${TargetURL}\" ${clickOpenBrowser} >" />
+			</c:if>
+			
+			<%-- Check if there are any marketing content descriptions --%>
+			<c:if test="${fn:length(marketingSpotData.marketingContent.marketingContentDescription) > 0}">
+				<c:out value="${marketingSpotData.marketingContent.marketingContentDescription[marketingDescriptionIndex].marketingText}" />
+			</c:if>
+			
+			<c:if test="${!empty marketingSpotData.marketingContent.url}">
+				<c:out value="</a>" />
+			</c:if> 
+		</c:when>
+	</c:choose>
+</content>
+
+<%-- The following are some Atom Feed extensions that may be useful. These are not standard, but may prove useful with integration with third party software or maybe with some readers. --%>
+<%-- If they are not used, they can be commented out --%>
+<%-- The Atom Syndication Format allows for these types of extensions and explicitly states: --%>
+<%-- 6.3 Processing Foreign Markup --%>
+<%-- Atom Processors that encounter foreign markup in a location that is legal according to this specification MUST NOT stop processing or signal an error. It might be the case that the Atom Processor is able to process the foreign markup correctly and does so. Otherwise, such markup is termed "unknown foreign markup". --%>
+<%-- When unknown foreign markup is encountered as a child of atom:entry, atom:feed, or a Person construct, Atom Processors MAY bypass the markup and any textual content and MUST NOT change their behavior as a result of the markup's presence. --%>
+<%-- When unknown foreign markup is encountered in a Text Construct or atom:content element, software SHOULD ignore the markup and process any text content of foreign elements as though the surrounding markup were not present. --%>
+<thumbnail><c:out value="${imgURL}"/></thumbnail>
+
+<%-- Check if there are any marketing content descriptions --%>
+<description><c:if test="${fn:length(marketingSpotData.marketingContent.marketingContentDescription) > 0}"><c:out value="${marketingSpotData.marketingContent.marketingContentDescription[marketingDescriptionIndex].marketingText}" /></c:if></description>
+<%-- End: Atom Feed extensions --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:contributor is an optional element --%>
+
+<%--
+<contributor>
+<name></name>
+<uri></uri>
+<email></email>
+</contributor>
+--%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:id is a mandatory element --%>
+
+<id><c:out value="entry:id:${pageContext.request.serverName}/store/${storeId}/eSpot/${marketingSpotDatas.marketingSpotIdentifier.uniqueID}/content/${marketingSpotData.marketingContent.marketingContentIdentifier.uniqueID}" /></id>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:published is an optional element --%>
+
+<%-- <published></published> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:rights is an optional element --%>
+
+<%-- <rights></rights> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:source is an optional element --%>
+
+<%-- <source></source> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:summary is an optional element --%>
+
+<%-- <summary></summary> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:title is a mandatory element --%>
+
+<title type="text"><c:out value="${marketingSpotData.marketingContent.marketingContentIdentifier.externalIdentifier.name}" /></title>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:link is an optional element --%>
+
+<c:if test='${!empty marketingSpotData.marketingContent.url}'>
+	<link rel="self" href="<c:out value="${TargetURL}"/>" />
+</c:if>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:updated is a mandatory element --%>
+
+<updated><c:out value="${currentDate}" /></updated>
+
+</entry>

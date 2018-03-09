@@ -1,0 +1,1 @@
+﻿CKEDITOR.tools.extend(CKEDITOR.ibm.dialogs,{paste:function(a){if("paste"===a.dialog.getName()){var a=a.getContents("general"),b=a.get("pasteMsg");b.html=b.html.replace(/;width:\d+px/,"");var c=a.get("editing_area");a.elements=[b,c]}}},!0);

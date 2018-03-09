@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		A service that will return a list of business objects that are children of the current business object. Instances
+		of cmc/foundation/GetChildrenService may only be declared as immediate children of an instance of {@link cmc/foundation/ObjectDefinition}.
+		The get children service will be invoked for business objects that are described by the parent object definition
+		when the framework determines that the children are required. The children of a business object are required when
+		the user performs the following actions:
+		<ul>
+			<li>launches the properties view for a business object</li>
+			<li>opens a child navigation view for an object by selecting it in the explorer view</li>
+			<li>expands a business object tree node in the the explorer view</li>
+			<li>expands a business object tree node in the the utilities view browse view</li>
+			<li>copies a business object to create a new object</li>
+		</ul>
+		
+		<p>If the parent object definition is an instance of {@link cmc/foundation/OrganizationalObjectDefinition}, then the child
+		objects returned must be {@link cmc/foundation/PrimaryObjectDefinition primary objects}.
+		
+		<p>If the parent object definition is not an instance of cmc/foundation/OrganizationalObjectDefinition, then all of the objects
+		returned must match one of the object definitions declared as children of the parent object definition.
+		This means that the object types for all of the objects returned must match an object definition
+		declared using {@link cmc/foundation/ChildObjectDefinition}, {@link cmc/foundation/ReferenceObjectDefinition}, or
+		{@link cmc/foundation/ParentReferenceObjectDefinition}.
+		
+		<p>Multiple get children services may be declared for a single parent object definition and each
+		get children service may return more than one type of child object. The most important consideration
+		when deciding if a get children service should return multiple object types is to ensure that result set paging
+		can be performed on the entire list of objects being returned. For example, you can declare
+		a single get children service that will return all child catalog entries even though catalog entries include
+		several object types: Products, SKUs, Bundles and Kits. The paging can be calculated for the entire
+		set of catalog entries. But you cannot create a single get children service that will return all
+		child catalog entries and all child catalog groups. The boundries for the underlying component services
+		make it impossible to manage the result set paging across the two result sets.
+		
+		<p>It is good practice (though not required) to declare all of the possible object types that are
+		returned by a specific get children service. Declaring the object types allows the framework to make
+		better decisions about which get children services need to be invoked to satisfy a specific user operation.
+		If the object types are not declared, then the framework must invoke the get children service before
+		it can determine what types of children will be returned and if they are actually needed.
+		
+		<p>Get children services can expect an implicit parameter named "parentId".
+		The "parentId" parameter will be set to the value of the parent object's object ID. The object ID
+		is the value of the property that is named in the parent object definition's "idProperty" attribute.
+		
+		<p>Get children services must be prepared to accept the following implicit parameters:
+		<ul>
+			<li>parentId: This parameter will be set to the value of the parent object's object ID. The object ID
+			is the value of the property that is named in the parent object definition's "idProperty" attribute.</li>
+			<li>dataLanguageIds: This parameter is a comma separated list of language IDs. If the get children service
+			returns language sensitive objects, then it must return all of the existing child objects that match
+			the specified language IDs.</li>
+			<li>maxItems: This is an integer value that indicates the desired page size for the result set.</li>
+			<li>recordSetStartNumber: This is an integer value that is sent if the result set is broken up
+			into multiple pages. The second and subsequent page requests will include this parameter.</li>
+		</ul>
+		
+		<p>Additional required service parameters can be defined by declaring instances
+		of {@link cmc/foundation/ServiceParam} as children of the cmc/foundation/GetChildrenService instance.
+		
+		<p>The following example demonstrates the declaration of a get children service
+		that loads the child catalog entries for a parent catalog group.
+		The service declares one explicit parameter, the store ID which
+		is resolved from the "storeId" context value.
+		
+		@START_CODE
+		<GetChildrenService url="/cmc/GetCatalogGroupChildren-CatalogEntry">
+			<ServiceParam name="storeId"/>
+		</GetChildrenService>
+		@END_CODE
+		
+		<p>The successful response from a get children service must be an XML document that has a root element named
+		"objects". The child elements of the "objects" element must all be named "object" and they
+		must indicate their object type through the specification of the
+		the "objectType" attribute. The root "objects" element must include the following attributes:
+		<ul>
+			<li>recordSetCompleteIndicator - this value is true if the response is the last page of the result set</li>
+			<li>recordSetStartNumber - the starting index into the result set for the current page</li>
+			<li>recordSetCount - the number of objects returned by this page</li>
+			<li>recordSetTotal - the total number of objects in the complete result set</li>
+		</ul>
+		The "objects" element may optionally include an attribute called "recordSetReferenceId" that will be sent back
+		as a parameter on the request for the next page of child objects. This may be used to optimize the get children service.
+
+		<p>Get children services that return reference objects or parent reference objects must include
+		the associated primary objects as embedded child objects in the reference objects.
+
+		<p>Object and property elements returned from a get children service may optionally include a "readonly" attribute.
+		If the value is set to "true", then the framework will prevent the user from making changes to that object
+		or property instance.
+		
+		<p>The following sample demonstrates a response that returns two child product objects. Each object
+		is a parent reference object that includes as an embedded child object the product primary object.
+		
+		@START_CODE
+		<objects recordSetCompleteIndicator="true"
+				recordSetReferenceId="8444c830-dfe4-11dc-a84e-829b47bc525c:4"
+				recordSetStartNumber="0" recordSetCount="2" recordSetTotal="2">
+			<object objectType="ChildProduct">
+				<childCatalogEntryId>10107_10275</childCatalogEntryId> 
+				<sequence>0.0</sequence> 
+				<object objectType="Product">
+					<type>Product</type>
+					<catenttypeId readonly="true">ProductBean</catenttypeId>
+					<catentryId>10275</catentryId>
+					<partnumber>FUCO-01</partnumber>
+					<object objectType="CatalogEntryDescription">
+						<languageId>-1</languageId>
+						<name>Sleek Occasional Table</name>
+						<sDesc>The sleek styling makes this occasional
+						table a perfect addition to your home.</sDesc>
+					</object>
+				</object>
+			</object>
+			<object objectType="ChildProduct">
+				<childCatalogEntryId>10107_10277</childCatalogEntryId> 
+				<sequence>2.0</sequence> 
+				<object objectType="Product">
+					<type>Product</type>
+					<catenttypeId readonly="true">ProductBean</catenttypeId>
+					<catentryId>10277</catentryId>
+					<partnumber>FUCO-02</partnumber>
+					<object objectType="CatalogEntryDescription">
+						<languageId>-1</languageId>
+						<name>Modern Occasional Table</name>
+						<sDesc>Modern occasional table to go with
+						the modern decor.</sDesc>
+					</object>
+				</object>
+			</object>
+		</objects>
+		@END_CODE
+		
+		<p>If an exception occurs while processing a get children service, the response must be an XML document that
+		has a root element named "errors". The "errors" element must include one child element named "exception".
+		The "exception" element includes a message suitable for display to the user. The following example demonstrates
+		a valid error response for a get children service.
+
+		@START_CODE
+		<errors>
+			<exception>You do not have the required access rights to perform this operation.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service abortResultsOverLimit="false" classDefinition="true" definitionName="cmc/foundation/GetChildrenService" getService="true" retryOnError="true" sendMaxItems="true" sendObjectVersionId="true" sendParent="true" stoppable="true">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+	
+		<!---
+			A comma separated list of {@link cmc/foundation/ObjectDefinition#objectType object types} that may be returned by this get children service.
+		-->
+		<variable name="objectTypes" type="string" value=""/>
+		
+		<!---
+			@keywords private
+			A map of arrays of object definitions organized by parent object definitions for this get children service
+		-->
+		<variable name="objectDefinitionsMap" value="${null}"/>
+
+		<!---
+			@keywords private
+			A string array of the object types specified "objectTypes".
+		-->
+		<variable name="objectTypesArray" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var services = this.parent.getChildrenServices;
+			if (!services) {
+				services = [];
+				this.parent.getChildrenServices = services;
+			}
+			services.push(this);
+			this.doParseCompleteDel = new EventHandler.Class(this, "doParseComplete");
+			this.doParseStopDel = new EventHandler.Class(this, "doParseStop");
+			if (this.objectTypes && this.objectTypes != "") {
+				this.objectTypesArray = StringUtil.Singleton.splitAndTrim(this.objectTypes, ",");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			delete this.doParseCompleteDel;
+			delete this.doParseStopDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns an array of object definitions supported by this get children service for the given parent object definition
+			@param cmc/foundation/ObjectDefinition parentDef: The parent object definition
+			@return Array the object definitions associated with the parent object definition for this get children service
+		-->
+		<method args="parentDef" name="getObjectDefinitions">
+			<![CDATA[
+			if (this.objectDefinitionsMap == null) {
+				this.objectDefinitionsMap = {};
+			}
+			if (!this.objectDefinitionsMap[parentDef.objectType]) {
+				var objectDefinitions = [];
+				if (this.objectTypesArray != null) {
+					var types = this.objectTypesArray;
+					for (var i = 0; i < types.length; i++) {
+						var od = parentDef.getChildDefinition(types[i]);
+						if (typeof (od) == "undefined") {
+							for (var j = 0; j < parentDef.model.objectDefinitions.length; j++) {
+								if (parentDef.model.objectDefinitions[j].objectType == types[i]) {
+									od = parentDef.model.objectDefinitions[j].objectDefinition;
+									break;
+								}
+							}
+							if (od) {
+								od.initializeDefinition(parentDef.model);
+							}
+						}
+						if (od) {
+							objectDefinitions.push(od);
+						}
+						else if (Logger.Singleton.enabled) {
+							var msg = "Unable to resolve object type: " + types[i];
+							if (parentDef != null) {
+								msg += " Parent object type: " + parentDef.objectType;
+							}
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.model", "INFO", "cmc/foundation/GetChildrenService", "getObjectDefinitions", msg);
+						}
+					}
+				}
+				this.objectDefinitionsMap[parentDef.objectType] = objectDefinitions;
+			}
+			return this.objectDefinitionsMap[parentDef.objectType];
+			]]>
+		</method>
+		
+		<!---
+			@keywords private 
+			Returns true if this service has any of the given object definitions for the given parent object definition
+			@param cmc/foundation/ObjectDefinition parentDef: The parent object definition
+			@param [cmc/foundation/ObjectDefinition] oDefs: an array of object definitions to check against this service
+			@param boolean strictMatch: if true and this service has no object types specified, this service will not match the object definitions
+			@return boolean true if the service has any of the object definitions
+		-->
+		<method args="parentDef, oDefs, strictMatch" name="matchesObjectDefinitions">
+			<![CDATA[
+			if (typeof(strictMatch) == "undefined") strictMatch = false;
+			if (!oDefs || oDefs.length == 0) {
+				return true;
+			}
+			var objectDefinitions = this.getObjectDefinitions(parentDef);
+			if (!strictMatch && objectDefinitions.length == 0) {
+				return true;
+			}
+			for (var i = 0; i < objectDefinitions.length; i++) {
+				for (var j = 0; j < oDefs.length; j++) {
+					if (objectDefinitions[i] == oDefs[j]) {
+						return true;
+					}
+				}
+			}
+			return false;
+			]]>
+		</method>	
+		
+		<!---
+			@keywords private 
+			Returns true if this service has any of the given object definition for the given parent object definition
+			@param cmc/foundation/ObjectDefinition parentDef: The parent object definition
+			@param cmc/foundation/ObjectDefinition oDef: an object definition to check against this service
+			@return boolean true if the service has the object definition
+		-->
+		<method args="parentDef, oDef" name="matchesObjectDefinition">
+			<![CDATA[
+			var objectDefinitions = this.getObjectDefinitions(parentDef);
+			if (objectDefinitions.length == 0) {
+				return true;
+			}
+			for (var i = 0; i < objectDefinitions.length; i++) {
+				if (objectDefinitions[i] == oDef) {
+					return true;
+				}
+			}
+			return false;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private 
+			Returns true if this service has language sensitive object definitions for the given parent object definition
+			@param cmc/foundation/ObjectDefinition parentDef: The parent object definition
+			@return boolean true if this service has a language sensitive object definition
+		-->
+		<method args="parentDef" name="isLanguageSensitive">
+			<![CDATA[
+			var objectDefinitions = this.getObjectDefinitions(parentDef);
+			if (!parentDef.organizational && !parentDef.reference) {
+				if (objectDefinitions.length == 0) {
+					return true;
+				}
+				for (var i = 0; i < objectDefinitions.length; i++) {
+					var childDefUIDs = {};
+					if (!objectDefinitions[i].primary && this.isDescendantLanguageSensitive(objectDefinitions[i], childDefUIDs)) {
+						return true;
+					}
+				}
+			}
+			return false;
+			]]>
+		</method>	
+		
+		<!---
+			@keywords private 
+			Returns true if the given object definition or descendant is language sensitive
+			@param [cmc/foundation/ObjectDefinition] oDef: an object definition
+			@param {} childDefUIDs: map of unique ID of child object definitions
+			@return boolean true if the given object definition or descendant is language sensitive
+		-->
+		<method args="oDef, childDefUIDs" name="isDescendantLanguageSensitive">
+			<![CDATA[
+			if (oDef.languageSensitive) {
+				return true;
+			}
+			var ouid = oDef.getUID();
+			childDefUIDs[ouid] = ouid;
+			for (var i = 0; i < oDef.objectDefinitions.length; i++) {
+				var childDef = oDef.getChildDefinition(oDef.objectDefinitions[i].objectType);
+				var uid = childDef.getUID();
+				if (!(uid in childDefUIDs) && this.isDescendantLanguageSensitive(childDef, childDefUIDs)) {
+					return true;
+				}
+			}
+			return false;
+			]]>
+		</method>	
+		
+		<!---
+			@keywords private
+			Parse the "objects" element returned from a successful request.
+			@param cmc/foundation/ModelObject o: the parent object
+			@param XML e: the objects data element
+			@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+			@param boolean reqIdentifier: the request identifier associated with the dataset that returned this data
+			@param number startIndex: the start index for this request
+		-->
+		<method args="o, e, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			o.model.doDeferredParseObjects(e, o, this.doParseCompleteDel, {
+				o: o,
+				e: e,
+				hasMoreRecordsFlag: hasMoreRecordsFlag,
+				reqIdentifier: reqIdentifier,
+				startIndex: startIndex
+			}, this.stoppable, this.doParseStopDel, {
+				o: o,
+				hasMoreRecordsFlag: hasMoreRecordsFlag
+			}, this);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the specified data element and apply the properties to the
+			specified object. This method is called when an element named "object"
+			is found in the service response XML.
+			@param cmc/foundation/ModelObject o: the model object
+			@param XML e: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="o, e, reqIdentifier" name="parseObject">
+			<![CDATA[
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/GetChildrenService", "onerror", "Unexpected <object> tag returned by get children service: " + this.url + ". Get children services must return <objects> tag.");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method args="args" name="doParseComplete">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/GetChildrenService", "doParseComplete", "Start update UI for " + args.objects.length + " Objects returned");
+			}
+			var hasMoreRecordsFlag = args.hasMoreRecordsFlag;
+			var o = args.o;
+			var reqIdentifier = args.reqIdentifier;
+			if (!hasMoreRecordsFlag) {
+				var e = args.e;
+				var totalRecords = Number(e.getAttribute("recordSetTotal"));
+				var recordSetComplete = e.getAttribute("recordSetCompleteIndicator") != "false";
+				o.childrenServiceRequestCompleted(this, args.startIndex, totalRecords, recordSetComplete);
+			}
+			else {
+				o.updateChildObjects(true);
+			}
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.updateObjCount(args.objects.length);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "CONFIG", "cmc/foundation/GetChildrenService", "doParseComplete", "requestIdentifier=" + reqIdentifier + " " + this.url);
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/GetChildrenService", "doParseComplete", "End update UI for " + args.objects.length + " Objects returned");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args" name="doParseStop">
+			<![CDATA[
+			if (!args.hasMoreRecordsFlag) {
+				args.o.childrenServiceRequestError(this);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the service has been stopped, aborting a request or a response.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceStopped">
+			<![CDATA[
+			ds.requestParent.childrenServiceRequestError(this);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the specified errors element. This method is called when an element named "errors"
+			is found in the service response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: the data element
+		-->
+		<method args="ds, e" name="parseErrors">
+			<![CDATA[
+			ds.requestParent.childrenServiceRequestError(this);
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			this.inherited(arguments);
+			ds.requestParent.childrenServiceRequestError(this, message);
+			]]>
+		</method>	
+		
+		<!---
+			@keywords private
+			This method checks if the object passed in is of a type that this service is expected to return. If the object
+			is not one of the types listed in {@link cmc/foundation/GetChildrenService#objectTypes objectTypes} then an error is logged. 
+			If {@link cmc/foundation/GetChildrenService#objectTypes objectTypes} is not specified, or the object is one of the expected
+			types then no error is logged.
+			
+			@param cmc/foundation/ModelObject o: the model object to check
+		-->
+		<method args="o" name="checkReturnedObject">
+			<![CDATA[
+			if (this.objectTypesArray != null && this.objectTypesArray.indexOf(o.objectType) == -1) {
+				var msg = "The cmc/foundation/GetChildrenService with url " + this.url + " returned an object of type " + o.objectType + ", which is not one of the expected types: " + this.objectTypes;
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/GetChildrenService", "checkReturnedObject", msg);
+			}
+			]]>
+		</method>
+	</Service>
+</Definitions>

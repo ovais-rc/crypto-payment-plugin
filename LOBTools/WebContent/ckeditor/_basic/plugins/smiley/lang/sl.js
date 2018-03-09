@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","sl",{options:"Možnosti čustvenih simbolov",title:"Čustveni simboli",toolbar:"Vstavi čustveni simbol"});

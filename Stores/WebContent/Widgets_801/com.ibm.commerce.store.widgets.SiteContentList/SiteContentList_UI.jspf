@@ -1,0 +1,170 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- BEGIN SiteContentList_UI.jsp --%>
+<div class="productListingWidget widget_articles_videos_position">
+	<div class="widget_articles_videos">
+		<div class="content">
+			<div class="header_bar">
+				<div class="title"><wcst:message key = "ARTICLES_VIDEOS" bundle="${widgetText}"/></div>
+				<span class="small">
+					<wcst:message key = "ARTICLE_COUNT_{0}_{1}_{2}" bundle="${widgetText}" >
+						<wcst:param value= "${totalContentCount == 0 ? 0 : WCParam.beginIndexContent + 1}"/>
+						<wcst:param value = "${endIndex}"/>
+						<wcst:param value = "${totalContentCount}"/>
+					</wcst:message>
+				</span>
+				
+				<div class="controls <c:if test = '${totalPages > 1}'>pagination_present</c:if>">
+				<c:set var="linkPrefix" value="siteContent"/>
+
+				<%@include file="../Common/PaginationControlsNonAjax.jspf" %>
+					<div class="sorting_view_controls_container">
+						<div class="sorting_controls">
+							<span><label for="orderByContent"><wcst:message key="SN_CONTENT_SORT_BY" bundle="${widgetText}"/></label>:</span>
+							<div id="orderByDropdown" class="selectWrapper">
+							<c:set var="selectOptions" value='{"useValueAsLink": true}' />
+							<select data-widget-type="wc.Select" data-widget-options="${fn:escapeXml(selectOptions)}" class="wcSelect" id="orderByContent" title="<wcst:message key='SN_SORT_BY_USAGE' bundle="${widgetText}"/>" name="contentOrderBy">
+								<option <c:if test="${param.orderByContent == '' || param.orderByContent == 0}">selected="selected"</c:if> value = "${sortByURLs[0]}"><wcst:message key="SN_CONTENT_NO_SORT" bundle="${widgetText}"/></option>
+								<option <c:if test="${param.orderByContent == '1'}">selected="selected"</c:if> value = "${sortByURLs[1]}"><wcst:message key="SN_CONTENT_SORT_BY_NAME" bundle="${widgetText}"/></option>
+								<option <c:if test="${param.orderByContent == '2'}">selected="selected"</c:if> value = "${sortByURLs[2]}"><wcst:message key="SN_CONTENT_SORT_BY_TYPE" bundle="${widgetText}"/></option>
+							</select>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="clear_float"></div>
+
+			<ul id="articleListing">
+			<c:forEach items="${contentresults}" var="content" begin="${beginIndex}" end="${endIndex < totalContentCount ? endIndex-1 : totalContentCount-1}" varStatus="status">
+				<c:set var="contentName" value="${content.name}"  />
+				<c:set var="contentShortDescription" value="${content.metaData.shortdesc}"  />
+				<c:set var="contentHLName" value="${content.metaData.hl_name}" />
+				<c:if test="${empty contentHLName}">
+					<c:set var="contentHLName" value="${contentName}" />
+				</c:if>
+				<c:set var="contentHLShortDescription" value="${content.metaData.hl_shortdesc}" />
+					<c:if test="${empty contentHLShortDescription}">
+					<c:set var="contentHLShortDescription" value="${contentShortDescription}" />
+				</c:if>
+				<c:set var="urlValue" value="${content.url}"/>
+
+				<c:set var="contentUrlFilename" value="${fn:split(content.URL, '/(.*?).')[1]}" />
+
+				<c:if test="${fn:startsWith(urlValue, 'StaticContent/')}">
+					<wcf:url var="urlValue" patternName="StaticContentURL" value="StaticContent">
+						<wcf:param name="url" value="${fn:substringAfter(urlValue, 'StaticContent/')}" />
+						<wcf:param name="langId" value="${param.langId}" />
+						<wcf:param name="storeId" value="${param.storeId}" />
+						<wcf:param name="catalogId" value="${param.catalogId}" />
+						<wcf:param name="urlLangId" value="${urlLangId}" />
+					</wcf:url>
+				</c:if>
+
+				<c:choose>
+					<c:when test="${fn:contains(urlValue, '://') || fn:contains(urlValue, ':/')}">
+						<wcf:url var="urlValue" value="${urlValue}"/>
+					</c:when>
+					<c:when test="${!(fn:startsWith(urlValue, '/'))}">
+						<wcf:url var="urlValue" value="/${urlValue}"/>
+					</c:when>
+				</c:choose>
+				
+				<c:set var="iconName" value="${content.mimetype}"/>
+				<c:set var="mimeType" value="${content.mimetype}" />
+
+				<c:if test="${not empty fn:substringBefore(mimeType, ';')}">
+					<c:set var="mimeType" value="${fn:substringBefore(mimeType, ';')}" />
+				</c:if>
+
+				<c:set var="url_parts" value="${fn:split(urlValue, '/')}" />
+				<c:set var="fileType_parts" value="${fn:split(url_parts[fn:length(url_parts)-1], '.')}" />
+				<c:set var="fileType" value="${fn:toLowerCase(fileType_parts[fn:length(fileType_parts)-1])}" />
+
+				<c:choose>
+					<c:when test="${mimeType eq 'text/html' || mimeType eq 'application/pdf'}">
+						<c:set var="iconName" value="doc"/>
+					</c:when>
+					<c:when test="${mimeType eq 'video/mpeg' || mimeType eq 'video/quicktime'|| mimeType eq 'video/x-msvideo'|| mimeType eq 'application/x-shockwave-flash'}">
+						<c:set var="iconName" value="video"/>
+					</c:when>
+				</c:choose>
+				<li class="item ${fn:toLowerCase(iconName)}Item">
+					<c:choose>
+						<c:when test="${empty contentHLName || contentHLName eq 'Application:'}">
+						<c:set var="displayName" value="${url_parts[fn:length(url_parts)-1]}"/>
+						</c:when>
+						<c:otherwise>
+						<c:set var="displayName" value="${contentHLName}"/>
+						</c:otherwise>
+					</c:choose>
+					<div class="icon">
+					<c:set var="iconName" value="default"/>
+					<c:if test="${not empty fileType}">
+						<c:if test="${fileType eq 'txt'|| fileType eq 'text'|| fileType eq 'csv'|| fileType eq 'vsd'|| fileType eq 'msg'}">
+							<c:set var="iconName" value="text"/>
+						</c:if>
+						<c:if test="${fileType eq 'html' || fileType eq 'htm' || mimeType eq 'text/html'}">
+							<c:set var="iconName" value="html"/>
+						</c:if>
+						<c:if test="${fileType eq 'gif'|| fileType eq 'jpeg'|| fileType eq 'jpg'|| fileType eq 'jpe'|| fileType eq 'png'|| fileType eq 'ps'}">
+							<c:set var="iconName" value="image"/>
+						</c:if>
+						<c:if test="${fileType eq 'pdf' || mimeType eq 'application/pdf'}">
+							<c:set var="iconName" value="pdf"/>
+						</c:if>
+						<c:if test="${fileType eq 'postscript'|| fileType eq 'msword'|| fileType eq 'doc'|| fileType eq 'docx'|| fileType eq 'rtf'|| fileType eq 'odt'}">
+							<c:set var="iconName" value="doc"/>
+						</c:if>
+						<c:if test="${fileType eq 'vnd.ms-powerpoint'|| fileType eq 'ppt'|| fileType eq 'pptx'|| fileType eq 'odp'}">
+							<c:set var="iconName" value="presentation"/>
+						</c:if>
+						<c:if test="${fileType eq 'vnd.ms-excel'|| fileType eq 'xls'|| fileType eq 'xlsx'|| fileType eq 'ods'}">
+							<c:set var="iconName" value="spreadsheet"/>
+						</c:if>
+						<c:if test="${fileType eq 'wav'|| fileType eq 'ra'|| fileType eq 'x-pn-realaudio-plugin'}">
+							<c:set var="iconName" value="audio"/>
+						</c:if>
+						<c:if test="${fileType eq 'mpg'|| fileType eq 'mp4'|| fileType eq 'mov'|| fileType eq 'avi'|| fileType eq 'qt'|| fileType eq 'rpm'|| fileType eq 'swf'|| fileType eq 'movie' || mimeType eq 'video/mpeg' ||mimeType eq 'video/quicktime'|| mimeType eq 'video/x-msvideo'|| mimeType eq 'application/x-shockwave-flash'}">
+							<c:set var="iconName" value="video"/>
+						</c:if>
+						<c:if test="${fileType eq 'x-gzip'|| fileType eq 'zip'|| fileType eq 'rar'|| fileType eq 'tar'|| fileType eq 'gtar'|| fileType eq 'x-tar'|| fileType eq 'jar'|| fileType eq 'class'}">
+							<c:set var="iconName" value="archive"/>
+						</c:if>
+					</c:if>
+					<c:if test="${empty fileType}">
+						<c:set var="iconName" value="webpage"/>
+					</c:if>
+						<a href="${urlValue}" alt="${displayName}"><img src="${jspStoreImgDir}${env_vfileColor}${fn:toLowerCase(iconName)}_icon.png" alt="${displayName}" /></a>
+					</div>
+
+					<div class="content" >
+						<h1 class="header"><a class="link" href="${urlValue}" tabindex="-1" aria-hidden="true">${displayName}</a></h1>
+						<div class="item_spacer_5px"></div>
+						<h2 role="presentation">${mimeType}</h2>
+					</div>
+					<div class="clear_float"></div>
+				</li>
+				<c:if test="${!status.last}">
+				</c:if>
+			</c:forEach>
+				<div class="clear_float"></div>
+			</ul>
+
+		</div>
+	</div>
+</div>
+<%-- END SiteContentList_UI.jsp --%>

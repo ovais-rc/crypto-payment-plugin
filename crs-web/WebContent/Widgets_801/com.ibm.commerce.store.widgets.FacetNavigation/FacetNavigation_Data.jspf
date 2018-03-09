@@ -1,0 +1,321 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+Declares and assigns values to these variables for UI use:
+clearAllURL - the URL to follow when the user clicks the clear all facets button
+clearCustomPriceURL - the URL to follow when the user clicks the button to clear the current
+custom price filter 
+--%>
+<%@ include file="/Widgets_801/Common/Facet/FacetFilter.jspf" %>
+
+<%-- TEMP: put some parameters in query part of URL until SEO issue fixed --%>
+<c:if test="${!empty param.pageView}">
+	<wcf:set target="${WCParam}" key="pageView" value="${param.pageView}" />	
+</c:if>
+<c:if test="${!empty param.beginIndex}">
+	<wcf:set target="${WCParam}" key="beginIndex" value="${param.beginIndex}" />	
+</c:if>
+
+<c:choose>
+	<c:when test="${requestScope.pageGroup == 'Category'}">
+		<%@ include file="/Widgets_801/Common/Facet/FacetSetup.jspf" %>
+	</c:when>
+	<c:when test="${requestScope.pageGroup == 'Search'}">
+		<%@ include file="/Widgets_801/Common/SearchSetup.jspf" %>
+	</c:when>
+</c:choose>
+
+<wcst:message key="REMOVE" bundle="${widgetText}" var="REMOVE"/>
+<script type="text/javascript">
+	$(document).ready(function() {	
+		MessageHelper.setMessage("REMOVE", <wcf:json object="${REMOVE}"/>);	
+	});
+</script> 
+
+<c:set var="f" value="0" />
+<c:set var="price_facet_index" value="-1"/>
+<c:set var="sType" value="${WCParam.sType}"/>
+<c:if test="${empty sType}">
+	<c:set var="sType" value="SimpleSearch"/>
+</c:if>
+<c:set var="currencySymbol">
+	<c:out value='${env_CurrencySymbolToFormat}' escapeXml='false'/>
+</c:set>
+
+<%-- Count number of facets selected --%>
+<c:set var="selectedFacetCount" value="${0}" />
+<c:forEach var="entry" items="${WCParam}">
+	<c:if test="${fn:startsWith(entry, 'facet_')}">
+		<c:set var="selectedFacetCount" value="${selectedFacetCount + 1}" />
+	</c:if>
+</c:forEach>
+
+<c:set var="hasCustomPriceFilter" value="${!empty WCParam.minPrice && !empty WCParam.maxPrice}" />
+<c:set var="hasFacetFilter" value="${selectedFacetCount > 0}" />
+<c:set var="hasFilter" value="${hasCustomPriceFilter || hasFacetFilter}" />
+<c:set var="pageView" value="${WCParam.pageView}" scope="request"/>
+<c:if test="${empty pageView}" >
+	<c:set var="pageView" value="${env_defaultPageView}" scope="request"/>
+</c:if>
+
+<%-- 
+<c:forEach var="facetField" items="${globalcategories}">
+	<c:choose>
+		<c:when test="${facetField.value eq 'parentCatgroup_id_search'}">
+			<c:if test="${fn:length(facetField.entry) > 0}">
+				<%@ include file="CategoryFacetDisplay.jspf" %>
+			</c:if>
+		</c:when>
+		<c:when test="${facetField.extendedData['groupId'] == 1}">
+			<%@ include file="FeaturedFacetDisplay.jspf" %>
+		</c:when>
+	</c:choose>
+</c:forEach>
+--%> 
+
+<wcf:useBean var="brandFacetArray" classname="java.util.ArrayList"/>	
+<wcf:useBean var="priceFacetArray" classname="java.util.ArrayList"/>	
+<wcf:useBean var="featuredFacetArray" classname="java.util.ArrayList"/>	
+<wcf:useBean var="intermediateFacetArray" classname="java.util.ArrayList"/>
+<c:forEach var="facetField" items="${globalfacets}">
+		<c:choose>				
+			<c:when test="${facetField.value eq 'parentCatgroup_id_search'}">
+			</c:when>
+			<c:when test="${fn:startsWith(facetField.value, 'price_')}">
+				<c:if test="${globalpricemode != 0}">
+					<c:set var="facetsGreaterThanZero" value="0"/>
+					<c:forEach var="item" items="${facetField.entry}">
+						<c:if test="${item.count > 0}">
+							<c:set var="facetsGreaterThanZero" value="${facetsGreaterThanZero + 1}"/>
+						</c:if>
+					</c:forEach>
+					<c:if test="${facetsGreaterThanZero > 0}">
+						<%@ include file="/Widgets_801/Common/Facet/PriceFacetDisplay.jspf" %>
+						<c:set var="price_facet_index" value="${f}"/>
+						<c:set var="f" value="${f + 1}" />					
+					</c:if>
+				</c:if>
+			</c:when>
+			<c:otherwise>
+				<%@ include file="/Widgets_801/Common/Facet/FacetDisplay.jspf" %>
+				<c:set var="f" value="${f + 1}" />
+			</c:otherwise>
+		</c:choose>
+</c:forEach>
+
+<%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+
+<%-- A HashMap of all the selected facets, with facet value as key and a HashMap containing information
+about this facet as value. The value HashMap contains:
+name: the facet name
+url: the URL to follow if the facet was deselected
+multiselection: true if this selected facet belongs to a facet that supports multiple selection
+
+Used a LinkedHashMap to preserve order when iterating --%>
+<wcf:useBean var="selectedFacets" classname="java.util.LinkedHashMap"/>
+<c:if test="${hasFacetFilter}">	
+	<c:forEach var="index" begin="1" end="${selectedFacetCount}">
+		<wcf:useBean var="facetProp" classname="java.util.HashMap"/>
+		<wcf:useBean var="newParameters" classname="java.util.HashMap" />
+        <%-- Reset to page 1 --%>
+        <wcf:set target="${newParameters}" key="beginIndex" value="0" />
+		<%-- Re-index the remaining facet parameters --%>
+		<c:forEach var="j" begin="${index}" end="${selectedFacetCount - 1}">
+			<wcf:set target="${newParameters}" key="${'facet_'.concat(j)}" value="${WCParam.get('facet_'.concat(j + 1))}" />
+			<wcf:set target="${newParameters}" key="${'facetName_'.concat(j)}" value="${WCParam.get('facetName_'.concat(j + 1))}" />
+		</c:forEach>
+
+		<%-- Empty the last facet --%>
+		<wcf:set target="${newParameters}" key="${'facet_'.concat(selectedFacetCount)}" value="" />
+		<wcf:set target="${newParameters}" key="${'facetName_'.concat(selectedFacetCount)}" value="" />
+        
+		<%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+
+        	<c:remove var="newParameters" />
+		<wcf:set target="${facetProp}" key="url" value="${SEOFacetURL}" />
+		<wcf:set target="${facetProp}" key="name" value="${WCParam.get('facetName_'.concat(index))}" />
+		<%-- This value may be overwritten later --%>
+		<wcf:set target="${facetProp}" key="multiselection" value="false" />
+
+		<%-- Use facet value as key --%>
+		<wcf:set target="${selectedFacets}" key="${WCParam.get('facet_'.concat(index))}" value="${facetProp}" />
+		<c:remove var="facetProp" />
+	</c:forEach>
+</c:if>
+<wcf:useBean var="facetArray" classname="java.util.ArrayList"/>
+
+<c:if test="${!empty featuredFacetArray}">
+	<wcst:message var="facetName" key="LN_SEARCH_FACET_FEATURED" bundle="${widgetText}" />
+
+	<wcf:useBean var="a_facet" classname="java.util.HashMap"/>
+	<wcf:set target="${values}" key="name" value="${facetName}" />
+	<wcf:set target="${values}" key="facets" value="${featuredFacetArray}"/>
+	<wcf:set target="${values}" key="multipleSelection" value="true"/>
+	<wcf:set target="${values}" key="maxVal" value="-1"/>
+	<wcf:set target="${facetArray}" value="${a_facet}"/>
+	<c:remove var="a_facet"/>
+</c:if>
+
+<c:forEach var="a_facet" items="${intermediateFacetArray}">
+	<wcf:set target="${facetArray}" value="${a_facet}"/>
+</c:forEach>
+<c:forEach var="a_facet" items="${facetArray}">
+	<%-- priceFacet: true if this a_facet contains a price facet --%>
+	<wcf:set target="${a_facet}" key="priceFacet" value="${false}" />
+
+	<c:forEach var="facetVal" items="${a_facet.facets}">
+		<c:if test="${fn:startsWith(facetVal.value, 'price_')}">
+			<wcf:set target="${a_facet}" key="priceFacet" value="${true}" />
+		</c:if>
+	</c:forEach>
+
+	<%-- hasSelectedFacet: true if at least one facet in this a_facet is selected --%>
+	<c:choose>
+		<c:when test="${a_facet.priceFacet}">
+			<%-- If there is a custom price filter, then we'll consider this a_facet to have
+			a selected facet --%>
+			<wcf:set target="${a_facet}" key="hasSelectedFacet" value="${hasCustomPriceFilter}" />
+		</c:when>
+		<c:otherwise>
+			<wcf:set target="${a_facet}" key="hasSelectedFacet" value="${false}" />
+		</c:otherwise>
+	</c:choose>
+	
+	<c:forEach var="facetVal" items="${a_facet.facets}">
+		<c:set var="target" value="${facetVal.value}" /> 
+		<%-- Mark all facets that are currently selected --%>
+		<c:choose>
+			<c:when test="${selectedFacets.containsKey(target)}">
+				<wcf:set target="${a_facet}" key="hasSelectedFacet" value="${true}" />
+				<wcf:set target="${facetVal}" key="selected" value="${true}" />
+				<c:if test="${a_facet.multipleSelection}">
+					<wcf:set target="${selectedFacets[target]}" key="multiselection" value="${true}" /> 
+				</c:if>
+			</c:when>
+			<c:otherwise>
+				<wcf:set target="${facetVal}" key="selected" value="${false}" />
+			</c:otherwise>
+		</c:choose>
+	</c:forEach>
+</c:forEach>
+<%-- Generate URL for clear all facets button --%>
+<c:if test="${hasFilter}">
+    <wcf:useBean var="newParameters" classname="java.util.HashMap" />
+    <%-- Reset these parameters --%>
+    <wcf:set target="${newParameters}" key="minPrice" value="" />
+    <wcf:set target="${newParameters}" key="maxPrice" value="" />
+	<%-- Override all facet_ and facetName_ parameters with empty ones --%>
+	<c:forEach var="index" begin="1" end="${selectedFacetCount}">
+		<wcf:set target="${newParameters}" key="${'facet_'.concat(index)}" value="" />
+		<wcf:set target="${newParameters}" key="${'facetName_'.concat(index)}" value="" />
+	</c:forEach>
+    <wcf:set target="${newParameters}" key="beginIndex" value="0" />
+	<%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+	<c:set var="clearAllURL" value="${SEOFacetURL}" />
+    <c:remove var="newParameters" />
+</c:if>
+
+<%-- Generate URL for clearing the price when a custom entered price facet is selected --%>
+<c:if test="${hasCustomPriceFilter}">
+    <wcf:useBean var="newParameters" classname="java.util.HashMap" />
+    <%-- Reset these parameters --%>
+    <wcf:set target="${newParameters}" key="minPrice" value="" />
+    <wcf:set target="${newParameters}" key="maxPrice" value="" />
+    <wcf:set target="${newParameters}" key="beginIndex" value="0" />
+
+    <%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+    <c:set var="clearCustomPriceURL" value="${SEOFacetURL}" />
+    <c:remove var="newParameters" />
+</c:if>
+
+<%-- Get the facet limit as an array --%>
+<wcf:useBean var="facetLimits" classname="java.util.ArrayList" />
+<c:set var="facetLimitCount" value="${0}" />
+<%-- Need to get total number of facet limits first then add 
+by index, since WCParam is a HashMap, and the order in which
+items are returned are not necessarily in sorted order --%>
+<c:forEach var="entry" items="${WCParam}">
+	<c:if test="${fn:startsWith(entry.key, 'facetLimit_')}">
+		<c:set var="facetLimitCount" value="${facetLimitCount + 1}" />		
+	</c:if>
+</c:forEach>
+<c:forEach var="i" begin="${1}" end="${facetLimitCount}">
+	<wcf:set target="${facetLimits}" value="${WCParam['facetLimit_'.concat(i)]}" />
+</c:forEach>
+
+<%-- Generate URL for each facet --%>
+<c:forEach var="a_facet" items="${facetArray}" varStatus="facetCounter" >
+	<c:forEach var="facetVal" items="${a_facet.facets}">	
+		<c:choose>
+			<c:when test="${!facetVal.selected}">	
+				<%-- Only generate URLs for facet values that have not been selected --%>	
+				<wcf:useBean var="newParameters" classname="java.util.HashMap" />
+				<%-- Reset to page 1 --%>
+				<wcf:set target="${newParameters}" key="beginIndex" value="0" />
+				<%-- Add this facet's value and name to the parameter --%>
+				<wcf:set target="${newParameters}" key="${'facet_'.concat(selectedFacetCount + 1)}" value="${facetVal.value}" />
+				<wcf:set target="${newParameters}" key="${'facetName_'.concat(selectedFacetCount + 1)}" value="${facetVal.name}" />
+		
+				<%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+				<c:remove var="newParameters" />
+				<wcf:set target="${facetVal}" key="facetURL" value="${SEOFacetURL}"/>
+			</c:when>
+			<c:when test="${a_facet.multipleSelection}">
+				<%-- Facet value is selected and this facet allows multiple selection
+				so the URL to follow when this facet is clicked is to remove the facet. 
+				That URL has already been generated earlier, it's in the selectedFacets map --%>
+				<wcf:set target="${facetVal}" key="facetURL" value="${selectedFacets[facetVal.value].url}"/>
+			</c:when>
+		</c:choose>	
+	</c:forEach>
+
+	<%-- Generate URL for "Show More"/"Show Less" --%>
+	<c:set var="facetSection" value="${!empty(a_facet.value) ? a_facet.value.concat(':-1') : facetCounter.index}"/>	
+	<c:choose>
+		<c:when test="${a_facet.allValReturned == false}">
+			<wcf:useBean var="newParameters" classname="java.util.HashMap" />
+			<wcf:set target="${newParameters}" key="${'facetLimit_'.concat(facetLimitCount + 1)}" value="${facetSection}" />
+			
+			<%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+			<c:remove var="newParameters" />
+			<wcf:set target="${a_facet}" key="showMoreURL" value="${SEOFacetURL}"/>	
+		</c:when>
+		<c:otherwise>
+			<%-- Check to see if there's a facetLimit for this facet, if there is we should 
+			display the "Show Less" button --%>
+			<c:forEach var="facetLimit" items="${facetLimits}" varStatus="facetLimitCounter">
+				<c:if test="${facetLimit == facetSection}">
+					<wcf:useBean var="newParameters" classname="java.util.HashMap" />
+					<%-- Re-index the remaining facet limit parameters --%>
+					<c:forEach var="j" begin="${facetLimitCounter.index + 1}" end="${facetLimitCount}">
+						<wcf:set target="${newParameters}" key="${'facetLimit_'.concat(j)}" value="${facetLimits[j]}" />
+					</c:forEach>
+
+					<%-- Empty the last facet limit --%>
+					<wcf:set target="${newParameters}" key="${'facetLimit_'.concat(facetLimitCount)}" value="" />
+
+					<%@ include file="/Widgets_801/Common/SEOFacetURL.jspf" %>
+					<c:remove var="newParameters" />
+					<wcf:set target="${a_facet}" key="showLessURL" value="${SEOFacetURL}"/>
+				</c:if>
+			</c:forEach>			
+		</c:otherwise>
+	</c:choose>
+</c:forEach>
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+

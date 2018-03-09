@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","ro",{button:"Şabloane",emptyListMsg:"(Niciun şablon definit)",insertOption:"Înlocuire conţinut real",options:"Opţiuni şablon",selectPromptMsg:"Selectaţi şablonul de deschis în editor",title:"Şabloane de conţinut"});

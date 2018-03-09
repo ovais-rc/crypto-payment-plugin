@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","de",{border:"Rahmenumrandung anzeigen",noUrl:"Geben Sie die I-Frame-URL ein.",scrolling:"Bildlaufleisten aktivieren",title:"I-Frame-Eigenschaften",toolbar:"I-Frame einfügen",ibm:{title:"I-Frame"}});

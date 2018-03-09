@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","tr",{bulletedlist:"Madde İşaretli Liste",numberedlist:"Numaralandırılmış Liste",ibm:{numberedTitle:"Numaralandırılmış Liste",bulletedTitle:"Madde İşaretli Liste",description:"Ayarlar, geçerli liste düzeyine uygulanacak.",fontsize:"Yazı tipi boyutu:"}});

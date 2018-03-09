@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<FloatingPane definitionName="cmc/foundation/ColorPicker" focusable="false" singletonDefinition="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="ColorCell" moduleName="cmc/foundation/ColorCell"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<variable name="outterPadding" type="number" value="6"/>
+		<variable name="colorMap" value="${{}}"/>
+		<variable name="color" type="string"/>
+		<variable name="initstage" value="late"/>
+		<variable name="colorPalette" value="${[]}"/>
+		
+		<AxisLayout axis="y" inset="${this.parent.outterPadding}" spacing="10"/>
+		<Component focusable="true" name="colorCells" x="${this.parent.outterPadding}">
+			<AxisLayout axis="y"/>
+			
+			<method args="colorsInRow, rowIndex" name="addSwatchRow">
+				<![CDATA[
+				var rowView = new Component.Class(this, {
+					name: String(rowIndex),
+					x: 0,
+					bgcolor: "#EBEBEB"
+				});
+				for (var i = 0, len = colorsInRow.length; i < len; ++i) {
+					var cell = this.addSwatchCell(rowView, rowIndex, colorsInRow[i], i, len);
+				}
+				return rowView;
+				]]>
+			</method>
+			
+			<method args="rowView, rowIndex, color, cellIndex, rowLength" name="addSwatchCell">
+				<![CDATA[
+				var colorCell = new ColorCell.Class(rowView, {
+					name: String(cellIndex),
+					bgcolor: color,
+					disabled: color == null,
+					borderRightSize: color != null && cellIndex == rowLength - 1 ? 1 : 0,
+					borderLeftSize: color == null ? 0 : 1,
+					colorPicker: this.parent,
+					rowIndex: rowIndex,
+					colIndex: cellIndex
+				});
+				colorCell.setVariable('x', cellIndex * colorCell.width);
+				this.parent.colorMap = this.parent.colorMap || {};
+				if (color != null) {
+					this.parent.colorMap[color] = colorCell;
+				}
+				return colorCell;
+				]]>
+			</method>
+			
+			<handler name="oninit">
+				<![CDATA[
+				var colors = [[0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xffffff, 0xebebeb, 0xe1e1e1, 0xd7d7d7, 0xcccccc, 0xc2c2c2, 0xb7b7b7, 0xacacac, 0xa0a0a0, 0x959595], [0xee1d24, 0xfff100, 0x00a650, 0x00aeef, 0x2f3192, 0xed008c, 0x898989, 0x7d7d7d, 0x707070, 0x626262, 0x555555, 0x464646, 0x363636, 0x262626, 0x111111, 0x000000], [0xf7977a, 0xfbad82, 0xfdc68c, 0xfff799, 0xc6df9c, 0xa4d49d, 0x81ca9d, 0x7bcdc9, 0x6ccff7, 0x7ca6d8, 0x8293ca, 0x8881be, 0xa286bd, 0xbc8cbf, 0xf49bc1, 0xf5999d], [0xf16c4d, 0xf68e54, 0xfbaf5a, 0xfff467, 0xacd372, 0x7dc473, 0x39b778, 0x16bcb4, 0x00bff3, 0x438ccb, 0x5573b7, 0x5e5ca7, 0x855fa8, 0xa763a9, 0xef6ea8, 0xf16d7e], [0x9a8575, 0x726357, 0x524842, 0x362f2c, 0xc69c6d, 0xa77c50, 0x8c623a, 0x744b24, 0x613813, null, null, null, null, null, null, null]];
+				for (var row = 0; row < colors.length; ++row) {
+					this.parent.colorPalette[row] = this.addSwatchRow(colors[row], row);
+				}
+				]]>
+			</handler>
+			
+			<handler name="onfocus">
+				<![CDATA[
+				if (this.classroot.activeColorCell) {
+					this.classroot.setSliders(this.classroot.activeColorCell.bgcolor);
+				}
+				else {
+					this.classroot.setSliders(0x000000);
+				}
+				]]>
+			</handler>
+
+			<handler args="k" name="onkeydown">
+				<![CDATA[
+				if (k >= 37 && k <= 40) {
+					this.doMove(k);
+				}
+				else if (k == 32) {
+					EventUtil.trigger(this.classroot.activeColorCell, "onclick");
+				}
+				]]>
+			</handler>
+
+			<method args="k" name="doMove">
+				<![CDATA[
+				var cell = this.classroot.activeColorCell;
+				var row = cell.rowIndex;
+				var col = cell.colIndex;
+				var colorPalette = this.classroot.colorPalette;
+				if (k == 38) {
+					if (row > 0) {
+						row = row - 1;
+					}
+				}
+				else if (k == 40) {
+					if (row < colorPalette.length - 1 && !colorPalette[row + 1].subviews[col].disabled) {
+						row = row + 1;
+					}
+				}
+				else if (k == 39) {
+					if (col < colorPalette[row].subviews.length - 1 && !colorPalette[row].subviews[col + 1].disabled) {
+						col = col + 1;
+					}
+				}
+				else if (k == 37) {
+					if (col > 0) {
+						col = col - 1;
+					}
+				}
+				this.classroot.setSliders(colorPalette[row].subviews[col].bgcolor);
+				]]>
+			</method>			
+		</Component>
+		<Component name="manualInput" x="${this.parent.outterPadding}">
+			<AxisLayout axis="x" spacing="5"/>
+			<Component height="48" name="swatch" width="36">		
+				<BorderedView bgcolor="black" borderColor="#898989" borderSize="1" height="36" name="color" width="36" y="6"/>
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.doSelect();
+					]]>
+				</handler>
+			</Component>
+			<Component height="${this.parent.swatch.height + 15}" name="sliders">
+				<Slider labelText="R" name="red" y="0"/>	
+				<Slider labelText="G" name="green" y="${(this.parent.height - this.height) / 2}"/>	
+				<Slider labelText="B" name="blue" y="${this.parent.height - this.height}"/>	
+				
+				<handler name="oninit">
+					<![CDATA[
+					this.setColorDel = new EventHandler.Class(this, "selectColor");
+					this.setColorDel.connect(this.red, "onvalue");
+					this.setColorDel.connect(this.green, "onvalue");
+					this.setColorDel.connect(this.blue, "onvalue");
+					this.selectColor();
+					]]>
+				</handler>
+				
+				<method name="destroy">
+					<![CDATA[
+					this.setColorDel.disconnectAll();
+					delete this.setColorDel;
+					this.inherited(arguments);
+					]]>
+				</method>
+				<method name="getColor">
+					<![CDATA[
+					return this.red.value * 65536 + this.green.value * 256 + this.blue.value;
+					]]>
+				</method>
+				
+				<method args="e" name="selectColor">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					this.parent.swatch.color.setVariable('bgcolor', this.getColor());
+					this.parent.parent.hiliteColorCell(this.getColor());
+					]]>
+				</method>
+			</Component>
+			<Component height="${this.parent.sliders.height}" name="padding" width="0"/>
+		</Component>
+		
+		<!--- @keywords private -->
+		<method args="e" name="destroyDelegateMethod">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.destroy();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.doSelectDel) {
+				this.doSelectDel.disconnectAll();
+				delete this.doSelectDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+				
+		<method args="color" name="setSliders">
+			<![CDATA[
+			if (color == null || typeof (color) == 'undefined') {
+				return;
+			}
+			var sliders = this.manualInput.sliders;
+			var blue = color % 256;
+			sliders.blue.setValue(blue);
+			var green = Math.floor((color % 65536 - blue) / 256);
+			sliders.green.setValue(green);
+			var red = Math.floor(color / 65536);
+			sliders.red.setValue(red);
+			]]>
+		</method>
+		
+		<method args="color" name="getColorCell">
+			<![CDATA[
+			if (!this.colorMap) {
+				return null;
+			}
+			return this.colorMap[color];
+			]]>
+		</method>
+		
+		<method args="color" name="hiliteColorCell">
+			<![CDATA[
+			if (this.activeColorCell) {
+				this.activeColorCell.removeHilite();
+				this.activeColorCell = null;
+			}
+			var colorCell = this.getColorCell(color);
+			if (colorCell) {
+				colorCell.hilite();
+				this.activeColorCell = colorCell;
+			}
+			]]>
+		</method>
+		
+		<method args="e" name="doSelect">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("color", this.manualInput.swatch.color.bgcolor);
+			]]>
+		</method>
+
+		<handler name="onvisible">
+			<![CDATA[
+			if (typeof (this.doSelectDel) == "undefined") {
+				this.doSelectDel = new EventHandler.Class(this, "doSelect");
+			}
+			if (this.visible) {
+				KeyUtil.callOnKeyCombo(this.doSelectDel, ['enter']);
+			}
+			else {
+				KeyUtil.removeKeyComboCall(this.doSelectDel, ['enter']);
+			}
+			]]>
+		</handler>		
+	</FloatingPane>
+	
+	<!--- @keywords private -->
+    <BorderedView bgcolor="${this.parent.bgcolor}" borderLeftSize="1" borderTopSize="1" classDefinition="true" definitionName="cmc/foundation/ColorCell" height="12" width="12">
+		<dependency localName="ColorPicker" moduleName="cmc/foundation/ColorPicker"/>
+	    <variable name="colorPicker" value="${null}"/>
+	    <variable name="defaultBorderColor" type="string" value="#444444"/>
+	    <variable name="borderHiliteColor" type="string" value="white"/>
+	    <variable name="disabled" type="boolean" value="false"/>
+	    <variable name="rowIndex" type="number"/>
+	    <variable name="colIndex" type="number"/>
+	    
+		<handler name="onmouseover">
+			<![CDATA[
+			if (this.disabled) {
+				return;
+			}
+			this.hilite();
+			]]>
+		</handler>	
+		
+		<method name="hilite">
+			<![CDATA[
+			this.setVariable("borderRightSize", 1);
+			this.setVariable("borderBottomSize", 1);
+			this.setVariable("borderColor", this.borderHiliteColor);
+			]]>
+		</method>
+			
+		<method name="removeHilite">
+			<![CDATA[
+			this.setVariable("borderRightSize", 0);
+			this.setVariable("borderBottomSize", 0);
+			this.setVariable("borderColor", this.defaultBorderColor);
+			]]>
+		</method>
+		
+		<handler name="onmouseout">
+			<![CDATA[
+			if (this.disabled || this == this.colorPicker.activeColorCell) {
+				return;
+			}
+			this.removeHilite();
+			]]>
+		</handler>		
+				
+		<handler name="onclick">
+			<![CDATA[
+			if (!this.disabled) {
+				this.colorPicker.setSliders(this.bgcolor);
+				ColorPicker.Singleton.doSelect();
+			}
+			]]>
+		</handler>
+					
+    </BorderedView>
+    
+    <!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/foundation/Slider">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<variable name="sliderWidth" type="number" value="140"/>
+		<variable name="labelText" type="string" value=""/>
+		<variable name="showValue" type="boolean" value="true"/>
+		
+		<!--  the minimum value of the slider. That is, the value with which the slider starts -->
+		<variable name="minValue" type="number" value="0"/>
+		
+		<!--  The maximum value of the slider. That is, the value at which the slider ends -->
+		<variable name="maxValue" type="number" value="255"/>
+		
+		<variable name="value" type="number" value="${Math.round(this.sliderTrackDark.width / (this.sliderWidth - this.sliderBar.width) * (this.maxValue - this.minValue))}"/>
+		
+		<Component imageSet="sliderTrackDark" name="sliderTrackDark" stretches="width" width="${this.parent.sliderBar.x}" x="0" y="${(this.parent.height - this.height) / 2}">
+			<handler name="onclick">
+				<![CDATA[
+				this.classroot.moveSliderBar(this.classroot.getMouse("x"));
+				]]>
+			</handler>
+		</Component>
+		<Component imageSet="sliderBar" name="sliderBar" x="0" y="${(this.parent.height - this.height) / 2}">
+			<DragState drag_axis="x" drag_max_x="${this.parent.sliderWidth - this.width}" drag_min_x="0" name="dragger"/>
+		<handler name="onmousedown">
+				<![CDATA[
+				this.dragger.setVariable("active", true);
+				]]>
+			</handler><handler name="onmouseup">
+				<![CDATA[
+				this.dragger.setVariable("active", false);
+				]]>
+			</handler></Component>
+		<Component imageSet="sliderTrack" name="sliderTrack" stretches="width" width="${this.parent.sliderWidth - this.parent.sliderBar.x - this.parent.sliderBar.width}" x="${this.parent.sliderBar.x + this.parent.sliderBar.width}" y="${this.parent.sliderTrackDark.y}">
+			<handler name="onclick">
+				<![CDATA[
+				this.classroot.moveSliderBar(this.classroot.getMouse("x"));
+				]]>
+			</handler>
+		</Component>
+
+		<TextComponent name="label" visible="${this.parent.labelText || this.parent.showValue}" x="${this.parent.sliderTrack.x + this.parent.sliderTrack.width + 5}">
+			<State active="${this.classroot.labelText &amp;&amp; this.classroot.showValue}" name="state0"><variable name="text" value="${this.classroot.labelText + ': '}"/></State>
+				
+			
+			
+			<State active="${this.classroot.labelText &amp;&amp; !this.classroot.showValue}" name="state1"><variable name="text" value="${this.classroot.labelText}"/></State>
+				
+			
+		</TextComponent>
+
+		<InputText height="20" name="colorValue" visible="${this.parent.labelText || this.parent.showValue}" width="35" x="${this.parent.label.x + 17}">
+			
+			<handler name="oninit">
+				<![CDATA[
+				this.setText(this.classroot.value);
+				]]>
+			</handler>
+			
+			<handler eventSource="this.classroot" name="onvalue">
+				<![CDATA[
+				if (!this.valueLocked) {
+					this.setText(this.classroot.value);
+				}
+				]]>
+			</handler>
+
+			<handler name="ontext">
+				<![CDATA[
+				var val = this.getText();
+				if (StringUtil.Singleton.isInteger(val)) {
+					val = parseInt(val);
+					if (val >= this.parent.minValue && val <= this.parent.maxValue) {
+						this.valueLocked = true;
+						this.parent.setValue(val);
+						this.valueLocked = false;
+					}
+				}
+				]]>
+			</handler>
+
+			<handler name="onblur">
+				<![CDATA[
+				this.setText(this.classroot.value);
+				]]>
+			</handler>
+		</InputText>
+		
+		<method args="toX" name="moveSliderBar">
+			<![CDATA[
+			var maxX = this.sliderWidth - this.sliderBar.width;
+			if (toX > maxX) {
+				toX = maxX;
+			}
+			this.sliderBar.setVariable('x', toX);
+			]]>
+		</method>
+		<method args="value" name="setValue">
+			<![CDATA[
+			if (value == null || typeof (value) == 'undefined' || value < this.minValue) {
+				value = this.minValue;
+			}
+			var ratio = (value - this.minValue) / this.maxValue;
+			if (ratio > 1) {
+				ratio = 1;
+			}
+			this.sliderBar.setVariable('x', (this.sliderWidth - this.sliderBar.width) * ratio);
+			]]>
+		</method>
+	</Component>
+</Definitions>

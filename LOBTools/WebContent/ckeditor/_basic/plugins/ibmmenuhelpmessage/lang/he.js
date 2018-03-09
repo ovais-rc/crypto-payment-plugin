@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","he",{keystrokeForContextMenu:"Ctrl + לחיצה בלחצן העכבר הימני להצגת אפשרויות נוספות",keystrokeForContextMenuMac:"Cmd + לחיצה בלחצן העכבר הימני להצגת אפשרויות נוספות"});

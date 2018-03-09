@@ -1,0 +1,180 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%--
+  * This SerializeMarketingSpotDataCatalogGroupAtom.jspf file is built as a snippet to display catalog group in
+  * an e-Marketing Spot in an Atom Feed.
+--%>
+
+<entry xml:lang="${locale}">
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:author:name is a optional element if feed:author:name is provided --%>
+
+<%--
+<author>
+<name></name>
+<uri></uri>
+<email></email>
+</author>
+--%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:category is an optional element --%>
+
+<%-- <category term="" /> --%>
+
+<c:set var="TargetURL" value="" />
+<c:set var="storePath" value="" />
+
+<content type="html">
+	<c:out value="<table border=\"0\">" />
+	
+	<c:set var="foundLanguage" value="false"/>
+	<c:set var="descriptionIndex" value="0"/>
+	
+	<%-- Check if there are any descriptions --%>
+	<c:if test="${fn:length(marketingSpotData.catalogGroup.description) > 0}">
+		<%-- Go through each description and find the description associated with the current language --%>
+		<%-- If no language specific description is found, use the default English description --%>
+		<c:forEach var="i" begin="0" end="${fn:length(marketingSpotData.catalogGroup.description)-1}">
+			<c:forEach var="language" items="${marketingSpotData.catalogGroup.description[i].language}">
+				<c:if test="${(language == langId) && (!foundLanguage)}">
+					<c:set var="foundLanguage" value="true"/>
+					<c:set var="descriptionIndex" value="${i}"/>
+				</c:if>
+			</c:forEach>
+		</c:forEach>
+	</c:if>
+	
+	<c:set var="description" value="${marketingSpotData.catalogGroup.description[descriptionIndex]}" />
+	
+	<%-- Determine the store path, this is used to build links. --%>
+	<c:forEach var="attribute" items="${marketingSpotData.catalogGroup.attributes}">			
+		<c:if test='${attribute.key eq "rootDirectory" }'>
+			<c:set var="storePath" value="${attribute.value}/"/>
+		</c:if>			
+	</c:forEach>
+			
+	<%-- Set up the URL to call when clicking on the image. --%>
+	<c:url value="${CategoryDisplayCommand}" var="CategoryDisplayURL">
+		<c:param name="catalogId" value="${catalogId}" />
+		<c:param name="categoryId" value="${marketingSpotData.catalogGroup.catalogGroupIdentifier.uniqueID}" />
+		<c:param name="storeId" value="${storeId}" />
+		<c:param name="langId" value="${description.language}" />
+		<c:if test="${marketingSpotData.catalogGroup.topCatalogGroup}">
+			<c:param name="top" value="Y"/>
+			<c:param name="top_category" value="${marketingSpotData.catalogGroup.catalogGroupIdentifier.uniqueID}"/>
+		</c:if>
+	</c:url>
+	
+	<c:url value="${ClickInfoCommand}" var="ClickInfoURL">
+		<c:param name="evtype" value="CpgnClick" />
+		<c:param name="mpe_id" value="${marketingSpotDatas.marketingSpotIdentifier.uniqueID}" />
+		<c:param name="intv_id" value="${marketingSpotData.activityIdentifier.uniqueID}" />
+		<c:param name="storeId" value="${storeId}" />
+		<c:forEach var="expResult" items="${marketingSpotData.experimentResult}" begin="0" end="0">
+			<c:param name="experimentId" value="${expResult.experiment.uniqueID}" />
+			<c:param name="testElementId" value="${expResult.testElement.uniqueID}" />
+			<c:param name="expDataType" value="${marketingSpotData.dataType}" />
+			<c:param name="expDataUniqueID" value="${marketingSpotData.uniqueID}" />
+		</c:forEach>
+		<c:param name="URL" value="${CategoryDisplayURL}" />
+	</c:url>
+	
+	<c:choose>
+		<c:when test="${clickInfoEnabled}">
+			<c:set var="TargetURL" value="${ClickInfoURL}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="TargetURL" value="${CategoryDisplayURL}" />
+		</c:otherwise>
+	</c:choose>
+	
+	<%-- Display the catalog group image. --%>
+	<c:out value="<tr><td align=\"center\"><a href=\"${TargetURL}\" ${clickOpenBrowser}><img src=\"${staticAssetContextRoot}/${storePath}${description.thumbnail}\" alt=\"${description.shortDescription}\" border=\"0\" /></a></td></tr>" />
+	
+	<%-- Display the catalog group description  --%>
+	<c:out value="<tr><td align=\"center\">${description.shortDescription}</tr></td>" />
+	
+	<c:out value="</table>" />
+</content>
+
+<%-- The following are some Atom Feed extensions that may be useful. These are not standard, but may prove useful with integration with third party software or maybe with some readers. --%>
+<%-- If they are not used, they can be commented out --%>
+<%-- The Atom Syndication Format allows for these types of extensions and explicitly states: --%>
+<%-- 6.3 Processing Foreign Markup --%>
+<%-- Atom Processors that encounter foreign markup in a location that is legal according to this specification MUST NOT stop processing or signal an error. It might be the case that the Atom Processor is able to process the foreign markup correctly and does so. Otherwise, such markup is termed "unknown foreign markup". --%>
+<%-- When unknown foreign markup is encountered as a child of atom:entry, atom:feed, or a Person construct, Atom Processors MAY bypass the markup and any textual content and MUST NOT change their behavior as a result of the markup's presence. --%>
+<%-- When unknown foreign markup is encountered in a Text Construct or atom:content element, software SHOULD ignore the markup and process any text content of foreign elements as though the surrounding markup were not present. --%>
+<name><c:out value="${description.name}"/></name>
+
+<description><c:out value="${description.shortDescription}"/></description>
+
+<longDescription><c:out value="${description.longDescription}"/></longDescription>
+
+<thumbnail><c:out value="${staticAssetContextRoot}/${storePath}${description.thumbnail}"/></thumbnail>
+<%-- End: Atom Feed extensions --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:contributor is an optional element --%>
+
+<%--
+<contributor>
+<name></name>
+<uri></uri>
+<email></email>
+</contributor>
+--%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:id is a mandatory element --%>
+
+<id><c:out value="entry:id:${pageContext.request.serverName}/store/${storeId}/eSpot/${marketingSpotDatas.marketingSpotIdentifier.uniqueID}/catalogGroup/${marketingSpotData.catalogGroup.catalogGroupIdentifier.uniqueID}" /></id>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:published is an optional element --%>
+
+<%-- <published></published> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:rights is an optional element --%>
+
+<%-- <rights></rights> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:source is an optional element --%>
+
+<%-- <source></source> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:summary is an optional element --%>
+
+<%-- <summary></summary> --%>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:title is a mandatory element --%>
+
+<title type="text"><c:out value="${description.name}" /></title>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- entry:link is an optional element --%>
+
+<c:if test='${!empty TargetURL}'>
+	<link rel="self" href="<c:out value="${TargetURL}"/>" title="<c:out value="${description.name}"/>"/>
+</c:if>
+
+<updated><c:out value="${currentDate}" /></updated>
+
+</entry>

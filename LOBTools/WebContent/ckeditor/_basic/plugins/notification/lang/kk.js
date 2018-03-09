@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","kk",{closed:"Хабарландыру жабылды."});

@@ -1,0 +1,530 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private	
+		The proBasicCodePatternPropertyBuilder is a property editor and is used to 
+		create an instance of the {@link cmc/promotion/BasicCodePatternBuilder} class that binds to a property 
+		value {@link cmc/foundation/ModelProperty}. 
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/promotion/BasicCodePatternPropertyBuilder" sizeToAvailableWidth="true">
+		<dependency localName="BasicCodePatternBuilder" moduleName="cmc/promotion/BasicCodePatternBuilder"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} of the current object that 
+			this property editor should bind to.				
+		-->
+		<variable name="propertyName" type="string"/>
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} that determines whether 
+			basic or advanced code generation option is chosen.			
+		-->	
+		<variable name="codeGenerationProperty" type="string"/>		
+		<!---
+			The {@link cmc/foundation/ModelProperty} instance that this property editor is editing.
+			@type cmc/foundation/ModelProperty
+		-->
+		<variable name="property"/>
+		
+		<!---
+			@keywords private
+			Create the editor box for the given {@link cmc/foundation/ModelProperty} component. This method overrides the createEditor
+			method in the {@link cmc/foundation/PropertyEditor} class.
+			@param cmc/foundation/PropertyEditor parentComponent The parent property editor from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new BasicCodePatternBuilder.Class(parentComponent, {
+				o: parentComponent.o,
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				codeGenerationProperty: this.codeGenerationProperty,
+				width: availableWidth,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+		
+	</PropertyEditor>
+	
+	<!---
+		@keywords private
+		The cmc/promotion/BasicCodePatternBuilder will bind a {@link cmc/foundation/ModelProperty} with 
+		two {@link cmc/promotion/CodeStepper} widgets and one {@link cmc/promotion/CodeInputText} widget. This is used to associate one 
+		property definition with the values of three widgets. The relationship is bi-directional.  This means that 
+		the widgets text will be refreshed to represent the value of the property and the new property 
+		value will be stored when a user changes the widget text.	
+	-->
+	<Component classDefinition="true" definitionName="cmc/promotion/BasicCodePatternBuilder">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>	
+		<!--- 
+			Reference to {@link cmc/foundation/ModelProperty} object that is being edited. 
+		-->
+		<variable name="property"/>	
+		<!---
+			This attribute specifies the name of the {@link cmc/foundation/ModelProperty property} that determines whether 
+			basic or advanced code generation option is chosen.			
+		-->	
+		<variable name="codeGenerationProperty" type="string" value=""/>		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this._initcomplete = true;
+			this.updateValue();
+			]]>
+		</handler>
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			if (this.storeValueDel) {
+				this.storeValueDel.disconnectAll();
+				delete this.storeValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>		
+		<!--- @keywords private -->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				if (typeof (this.storeValueDel) == "undefined") {
+					this.storeValueDel = new EventHandler.Class(this, "storeValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.storeValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					var codeGeneration = this.property.o.getProperty(this.codeGenerationProperty);
+					if (codeGeneration != null) {
+						this.storeValueDel.connect(codeGeneration, "onvalue");
+					}
+					this.updateValue();
+				}
+			}
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property && this._initcomplete) {
+				this._updateValueLock = true;
+				var value = this.property.value;
+				if (value == null || value == "") {
+					this.codeSpecifics.prefix.setValue("");
+					this.codeSpecifics.suffix.setValue("");
+					this.codeSpecifics.codeLength.setValue("");
+				}
+				else if (this.property.o.getPropertyValue(this.codeGenerationProperty) == "BasicGeneratedCode") {
+					var positionOfOpenBracket = value.indexOf("[");
+					var positionOfCloseBracket = value.indexOf("]");
+					this.codeSpecifics.prefix.setValue(value.substring(0, positionOfOpenBracket));
+					this.codeSpecifics.suffix.setValue(value.substring(positionOfCloseBracket + 1));
+					var codeLengthValue = value.substring(positionOfOpenBracket + 1, positionOfCloseBracket).length;
+					this.codeSpecifics.codeLength.setValue(codeLengthValue);
+				}
+				this._updateValueLock = false;
+			}
+			]]>
+		</method>
+		<!--- @keywords private -->		
+		<method args="e" name="storeValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var pattern = "";
+			if (!this._updateValueLock && this.property && this._initcomplete && this.property.o.getPropertyValue(this.codeGenerationProperty) == "BasicGeneratedCode") {
+				var prefix = this.codeSpecifics.prefix.getValue();
+				var codeLength = Number(this.codeSpecifics.codeLength.getValue());
+				var suffix = this.codeSpecifics.suffix.getValue();
+				pattern = pattern + "[";
+				for (var i = 0; i < codeLength; i++) {
+					pattern = pattern + "X";
+				}
+				pattern = pattern + "]";
+				pattern = prefix + pattern + suffix;
+				this.property.change(pattern);
+			}
+			]]>
+		</method>
+				
+		<Component name="codeSpecifics" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing}">
+			<AxisLayout axis="y" inset="13" spacing="13"/>
+			<CodeInputText helpText="${promotionResources.Singleton.promotion_codePrefix_helpText.string}" name="prefix" package="cmc/promotion" pattern="[^\[\]]*" promptText="${promotionResources.Singleton.promotion_codePrefix.string}">
+				<handler name="onvalue">
+					<![CDATA[
+					this.classroot.storeValue();
+					]]>
+				</handler>
+			</CodeInputText>			
+			<CodeStepper helpText="${promotionResources.Singleton.promotion_codeLength_helpText.string}" maximumValue="126" minimumValue="1" name="codeLength" package="cmc/promotion" promptText="${promotionResources.Singleton.promotion_codeLength.string}" required="true">
+				<handler name="onvalue">
+					<![CDATA[
+					this.classroot.storeValue();
+					]]>
+				</handler>
+			</CodeStepper>							
+			<CodeInputText helpText="${promotionResources.Singleton.promotion_codeSuffix_helpText.string}" name="suffix" package="cmc/promotion" pattern="[^\[\]]*" promptText="${promotionResources.Singleton.promotion_codeSuffix.string}">
+				<handler name="onvalue">
+					<![CDATA[
+					this.classroot.storeValue();
+					]]>
+				</handler>
+			</CodeInputText>	
+		</Component>		
+	 <method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method></Component>	
+	
+	<!---
+		Stepper widget that is similar to {@link cmc/foundation/PropertyStepper} but does not understand the object model.
+		@keywords private
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/promotion/CodeStepper" focusable="false" width="235">
+		<dependency localName="proPropertiesComponentPrompt" moduleName="cmc/promotion/PropertiesComponentPrompt"/>
+		<dependency localName="ExtendedHelpIcon" moduleName="cmc/foundation/ExtendedHelpIcon"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Indicates that this properties view component is required.
+			@keywords private
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			The prompt text for this properties view component.
+			@keywords private
+		-->
+		<variable name="promptText" type="string" value="${null}"/>
+		<!---
+			The help text for this properties view component. 
+			@keywords private 
+		-->
+		<variable name="helpText" type="string" value="${null}"/>
+		<!---
+			Input text value
+			@keywords private
+		-->
+		<variable name="value" type="string" value=""/>		
+		<!--- 
+			Colour of the label text
+			@keywords private
+		-->
+		<variable name="labelColor" value="${this.style.texthilitecolor}"/>
+		<!--- 
+			The smallest allowable value for this input 
+		-->
+		<variable name="minimumValue" type="number" value="0"/>
+		<!--- 
+			The largest allowable value for this input 
+		-->
+		<variable name="maximumValue" type="number" value="10000"/>		
+		<handler name="oninit">
+			<![CDATA[
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayout");
+			this.createPrompt();
+			]]>
+		</handler>
+		<method name="destroy">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			delete this.updateLayoutDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This handler recreates the prompt if the user changes their tool-tip preference.
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCEnableExtendedHelp") {
+				if (this.prompt.extendedHelpIcon) {
+					this.prompt.extendedHelpIcon.destroy();
+				}
+				this.prompt.prompt.destroy();
+				this.createPrompt();
+			}
+			]]>
+		</handler>
+		<!---
+			@keywords private
+			Creates the prompt.
+		-->
+		<method name="createPrompt">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var indent = 0;
+			var promptWidth = 164;
+			new proPropertiesComponentPrompt.Class(this.prompt, {
+				name: "prompt",
+				width: 100,
+				multiline: true,
+				fgcolor: this.labelColor,
+				resize: true,
+				x: indent,
+				required: this.required
+			});
+			if ((PreferenceManager.Singleton.getPreference("CMCEnableExtendedHelp") == "true") && (this.helpText != null && this.helpText != "")) {
+				new ExtendedHelpIcon.Class(this.prompt, {
+					name: "extendedHelpIcon",
+					helpText: this.helpText,
+					x: indent + this.prompt.prompt.width
+				});
+			}
+			this.updateLayout();
+			]]>
+		</method>
+		
+		<method name="updateLayout">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var extendedHelpIconHeight = 0;
+			var promptWidth = 164;
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.visible) {
+				promptWidth -= this.prompt.extendedHelpIcon.width;
+				extendedHelpIconHeight = this.prompt.extendedHelpIcon.height;
+				this.prompt.extendedHelpIcon.setVariable("x", promptWidth);
+				promptWidth -= 6;
+			}
+			var editorHeight = this.inputbox.height;
+			this.prompt.prompt.setVariable("width", promptWidth);
+			var promptY = 0;
+			var editorY = 0;
+			var extendedHelpIconY = 0;
+			var promptHeight = this.prompt.prompt.height;
+			var componentHeight = Math.max(Math.max(promptHeight, editorHeight), extendedHelpIconHeight);
+			var promptY = (componentHeight - promptHeight) / 2;
+			var editorY = (componentHeight - editorHeight) / 2;
+			var extendedHelpIconY = (componentHeight - extendedHelpIconHeight) / 2;
+			if (this.prompt.prompt.y != promptY) {
+				this.prompt.prompt.setVariable("y", promptY);
+			}
+			if (this.inputbox && this.inputbox.y != editorY) {
+				this.inputbox.setVariable("y", editorY);
+			}
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.y != extendedHelpIconY) {
+				this.prompt.extendedHelpIcon.setVariable("y", extendedHelpIconY);
+			}
+			this.updateLayoutDel.connect(this.prompt.prompt, "onheight");
+			this.updateLayoutDel.connect(this.inputbox, "onheight");
+			]]>
+		</method>
+
+		<!---
+			Sets the string value of this input field
+			@param string v The text to store and show to the user
+		-->
+		<method args="v" name="setValue">
+			<![CDATA[
+			if (this.value != v) {
+				this.inputbox.textInput.setText(v);
+			}
+			]]>
+		</method>		
+		<!---
+			Returns the text set in the input box.
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.value;
+			]]>
+		</method>
+
+		<Component name="prompt"/>
+		<Stepper maximumValue="${this.parent.maximumValue}" minimumValue="${this.parent.minimumValue}" name="inputbox" width="230" x="${this.parent.prompt.x + this.parent.prompt.width + 6}">
+			<handler name="onvalue">
+				<![CDATA[
+				this.classroot.setVariable("value", this.getValue());
+				]]>
+			</handler>
+		</Stepper>
+	</FocusableComponent>
+	
+	<!---
+		Input text widget that is similar to {@link cmc/foundation/PropertyInputText} but does not understand the object model.
+		@keywords private
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/promotion/CodeInputText" focusable="false" width="235">
+		<dependency localName="proPropertiesComponentPrompt" moduleName="cmc/promotion/PropertiesComponentPrompt"/>
+		<dependency localName="ExtendedHelpIcon" moduleName="cmc/foundation/ExtendedHelpIcon"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Indicates that this properties view component is a required.
+			@keywords private
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			The prompt text for this properties view component.
+			@keywords private
+		-->
+		<variable name="promptText" type="string" value="${null}"/>
+		<!---
+			The help text for this properties view component. 
+			@keywords private 
+		-->
+		<variable name="helpText" type="string" value="${null}"/>
+		<!--- 
+			A regular expression describing the set of characters allowed in this field.
+        	The default pattern is the empty string, which allows all characters.
+        -->
+		<variable name="pattern" type="string" value=""/>
+		<!---
+			Input text value.
+			@keywords private
+		-->
+		<variable name="value" type="string" value=""/>		
+		<!--- Colour of the label text -->
+		<variable name="labelColor" value="${this.style.texthilitecolor}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayout");
+			this.createPrompt();
+			]]>
+		</handler>
+		
+		<method name="destroy">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			delete this.updateLayoutDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This handler recreates the prompt if the user changes their tooltip preference
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCEnableExtendedHelp") {
+				if (this.prompt.extendedHelpIcon) {
+					this.prompt.extendedHelpIcon.destroy();
+				}
+				this.prompt.prompt.destroy();
+				this.createPrompt();
+			}
+			]]>
+		</handler>
+		<!---
+			@keywords private
+			Creates the prompt.
+		-->
+		<method name="createPrompt">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var indent = 0;
+			var promptWidth = 164;
+			new proPropertiesComponentPrompt.Class(this.prompt, {
+				name: "prompt",
+				width: 100,
+				multiline: true,
+				fgcolor: this.labelColor,
+				resize: true,
+				x: indent,
+				required: this.required
+			});
+			if ((PreferenceManager.Singleton.getPreference("CMCEnableExtendedHelp") == "true") && (this.helpText != null && this.helpText != "")) {
+				new ExtendedHelpIcon.Class(this.prompt, {
+					name: "extendedHelpIcon",
+					helpText: this.helpText,
+					x: indent + this.prompt.prompt.width
+				});
+			}
+			this.updateLayout();
+			]]>
+		</method>
+		<method name="updateLayout">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var extendedHelpIconHeight = 0;
+			var promptWidth = 164;
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.visible) {
+				promptWidth -= this.prompt.extendedHelpIcon.width;
+				extendedHelpIconHeight = this.prompt.extendedHelpIcon.height;
+				this.prompt.extendedHelpIcon.setVariable("x", promptWidth);
+				promptWidth -= 6;
+			}
+			var editorHeight = this.inputbox.height;
+			this.prompt.prompt.setVariable("width", promptWidth);
+			var promptY = 0;
+			var editorY = 0;
+			var extendedHelpIconY = 0;
+			var promptHeight = this.prompt.prompt.height;
+			var componentHeight = Math.max(Math.max(promptHeight, editorHeight), extendedHelpIconHeight);
+			var promptY = (componentHeight - promptHeight) / 2;
+			var editorY = (componentHeight - editorHeight) / 2;
+			var extendedHelpIconY = (componentHeight - extendedHelpIconHeight) / 2;
+			if (this.prompt.prompt.y != promptY) {
+				this.prompt.prompt.setVariable("y", promptY);
+			}
+			if (this.inputbox && this.inputbox.y != editorY) {
+				this.inputbox.setVariable("y", editorY);
+			}
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.y != extendedHelpIconY) {
+				this.prompt.extendedHelpIcon.setVariable("y", extendedHelpIconY);
+			}
+			this.updateLayoutDel.connect(this.prompt.prompt, "onheight");
+			this.updateLayoutDel.connect(this.inputbox, "onheight");
+			]]>
+		</method>
+		<!---
+			Sets the string value of this input field.
+			@param string v The text to store and show to the user
+		-->
+		<method args="v" name="setValue">
+			<![CDATA[
+			if (this.value != v) {
+				this.inputbox.setText(v);
+			}
+			]]>
+		</method>
+		<!---
+			Returns the text set in the input box. 
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.value;
+			]]>
+		</method>
+
+		<Component name="prompt"/>
+		<InputText name="inputbox" pattern="${this.parent.pattern}" x="${this.parent.prompt.x + this.parent.prompt.width + 6}">
+			<handler name="ontext">
+				<![CDATA[
+				this.classroot.setVariable("value", this.getText());
+				]]>
+			</handler>
+		</InputText>
+	</FocusableComponent>
+		
+	<!---		
+		@keywords private
+	 -->
+	<PropertiesComponentPrompt classDefinition="true" definitionName="cmc/promotion/PropertiesComponentPrompt" text="${this.getPromptText(this.parent.parent.promptText)}"/>	
+	
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("horizontalrule","id",{toolbar:"Masukkan Garis Horizontal"});

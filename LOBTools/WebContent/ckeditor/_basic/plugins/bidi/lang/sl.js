@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("bidi","sl",{ltr:"Usmerjenost besedila od leve proti desni",rtl:"Usmerjenost besedila od desne proti levi"});

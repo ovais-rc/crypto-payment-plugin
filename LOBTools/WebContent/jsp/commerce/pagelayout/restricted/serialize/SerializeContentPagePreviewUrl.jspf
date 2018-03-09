@@ -1,0 +1,111 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"%>
+
+<jsp:useBean id="seoContentUrlKeywordList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="seoContentUrlList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="seoContentPrefixUrlListForHome" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="seoContentPrefixUrlList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="inheritedSeoContentUrlKeywordList" class="java.util.HashMap" type="java.util.Map"/>
+		
+<c:forEach var="contentPageSEO" items="${SEOURLs}">
+
+
+	<c:if test="${contentPageSEO != null}" >
+		<c:set var="inherited" value=""/>
+	
+		<c:if test="${contentPageSEO.parentStoreIdentifier.uniqueID != currentStoreId }">
+			<c:set var="inherited" value="Inherited"/>
+		</c:if>
+		
+		<c:forEach var="contentPageURLKeyword" items="${contentPageSEO.URLKeyword}">
+			<c:if test="${contentPageURLKeyword.language != null }">
+				<c:choose>
+					<c:when test="${inherited != '' }">
+						<c:if test="${contentPageURLKeyword.keyword != null && contentPageURLKeyword.keyword != ''}">
+							<c:set target="${inheritedSeoContentUrlKeywordList}" property="${contentPageURLKeyword.language}" value="${contentPageURLKeyword.keyword}"/>
+						</c:if>
+					</c:when>
+					<c:otherwise>
+						<c:if test="${contentPageURLKeyword.previewURL != null && contentPageURLKeyword.previewURL != ''}">
+							<c:set target="${seoContentUrlList}" property="${contentPageURLKeyword.language}" value="${contentPageURLKeyword.previewURL}"/>
+						</c:if>
+						<c:if test="${contentPageURLKeyword.keyword != null && contentPageURLKeyword.keyword != ''}">
+							<c:set target="${seoContentUrlKeywordList}" property="${contentPageURLKeyword.language}" value="${contentPageURLKeyword.keyword}"/>
+						</c:if>
+						<c:if test="${contentPageURLKeyword.URLPrefix != null && contentPageURLKeyword.URLPrefix != ''}">
+							<c:choose>
+								<c:when test="${contentPageSEO.usage ne 'Home' && pageUsage eq 'Home'}">
+									<c:set target="${seoContentPrefixUrlListForHome}" property="${contentPageURLKeyword.language}" value="${contentPageURLKeyword.URLPrefix}"/>
+								</c:when>
+								<c:otherwise>
+									<c:set target="${seoContentPrefixUrlList}" property="${contentPageURLKeyword.language}" value="${contentPageURLKeyword.URLPrefix}"/>
+								</c:otherwise>
+							</c:choose>
+					 	</c:if>								
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+		</c:forEach>
+	</c:if>
+</c:forEach>
+
+<c:set var="fullUrl" value=""/>
+<c:set var="urlKeyword" value=""/>
+<c:forEach var="language" items="${supportedDataLangIds}">
+	<c:choose>
+		<c:when test="${seoContentUrlList[language] != '' && seoContentUrlList[language] != null && !empty (seoContentUrlKeywordList[language])}">
+			<c:set var="fullUrl" value="${seoContentUrlList[language]}"/>
+			<c:set var="urlKeyword" value="${seoContentUrlKeywordList[language]}"/>
+		</c:when>
+		<c:when test="${seoContentUrlList[language] != '' && seoContentUrlList[language] != null && empty (seoContentUrlKeywordList[language])}">
+			<c:set var="fullUrl" value="${seoContentUrlList[language]}"/>
+			<c:set var="urlKeyword" value="${pageUsage}"/>
+			<c:if test="${empty urlKeyword && !empty inheritedSeoContentUrlKeywordList[language]}">
+				<c:set var="urlKeyword" value="${inheritedSeoContentUrlKeywordList[language]}"/>	
+			</c:if>
+		</c:when>
+		<c:when test="${seoContentPrefixUrlListForHome[language] != '' && seoContentPrefixUrlListForHome[language] != null}">
+			<c:set var="fullUrl" value="${fn:replace(seoContentPrefixUrlListForHome[language],'$SEO:PRIMARYTOKEN$','')}"/>
+		</c:when>
+		<c:when test="${seoContentPrefixUrlList[language] != '' && seoContentPrefixUrlList[language] != null }">
+			<c:set var="fullUrl" value="${fn:replace(seoContentPrefixUrlList[language],'$SEO:PRIMARYTOKEN$',seoContentUrlKeywordList[language])}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="fullUrl" value=""/>
+		</c:otherwise>
+	</c:choose>
+
+	<c:choose>
+		<c:when test="${urlKeyword != '' && fullUrl != ''}">
+			<object>
+				<alias><wcf:cdata data="${storeName} - ${urlKeyword}"/></alias>
+				<url><wcf:cdata data="${fullUrl}"/></url>
+			</object>
+		</c:when>
+		<c:when test="${urlKeyword == '' && fullUrl != ''}">
+			<object>
+				<alias><wcf:cdata data="${storeName}"/></alias>
+				<url><wcf:cdata data="${fullUrl}"/></url>
+			</object>
+		</c:when>
+	</c:choose>
+</c:forEach>
+
+
+<c:remove var="seoContentUrlKeywordList"/>
+<c:remove var="seoContentUrlList"/>
+<c:remove var="seoContentPrefixUrlListForHome"/>
+<c:remove var="seoContentPrefixUrlList"/>
+<c:remove var="inheritedSeoContentUrlKeywordList"/>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","fi",{keystrokeForContextMenu:"Saat lisää asetuksia näkyviin painamalla Ctrl-näppäintä samalla, kun napsautat",keystrokeForContextMenuMac:"Saat lisää asetuksia näkyviin painamalla Komento-näppäintä samalla, kun osoitat"});

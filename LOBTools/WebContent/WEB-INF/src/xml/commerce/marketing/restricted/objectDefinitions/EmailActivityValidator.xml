@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for {@link cmc/marketing/EmailActivityPrimaryObjectDefinition E-mail Activities}. This ensures that
+		the sendTime property is marked as readOnly as it is only a display value to the user and configured
+		on the server by IT staff.
+	-->
+	<Validator classDefinition="true" definitionName="cmc/marketing/EmailActivityValidator">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- The property name containing the configured value of e-mail activity send time. -->
+		<variable name="sendTimePropertyName" type="string" value="sendtime"/>
+		
+		<!--- @keywords private -->
+		<variable name="unsetProperties" value="${[]}"/>
+		
+		<!--- @keywords private -->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!this.updatePropertyValuesDel) {
+				this.updatePropertyValuesDel = new EventHandler.Class(this, "updatePropertyValues");
+			}
+			else {
+				this.updatePropertyValuesDel.disconnectAll();
+			}
+			var sendTimeProp = o.getProperty(this.sendTimePropertyName);
+			if (sendTimeProp.propertyReadOnly != "true") {
+				sendTimeProp.setVariable("propertyReadOnly", "true");
+			}
+			var propertyValues = sendTimeProp.propertyDefinition.getPropertyValues(o, this.updatePropertyValuesDel);
+			if ((propertyValues.length > 0) && (propertyValues[0].value != sendTimeProp.value)) {
+				sendTimeProp.setVariable("value", propertyValues[0].value);
+			}
+			else if (propertyValues.length == 0) {
+				this.unsetProperties.push(sendTimeProp);
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "releasedModelObject");
+				}
+				this.releaseModelObjectDel.connect(o, "beingDestroyed");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updatePropertyValues">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.unsetProperties.length; i++) {
+				var sendTimeProp = this.unsetProperties[i];
+				var propertyValues = sendTimeProp.propertyDefinition.getPropertyValues(sendTimeProp.o);
+				if ((propertyValues.length > 0) && (propertyValues[0].value != sendTimeProp.value)) {
+					sendTimeProp.setVariable("value", propertyValues[0].value);
+				}
+			}
+			this.unsetProperties = [];
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="releasedModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.unsetProperties.length; i++) {
+				if (this.unsetProperties[i].o == null) {
+					this.unsetProperties.splice(i, 1);
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updatePropertyValuesDel) {
+				this.updatePropertyValuesDel.disconnectAll();
+				delete this.updatePropertyValuesDel;
+			}
+			if (this.releaseModelObjectDel) {
+				this.releaseModelObjectDel.disconnectAll();
+				delete this.releaseModelObjectDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+	</Validator>
+</Definitions>

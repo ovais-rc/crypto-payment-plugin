@@ -1,0 +1,232 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%-- 
+  *****
+  * This JSP file prepares the data structure for titles (text or images) assigned to the eSpot
+  *****
+--%>
+<c:set var="titleObjectCount" value="0" />
+<jsp:useBean id="titleContentTypeMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="titleContentDescriptionMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="titleContentUrlMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="titleContentImageMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="titleContentTextMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+<jsp:useBean id="titleContentAssetPathMap" class="java.util.LinkedHashMap" type="java.util.Map"/>
+
+
+
+<c:forEach var="baseCurrentTitle" items="${eSpotDatas.marketingSpotDataTitle}">
+	
+		<c:set var="titleObjectCount" value="${titleObjectCount+1}" />
+
+        <%--
+          *
+          * Set up the URL to call when the image or text is clicked.
+          *
+        --%>
+		<c:set var="contentClickUrl" value="${param.contentClickUrl}"/>
+		<c:if test = "${empty contentClickUrl}">
+			<c:url value="${baseCurrentTitle.contentUrl}" var="contentClickUrl">
+				<c:if test="${!empty param.errorViewName}" >
+					<c:param name="errorViewName" value="${param.errorViewName}" />
+					<c:if test="${!empty param.orderId}">
+						<c:param name="orderId" value="${param.orderId}"/>
+					</c:if>
+				</c:if>
+			</c:url>
+		</c:if>
+
+        <c:url value="${clickInfoCommand}" var="ClickInfoURL">
+            <c:param name="evtype" value="CpgnClick" />
+            <c:param name="mpe_id" value="${eSpotDatas.marketingSpotIdentifier}" />
+            <c:param name="intv_id" value="${baseCurrentTitle.marketingSpotDataTitleActivityID}" />
+            <c:param name="storeId" value="${storeId}" />
+            <c:param name="catalogId" value="${catalogId}" />
+            <c:param name="langId" value="${langId}" />
+            
+			<c:forEach var="expResult" items="${baseCurrentTitle.experimentResult}" begin="0" end="0">
+				<c:param name="experimentId" value="${expResult.experimentResultId}" />
+				<c:param name="testElementId" value="${expResult.experimentResultTestElementId}" />
+				<c:param name="controlElement" value="${expResult.controlElement}" />
+			</c:forEach>
+			<c:param name="expDataType" value="${baseCurrentTitle.baseMarketingSpotDataType}" />
+			<c:param name="expDataUniqueID" value="${baseCurrentTitle.baseMarketingSpotActivityID}" />
+ 
+             <c:param name="URL" value="${contentClickUrl}" />
+        </c:url>
+        <c:choose>
+            <c:when test="${baseCurrentTitle.contentFormatName == 'File'}">
+                <%--
+                  *
+                  * For handling language specific assets and descriptions
+                  *
+                --%>
+                 <c:set var="foundLanguage" value="false"/>
+                
+                <%-- Store the index of the asset for the current language in the array --%>
+                <c:set var="assetIndex" value="0"/>
+                
+                <%-- Check if there are any attachment assets --%>
+                <c:if test="${fn:length(baseCurrentTitle.attachmentAsset) > 0}">
+                    <%-- Go through each asset and scan the list of languages specified --%>
+                    <%-- Take the first asset found with the current selected language --%>
+                    <%-- If no language specific asset is found, use the first asset as the default --%>
+                    <c:forEach var="i" begin="0" end="${fn:length(baseCurrentTitle.attachmentAsset)-1}">
+                        <c:forEach var="language" items="${baseCurrentTitle.attachmentAsset[i].attachmentAssetLanguage}">
+                            <c:if test="${(language == langId) && (!foundLanguage)}">
+                                <c:set var="foundLanguage" value="true"/>
+                                <c:set var="assetIndex" value="${i}"/>
+                            </c:if>
+                        </c:forEach>
+                    </c:forEach>
+                </c:if>
+
+                <c:set var="foundLanguage" value="false"/>
+                <%-- Store the index of the attachment description for the current language in the array --%>
+                <c:set var="descriptionIndex" value="0"/>
+
+                <%-- Check if there are any attachment descriptions --%>
+                <c:if test="${fn:length(baseCurrentTitle.attachmentDescription) > 0}">
+                    <%-- Go through each description and find the description associated with the current language --%>
+                    <%-- If no language specific description is found, use the default English description --%>
+                    <c:forEach var="i" begin="0" end="${fn:length(baseCurrentTitle.attachmentDescription)-1}">
+                        <c:forEach var="language" items="${baseCurrentTitle.attachmentDescription[i].attachmentLanguage}">
+                            <c:if test="${(language == langId) && (!foundLanguage)}">
+                                <c:set var="foundLanguage" value="true"/>
+                                <c:set var="descriptionIndex" value="${i}"/>
+                            </c:if>
+                        </c:forEach>
+                    </c:forEach>
+                </c:if>
+                
+                <c:set var="contentMimeType" value="${baseCurrentTitle.contentMimeType}"/>
+                <c:set var="assetMimeType" value="${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetMimeType}"/>
+                <c:if test="${(empty contentMimeType) && 
+                	(fn:endsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, '.gif') ||
+                	 fn:endsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, '.jpg') ||
+                	 fn:endsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, '.jpeg') ||
+                	 fn:endsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, '.png')	)}">
+                	 <c:set var="contentMimeType" value="image"/>
+                </c:if>
+                <c:if test="${(empty contentMimeType) && (fn:endsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, '.swf') )}">
+                	<c:set var="contentMimeType" value="application"/>
+                	<c:set var="assetMimeType" value="application/x-shockwave-flash"/>
+                </c:if>
+                
+                <c:set var="contentPath" value=""/>
+                <c:choose>
+                	<c:when test="${(fn:startsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, 'http://') ||
+                		fn:startsWith(baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath, 'https://')	)}">
+                		<c:set var="contentPath" value="${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+                		<wcst:resolveContentURL var="contentPath" url="${contentPath}" mimeTypeVar="resolvedMimeType" mimeSubtypeVar="resolvedMimeSubtype"/>
+                		<c:if test="${!empty resolvedMimeType}">
+                			<c:set var="contentMimeType" value="${resolvedMimeType}"/>
+                			<c:if test="${!empty resolvedMimeSubtype}">
+		                		<c:set var="assetMimeType" value="${resolvedMimeType}/${resolvedMimeSubtype}"/>
+		                	</c:if>
+                		</c:if>
+                	</c:when>
+                	<c:when test="${empty baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetRootDirectory}">
+                		<c:set var="contentPath" value="${storeImgDirHostPath}${storeImgDir}${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+                	</c:when>
+                	<c:otherwise>
+                		<c:set var="contentPath" value="${env_imageContextPathHostPath}${env_customImageContextPath}/${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetRootDirectory}/${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+                	</c:otherwise>
+                </c:choose>		
+            	
+				<c:choose>
+	              	<c:when test="${(contentMimeType eq 'image') || (contentMimeType eq 'images')}">
+						<c:set target="${titleContentTypeMap}" property="${titleObjectCount}" value="image" />
+						<c:if test="${!empty baseCurrentTitle.contentUrl}">
+							<c:set target="${titleContentUrlMap}" property="${titleObjectCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+						</c:if>
+						<c:set target="${titleContentImageMap}" property="${titleObjectCount}" value="${contentPath}" />
+						<c:set target="${titleContentDescriptionMap}" property="${titleObjectCount}" value="${baseCurrentTitle.attachmentDescription[descriptionIndex].attachmentShortDescription}" />
+					</c:when>
+					<c:when test="${contentMimeType eq 'text'}">
+						<c:set target="${titleContentTypeMap}" property="${titleObjectCount}" value="Text" />
+						<wcst:getContent var="textContent" url="${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetPath}"/>
+						<%--
+						  *
+						  * Display the content text, with optional click information.
+						  *
+						--%>
+						<c:if test="${!empty baseCurrentTitle.contentUrl}">
+							<c:set target="${titleContentUrlMap}" property="${titleObjectCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+						</c:if>
+						<c:set target="${titleContentTextMap}" property="${titleObjectCount}" value="${textContent}"/>
+					</c:when>
+                    <c:when test="${(contentMimeType eq 'application') ||
+                                    (contentMimeType eq 'applications') ||
+                                    (contentMimeType eq 'textyv') ||
+                                    (contentMimeType eq 'video') ||
+                                    (contentMimeType eq 'audio') ||
+                                    (contentMimeType eq 'model')
+                                    }">
+                        <%--
+                          *
+                          * It is content: flash, audio, or other.
+                          *
+                        --%>
+                        <c:choose>
+                            <c:when test="${(assetMimeType eq 'application/x-shockwave-flash')}" >
+								<c:set target="${titleContentTypeMap}" property="${titleObjectCount}" value="flash" />
+								<c:set target="${titleContentDescriptionMap}" property="${titleObjectCount}" value="${baseCurrentTitle.marketingContentDescription[0].marketingText}" />
+								<c:set target="${titleContentUrlMap}" property="${titleObjectCount}" value="${contentPath}" />
+                            </c:when>
+                            <c:otherwise>
+								<c:set target="${titleContentTypeMap}" property="${titleObjectCount}" value="application" />
+								<c:set target="${titleContentAssetPathMap}" property="${titleObjectCount}" value="${contentPath}" />
+								<c:set target="${titleContentImageMap}" property="${titleObjectCount}" value="${env_imageContextPathHostPath}${env_customImageContextPath}/${baseCurrentTitle.attachmentAsset[assetIndex].attachmentAssetRootDirectory}/${baseCurrentTitle.attachmentImage}"/>
+								<c:set target="${titleContentDescriptionMap}" property="${titleObjectCount}" value="${baseCurrentTitle.attachmentDescription[descriptionIndex].attachmentLongDescription}"/>
+								
+								<c:if test="${!empty baseCurrentTitle.contentUrl}">
+									<c:set target="${titleContentUrlMap}" property="${titleObjectCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+									<c:set target="${titleContentTextMap}" property="${titleObjectCount}" value="${baseCurrentTitle.marketingContentDescription[0].marketingText}"/>
+								</c:if>
+                            </c:otherwise>
+                        </c:choose>
+                    </c:when>
+                    <c:otherwise>
+                        <%--
+                          * Content type is File, but no image or known mime type is associated, so display a link to the URL.
+                          * Display the content text, with optional click information.
+                          *
+                        --%>
+						<c:set target="${titleContentTypeMap}" property="${titleObjectCount}" value="fileasset" />
+						<c:set target="${titleContentAssetPathMap}" property="${titleObjectCount}" value="${contentPath}" />
+                        <c:if test="${!empty baseCurrentTitle.contentUrl}">
+                            <c:set target="${titleContentUrlMap}" property="${titleObjectCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+                        </c:if>
+                        <c:if test="${!empty baseCurrentTitle.marketingContentDescription[0].marketingText}">
+                           	<c:set target="${titleContentTextMap}" property="${titleObjectCount}" value="${baseCurrentTitle.marketingContentDescription[0].marketingText}"/>
+                        </c:if>
+                    </c:otherwise>
+                </c:choose>
+            </c:when>
+             
+            <c:when test="${baseCurrentTitle.contentFormatName == 'Text'}">
+				<c:set target="${titleContentTypeMap}" property="${titleObjectCount}" value="Text" />
+                <%--
+                  *
+                  * Display the content text, with optional click information.
+                  *
+                --%>                          
+				<c:if test="${!empty baseCurrentTitle.contentUrl}">
+					<c:set target="${titleContentUrlMap}" property="${titleObjectCount}" value="${env_absoluteUrl}${ClickInfoURL}" />
+				</c:if>
+				<c:set target="${titleContentTextMap}" property="${titleObjectCount}" value="${baseCurrentTitle.marketingContentDescription[0].marketingText}"/>
+            </c:when>            
+        </c:choose>
+</c:forEach>

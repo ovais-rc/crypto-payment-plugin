@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","ro",{indent:"Creştere indentare",outdent:"Descreştere indentare"});

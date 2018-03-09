@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","th",{button:"เท็มเพลต",emptyListMsg:"(ไม่มีเท็มเพลตถูกกำหนด)",insertOption:"แทนที่เนื้อหาจริง",options:"ตัวเลือกเท็มเพลต",selectPromptMsg:"เลือกเท็มเพลตเพื่อเปิดในเอดิเตอร์",title:"เท็มเพลตเนื้อหา"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("showblocks","it",{toolbar:"Mostra blocchi"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","pt",{options:"Opções de ícones de emoção",title:"Ícones de emoção",toolbar:"Inserir ícone de emoção"});

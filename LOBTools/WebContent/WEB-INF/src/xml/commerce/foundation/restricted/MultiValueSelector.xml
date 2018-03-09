@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		The Base class for a multi-value selector. A multi-value selector allows a user to select more than one property
+		value at a time. The selected property values will be set to the bound {@link cmc/foundation/ModelObject} instance. 
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseMultiValueSelector">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="BaseComboBox" moduleName="cmc/foundation/BaseComboBox"/>
+		<dependency localName="BaseRadioGroup" moduleName="cmc/foundation/BaseRadioGroup"/>
+		<!---
+			Reference to the instance of cmc/foundation/ModelObject that is being modified by the
+			properties view that contains this multi-value selector.
+		-->
+		<variable name="o"/>
+		<!--- the list of selections -->
+		<variable name="multiValueSelections"/>
+		<!--- the pointer to the selector containing all selections -->
+		<variable name="selector" value="${null}"/>
+		<!--- Flags whether to use radio buttons. The default value is combobox. -->
+		<variable name="useRadioButtons" type="boolean" value="false"/>
+		<!--- True if the selector is enabled -->
+		<variable name="enabled" type="boolean" value="true"/>
+		
+		<!--- 
+			@keywords private
+		 -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.valueChangedDel = new EventHandler.Class(this, "valueChanged");
+			this.updateSelectionDel = new EventHandler.Class(this, "updateSelection");
+			this.createViews();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+		 -->
+		<method name="destroy">
+			<![CDATA[
+			this.valueChangedDel.disconnectAll();
+			delete this.valueChangedDel;
+			this.updateSelectionDel.disconnectAll();
+			delete this.updateSelectionDel;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Pass the attribute "enabled" to the selector
+		 -->
+		<handler name="onenabled">
+			<![CDATA[
+			this.selector.setVariable("enabled", this.enabled);
+			]]>
+		</handler>
+		
+		<!--- 
+			@keywords private
+			Updates the bound model object when a new value is selected
+		 -->
+		<method args="e" name="valueChanged">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = this.selector.getValue();
+			if (!this._settingValue && this.multiValueSelections && this.multiValueSelections.length > 0 && value != null) {
+				this.multiValueSelections[Number(value)].setPropertyValues(this.o);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Binds a new model object to this multi-value selector. 
+			@param cmc/foundation/ModelObject newObject the new model object to bind.
+		 -->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.o = newObject;
+				this.updateSelection();
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Makes sure the selected property values are the same as the property values in the bound model object. 
+		 -->
+		<method args="e" name="updateSelection">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateSelectionDel) {
+				this.updateSelectionDel.disconnectAll();
+				if (this.multiValueSelections && this.o) {
+					for (var i = 0; i < this.multiValueSelections.length; i++) {
+						this.multiValueSelections[i].registerDelegate(this.o, this.updateSelectionDel);
+					}
+				}
+			}
+			if (this.selector && this.o) {
+				this._settingValue = true;
+				var selectedIndex = -1;
+				for (var i = 0; i < this.multiValueSelections.length; i++) {
+					if (this.multiValueSelections[i].isSelected(this.o)) {
+						selectedIndex = i;
+						break;
+					}
+				}
+				if (selectedIndex >= 0) {
+					this.selector.selectItemAt(selectedIndex);
+				}
+				else if (selectedIndex == -1) {
+					this.selector.clearSelection();
+				}
+				this._settingValue = false;
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Creates the selector widget based on the types of the selector. Either a dropdown list or a group of 
+			radio buttons will be created. 
+		-->
+		<method name="createViews">
+			<![CDATA[
+			if (this.useRadioButtons) {
+				this.selector = new BaseRadioGroup.Class(this, {
+					name: "editor",
+					enabled: this.enabled
+				});
+				this.valueChangedDel.connect(this.selector, "onvalue");
+			}
+			else {
+				this.selector = new BaseComboBox.Class(this, {
+					name: "editor",
+					width: 230,
+					enabled: this.enabled
+				});
+				this.valueChangedDel.connect(this.selector, "onselectedValue");
+			}
+			for (var i = 0; i < this.multiValueSelections.length; i++) {
+				var selection = this.multiValueSelections[i];
+				if (this.useRadioButtons) {
+					this.selector.addItem(selection.displayName, i);
+					var item = this.selector.getItemAt(i);
+					item.setVariable("multiValueSelection", selection);
+					item.setVariable("propertyValue", selection);
+					if (selection.imageSrc != "") {
+						item.setVariable("imageSrc", selection.imageSrc);
+					}
+				}
+				else {
+					this.selector.addValue(selection);
+				}
+			}
+			this.updateSelection();
+			]]>
+		</method>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Component>
+	
+	<!---
+		This class defines widget that allows the business user to select from a set of options.
+		The widget is for use within a properties view.
+		The options can be displayed in a combobox or as a list of radio buttons. Selecting an option will
+		cause one or more property values to be changed.
+		The following code snippet shows how to use a multi-value selector.
+		In this example each option will set two properties 
+		at a time, the promotion rule and the promotion group. The values of selections are defined in 
+		{@link cmc/foundation/MultiValueSelection} instances.
+		
+		@START_CODE
+			<MultiValueSelector>
+				<MultiValueSelection displayName="${promotionResources.promotion_type_OrderLevelPercentDiscount}">
+					<dataset name="values">
+						<promotionRuleName>OrderLevelPercentDiscount</promotionRuleName>
+						<promotionGroup>OrderLevelPromotion</promotionGroup>
+					</dataset>
+				</MultiValueSelection>
+				<MultiValueSelection displayName="${promotionResources.promotion_type_OrderLevelValueDiscount}">
+					<dataset name="values">
+						<promotionRuleName>OrderLevelValueDiscount</promotionRuleName>
+						<promotionGroup>OrderLevelPromotion</promotionGroup>
+					</dataset>
+				</MultiValueSelection>
+			</MultiValueSelector>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/MultiValueSelector">
+		<dependency localName="BaseMultiValueSelector" moduleName="cmc/foundation/BaseMultiValueSelector"/>
+		<!--- 
+			@keywords private
+			the list of selections 
+			@type cmc/foundation/MultiValueSelection[]
+		-->
+		<variable name="multiValueSelections"/>
+		<!--- Flags whether to use radio buttons. The default value is combobox. -->
+		<variable name="useRadioButtons" type="boolean" value="false"/>
+		
+		<!---
+			Creates the editor for the given property component.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new BaseMultiValueSelector.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				enabled: parentComponent.enabled,
+				o: parentComponent.o,
+				multiValueSelections: this.multiValueSelections,
+				useRadioButtons: this.useRadioButtons
+			});
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		
+		The base class for a checkbox multi-value selector. A checkbox multi-value selector allows a user to toggle an option on or off
+		which may set more than one property value at a time. Based on the selection, multiple properties may be set. The properties that are set
+		are defined by two instances of {@link cmc/foundation/MultiValueSelection} - one instance must be named <code>true</code>
+		and the other must be named <code>false</code>.
+	-->
+	<BaseMultiValueSelector classDefinition="true" definitionName="cmc/foundation/CheckboxMultiValueSelector">
+		<dependency localName="BaseCheckbox" moduleName="cmc/foundation/BaseCheckbox"/>
+		<!--- 
+			@keywords private
+			Updates the checkbox state based on the object property values. 
+		 -->
+		<method args="e" name="updateSelection">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateSelectionDel) {
+				this.updateSelectionDel.disconnectAll();
+				if (this.multiValueSelections && this.o) {
+					for (var i = 0; i < this.multiValueSelections.length; i++) {
+						this.multiValueSelections[i].registerDelegate(this.o, this.updateSelectionDel);
+					}
+				}
+			}
+			if (this.selector && this.o) {
+				this._settingValue = true;
+				var isChecked = false;
+				for (var i = 0; i < this.multiValueSelections.length; i++) {
+					if (this.multiValueSelections[i].isSelected(this.o)) {
+						if (this.multiValueSelections[i].name == "true") {
+							isChecked = true;
+						}
+						break;
+					}
+				}
+				this.selector.setValue(isChecked);
+				this._settingValue = false;
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Creates the base checkbox widget.
+		-->
+		<method name="createViews">
+			<![CDATA[
+			this.selector = new BaseCheckbox.Class(this, {
+				name: "editor",
+				enabled: this.enabled
+			});
+			this.valueChangedDel.connect(this.selector, "onvalue");
+			this.updateSelection();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Updates the bound model object when a new value is selected
+		 -->
+		<method args="e" name="valueChanged">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var value = String(this.selector.getValue());
+			if (!this._settingValue && this.multiValueSelections && this.multiValueSelections.length > 0 && value != null) {
+				for (var i = 0; i < this.multiValueSelections.length; i++) {
+					if (this.multiValueSelections[i].name == value) {
+						this.multiValueSelections[i].setPropertyValues(this.o);
+						break;
+					}
+				}
+			}
+			]]>
+		</method>
+	</BaseMultiValueSelector>
+	
+	<!---
+		<p>This class defines widget that allows the business user to select whether or not an option is true (checked)
+		or false (unchecked). Based on the selection, multiple properties may be set. The properties that are set
+		are defined by two instances of {@link cmc/foundation/MultiValueSelection} - one instance must be named <code>true</code>
+		and the other must be named <code>false</code>.</p>
+		
+		<p>The following code snippet shows how to use a multi-value checkbox. When the checkbox is checked, the
+		"true" MultiValueSelection is applied to set wishlistEnabled=true, singleWishList=true and multipleWishList=false.
+		When the checkbox is unchecked, the "false" MultiValueSelection is applied to set all three properties to <code>false</code>.</p>
+		
+		@START_CODE
+			<MultiValueCheckbox promptText="Enable wishlist">
+				<MultiValueSelection name="true">
+					<Xml name="values">
+						<wishlistEnabled>true</wishlistEnabled>
+						<singleWishList>true</singleWishList>
+						<multipleWishList>false</multipleWishList>
+					</Xml>
+				</MultiValueSelection>
+				<MultiValueSelection name="false">
+					<Xml name="values">
+						<wishlistEnabled>false</wishlistEnabled>
+						<singleWishList>false</singleWishList>
+						<multipleWishList>false</multipleWishList>
+					</Xml>
+				</MultiValueSelection>
+			</MultiValueCheckbox>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/MultiValueCheckbox">
+		<dependency localName="CheckboxMultiValueSelector" moduleName="cmc/foundation/CheckboxMultiValueSelector"/>
+		<!--- 
+			@keywords private
+			the list of selections 
+			@type cmc/foundation/MultiValueSelection[]
+		-->
+		<variable name="multiValueSelections"/>
+		
+		<!---
+			Creates the editor for the given property component.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new CheckboxMultiValueSelector.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				enabled: parentComponent.enabled,
+				o: parentComponent.o,
+				multiValueSelections: this.multiValueSelections
+			});
+			]]>
+		</method>
+	 </PropertiesComponent>
+	
+	<!---
+		Use this class to define a selectable value in a multiple value selector.
+		Multiple instances of this class can be declared as children of an instance
+		of {@link cmc/foundation/MultiValueSelector}. Declare a single instance of a dataset (xml) 
+		with the name "values" to define the property values that will
+		be applied to the current object when this value is selected.
+		
+		<p>For example, the following code snippet 
+		declares a selection that contains two property values, promotionRuleName, and promotionGroup. A tag name inside
+		the dataset node refers to a property's name, and the tag's inner text is the property value. 
+		
+		@START_CODE
+			<MultiValueSelection displayName="${promotionResources.promotion_type_OrderLevelPercentDiscount}">
+				<dataset name="values">
+					<promotionRuleName>OrderLevelPercentDiscount</promotionRuleName>
+					<promotionGroup>OrderLevelPromotion</promotionGroup>
+				</dataset>
+			</MultiValueSelection>
+		@END_CODE
+	 -->
+	<Node classDefinition="true" definitionName="cmc/foundation/MultiValueSelection">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<!--- 
+			The text displayed for this selection when this selection is used as an item in a multi-value selector. 
+		 -->
+		<variable name="displayName" type="string" value=""/>
+		<!--- 
+			The source for an image to be displayed after the displayname for this selection when this selection is used as an item in a multi-value selector. 
+		 -->
+		<variable name="imageSrc" type="string" value=""/>
+		
+		<!--- 
+			@keywords private
+			A list of property values for selection. Each property value contains two attributes, name, and value. 
+			@type Object[]
+		 -->
+		<variable name="propertyValues" value="${null}"/>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+
+		<!--- 
+			@keywords private
+		 -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.parseDataElement();
+			var selections = this.parent.multiValueSelections;
+			if (!selections) {
+				selections = [];
+				this.parent.multiValueSelections = selections;
+			}
+			this.value = selections.length;
+			selections.push(this);
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Constructs property values by parsing the data set node in this selection. 
+		 -->
+		<method name="parseDataElement">
+			<![CDATA[
+			this.propertyValues = [];
+			var nodes = this.values.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				var significant = node.getAttribute("significant") != "false";
+				var propertyName = node.nodeName;
+				var propertyValue = XMLUtil.getNodeValue(node);
+				var objectPath = null;
+				if (node.getAttribute("objectPath")) {
+					objectPath = node.getAttribute("objectPath");
+				}
+				var nameValuePair = new Object();
+				nameValuePair.name = propertyName;
+				nameValuePair.value = propertyValue;
+				nameValuePair.objectPath = objectPath;
+				nameValuePair.significant = significant;
+				this.propertyValues.push(nameValuePair);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Sets the the properties in the given object with the property values in this selection. 
+			@param cmc/foundation/ModelObject o the model object whose properties to be set.
+		 -->
+		<method args="o" name="setPropertyValues">
+			<![CDATA[
+			for (var i = 0; i < this.propertyValues.length; i++) {
+				o.setPropertyValue(this.propertyValues[i].name, this.propertyValues[i].objectPath, this.propertyValues[i].value);
+			}
+			return true;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Register a delegate to be executed when the significant properties change
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			for (var i = 0; i < this.propertyValues.length; i++) {
+				if (this.propertyValues[i].significant) {
+					var propertyObject = o;
+					if (this.propertyValues[i].objectPath != null) {
+						propertyObject = o.getObject(this.propertyValues[i].objectPath, false, null, del);
+					}
+					if (propertyObject != null) {
+						var property = propertyObject.getProperty(this.propertyValues[i].name);
+						del.connect(property, "onvalue");
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Determines if an object's properties are set. 
+			@param cmc/foundation/ModelObject o a model object to be examined.
+			@return true if this model object is set with the property values in this selection. False otherwise. 
+		 -->
+		<method args="o" name="isSelected">
+			<![CDATA[
+			for (var i = 0; i < this.propertyValues.length; i++) {
+				if (this.propertyValues[i].significant) {
+					var oPropertyValue = o.getPropertyValue(this.propertyValues[i].name, this.propertyValues[i].objectPath);
+					if (oPropertyValue && this.propertyValues[i].value) {
+						if (oPropertyValue != this.propertyValues[i].value) {
+							return false;
+						}
+					}
+					else if (!oPropertyValue && this.propertyValues[i].value) {
+						return false;
+					}
+					else if (oPropertyValue && !this.propertyValues[i].value) {
+						return false;
+					}
+				}
+			}
+			return true;
+			]]>
+		</method>
+	 </Node>
+</Definitions>

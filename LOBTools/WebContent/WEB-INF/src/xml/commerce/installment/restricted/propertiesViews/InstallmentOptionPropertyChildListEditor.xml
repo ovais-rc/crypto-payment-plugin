@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<PropertyChildListEditor classDefinition="true" definitionName="cmc/installment/OptionPropertyChildListEditor">
+		<dependency localName="OptionBaseListEditor" moduleName="cmc/installment/OptionBaseListEditor"/>
+
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new OptionBaseListEditor.Class(parentComponent, {
+				name: "editor",
+				model: parentComponent.model,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				objectTypes: this.objectTypes,
+				listClass: this.listClass,
+				listDefinition: this.listDefinition,
+				embedded: true,
+				singleChild: this.singleChild,
+				newButtonResource: this.newButtonResource
+			});
+			]]>
+		</method>
+
+	</PropertyChildListEditor>
+
+	<!--- @keywords private -->
+	<BaseChildListEditor classDefinition="true" definitionName="cmc/installment/OptionBaseListEditor">
+		<!--- @keywords private -->
+		<method args="actionDef" name="createChild">
+			<![CDATA[
+			var creatableDef = actionDef.objectSelector.objectDefinition;
+			var currentInstallmentOptions = this.getSortedInstallmentOptionElements(this.o);
+			var newO = this.o.model.createNewObject(creatableDef, this.o, true);
+			if (currentInstallmentOptions.length > 0) {
+				var lastInstallmentOption = currentInstallmentOptions[currentInstallmentOptions.length - 1];
+				var newInstallmentNum = lastInstallmentOption.getPropertyValue("numInstallments");
+				newInstallmentNum = parseInt(newInstallmentNum);
+				if (!isNaN(newInstallmentNum) && newInstallmentNum > 0) {
+					newInstallmentNum++;
+					newO.setPropertyValue("numInstallments", null, newInstallmentNum.toString());
+				}
+				newO.setPropertyValue("rate", null, lastInstallmentOption.getPropertyValue("rate"));
+				newO.setPropertyValue("minInstallmentAmt", null, lastInstallmentOption.getPropertyValue("minInstallmentAmt"));
+			}
+			else {
+				for (var i = 0; i < actionDef.objectSelector.selectors.length; i++) {
+					newO.setPropertyValue(actionDef.objectSelector.selectors[i].propertyName, null, actionDef.objectSelector.selectors[i].propertyValue);
+				}
+			}
+			if (this.o.lockCount == 0) {
+				this.o.updateChildObjects(true);
+				this.list.showObjectInView(newO, true);
+			}
+			]]>
+		</method>
+
+		<method args="parentObj" name="getSortedInstallmentOptionElements">
+			<![CDATA[
+			var sortedPropertyName = "numInstallments";
+			var elements = [];
+			if (parentObj) {
+				elements = parentObj.getObjects("InstallmentOption");
+				var comparator = function(o1, o2) {
+					var seq1 = o1.getPropertyValue("numInstallments");
+					var seq2 = o2.getPropertyValue("numInstallments");
+					return Number(seq1) - Number(seq2);
+				};
+				elements.sort(comparator);
+			}
+			return elements;
+			]]>
+		</method>
+	</BaseChildListEditor>
+
+</Definitions>

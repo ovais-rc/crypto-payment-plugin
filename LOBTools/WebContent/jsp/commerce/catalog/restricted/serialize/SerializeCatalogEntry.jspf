@@ -1,0 +1,131 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"%>
+<fmt:setLocale value="en_US" />
+
+<object objectType="${objectType}">
+	<c:set var="showVerb" value="${showVerb}" scope="request"/>
+	<c:set var="businessObject" value="${catalogEntry}" scope="request"/>
+	<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+	<catenttypeId readonly="true"><wcf:cdata data="${catalogEntry.catalogEntryTypeCode}"/></catenttypeId>
+	<catentryId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.uniqueID}"/></catentryId>
+	<ownerId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.externalIdentifier.ownerID}"/></ownerId>
+	<objectStoreId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+	<partnumber><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.externalIdentifier.partNumber}"/></partnumber>
+	<c:forEach var="userDataField" items="${catalogEntry.userData.userDataField}">
+		<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+	</c:forEach>
+	<jsp:directive.include file="SerializeCatalogEntryDescription.jspf"/>
+	<jsp:directive.include file="SerializeCatalogEntryListPrice.jspf"/>
+	<jsp:directive.include file="SerializeCatalogEntryExtraProperties.jspf"/>
+	
+	<c:if test="${objectType == 'Kit' or objectType == 'InheritedKit'}">
+		<jsp:directive.include file="SerializeCatalogEntryConfigModel.jspf"/>
+	</c:if>
+	
+	<%--
+		The if check below will serialize CMC object 'SKUDefiningAttribute', if
+		the SKU list is being displayed.
+		The reason this is needed is because the ProductSKU navigation list
+		displays attribute and values for the SKU.
+	--%>
+	<c:if test="${objectType == 'ProductSKU' or objectType == 'InheritedProductSKU'}">
+		<jsp:directive.include file="SerializeCatalogEntrySKUDefiningAttribute.jspf"/>
+	</c:if>
+	<%-- Construct parent references if requested for search.
+		This is only safe for search as it assumes the parent is the real parent, not a sales category.
+		Check that parent exists in the case of unassigned catalog entries
+	--%>
+	<c:if test="${serializeParentReferenceObject eq 'true'}">
+		<%-- Construct parent reference for catalog entries that are not product SKUs --%>
+		<c:if test="${!(objectType == 'ProductSKU' or objectType == 'InheritedProductSKU' or objectType == 'PredefinedDKit' or objectType == 'InheritedPredefinedDKit') && !(empty catalogEntry.parentCatalogGroupIdentifier)}">
+			<reference>
+				<object objectType="${childType}" ${childTypeLocked}>
+					<objectStoreId>${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+					<sequence><fmt:formatNumber type="number" value="${catalogEntry.displaySequence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></sequence>
+					<c:set var="showVerb" value="${showVerb}" scope="request"/>
+					<c:set var="businessObject" value="${catalogEntry.parentCatalogGroupIdentifier}" scope="request"/>
+					<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+					<childCatalogEntryId>${catalogEntry.parentCatalogGroupIdentifier.uniqueID}_${catalogEntry.catalogEntryIdentifier.uniqueID}</childCatalogEntryId>
+					<c:set var="parentObjectType" value="CatalogGroup" />
+					<c:set var="parentOwningStoreId" value="${catalogEntry.parentCatalogGroupIdentifier.externalIdentifier.storeIdentifier.uniqueID}" />
+					<c:if test="${(param.storeId) != parentOwningStoreId}">
+						<c:set var="parentObjectType" value="InheritedCatalogGroup" />
+					</c:if>
+					<parent>
+						<object objectType="${parentObjectType}">
+							<catgroupId>${catalogEntry.parentCatalogGroupIdentifier.uniqueID}</catgroupId>
+							<identifier><wcf:cdata data="${catalogEntry.parentCatalogGroupIdentifier.externalIdentifier.groupIdentifier}"/></identifier>
+							<objectStoreId>${parentOwningStoreId}</objectStoreId>
+						</object>
+					</parent>
+				</object>
+			</reference>
+		</c:if>
+		<%-- Construct parent reference for product SKUs --%>
+		<c:if test="${(objectType == 'ProductSKU' or objectType == 'InheritedProductSKU') && !(empty catalogEntry.parentCatalogEntryIdentifier)}">
+			<reference>
+				<object objectType="${childType}" ${childTypeLocked}>
+					<objectStoreId>${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+					<sequence><fmt:formatNumber type="number" value="${catalogEntry.displaySequence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></sequence>
+					<c:set var="showVerb" value="${showVerb}" scope="request"/>
+					<c:set var="businessObject" value="${catalogEntry.parentCatalogEntryIdentifier}" scope="request"/>
+					<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+					<childCatalogEntryId>${catalogEntry.parentCatalogEntryIdentifier.uniqueID}_${catalogEntry.catalogEntryIdentifier.uniqueID}</childCatalogEntryId>
+					<c:set var="parentObjectType" value="Product" />
+					<c:set var="parentOwningStoreId" value="${catalogEntry.parentCatalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}" />
+					<c:if test="${(param.storeId) != parentOwningStoreId}">
+						<c:set var="parentObjectType" value="InheritedProduct" />
+					</c:if>
+					<parent>
+						<object objectType="${parentObjectType}">
+							<catentryId>${catalogEntry.parentCatalogEntryIdentifier.uniqueID}</catentryId>
+							<partnumber><wcf:cdata data="${catalogEntry.parentCatalogEntryIdentifier.externalIdentifier.partNumber}"/></partnumber>
+							<objectStoreId>${parentOwningStoreId}</objectStoreId>
+						</object>
+					</parent>
+				</object>
+			</reference>
+		</c:if>
+		
+		<%-- Construct parent reference for predefined dynamic kits --%>
+		<c:if test="${(objectType == 'PredefinedDKit' or objectType == 'InheritedPredefinedDKit') && !(empty catalogEntry.parentCatalogEntryIdentifier)}">			
+			<reference>
+				<object objectType="${childType}" ${childTypeLocked}>
+					<objectStoreId>${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+					<sequence><fmt:formatNumber type="number" value="${catalogEntry.displaySequence}" maxIntegerDigits="10" maxFractionDigits="13" pattern="#0.#" /></sequence>
+					<c:set var="showVerb" value="${showVerb}" scope="request"/>
+					<c:set var="businessObject" value="${catalogEntry.parentCatalogEntryIdentifier}" scope="request"/>
+					<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+					<childCatalogEntryId>${catalogEntry.parentCatalogEntryIdentifier.uniqueID}_${catalogEntry.catalogEntryIdentifier.uniqueID}</childCatalogEntryId>
+					<c:set var="parentObjectType" value="Kit" />
+					<c:set var="parentOwningStoreId" value="${catalogEntry.parentCatalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}" />
+					<c:if test="${(param.storeId) != parentOwningStoreId}">
+						<c:set var="parentObjectType" value="InheritedKit" />
+					</c:if>
+					<parent>					   
+						<object objectType="${parentObjectType}">
+							<catentryId>${catalogEntry.parentCatalogEntryIdentifier.uniqueID}</catentryId>
+							<partnumber><wcf:cdata data="${catalogEntry.parentCatalogEntryIdentifier.externalIdentifier.partNumber}"/></partnumber>
+							<objectStoreId>${parentOwningStoreId}</objectStoreId>
+							<%-- Add model information to the parent dynamic kit --%>
+							<jsp:directive.include file="SerializeCatalogEntryConfigModel.jspf"/>
+						</object>
+					</parent>
+				</object>
+			</reference>
+		</c:if>
+	</c:if>
+</object>

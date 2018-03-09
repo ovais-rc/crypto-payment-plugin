@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<Validator classDefinition="true" definitionName="cmc/installment/InstallmentRuleValidator">
+		<variable name="includeCatEntriesPropertyName" type="string" value="includeAllCatEntries"/>
+		<variable name="blankCatEntryObjectType" type="string" value="AllInclusionChildCatentry"/>
+		<variable name="inclusionCatalogObjectPath" type="string" value="InclusionCatalogGroup"/>
+		
+		<variable name="includePayMethodsPropertyName" type="string" value="includeAllPayMethods"/>
+		<variable name="blankPaymentMethodObjectType" type="string" value="AllPaymentMethod"/>
+		<variable name="paymentMethodsObjectPath" type="string" value="PaymentMethod"/>
+		<variable name="installmentOptionObjectPath" type="string" value="InstallmentOption"/>
+		
+		<variable name="includeManufacturersPropertyName" type="string" value="includeAllManufacturers"/>
+		<variable name="currencyPropertyName" type="string" value="currency"/>
+		<variable name="manufacturersObjectType" type="string" value="ManufacturerCondition"/>
+		
+		<method args="o, changedProperty" name="validate">
+			<![CDATA[
+			if (typeof(changedProperty) == "undefined") changedProperty = null;
+			if (o) {
+				var includeAllPayments = o.getPropertyValue(this.includePayMethodsPropertyName) == "true";
+				if (includeAllPayments) {
+					var children = o.getObjects(this.paymentMethodsObjectPath);
+					for (var i = 0; i < children.length; i++) {
+						children[i].deleteObject();
+					}
+					var blankObj = o.getObject(this.blankPaymentMethodObjectType, true);
+				}
+				else {
+					var blankObj = o.getObject(this.blankPaymentMethodObjectType);
+					if (blankObj) {
+						blankObj.deleteObject();
+					}
+				}
+				var includeAllCatEntries = o.getPropertyValue(this.includeCatEntriesPropertyName) == "true";
+				if (includeAllCatEntries) {
+					var children = o.getObjects(this.inclusionCatalogObjectPath);
+					for (var i = 0; i < children.length; i++) {
+						children[i].deleteObject();
+					}
+					var blankObj = o.getObject(this.blankCatEntryObjectType, true);
+				}
+				else {
+					var blankObj = o.getObject(this.blankCatEntryObjectType);
+					if (blankObj) {
+						blankObj.deleteObject();
+					}
+				}
+				var includeAllManufacturers = o.getPropertyValue(this.includeManufacturersPropertyName) == "true";
+				if (includeAllManufacturers) {
+					var children = o.getObjects(this.manufacturersObjectType);
+					for (var i = 0; i < children.length; i++) {
+						children[i].deleteObject();
+					}
+				}
+				else {
+					var manufacturerObj = o.getObject(this.manufacturersObjectType, true);
+				}
+				var installmentOptions = o.getObjects(this.installmentOptionObjectPath);
+				if (installmentOptions && installmentOptions.length > 0) {
+					var originalCurrency = installmentOptions[0].getProperty(this.currencyPropertyName);
+					var currentCurrency = o.getProperty(this.currencyPropertyName);
+					if ((currentCurrency) && (currentCurrency.value != originalCurrency.value)) {
+						for (var i = 0; i < installmentOptions.length; i++) {
+							var option = installmentOptions[i];
+							var curProperty = option.getProperty(this.currencyPropertyName);
+							curProperty.change(currentCurrency.value);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+	</Validator>
+</Definitions>

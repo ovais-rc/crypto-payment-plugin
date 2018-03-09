@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","de",{error:"Das Einfügen von Grafiken wird derzeit nicht unterstützt. Verwenden Sie stattdessen die Symbolleistenoption 'Grafik einfügen'."});

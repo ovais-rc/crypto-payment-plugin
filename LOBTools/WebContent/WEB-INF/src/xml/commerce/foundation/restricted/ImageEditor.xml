@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		<p>
+		cmc/foundation/ImageEditor is a property editor that is used to edit URLs that point to images.
+		The images constructed from the URL will be displayed either next to or below the text entry field used to
+		edit the URL. Instances of cmc/foundation/ImageEditor may only be declared as children
+		of {@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.
+		</p><p>
+		Override the {@link cmc/foundation/ImageEditor#getImageURL} method if the property value must be modified before 
+		fetching the image. If the property value is used to locate multiple values, the getImageURL method must 
+		return different URLs based on the image index. The total number of images managed by the image editor is 
+		controlled by the {@link cmc/foundation/ImageEditor#imageCount} attribute.
+		</p><p>
+		The following example demonstrates the declaration of an image editor
+		that lets the user edit a property named "tImage". The property is
+		in a child object of object type "SalesCatalogDescription". The image 
+		found at the URL will be displayed below the text entry field.
+		</p>
+		@START_CODE
+			<ImageEditor 
+				promptText="${resourceBundles.thumbnailPrompt}" 
+				objectPath="SalesCatalogDescription" 
+				propertyName="tImage"
+				showImagesBelowText="true"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/ImageEditor" sizeToAvailableWidth="false">
+		<dependency localName="ImageEditorViews" moduleName="cmc/foundation/ImageEditorViews"/>
+		<!---
+			Show the URL editor text entry field. If this is set to false, the text entry field is not available. 
+			You can use this attribute to only show images. The default value is "true".
+		-->
+		<variable name="showText" type="boolean" value="true"/>
+		<!---
+			Show the images below the text entry field. If this is set to "false", the images display 
+			to the right of the text entry field.
+		-->
+		<variable name="showImagesBelowText" type="boolean" value="false"/>
+		<!---
+			The number of images to display. If the property value is used to derive multiple image URLS, set 
+			this value to the number of available images and override the {@link getImageURL} method to
+			return different URLs based on the image index. The default image count is 1.
+		-->
+		<variable name="imageCount" type="number" value="1"/>
+		<!---
+			The width of the image URL text entry field.
+		-->
+		<variable name="urlTextWidth" type="number" value="235"/>
+		
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new ImageEditorViews.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				imageEditor: this
+			});
+			]]>
+		</method>
+		
+		<!---
+			<p>
+			Get the image URL for the specified image index. Override this method to derive the image URL from the property 
+			value. If this image editor supports multiple indexes, the image URL must be derived differently for each 
+			image index. The default implementation returns the unmodified property value.
+			</p>
+			@param string value: the property value
+			@param number imageIndex: the image index. The first image is index 0.
+			@return string: the image URL
+		-->
+		<method args="value, imageIndex" name="getImageURL">
+			<![CDATA[
+			return value;
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords private
+		
+		Image editor views. The image editor views include an entry field for the image URL and an image viewer.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/ImageEditorViews">
+		<dependency localName="PropertyImageViewer" moduleName="cmc/foundation/PropertyImageViewer"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			cmc/foundation/ImageEditor instance.
+		-->
+		<variable name="imageEditor"/>
+				
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.viewsLayout.setVariable("axis", this.imageEditor.showImagesBelowText ? 'y' : 'x');
+			for (var i = 0; i < this.imageEditor.imageCount; i++) {
+				new PropertyImageViewer.Class(this, {
+					placement: "imageViewContainer",
+					imageIndex: i
+				});
+			}
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayout");
+			this.updateLayout();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateLayoutDel) {
+				this.updateLayoutDel.disconnectAll();
+				delete this.updateLayoutDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<method name="updateLayout">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			if (!this.imageViewContainer.visible) {
+				this.url.setVariable("y", 0);
+			}
+			else if (this.url.height > this.imageViewContainer.height) {
+				this.url.setVariable("y", 0);
+				this.imageViewContainer.setVariable("y", this.url.height / 2 - this.imageViewContainer.height / 2);
+			}
+			else {
+				this.imageViewContainer.setVariable("y", 0);
+				this.url.setVariable("y", this.imageViewContainer.height / 2 - this.url.height / 2);
+			}
+			this.updateLayoutDel.connect(this.url, "onheight");
+			this.updateLayoutDel.connect(this.imageViewContainer, "onheight");
+			this.updateLayoutDel.connect(this.imageViewContainer, "onvisible");
+			]]>
+		</method>
+				
+		<AxisLayout axis="x" name="viewsLayout" spacing="5"/>
+		<PunchOutTextEditor enabled="${this.parent.parent.enabled}" name="url" property="${this.parent.parent.property}" visible="${this.parent.imageEditor.showText}" width="${this.parent.imageEditor.urlTextWidth}"/>
+		<Component name="imageViewContainer" visible="${this.parent.imageEditor.imageCount &gt; 0}">
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>
+	</Component>
+
+	<!---
+		@keywords private
+		
+		Image viewer.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/ImageViewer" focusable="false">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<!---
+			The maximum width allowed for this viewer. Images that are wider than this value will be scaled down.
+			If this value is not specified then the viewer will display the image in its original size.
+		-->
+		<variable name="maximumWidth" type="number" value="${null}"/>
+		
+		<!---
+			This attribute specifies if image tooltip shows along with this image viewer.
+		-->
+		<variable name="showImageToolTip" type="boolean" value="false"/>
+		
+		<!---
+			Reference to the model instance.
+		-->
+		<variable name="model" value="${ModelUtil.Singleton.findModelForView(this)}"/>
+		<!---
+			Image URL property.
+		-->
+		<variable name="property" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.property != null) {
+				this.updateValue();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set a new property instance for this viewer.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					if (this.inited) {
+						this.updateValue();
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the property value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(this.property.o);
+			var wchDomain = ContextUtil.Singleton.findContextValue(this.property.o, "externalContentHostname") ? ContextUtil.Singleton.findContextValue(this.property.o, "externalContentHostname").value : "digitalexperience.ibm.com"; 
+			if (wchDomain.indexOf("http") == 0)
+			{
+				var dotList = wchDomain.split('.');
+				dotList.splice(0,1);
+				wchDomain = dotList.join('.');
+			}
+			var restWebAlias = (cmcConfig.restWebAlias ? cmcConfig.restWebAlias : "/wcs/resources");
+			var storeId = ((storeConfig != null) ? storeConfig.storeId : null);
+			if (this.property != null) {
+				var o = this.property.o;
+				while (o != null) {
+					var imageStoreId = o.getPropertyValue("imageStoreId");
+					if (imageStoreId != null && imageStoreId != "") {
+						storeId = imageStoreId;
+						break;
+					}
+					else if (o.objectStoreId != "") {
+						storeId = o.objectStoreId;
+						break;
+					}
+					o = o.parentObject;
+				}
+			}
+			var url;
+			if (cmcConfig.serviceContextRoot) {
+				url = cmcConfig.serviceContextRoot;
+			}
+			else {
+				url = "/lobtools";
+			}
+			var imageURL = this.getImageURL();
+			if (this.property != null && this.property.propertyDefinition != null && this.property.propertyDefinition.urlResolver != null) {
+				imageURL = this.property.propertyDefinition.urlResolver.resolveURL(this.property);
+			}
+			if (imageURL.indexOf("http") == 0 && (imageURL.indexOf(restWebAlias) > -1 || imageURL.indexOf(wchDomain) > -1))
+			{
+				url = imageURL;
+			}
+			else{
+				url += "/LoadImage?" + (storeId != null ? "storeId=" + storeId + "&" : "") + "imageURL=" + encodeURIComponent(imageURL);
+				if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+					url += "&workspaceName=" + ContextUtil.Singleton.findContextValue(null, "workspaceName").value;
+				}
+				if (ConfigProperties.Singleton.loadContentSecurely) {
+					url += "&identityId=" + encodeURIComponent(ContextUtil.Singleton.findContextValue(null, "identityId").value);
+				}
+			}
+			if (url != this.display.image.currentImageUrl) {
+				this.setVariable('height', this.display.image.height);
+				this.display.image.setVariable("currentImageUrl", url);
+			}
+			if (this.showImageToolTip && url != null && url != "") {
+				this.display.image.tip.setVariable("imageURL", url);
+				this.display.image.setVariable("enabled", true);
+			}
+			else {
+				this.display.image.tip.setVariable("imageURL", "");
+				this.display.image.tip.setVariable("enabled", false);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the image URL.
+		-->
+		<method name="getImageURL">
+			<![CDATA[
+			return this.property.value;
+			]]>
+		</method>
+		
+		<BorderedView borderColor="${this.classroot.style.thumbnailbordercolor}" borderSize="${this.classroot.style.thumbnailbordersize}" marginBottomSize="${this.classroot.style.thumbnailmarginbottomsize}" name="display" paddingSize="${this.classroot.style.thumbnailpaddingsize}">  	
+			<Component name="image" stretches="both">
+				<Tooltip name="tip"/>
+				<variable name="currentImageUrl" type="string" value=""/>
+				<!--- 
+					@keywords private 
+					Indicates that DragAndDropMangement should not to set this resource in the cloneViewItem method
+				-->
+				<variable name="dndIgnoreResource" type="boolean" value="true"/>				
+				
+				<method args="url" name="setCurrentImageUrl">
+					<![CDATA[
+					if (url != null && url != "") {
+						this.currentImageUrl = url;
+						this.set_imageSource(url);
+					}
+					]]>
+				</method>
+				
+				<handler name="onload">
+					<![CDATA[
+					this.classroot.setVariable('height', null);
+					this.scaleImage();
+					]]>
+				</handler>
+				<!---
+					@keywords private
+					This method will scale the image down if required, and otherwise resets the image to its fullsize.
+				-->
+				<method name="scaleImage">
+					<![CDATA[
+					if (this.classroot.maximumWidth != null && this.imageNaturalWidth > this.classroot.maximumWidth) {
+						var scale = this.imageNaturalWidth / this.classroot.maximumWidth;
+						this.setVariable('width', this.classroot.maximumWidth);
+						this.setVariable('height', this.imageNaturalHeight / scale);
+					}
+					else {
+						this.setVariable('height', this.imageNaturalHeight);
+						this.setVariable('width', this.imageNaturalWidth);
+					}
+					]]>
+				</method>				
+
+				<method args="currentImageUrl" name="set_currentImageUrl">
+					<![CDATA[
+					this.setCurrentImageUrl(currentImageUrl);
+					]]>
+				</method>
+			</Component>
+		</BorderedView>
+		
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		
+		Image viewer used by cmc/foundation/ImageEditorViews.
+	-->
+	<ImageViewer classDefinition="true" definitionName="cmc/foundation/PropertyImageViewer" property="${this.parent.parent.property}">
+		<!---
+			@keywords private
+			Image index.
+		-->
+		<variable name="imageIndex" type="number" value="0"/>
+
+		<!--- @keywords private -->
+		<method name="getImageURL">
+			<![CDATA[
+			return this.parent.imageEditor.getImageURL(this.property.value, this.imageIndex);
+			]]>
+		</method>
+	</ImageViewer>
+	
+	<!---
+		@keywords private
+		
+		Image viewer used by cmc/foundation/GridImage.
+	-->
+	<ImageViewer classDefinition="true" definitionName="cmc/foundation/GridImageViewer">
+		<!--- @keywords private -->
+		<method name="getImageURL">
+			<![CDATA[
+			var column = this.parent.column;
+			if (column.originalColumn) {
+				column = column.originalColumn;
+			}
+			return column.getImageURL(this.property.value);
+			]]>
+		</method>
+	</ImageViewer>
+	 
+</Definitions>

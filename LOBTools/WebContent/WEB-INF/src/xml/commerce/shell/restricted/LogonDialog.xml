@@ -1,0 +1,905 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- Logon service. -->
+	<Service definitionName="cmc/shell/LogonService" retryOnError="true" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/Logon">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			Parse the response values from the logon service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			var logonIdElement = XMLUtil.getFirstElement(e, "logonId");
+			if (logonIdElement == null) {
+				ContextUtil.Singleton.findContextValue(null, "logonId").setVariable("value", requestParent.logonInputView.logonInputDetailsView.logonId.getText());
+			}
+			requestParent.logonComplete();
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			if (ds.requestParent.isPasswordExpired) {
+				ds.requestParent.changePasswordFailed(message, code);
+			}
+			else {
+				ds.requestParent.logonFailed(message, code);
+			}
+			]]>
+		</method>
+	</Service>
+
+	<!--- Change password service. -->
+	<Service definitionName="cmc/shell/ChangePasswordService" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/ChangePassword">
+		<!---
+			Parse the response values from the change password service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			requestParent.changePasswordComplete();
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			ds.requestParent.changePasswordFailed(message, code);
+			]]>
+		</method>
+	</Service>
+
+	<!--- Resolve Identity service. -->
+	<Service definitionName="cmc/shell/ResolveIdentityService" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/ResolveIdentity">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="LogonPanel" moduleName="cmc/shell/LogonPanel"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Parse the response values from the resolve identity service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			var identityId = ContextUtil.Singleton.findContextValue(null, "identityId").value;
+			var identitySignature = ContextUtil.Singleton.findContextValue(null, "identitySignature").value;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.shell.LogonDialog", "INFO", "cmc/shell/ResolveIdentityService", "parseValues", "identityId is " + identityId);
+			}
+			if (identityId != null && identitySignature != null) {
+				SingletonRegistry.applicationMenu.initializeMenu();
+				RootComponent.Singleton.logonSuccessful();
+			}
+			else {
+				if (!SingletonRegistry.logonPanel) {
+					new LogonPanel.Class(RootComponent.Singleton, {
+						id: "logonPanel"
+					});
+				}
+				else if (!SingletonRegistry.logonPanel.visible) {
+					SingletonRegistry.logonPanel.setVariable("visible", true);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			if (!SingletonRegistry.logonPanel) {
+				new LogonPanel.Class(RootComponent.Singleton, {
+					id: "logonPanel"
+				});
+			}
+			else if (!SingletonRegistry.logonPanel.visible) {
+				SingletonRegistry.logonPanel.setVariable("visible", true);
+			}
+			]]>
+		</method>
+	</Service>
+
+	<!--- Resolve WCTokens service. -->
+	<Service definitionName="cmc/shell/ResolveWCTokensService" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/ResolveWCTokens">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="ResolveIdentityService" moduleName="cmc/shell/ResolveIdentityService"/>
+		<!---
+			Parse the response values from the resolve identity service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			var identityId = ContextUtil.Singleton.findContextValue(null, "identityId").value;
+			var identitySignature = ContextUtil.Singleton.findContextValue(null, "identitySignature").value;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.shell.LogonDialog", "INFO", "cmc/shell/ResolveWCTokensService", "parseValues", "identityId is " + identityId);
+			}
+			if (identityId != null && identitySignature != null) {
+				if (!RootComponent.Singleton.resolveWCTokenOnly) {
+					SingletonRegistry.applicationMenu.initializeMenu();
+					RootComponent.Singleton.logonSuccessful();
+				}
+				else {
+					RootComponent.Singleton.resolveWCTokenSuccessful();
+				}
+			}
+			else if (!RootComponent.Singleton.resolveWCTokenOnly) {
+				ResolveIdentityService.Singleton.doRequest(requestParent, {
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+				});
+			}
+			else {
+				RootComponent.Singleton.resolveWCTokenFail();
+				if (console.console) {
+					if (console.console.window && console.console.window.bringToFront) {
+						console.console.window.bringToFront();
+					}
+					else if (console.console.bringToFront) {
+						console.console.bringToFront();
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			if (!RootComponent.Singleton.resolveWCTokenOnly) {
+				ResolveIdentityService.Singleton.doRequest(ds.requestParent, {
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+				});
+			}
+			else {
+				RootComponent.Singleton.resolveWCTokenFail();
+				if (console.console) {
+					if (console.console.window && console.console.window.bringToFront) {
+						console.console.window.bringToFront();
+					}
+					else if (console.console.bringToFront) {
+						console.console.bringToFront();
+					}
+				}
+			}
+			]]>
+		</method>
+	</Service>
+	
+	<!--- Resolve IBM id service. -->
+	<Service definitionName="cmc/shell/ResolveIbmIdService" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/ResolveIbmId">
+		<!---
+			Parse the response values from the resolve identity service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			requestParent.logonComplete();
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			ds.requestParent.logonFailed(message, code);
+			]]>
+		</method>
+	</Service>
+
+	<!--- Link IBM id service. -->
+	<Service definitionName="cmc/shell/LinkIbmIdService" retryOnError="true" sendIdentity="false" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/LinkIbmId">
+		<!---
+			Parse the response values from the logon service.
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			this.inherited(arguments);
+			requestParent.logonComplete();
+			]]>
+		</method>
+
+		<!---
+			Handle service exception. The default implementation will log the exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param message string: the exception message
+			@param code string: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			ds.requestParent.logonFailed(message, code);
+			]]>
+		</method>
+	</Service>
+
+	<!---
+		@keywords private
+		
+		This class implements the main input area within Management Center log on dialog.
+		It also handles all the log on related events.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/LogonInputWidget" focusable="false">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="FoundationConstants" moduleName="cmc/foundation/FoundationConstants"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="LogonService" moduleName="cmc/shell/LogonService"/>
+		<dependency localName="ChangePasswordService" moduleName="cmc/shell/ChangePasswordService"/>
+		<dependency localName="LinkIbmIdService" moduleName="cmc/shell/LinkIbmIdService"/>
+
+		<!---
+			@keywords private
+			Flag that determines whether this input widget is for re-logon or not. The default
+			value is set to false.
+		-->
+		<variable name="reLogon" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Flag that determines whether the logon service is currently running or not. The
+			default value is set to false, and it will be set to true when this flag is false
+			and the user clicks on the logon button to start the logon process.
+		-->
+		<variable name="isLogonServiceRunning" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Flag that determines whether to proceed with change password when the logon process
+			completed successfully or not. The default value is set to false, and it will be set
+			to true when the change password checkbox is checked at the time logon process starts.
+		-->
+		<variable name="isChangePassword" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Flag that determines whether the password that the user entered has been expired or
+			not. The default value is set to false, and it will be set to true when the logon
+			service failed and indicated that the user's password is expired.
+		-->
+		<variable name="isPasswordExpired" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "FINER", "cmc/shell/LogonInputWidget", "oninit", "Initializing log on dialog in Management Center.");
+			}
+			this.resetForm();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="logon">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LogonInputWidget", "logon", "Starts log on process by invoking logonService.");
+			}
+			this.logonErrorMessageView.setVariable("visible", false);
+			if (!this.isLogonServiceRunning) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("logon");
+				this.setVariable("isLogonServiceRunning", true);
+				this.isChangePassword = this.logonInputView.logonInputDetailsView.logonFooterBar.changePassword.getValue();
+				var logonId = this.logonInputView.logonInputDetailsView.logonId.getText();
+				if (ContextUtil.Singleton.findContextValue(null, "logonIdDN").value != null) {
+					logonId = ContextUtil.Singleton.findContextValue(null, "logonIdDN").value;
+				}
+				LogonService.Singleton.doRequest(this, {
+					logonId: logonId,
+					password: this.logonInputView.logonInputDetailsView.password.getText(),
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+				});
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			else {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/LogonInputWidget", "logon", "Log on process has already begun and logonService is currently running.");
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="linkIbmId">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LogonInputWidget", "linkIbmId", "Invoke the linkIbmId service.");
+			}
+			this.logonErrorMessageView.setVariable("visible", false);
+			if (!this.isLogonServiceRunning) {
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("linkIbmId");
+				this.setVariable("isLogonServiceRunning", true);
+				var logonId = this.logonInputView.linkIbmIdView.logonId.getText();
+				if (ContextUtil.Singleton.findContextValue(null, "logonIdDN").value != null) {
+					logonId = ContextUtil.Singleton.findContextValue(null, "logonIdDN").value;
+				}
+				LinkIbmIdService.Singleton.doRequest(this, {
+					logonId: logonId,
+					password: this.logonInputView.linkIbmIdView.password.getText(),
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+				});
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			}
+			else {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/LogonInputWidget", "linkIbmId", "Link process has already begun and linkIbmId service is currently running.");
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="resetForm">
+			<![CDATA[
+			var ibmIdEnabled = ContextUtil.Singleton.findContextValue(null, "ibmIdEnabled").value == "true";
+			this.logonInputView.changePasswordInputDetailsView.setVariable("visible", false);
+			this.logonInputView.linkIbmIdView.setVariable("visible", false);
+			this.logonInputView.logonInputDetailsView.setVariable("visible", !ibmIdEnabled);
+			this.logonInputView.ibmIdView.setVariable("visible", ibmIdEnabled);
+			this.logonErrorMessageView.setVariable("visible", false);
+			this.isChangePassword = false;
+			this.isPasswordExpired = false;
+			this.logonInputView.changePasswordInputDetailsView.newPasswordVerify.setText("");
+			this.logonInputView.changePasswordInputDetailsView.newPassword.setText("");
+			this.logonInputView.changePasswordInputDetailsView.oldPassword.setText("");
+			this.logonInputView.logonInputDetailsView.logonFooterBar.changePassword.setValue(false);
+			this.logonInputView.logonInputDetailsView.password.setText("");
+			this.logonInputView.linkIbmIdView.logonId.setText("");
+			this.logonInputView.linkIbmIdView.password.setText("");
+			if (this.reLogon) {
+				this.logonInputView.logonInputDetailsView.logonId.setText(ContextUtil.Singleton.findContextValue(null, "logonId").value);
+			}
+			else {
+				this.logonInputView.logonInputDetailsView.logonId.setText("");
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "FINER", "cmc/shell/LogonInputWidget", "resetForm", "Completed initializing log on dialog in Management Center.");
+			}
+			]]>
+		</method>
+
+		<!---
+			This method handles the event when log on completed successfully.
+		-->
+		<method name="logonComplete">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "FINER", "cmc/shell/LogonInputWidget", "logonComplete", "Log on process completed successfully, start loading the main application.");
+			}
+			if (this.isChangePassword) {
+				this.showChangePassword();
+			}
+			else {
+				if (!this.reLogon) {
+					this.startToolAccessControlCheck();
+				}
+				else {
+					RootComponent.Singleton.logonSuccessful();
+				}
+			}
+			this.setVariable("isLogonServiceRunning", false);
+			]]>
+		</method>
+
+		<!---
+			This method handles the event when log on failed. It takes the reason code of the
+			failure and display its associated error message in the error message area.
+			@param string message: message for logon failure
+			@param string code: reason code for logon failure
+		-->
+		<method args="message, code" name="logonFailed">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/LogonInputWidget", "logonFailed(message,code)", "Log on process failed due to the following reason (" + code + "): " + message);
+			}
+			var errorMessage = "";
+			if (code == FoundationConstants.Singleton.ERROR_LOGON_WRONG_LOGON_ID || code == FoundationConstants.Singleton.ERROR_LOGON_WRONG_PASSWORD || code == FoundationConstants.Singleton.ERROR_LOGON_MISSING_LOGON_ID || code == FoundationConstants.Singleton.ERROR_LOGON_MISSING_PASSWORD || code == FoundationConstants.Singleton.ERROR_LOGON_PASSWORD_LENGTH) {
+				errorMessage = shellResources.Singleton.errorLogonUserWrongIDPassword.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_USER_ACCOUNT_DISABLED) {
+				errorMessage = shellResources.Singleton.errorLogonUserAccountDisabled.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_PARENT_ORG_LOCKED) {
+				errorMessage = shellResources.Singleton.errorLogonUserParentOrgLocked.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_USER_NOT_REGISTERED_IN_STORE) {
+				errorMessage = shellResources.Singleton.errorLogonUserNotRegisteredInStore.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_USER_PENDING_APPROVAL) {
+				errorMessage = shellResources.Singleton.errorLogonUserInPendingApproval.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_NOT_ALLOWED_NOW) {
+				errorMessage = message;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_PASSWORD_EXPIRED) {
+				errorMessage = shellResources.Singleton.errorLogonUserPasswordExpired.string;
+				this.isPasswordExpired = true;
+				this.showChangePassword();
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_LOGON_IBM_ID_NOT_LINKED) {
+				errorMessage = message;
+				this.showIbmIdLink();
+			}
+			else {
+				errorMessage = message;
+			}
+			this.logonErrorMessageView.errorMessage.setVariable("text", errorMessage);
+			this.logonErrorMessageView.setVariable("visible", true);
+			this.setVariable("isLogonServiceRunning", false);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="showChangePassword">
+			<![CDATA[
+			this.logonInputView.logonInputDetailsView.setVariable("visible", false);
+			this.logonInputView.ibmIdView.setVariable("visible", false);
+			this.logonInputView.linkIbmIdView.setVariable("visible", false);
+			this.logonInputView.changePasswordInputDetailsView.setVariable("visible", true);
+			FocusUtil.setFocus(this.logonInputView.changePasswordInputDetailsView.oldPassword);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="showIbmIdLink">
+			<![CDATA[
+			this.logonInputView.logonInputDetailsView.setVariable("visible", false);
+			this.logonInputView.ibmIdView.setVariable("visible", false);
+			this.logonInputView.changePasswordInputDetailsView.setVariable("visible", false);
+			this.logonInputView.linkIbmIdView.setVariable("visible", true);
+			FocusUtil.setFocus(this.logonInputView.linkIbmIdView.logonId);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the initial focus
+		-->
+		<method name="setInitialFocus">
+			<![CDATA[
+			var ibmIdEnabled = ContextUtil.Singleton.findContextValue(null, "ibmIdEnabled").value == "true";
+			if (ibmIdEnabled) {
+				FocusUtil.setFocus(this.logonInputView.ibmIdView.ibmIdButtons.ibmIdLogon, false);
+			}
+			else if (this.reLogon) {
+				FocusUtil.setFocus(this.logonInputView.logonInputDetailsView.password, false);
+			}
+			else {
+				FocusUtil.setFocus(this.logonInputView.logonInputDetailsView.logonId, false);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="submitChangePassword">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LogonInputWidget", "submitChangePassword", "Starts change password process by invoking changePasswordService.");
+			}
+			this.logonErrorMessageView.setVariable("visible", false);
+			if (!this.isLogonServiceRunning) {
+				this.setVariable("isLogonServiceRunning", true);
+				if (this.isPasswordExpired) {
+					var ibmIdEnabled = ContextUtil.Singleton.findContextValue(null, "ibmIdEnabled").value == "true";
+					var logonId = ibmIdEnabled ? this.logonInputView.linkIbmIdView.logonId.getText() : this.logonInputView.logonInputDetailsView.logonId.getText();
+					LogonService.Singleton.doRequest(this, {
+						logonId: logonId,
+						password: this.logonInputView.changePasswordInputDetailsView.oldPassword.getText(),
+						logonPasswordNew: this.logonInputView.changePasswordInputDetailsView.newPassword.getText(),
+						logonPasswordVerify: this.logonInputView.changePasswordInputDetailsView.newPasswordVerify.getText(),
+						channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+					});
+				}
+				else {
+					ChangePasswordService.Singleton.doRequest(this, {
+						logonPasswordOld: this.logonInputView.changePasswordInputDetailsView.oldPassword.getText(),
+						logonPassword: this.logonInputView.changePasswordInputDetailsView.newPassword.getText(),
+						logonPasswordVerify: this.logonInputView.changePasswordInputDetailsView.newPasswordVerify.getText()
+					});
+				}
+			}
+			else {
+				if (Logger.Singleton.enabled) {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/LogonInputWidget", "submitChangePassword", "Change password process has already begun and changePasswordService is currently running.");
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="cancelChangePassword">
+			<![CDATA[
+			if (this.isPasswordExpired) {
+				this.resetForm();
+				this.setInitialFocus();
+			}
+			else {
+				this.startToolAccessControlCheck();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="changePasswordComplete">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "FINER", "cmc/shell/LogonInputWidget", "changePasswordComplete", "Change password process completed successfully, start loading the main application.");
+			}
+			this.setVariable("isLogonServiceRunning", false);
+			if (ContextUtil.Singleton.findContextValue(null, "ibmIdEnabled").value == "true") {
+				this.linkIbmId();
+			}
+			else {
+				this.startToolAccessControlCheck();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="message, code" name="changePasswordFailed">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "WARNING", "cmc/shell/LogonInputWidget", "changePasswordFailed(message,code)", "Change password process failed due to the following reason (" + code + "): " + message);
+			}
+			var errorMessage = "";
+			if (code == FoundationConstants.Singleton.ERROR_CHANGE_PASSWORD_MISSING_OLD_PASSWORD || code == FoundationConstants.Singleton.ERROR_CHANGE_PASSWORD_WRONG_OLD_PASSWORD) {
+				errorMessage = shellResources.Singleton.errorChangePasswordWrongOldPassword.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_CHANGE_PASSWORD_MISSING_NEW_PASSWORD || code == FoundationConstants.Singleton.ERROR_CHANGE_PASSWORD_MISSING_NEW_PASSWORD_VERIFY) {
+				errorMessage = shellResources.Singleton.errorChangePasswordWrongNewPassword.string;
+			}
+			else if (code == FoundationConstants.Singleton.ERROR_CHANGE_PASSWORD_NEW_PASSWORD_DO_NOT_MATCH) {
+				errorMessage = shellResources.Singleton.errorChangePasswordNewPasswordDoNotMatch.string;
+			}
+			else {
+				errorMessage = message;
+			}
+			this.logonErrorMessageView.errorMessage.setVariable("text", errorMessage);
+			this.logonErrorMessageView.setVariable("visible", true);
+			this.setVariable("isLogonServiceRunning", false);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="logonWithIbmId">
+			<![CDATA[
+			var url = (cmcConfig.serviceContextRoot ? cmcConfig.serviceContextRoot : "/lobtools") + "/cmc/LogonWithIbmId";
+			var newWindowObj = new Object();
+			newWindowObj.URL = url;
+			newWindowObj.windowName = "Login";
+			newWindowObj.windowFeatures = "left=0,top=0,width=1014,height=710,scrollbars=no,toolbar=no,directories=no,status=no,menubar=no,copyhistory=no,resizable=yes";
+			openNewWindow(newWindowObj);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="startToolAccessControlCheck">
+			<![CDATA[
+			this.finishToolAccessControlCheckDel = new EventHandler.Class(this, "finishToolAccessControlCheck");
+			this.finishToolAccessControlCheckDel.connect(SingletonRegistry.applicationMenu, "onnumberOfAccessibleTools");
+			SingletonRegistry.applicationMenu.initializeMenu();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="finishToolAccessControlCheck">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (SingletonRegistry.applicationMenu.numberOfAccessibleTools == 0) {
+				this.logonFailed(shellResources.Singleton.errorLogonNoAccessibleTools.string, null);
+			}
+			else {
+				RootComponent.Singleton.logonSuccessful();
+			}
+			if (this.finishToolAccessControlCheckDel) {
+				this.finishToolAccessControlCheckDel.disconnectAll();
+				delete this.finishToolAccessControlCheckDel;
+			}
+			]]>
+		</method>
+
+		<Component name="logonErrorMessageView" visible="false">
+			<Component imageSet="errorIcon"/>
+			<TextComponent multiline="true" name="errorMessage" width="584"/>
+			<AxisLayout axis="x" spacing="4"/>
+		</Component>
+		<Component name="logonInputView">
+			<Component name="logonInputDetailsView">
+				<TextComponent text="${shellResources.Singleton.logonDialogUserNamePrompt.string}"/>
+				<Component height="2"/>
+				<InputText enabled="${!this.classroot.reLogon}" name="logonId" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.logon();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="20"/>
+				<TextComponent text="${shellResources.Singleton.logonDialogPasswordPrompt.string}"/>
+				<Component height="2"/>
+				<InputText name="password" password="true" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.logon();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="25" />
+				<Component name="logonFooterBar" width="584">
+					<BaseCheckbox name="changePassword" text="${shellResources.Singleton.logonDialogChangePasswordPrompt.string}" valign="middle">
+						<!--- @keywords private -->
+						<handler args="k" name="onkeydown">
+							<![CDATA[
+							if (k == 13) {
+								this.classroot.logon();
+							}
+							]]>
+						</handler>
+					</BaseCheckbox>
+					<Button enabled="${!this.classroot.isLogonServiceRunning}" text="${shellResources.Singleton.logonButton.string}" align="right">
+						<handler name="onclick">
+							<![CDATA[
+							this.classroot.logon();
+							]]>
+						</handler>
+					</Button>
+				</Component>
+				<AxisLayout axis="y"/>
+			</Component>
+			<Component name="changePasswordInputDetailsView" visible="false">
+				<TextComponent multiline="true" text="${shellResources.Singleton.changePasswordDialogSectionHeader.string}" width="584"/>
+				<Component height="20"/>
+				<TextComponent text="${shellResources.Singleton.changePasswordDialogOldPasswordPrompt.string}"/>
+				<Component height="2"/>
+				<InputText name="oldPassword" password="true" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.submitChangePassword();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="20"/>
+				<TextComponent text="${shellResources.Singleton.changePasswordDialogNewPasswordPrompt.string}"/>
+				<Component height="2"/>
+				<InputText name="newPassword" password="true" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.submitChangePassword();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="20"/>
+				<TextComponent text="${shellResources.Singleton.changePasswordDialogNewPasswordVerifyPrompt.string}"/>
+				<Component height="2"/>
+				<InputText name="newPasswordVerify" password="true" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.submitChangePassword();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="25"/>
+				<Component width="584">
+					<Component name="changePasswordButtonView" align="right">
+						<Button enabled="${!this.classroot.isLogonServiceRunning}" text="${shellResources.Singleton.cancelButton.string}" primary="false">
+							<handler name="onclick">
+								<![CDATA[
+								this.classroot.cancelChangePassword();
+								]]>
+							</handler>
+						</Button>
+						<Button enabled="${!this.classroot.isLogonServiceRunning}" text="${shellResources.Singleton.changeButton.string}">
+							<handler name="onclick">
+								<![CDATA[
+								this.classroot.submitChangePassword();
+								]]>
+							</handler>
+						</Button>
+						<AxisLayout axis="x" spacing="10"/>
+					</Component>
+				</Component>
+				<AxisLayout axis="y" spacing="0"/>
+			</Component>
+			<Component name="ibmIdView" visible="false">
+				<TextComponent multiline="true" text="${shellResources.Singleton.ibmIdDialogSectionHeader.string}" width="584"/>
+				<Component height="25"/>
+				<Component width="584" name="ibmIdButtons">
+					<Button text="${shellResources.Singleton.logonButton.string}" name="ibmIdLogon" align="right">
+						<handler name="onclick">
+							<![CDATA[
+							this.classroot.logonWithIbmId();
+							]]>
+						</handler>
+					</Button>
+				</Component>
+				<AxisLayout axis="y" spacing="0"/>
+			</Component>
+			<Component name="linkIbmIdView">
+				<TextComponent multiline="true" text="${shellResources.Singleton.linkIbmIdSectionHeader.string}" width="584"/>
+				<Component height="25"/>
+				<TextComponent text="${shellResources.Singleton.logonDialogUserNamePrompt.string}"/>
+				<Component height="2"/>
+				<InputText name="logonId" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.linkIbmId();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="20"/>
+				<TextComponent text="${shellResources.Singleton.logonDialogPasswordPrompt.string}"/>
+				<Component height="2"/>
+				<InputText name="password" password="true" width="584">
+					<!--- @keywords private -->
+					<handler args="k" name="onkeydown">
+						<![CDATA[
+						if (k == 13) {
+							this.classroot.linkIbmId();
+						}
+						]]>
+					</handler>
+				</InputText>
+				<Component height="25" />
+				<Component width="584">
+					<Button text="${shellResources.Singleton.linkIbmIdButton.string}" align="right">
+						<handler name="onclick">
+							<![CDATA[
+							this.classroot.linkIbmId();
+							]]>
+						</handler>
+					</Button>
+				</Component>
+				<AxisLayout axis="y"/>
+			</Component>
+		</Component>
+		<AxisLayout axis="y" spacing="20"/>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		
+		This class defines the dialog for Management Center log on when the session has expired
+		and the user is forced to log on again.
+	-->
+	<Dialog classDefinition="true" closeable="false" definitionName="cmc/shell/LogonDialog" title="${shellResources.Singleton.logonDialogTitle.string}">
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<LogonInputWidget name="logonInputWidget" package="cmc/shell" reLogon="true"/>
+		
+		<!---
+			@keywords private
+			Set the initial focus
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.logonInputWidget.setInitialFocus();
+			]]>
+		</method>
+	</Dialog>
+
+	<!---
+		@keywords private
+		
+		This class defines the log on page in Management Center. It consists of the title of the
+		page, the main log on input area, and Management Center copyright statement as the footer.
+	-->
+	<Component classDefinition="true" definitionName="cmc/shell/LogonPanel" fgcolor="#ffffff">
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!--- @keywords private -->
+		<method name="resetForm">
+			<![CDATA[
+			this.logonPane.logonInputWidget.resetForm();
+			this.logonPane.logonInputWidget.setInitialFocus();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.logonPane.logonInputWidget.setInitialFocus();
+			]]>
+		</handler>
+
+		<Component height="${RootComponent.Singleton.height}" stretches="both" imageSet="LogonBg" width="${RootComponent.Singleton.width}"/>
+		<Component name="logonPane" x="${Math.max(Math.min(Math.floor(RootComponent.Singleton.width * 0.312), RootComponent.Singleton.width - this.width), 0)}" y="${Math.max(Math.min(RootComponent.Singleton.height - this.height, 170), 0)}">
+			<AxisLayout axis="y" spacing="0"/>
+			<TextComponent fontsize="26" multiline="true" x="50" text="${shellResources.Singleton.applicationTitle.string}" width="${Math.max(RootComponent.Singleton.width - this.parent.x - 100, 584)}"/>
+			<Component height="50"/>
+			<LogonInputWidget name="logonInputWidget" package="cmc/shell" x="50"/>
+		</Component>
+		<Component x="${this.parent.logonPane.x + 50}" y="${RootComponent.Singleton.height - 100}" width="584">
+			<TextComponent fontsize="10" multiline="true" text="${shellResources.Singleton.logonDialogLicenseStatement.string}" width="450"/>
+			<Component imageSet="logonLogo" align="right"/>
+		</Component>
+	</Component>
+
+</Definitions>

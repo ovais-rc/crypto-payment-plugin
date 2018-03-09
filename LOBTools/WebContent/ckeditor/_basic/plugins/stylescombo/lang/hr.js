@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","hr",{label:"Stilovi",panelTitle:"Stilovi",panelTitle1:"Stilovi blokova",panelTitle2:"Stilovi umetanja",panelTitle3:"Stilovi objekta"});

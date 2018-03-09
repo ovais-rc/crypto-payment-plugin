@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		This class is used to set a context value in an object. Context value is a name-value pair where the name is set in 
+		{@link cmc/foundation/ContextValue#parameterName} and the value in {@link cmc/foundation/ContextValue#value}. Context values are used by
+		{@link cmc/foundation/ServiceParam} to pass parameters to a service. The value of {@link cmc/foundation/ContextValue#parameterName}	is added
+		as a parameter to the service and the value of {@link cmc/foundation/ContextValue#value} is set as the value of this parameter. 
+		To specify which context value is to be used the same value of {@link cmc/foundation/ContextValue#parameterName} is specified in
+		{@link cmc/foundation/ServiceParam#name}.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/ContextValue">
+		<!---
+			The parameter name for the context value. This name is the same as the service URL query parameter.
+			This is a required attribute.
+		-->
+		<variable name="parameterName" type="string"/>
+		<!---
+			The context value.
+		-->
+		<variable name="value" type="string" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var values = this.parent.contextValues;
+			if (!values) {
+				values = {};
+				this.parent.contextValues = values;
+			}
+			var urlValue = this.getInitialValue(this.parameterName);
+			if (urlValue != null) {
+				this.value = urlValue;
+			}
+			values[this.parameterName] = this;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Get the initial value from the URL parameters.
+			@param string name: the name of the attribute
+		-->
+		<method args="name" name="getInitialValue">
+			<![CDATA[
+			var value = cmcConfig[name];
+			if (typeof value == "undefined" || value == null) {
+				return null;
+			}
+			else {
+				return value;
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		<p>cmc/foundation/BaseContext is the base class of all context classes. A context definition is used to contain context
+		values that are used to resolve {@link cmc/foundation/ServiceParam service parameter} and
+		{@link cmc/foundation/EnablementCondition enablement condition} values.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/BaseContext" initstage="defer">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="parentContext" value="${null}"/>
+
+		<!---
+			@keywords private
+			Array of cmc/foundation/ContextValue objects defined in this context.
+		-->
+		<variable name="contextValues" value="${null}"/>
+
+		<!---
+			@keywords private
+			Array of cmc/foundation/InitService objects defined in this context.
+		-->
+		<variable name="initServices" value="${[]}"/>
+
+		<!---
+			@keywords private
+			The current store. This attribute is a reference to an instance of {@link cmc/foundation/Store} and is set by the 
+			instance of {@link cmc/foundation/StoreSelectionWidget}.
+		-->
+		<variable name="storeConfig" value="${null}"/>
+
+		<!---
+			@keywords private
+			The context of a context is itself.
+		-->
+		<variable name="localContext" value="${this}"/>
+		<!---
+			@keywords private
+			The unique key for this context.
+		-->
+		<variable name="key" type="string" value=""/>
+
+		<!---  @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.updateStoreConfigurationDel = new EventHandler.Class(this, "updateStoreConfiguration");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateStoreConfigurationDel.disconnectAll();
+			delete this.updateStoreConfigurationDel;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Gets the value of the given name in the context.
+			@return string The value of the given name in the context.
+		-->
+		<method args="parameterName" name="getContextValue">
+			<![CDATA[
+			if (this.contextValues == null) {
+				this.contextValues = {};
+				this.completeInstantiation();
+				DefinitionUtil.completeCreateDefinitionChildren(this);
+			}
+			var contextValue = this.contextValues[parameterName];
+			if (typeof (contextValue) == "undefined" && this.parentContext != null) {
+				contextValue = this.parentContext.getContextValue(parameterName);
+			}
+			return contextValue;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the store configuration.
+		-->
+		<method args="e" name="updateStoreConfiguration">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateStoreConfigurationDel.disconnectAll();
+			this.updateStoreConfigurationDel.connect(this.storeConfig, "onconfigurationLoaded");
+			if (this.storeConfig.defaultLanguage != null) {
+				this.getContextValue("defaultLanguageId").setVariable("value", this.storeConfig.defaultLanguage.languageId);
+				this.getContextValue("defaultLanguageLocale").setVariable("value", this.storeConfig.defaultLanguage.localeName);
+			}
+			this.getContextValue("storeLanguageIds").setVariable("value", this.storeConfig.getStoreLanguageIds());
+			if (this.storeConfig.defaultCurrency != null) {
+				this.getContextValue("defaultCurrencyCode").setVariable("value", this.storeConfig.defaultCurrency.currencyCode);
+			}
+			this.getContextValue("currencyCodes").setVariable("value", this.storeConfig.getCurrencyCodes());
+			this.getContextValue("remoteWidgetsEnabled").setVariable("value", this.storeConfig.remoteWidgets != null ? this.storeConfig.remoteWidgets.isEnabled : "false");
+			this.getContextValue("listPriceListEnabled").setVariable("value", this.storeConfig.listPriceList != null ? this.storeConfig.listPriceList.isEnabled : "false");
+			this.getContextValue("sterlingConfigEnabled").setVariable("value", this.storeConfig.sterlingConfig != null ? this.storeConfig.sterlingConfig.isEnabled : "false");
+			this.getContextValue("seoEnabled").setVariable("value", this.storeConfig.seo != null ? this.storeConfig.seo.isEnabled : "false");
+			if (this.storeConfig.staticContent != null && this.storeConfig.staticContent.storeLevel != null) {
+				this.getContextValue("mobileEnabled").setVariable("value", this.storeConfig.staticContent.storeLevel.indexOf("MOBILE") != -1 ? "true" : "false");
+			}
+			this.updateInputLanguageIds();
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This handler will update the input language IDs for this context when the preferences are loaded.
+		-->
+		<handler eventSource="PreferenceManager.Singleton" name="onload">
+			<![CDATA[
+			this.updateInputLanguageIds();
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This handler will update the input language IDs for this context when the preferences are reset.
+		-->
+		<handler eventSource="PreferenceManager.Singleton" name="onreset">
+			<![CDATA[
+			this.updateInputLanguageIds();
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This handler will update the input language IDs for this context when the preferred input languages are changed.
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCInputLanguageIds") {
+				this.updateInputLanguageIds();
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Update the input language IDs.
+		-->
+		<method name="updateInputLanguageIds">
+			<![CDATA[
+			if (this.storeConfig != null) {
+				var preferredLanguageIds = [];
+				var savedPreference = PreferenceManager.Singleton.getPreference("CMCInputLanguageIds");
+				if (savedPreference != null) {
+					preferredLanguageIds = savedPreference.split(",");
+				}
+				var inputLanguageIds = "";
+				for (var i = 0; i < this.storeConfig.supportedLanguages.length; i++) {
+					var storeLanguage = this.storeConfig.supportedLanguages[i];
+					if (storeLanguage.isDefault || preferredLanguageIds.indexOf(storeLanguage.languageId) != -1) {
+						if (inputLanguageIds.length > 0) {
+							inputLanguageIds += ",";
+						}
+						inputLanguageIds += storeLanguage.languageId;
+					}
+				}
+				this.getContextValue("inputLanguageIds").setVariable("value", inputLanguageIds);
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/ContextUtil" singletonDefinition="true">
+		<dependency localName="GlobalContext" moduleName="cmc/foundation/GlobalContext"/>
+		<dependency localName="StoreContext" moduleName="cmc/foundation/StoreContext"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="WorkspaceContext" moduleName="cmc/foundation/WorkspaceContext"/>
+		<!--- @keywords private -->
+		<variable name="globalContext" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="storeContexts" value="${{}}"/>
+
+		<!---
+			@keywords private
+		-->
+		<method args="node, del" name="findContext">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			if (this.globalContext == null) {
+				this.createGlobalContext();
+			}
+			var ctx = this.globalContext;
+			while (node) {
+				if (typeof (node.localContext) != "undefined") {
+					if (del != null) {
+						del.connect(node, "onlocalContext");
+					}
+					ctx = node.localContext;
+					break;
+				}
+				if (node.parent && node != node.parent) {
+					node = node.parent;
+				}
+				else {
+					node = null;
+				}
+			}
+			return ctx;
+			]]>
+		</method>
+
+		<!---
+			Searches for a context value.
+			@START_CODE
+			ContextUtil.findContextValue(v, "locale");
+			@END_CODE
+
+			@param node node: the node on which to start the search
+			@param string parameterName: the parameter name
+		-->
+		<method args="node, parameterName, del" name="findContextValue">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var contextValue = null;
+			var context = this.findContext(node, del);
+			if (context != null) {
+				contextValue = context.getContextValue(parameterName);
+				if (contextValue != null && del != null) {
+					del.connect(contextValue, "onvalue");
+				}
+			}
+			return contextValue;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method args="node, del" name="findStoreConfig">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var storeConfig = null;
+			var context = this.findContext(node, del);
+			if (context != null && context.storeConfig != null) {
+				if (del) {
+					del.connect(context.storeConfig, "onconfigurationLoaded");
+				}
+				if (context.storeConfig.configurationLoaded || del == null) {
+					storeConfig = context.storeConfig;
+				}
+			}
+			return storeConfig;
+			]]>
+		</method>
+
+		<!---
+			Searches for an instance of the store context class by store ID, and also workspace, task
+			group and task ID if the context is accessed within the scope of a workspace task group.
+
+			@param string storeConfig: store configuration
+			@param string workspaceName: Name of the workspace
+			@param string taskGroup: Name of the workspace task group
+			@param string task: Name of the workspace task
+			@param boolean approvedContent: Set to true to get approved content context.
+			@return cmc/foundation/BaseContext instance of the store context class for the given store
+		-->
+		<method args="storeConfig, workspaceName, taskGroup, task, approvedContent" name="findStoreContext">
+			<![CDATA[
+			if (typeof(workspaceName) == "undefined") workspaceName = null;
+			if (typeof(taskGroup) == "undefined") taskGroup = null;
+			if (typeof(task) == "undefined") task = null;
+			if (typeof(approvedContent) == "undefined") approvedContent = false;
+			if (this.globalContext == null) {
+				this.createGlobalContext();
+			}
+			var key = storeConfig.storeId;
+			if (!approvedContent && workspaceName != null) {
+				key += "|" + workspaceName + "|" + taskGroup + "|" + task;
+			}
+			if (approvedContent) {
+				key += "|approvedContent";
+			}
+			var storeContext = this.storeContexts[key];
+			if (storeContext == null) {
+				var workspaceContext = null;
+				if (!approvedContent && workspaceName != null) {
+					workspaceContext = DefinitionUtil.createDefinitionInstance(WorkspaceContext, this, {
+						parentContext: this.globalContext
+					});
+					workspaceContext.getContextValue("workspaceName").setVariable("value", workspaceName);
+					workspaceContext.getContextValue("workspaceTaskGroup").setVariable("value", taskGroup);
+					workspaceContext.getContextValue("workspaceTask").setVariable("value", task);
+				}
+				if (approvedContent) {
+					workspaceContext = DefinitionUtil.createDefinitionInstance(WorkspaceContext, this, {
+						parentContext: this.globalContext
+					});
+					workspaceContext.getContextValue("workspaceName").setVariable("value", "");
+					workspaceContext.getContextValue("workspaceTaskGroup").setVariable("value", "");
+					workspaceContext.getContextValue("workspaceTask").setVariable("value", "");
+				}
+				storeContext = DefinitionUtil.createDefinitionInstance(StoreContext, this, {
+					parentContext: workspaceContext == null ? this.globalContext : workspaceContext,
+					storeConfig: storeConfig,
+					key: key
+				});
+				storeContext.getContextValue("storeId").setVariable("value", storeConfig.storeId);
+				storeContext.getContextValue("storeType").setVariable("value", storeConfig.storeType);
+				storeContext.getContextValue("storeName").setVariable("value", storeConfig.storeName);
+				storeContext.getContextValue("assetStoreId").setVariable("value", storeConfig.assetStoreId);
+				storeContext.updateStoreConfiguration();
+				this.storeContexts[key] = storeContext;
+			}
+			return storeContext;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="createGlobalContext">
+			<![CDATA[
+			this.globalContext = DefinitionUtil.createDefinitionInstance(GlobalContext, this, {});
+			this.globalContext.getContextValue("locale").setVariable("value", cmcConfig.locale);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="getGlobalContext">
+			<![CDATA[
+			if (this.globalContext == null) {
+				this.createGlobalContext();
+			}
+			return this.globalContext;
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

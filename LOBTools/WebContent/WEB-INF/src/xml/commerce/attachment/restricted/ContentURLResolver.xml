@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		This class resolves content URLs.
+	-->
+	<URLResolver classDefinition="true" definitionName="cmc/attachment/ContentURLResolver">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			URL prefix token that is used to identify unresolved content URLs.
+		-->
+		<variable name="CMS_HOST_TOKEN" type="string" value="http://[cmsHost]"/>
+		
+		<!---
+			Rest asset path.
+		-->
+		<variable name="REST_ASSET_PATH" type="string" value="/store/0/storeAsset?assetPath="/>
+	
+		<!---
+			This method determines if the specified property is an unresolved content URL and resolves it
+			to a valid URL based on the store configuration.
+			If the property value is not an unresolved content URL, then
+			the property value is returned unchanged.
+			@param cmc/foundation/ModelProperty property the URL property
+			@return the resolved URL 
+		-->
+		<method args="property" name="resolveURL">
+			<![CDATA[
+			var resolvedURL = property.value;
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(property.o);
+			var externalContentEnabled = "DISABLED";
+			var externalContentContext = ContextUtil.Singleton.findContextValue(property.o, "externalContentEnablementModeForStore");
+			if (externalContentContext != null && externalContentContext != "undefined"){
+				externalContentEnabled = externalContentContext.value;
+			}
+			
+			if (resolvedURL.indexOf(this.CMS_HOST_TOKEN) == 0 && storeConfig != null && storeConfig.resolveContentURL != null) {
+				resolvedURL = resolvedURL.substring(this.CMS_HOST_TOKEN.length, resolvedURL.length);
+				var cmsHost = storeConfig.resolveContentURL.cmsPreviewHost;
+				if (cmsHost == null) {
+					cmsHost = storeConfig.resolveContentURL.cmsHost;
+				}
+				var cmsPath = storeConfig.resolveContentURL.cmsPreviewPath;
+				if (cmsPath == null) {
+					cmsPath = storeConfig.resolveContentURL.cmsPath;
+				}
+				var encode = storeConfig.resolveContentURL.encodeForPreview;
+				if (encode == null) {
+					encode = storeConfig.resolveContentURL.encode;
+				}
+				var path = "";
+				if (cmsHost != null) {
+					path += cmsHost;
+				}
+				if (cmsPath != null) {
+					path += cmsPath;
+				}
+				if ("false" != encode) {
+					resolvedURL = encodeURIComponent(resolvedURL);
+				}
+				resolvedURL = path + resolvedURL;
+			}
+ 			else if (storeConfig != null &&  resolvedURL.trim() != ""
+ 					&& resolvedURL.indexOf("http") != 0  && (externalContentEnabled == "ENABLED" || externalContentEnabled == "COMPATIBILITY")){
+ 					// not a full qualified URL, use storeHandler storeAssets rest service to handle the request. 
+				var url = window.location;
+				var restWebAlias = (cmcConfig.restWebAlias ? cmcConfig.restWebAlias : "/wcs/resources");
+ 				resolvedURL = url.protocol + "//" + url.hostname + restWebAlias + REST_ASSET_PATH + resolvedURL;
+ 			}
+			return resolvedURL;
+			]]>
+		</method>
+	</URLResolver>
+	
+	<!---
+		This enablement condition returns true if the resolved value starts with
+		http://[cmsHost].
+	-->
+	<EnablementCondition classDefinition="true" definitionName="cmc/attachment/ContentURLEnablementCondition">
+		<!---
+			URL prefix token that is used to identify unresolved content URLs.
+		-->
+		<variable name="CMS_HOST_TOKEN" type="string" value="http://[cmsHost]"/>
+		
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var val = this.getValue(o);
+			var enabled = val != null && val.indexOf(this.CMS_HOST_TOKEN) == 0;
+			return this.negate ? !enabled : enabled;
+			]]>
+		</method>
+	</EnablementCondition>
+	
+	<!---
+		<p>The <code>attImageContentURLValidator</code> class is a property level validator. If the property associated with the validator
+		is a content managed URL, then the URL is examined to ensure that it is an image. Validation will only occur
+		if the URL starts with http://[cmsHost]. If the URL contains a renderType parameter, then it must be set to RESOURCE.
+		If the URL contains a mimeType parameter, then the MIME type must be an image.
+		All other URLs will be considered valid.
+	 -->
+	<Validator classDefinition="true" definitionName="cmc/attachment/ImageContentURLValidator">
+		<dependency localName="attachmentResources" moduleName="cmc/attachment/AttachmentResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			The error message text to display when the property value is not a valid image URL. The message has one substitution variables denoted 
+			by {0} which is the property display name.
+		-->
+		<variable name="errorMessage" type="string" value="${attachmentResources.Singleton.contentMustBeImage.string}"/>
+		<!---
+			URL prefix token that is used to identify unresolved content URLs.
+		-->
+		<variable name="CMS_HOST_TOKEN" type="string" value="http://[cmsHost]"/>
+		<!---
+			MIME type parameter.
+		-->
+		<variable name="MIME_TYPE_PARAMETER" type="string" value="mimeType"/>
+		<!---
+			Render type parameter.
+		-->
+		<variable name="RENDER_TYPE_PARAMETER" type="string" value="renderType"/>
+		<!---
+			Resource render type.
+		-->
+		<variable name="RESOURCE_RENDER_TYPE" type="string" value="RESOURCE"/>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (this.isEnabled(o) && property != null) {
+				var contentType = null;
+				var renderType = null;
+				if (property.value != null && property.value.indexOf(this.CMS_HOST_TOKEN) == 0) {
+					var url = property.value;
+					var queryIndex = url.indexOf("?");
+					var query = queryIndex > -1 ? url.substring(queryIndex + 1, url.length) : null;
+					if (query != null) {
+						var params = query.split("&");
+						if (params != null) {
+							for (var i = 0; i < params.length; i++) {
+								var param = params[i].split("=");
+								if (param != null && param.length == 2) {
+									if (this.MIME_TYPE_PARAMETER == param[0] && contentType == null) {
+										contentType = param[1];
+									}
+									else if (this.RENDER_TYPE_PARAMETER == param[0] && renderType == null) {
+										renderType = param[1];
+									}
+								}
+							}
+						}
+					}
+				}
+				if ((renderType != null && renderType != this.RESOURCE_RENDER_TYPE) || (contentType != null && contentType.indexOf("image") != 0)) {
+					var message = StringUtil.Singleton.replaceParams(this.errorMessage, [property.propertyDefinition.displayName]);
+					property.addValidationError(this, message);
+				}
+				else {
+					property.clearValidationError(this);
+				}
+			}
+			]]>
+		</method>
+	</Validator>
+</Definitions>

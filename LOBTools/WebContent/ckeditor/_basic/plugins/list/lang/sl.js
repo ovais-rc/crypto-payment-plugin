@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","sl",{bulletedlist:"Naštevni seznam",numberedlist:"Oštevilčen seznam",ibm:{numberedTitle:"Oštevilčen seznam",bulletedTitle:"Naštevni seznam",description:"Nastavitve bodo uveljavljene za trenutno raven seznama",fontsize:"Velikost pisave:"}});

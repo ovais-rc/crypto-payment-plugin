@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","th",{bold:"ตัวหนา",italic:"ตัวเอียง",strike:"ขีดทับ",subscript:"ตัวห้อย",superscript:"ตัวยก",underline:"ขีดเส้นใต้"});

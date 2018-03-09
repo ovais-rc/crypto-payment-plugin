@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	
+	<!---
+		@keywords private final
+		
+		<p>
+		This class represents a memory manager for defining attributes. 
+		</p>
+	 -->
+	<Node definitionName="cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager" singletonDefinition="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+	
+		<!---
+			@keywords private
+			
+			<p>
+			An array of defining attribute objects.
+			</p>			
+			
+			{@link cmc/catalog/CatalogEntryDefiningAttribute CatalogEntryDefiningAttribute}
+		 -->
+		<variable name="attributeObjects" value="${{}}"/>
+
+		<!---
+			@keywords private
+			
+			<p>
+			An array of product objects.
+			</p>		
+			
+			{@link cmc/catalog/Product Product}	
+		 -->		
+		<variable name="parentObjects" value="${{}}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.cleanupSKUDefiningAttributesDel = new EventHandler.Class(this, "cleanupSKUDefiningAttributes");
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			
+			<p>
+			This method will unregister and remove delegates.
+			</p>	
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "destroy");
+			}
+			this.cleanupSKUDefiningAttributesDel.disconnectAll();
+			delete this.cleanupSKUDefiningAttributesDel;
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "destroy");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>
+			Registers the defining attribute object.
+			</p>
+			
+			@param cmc/foundation/ModelObject attributeObject: The defining attribute object to be registered.
+			
+			{@link cmc/catalog/CatalogEntryDefiningAttribute CatalogEntryDefiningAttribute}
+		-->
+		<method args="attributeObject" name="registerAttributeObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "registerAttributeObject", [attributeObject]);
+				Logger.Singleton.log("com.ibm.commerce.lobtools.catalog", "INFO", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "registerAttributeObject", "Registering attribute objects " + attributeObject.logString());
+			}
+			var attributeObjectId = attributeObject.getPropertyValue(attributeObject.objectDefinition.idProperty);
+			if (!this.attributeObjects[attributeObjectId]) {
+				this.attributeObjects[attributeObjectId] = attributeObject;
+				this.parentObjects[attributeObjectId] = attributeObject.parentObject;
+				this.cleanupSKUDefiningAttributesDel.connect(attributeObject, "beingDestroyed");
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "registerAttributeObject");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>
+			Registers the delegate used to clean up defining attributes that have been deleted at the 
+			parent product.
+			</p>
+		-->
+		<method name="registerDelegate">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "registerDelegate");
+			}
+			this.cleanupSKUDefiningAttributesDel.disconnectAll();
+			for (var attributeObjectId in this.attributeObjects) {
+				var attributeObject = this.attributeObjects[attributeObjectId];
+				if (attributeObject) {
+					this.cleanupSKUDefiningAttributesDel.connect(attributeObject, "beingDestroyed");
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "registerDelegate");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>
+			Cleans up defining attributes that have been deleted at the parent product and being
+			used at the child SKU.
+			</p>
+			
+			@param cmc/foundation/ModelObject attributeObject: The defining attribute object to be registered.
+			
+			{@link cmc/catalog/CatalogEntryDefiningAttribute CatalogEntryDefiningAttribute}
+			{@link cmc/catalog/SKUDefiningAttribute}
+		-->		
+		<method args="attributeObject" name="cleanupSKUDefiningAttributes">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "cleanupSKUDefiningAttributes");
+			}
+			var deleting = attributeObject.deleting;
+			var attributeObjectId = attributeObject.getPropertyValue(attributeObject.objectDefinition.idProperty);
+			delete this.attributeObjects[attributeObjectId];
+			var parentObject = this.parentObjects[attributeObjectId];
+			delete this.parentObjects[attributeObjectId];
+			this.registerDelegate();
+			if (deleting) {
+				var skuDefiningAttributes = [];
+				var skuProductADDefiningAttributes = [];
+				var skuProductDefiningAttributes = parentObject.getObjects("ProductChildSKU/ProductSKU/SKUDefiningAttribute");
+				var skuInheritedProductDefiningAttributes = parentObject.getObjects("ProductChildInheritedSKU/InheritedProductSKU/SKUDefiningAttribute");
+				if (skuProductDefiningAttributes != null) {
+					skuDefiningAttributes = skuDefiningAttributes.concat(skuProductDefiningAttributes);
+				}
+				if (skuInheritedProductDefiningAttributes != null) {
+					skuDefiningAttributes = skuDefiningAttributes.concat(skuInheritedProductDefiningAttributes);
+				}
+				var skuProductADDefiningAttributes = parentObject.getObjects("ProductChildSKU/ProductSKU/ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+				var skuInheritedProductADDefiningAttributes = parentObject.getObjects("ProductChildSKU/ProductSKU/ProductSKUReferenceDefiningAttributeDictionaryAttributeWithAllowedValues");
+				var skuProductInheritedADDefiningAttributes = parentObject.getObjects("ProductChildInheritedSKU/InheritedProductSKU/ProductSKUReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues");
+				var skuInheritedProductInheritedADDefiningAttributes = parentObject.getObjects("ProductChildInheritedSKU/InheritedProductSKU/ProductSKUReferenceDefiningInheritedAttributeDictionaryAttributeWithAllowedValues");
+				if (skuProductADDefiningAttributes != null) {
+					skuProductADDefiningAttributes = skuProductADDefiningAttributes.concat(skuProductADDefiningAttributes);
+				}
+				if (skuInheritedProductADDefiningAttributes != null) {
+					skuProductADDefiningAttributes = skuProductADDefiningAttributes.concat(skuInheritedProductADDefiningAttributes);
+				}
+				if (skuProductInheritedADDefiningAttributes != null) {
+					skuProductADDefiningAttributes = skuProductADDefiningAttributes.concat(skuProductInheritedADDefiningAttributes);
+				}
+				if (skuInheritedProductInheritedADDefiningAttributes != null) {
+					skuProductADDefiningAttributes = skuProductADDefiningAttributes.concat(skuInheritedProductInheritedADDefiningAttributes);
+				}
+				for (var i = 0; i < skuDefiningAttributes.length; i++) {
+					var skuDefiningAttribute = skuDefiningAttributes[i];
+					if (skuDefiningAttribute.getPropertyValue("xdata_attrId") == attributeObjectId) {
+						ModelUtil.Singleton.releaseModelObject(skuDefiningAttribute);
+					}
+				}
+				for (var i = 0; i < skuProductADDefiningAttributes.length; i++) {
+					var skuProductADDefiningAttribute = skuProductADDefiningAttributes[i];
+					if (skuProductADDefiningAttribute.getPropertyValue("attrId") == attributeObjectId) {
+						ModelUtil.Singleton.releaseModelObject(skuProductADDefiningAttribute);
+					}
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.catalog", "cmc/catalog/CatalogEntryDefiningAttributeModelObjectManager", "cleanupSKUDefiningAttributes");
+			}
+			]]>
+		</method>
+		
+	</Node>
+	 
+</Definitions>

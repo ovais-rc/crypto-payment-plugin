@@ -1,0 +1,965 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		Business object editor toolbar.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/Toolbar">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="CustomServiceButton" moduleName="cmc/foundation/CustomServiceButton"/>
+		<dependency localName="FindAndReplaceDialog" moduleName="cmc/foundation/FindAndReplaceDialog"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="NavigationListDefinitionButton" moduleName="cmc/foundation/NavigationListDefinitionButton"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ClientActionButton" moduleName="cmc/foundation/ClientActionButton"/>
+		<!---
+			Reference to business object editor instance. This is a required attribute.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			A variable to indicate if the buttons on the toolbar should be enabled - all buttons are disabled until a store is
+			selected.
+		-->
+		<variable name="toolbarEnabled" type="boolean" value="${this.oEditor.isStoreSelected || !this.oEditor.showStoreSelection}"/>
+		<!---
+			Array of custom service buttons.
+		-->
+		<variable name="customServiceButtons" value="${[]}"/>
+		<!---
+			Array of custom service buttons that are available for re-use.
+		-->
+		<variable name="availableCustomServiceButtons" value="${[]}"/>
+		<!---
+			Array of client action buttons.
+		-->
+		<variable name="clientActionButtons" value="${[]}"/>
+		<!---
+			Array of client action buttons that are available for re-use.
+		-->
+		<variable name="availableClientActionButtons" value="${[]}"/>
+		<!---
+			Array of navigation list buttons.
+		-->
+		<variable name="navigationListButtons" value="${[]}"/>
+		<!---
+			Array of navigation list buttons that are available for re-use.
+		-->
+		<variable name="availableNavigationListButtons" value="${[]}"/>
+		
+		<!--- @keywords private -->
+		<AxisLayout axis="x" name="horizontalLayout" spacing="5"/>
+		
+		<!--- @keywords private -->
+		<CenterLayout axis="y"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateNavigationListButtonsDel = new EventHandler.Class(this, "updateNavigationListButtons");
+			this.updateNavigationListButtons();
+			this.updateStoreConfigurationButtonsDel = new EventHandler.Class(this, "updateStoreConfigurationButtons");
+			this.updateStoreConfigurationButtons();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateNavigationListButtonsDel.disconnectAll();
+			delete this.updateNavigationListButtonsDel;
+			this.updateStoreConfigurationButtonsDel.disconnectAll();
+			delete this.updateStoreConfiguraitonButtonsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		<!---
+			Handle changes to the current list of enabled custom services.
+		-->
+		<handler eventSource="this.oEditor" name="onenabledCustomServices">
+			<![CDATA[
+			while (this.customServiceButtons.length > 0) {
+				var button = this.customServiceButtons.pop();
+				button.setVariable("visible", false);
+				button.setVariable("customService", null);
+				button.tooltip.setVariable("text", "");
+				this.availableCustomServiceButtons.unshift(button);
+			}
+			var customServices = this.oEditor.enabledCustomServices;
+			if (customServices.length > 0) {
+				this.horizontalLayout.lock();
+				var findAndReplaceButtonIndex = this.childComponents.indexOf(this.findAndReplaceButton);
+				for (var i = customServices.length - 1; i >= 0; i--) {
+					if (customServices[i].toolbarIcon != "") {
+						if (this.availableCustomServiceButtons.length == 0) {
+							var button = new CustomServiceButton.Class(this, {
+								oEditor: this.oEditor,
+								customService: customServices[i],
+								buttonResource: customServices[i].toolbarIcon
+							});
+							this.customServiceButtons.push(button);
+							this.horizontalLayout.setLayoutOrder(this.findAndReplaceButton, button);
+							this.childComponents.splice(this.childComponents.length - 1, 1);
+							this.childComponents.splice(findAndReplaceButtonIndex + 1, 0, button);
+						}
+						else {
+							var button = this.availableCustomServiceButtons.shift();
+							this.customServiceButtons.push(button);
+							button.setVariable("customService", customServices[i]);
+							button.setVariable("buttonResource", customServices[i].toolbarIcon);
+							button.tooltip.setVariable("text", customServices[i].displayName);
+							button.setVariable("visible", true);
+						}
+					}
+				}
+				this.horizontalLayout.unlock();
+				this.horizontalLayout.update();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Handle changes to the current list of enabled client actions.
+		-->
+		<handler eventSource="this.oEditor" name="onenabledClientActions">
+			<![CDATA[
+			while (this.clientActionButtons.length > 0) {
+				var button = this.clientActionButtons.pop();
+				button.setVariable("visible", false);
+				button.setVariable("clientAction", null);
+				button.tooltip.setVariable("text", "");
+				this.availableClientActionButtons.unshift(button);
+			}
+			var clientActions = this.oEditor.enabledClientActions;
+			if (clientActions.length > 0) {
+				this.horizontalLayout.lock();
+				var previousButton = this.customServiceButtons.length > 0 ? this.customServiceButtons[this.customServiceButtons.length - 1] : this.findAndReplaceButton;
+				var previousButtonIndex = this.childComponents.indexOf(previousButton);
+				for (var i = clientActions.length - 1; i >= 0; i--) {
+					if (clientActions[i].toolbarIcon != "") {
+						if (this.availableClientActionButtons.length == 0) {
+							var button = new ClientActionButton.Class(this, {
+								oEditor: this.oEditor,
+								clientAction: clientActions[i],
+								buttonResource: clientActions[i].toolbarIcon
+							});
+							this.clientActionButtons.push(button);
+							this.horizontalLayout.setLayoutOrder(previousButton, button);
+							this.childComponents.splice(this.childComponents.length - 1, 1);
+							this.childComponents.splice(previousButtonIndex + 1, 0, button);
+						}
+						else {
+							var button = this.availableClientActionButtons.shift();
+							this.clientActionButtons.push(button);
+							button.setVariable("clientAction", clientActions[i]);
+							button.setVariable("buttonResource", clientActions[i].toolbarIcon);
+							button.tooltip.setVariable("text", clientActions[i].displayName);
+							button.setVariable("visible", true);
+						}
+					}
+				}
+				this.horizontalLayout.unlock();
+				this.horizontalLayout.update();
+			}
+			]]>
+		</handler>
+
+		<!---
+			Handle changes to the current list of enabled view options.
+		-->
+		<handler eventSource="this.oEditor" name="onenabledViewOptions">
+			<![CDATA[
+			var viewOptions = [];
+			for (var i = 0; i < this.oEditor.enabledViewOptions.length; i++) {
+				if (this.oEditor.enabledViewOptions[i].addToToolBar) {
+					viewOptions.push(this.oEditor.enabledViewOptions[i]);
+				}
+			}
+			this.viewOptionsButton.setVariable("viewOptions", viewOptions);
+			]]>
+		</handler>
+		
+		<!---
+			Handle changes to buttons that depend on the context
+		-->
+		<method args="e" name="updateStoreConfigurationButtons">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateStoreConfigurationButtonsDel.disconnectAll();
+			this.updateStoreConfigurationButtonsDel.connect(this.oEditor, "onlocalContext");
+			if (this.oEditor.localContext != null) {
+				var storeConfig = this.oEditor.localContext.storeConfig;
+				this.updateStoreConfigurationButtonsDel.connect(storeConfig, "onconfigurationLoaded");
+				var coremetricsEnabled = storeConfig.analytics != null && storeConfig.analytics.isEnabled == "true" && storeConfig.analytics.provider == "coremetrics";
+				this.launchCoremetricsDashboardButton.setVariable("visible", coremetricsEnabled);
+				var mcEnabled = storeConfig.analytics != null && storeConfig.analytics.isMarketingCenterEnabled == "true";
+				if (this.oEditor.showLaunchMarketingCenter) {
+					this.launchMarketingCenterDashboardButton.setVariable("visible", mcEnabled);
+				}
+				this.selectInputLanguage.setVariable("enabled", this.oEditor.multipleInputLanguages && storeConfig.supportedLanguages.length > 1);
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the navigation list buttons.
+		-->
+		<method args="e" name="updateNavigationListButtons">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			while (this.navigationListButtons.length > 0) {
+				var button = this.navigationListButtons.pop();
+				button.setVariable("visible", false);
+				button.setVariable("navigationListDefinition", null);
+				button.tooltip.setVariable("text", "");
+				this.availableNavigationListButtons.unshift(button);
+			}
+			this.updateNavigationListButtonsDel.disconnectAll();
+			this.updateNavigationListButtonsDel.connect(this.oEditor.navigationTree, "onselect");
+			var navigationListDefinitions = this.oEditor.getNavigationListDefinitions(this.updateNavigationListButtonsDel);
+			if (navigationListDefinitions.length > 0) {
+				if (this.oEditor.navigationTree.getSelection() != null) {
+					this.updateNavigationListButtonsDel.connect(this.oEditor.navigationTree.getSelection(), "onnavigationListDefinition");
+				}
+				this.horizontalLayout.lock();
+				var showPropertiesIndex = this.childComponents.indexOf(this.showProperties);
+				for (var i = navigationListDefinitions.length - 1; i >= 0; i--) {
+					if (navigationListDefinitions[i].toolbarIcon != "") {
+						if (this.availableNavigationListButtons.length == 0) {
+							var button = new NavigationListDefinitionButton.Class(this, {
+								oEditor: this.oEditor,
+								navigationListDefinition: navigationListDefinitions[i],
+								buttonResource: navigationListDefinitions[i].toolbarIcon,
+								enabled: navigationListDefinitions[i] !== this.oEditor.navigationTree.getSelection().navigationListDefinition
+							});
+							this.navigationListButtons.push(button);
+							this.horizontalLayout.setLayoutOrder(this.showProperties, button);
+							this.childComponents.splice(this.childComponents.length - 1, 1);
+							this.childComponents.splice(showPropertiesIndex + 1, 0, button);
+						}
+						else {
+							var button = this.availableNavigationListButtons.shift();
+							this.navigationListButtons.push(button);
+							button.setVariable("navigationListDefinition", navigationListDefinitions[i]);
+							button.setVariable("buttonResource", navigationListDefinitions[i].toolbarIcon);
+							button.tooltip.setVariable("text", foundationResources.Singleton.replaceValues("menuShowNavigationList", [navigationListDefinitions[i].displayName]));
+							button.setVariable("visible", true);
+							button.setVariable("enabled", navigationListDefinitions[i] !== this.oEditor.navigationTree.getSelection().navigationListDefinition);
+						}
+					}
+				}
+				this.horizontalLayout.unlock();
+				this.horizontalLayout.update();
+			}
+			if (this.navigationListButtons.length > 0) {
+				this.showProperties.setVariable("visible", this.oEditor.isShowPropertiesEnabled());
+				this.showProperties.setVariable("enabled", this.oEditor.navigationTree.getSelection().navigationListDefinition != null);
+			}
+			else {
+				this.showProperties.setVariable("visible", false);
+			}
+			]]>
+		</method>
+
+		<ToolBarButton buttonResource="backButton" enabled="${this.classroot.oEditor.backEnabled}" name="back">
+			<Tooltip text="${foundationResources.Singleton.toolbarBack.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doBack();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="forwardButton" enabled="${this.classroot.oEditor.forwardEnabled}" name="forward">
+			<Tooltip text="${foundationResources.Singleton.toolbarForward.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doForward();
+				]]>
+			</handler>
+		</ToolBarButton>
+		<ActionListButton buttonResource="newToolbarIcon" buttonResourceForSingleAction="newToolbarIconForSingleAction" displaySelectedIndicator="true" name="newButton" focusIndicatorColor="#ffffff">
+			<variable name="currentDefinition" value="${null}"/>
+			<Tooltip text="${foundationResources.Singleton.toolbarNew.string}"/>
+
+			<!---
+				@keywords private
+			-->
+			<method name="init">
+				<![CDATA[
+				this.checkCreatableDefinitionsDel = new EventHandler.Class(this, "checkCreatableDefinitions");
+				this.actionDefinitions = [];
+				for (var i = 0; i < this.classroot.oEditor.model.objectDefinitions.length; i++) {
+					var def = this.classroot.oEditor.model.getObjectDefinition(null, this.classroot.oEditor.model.objectDefinitions[i].objectType);
+					if (def.creatable && !def.isBaseDefinition) {
+						this.actionDefinitions.push(def);
+					}
+				}
+				if (this.actionDefinitions.length == 0) {
+					this.setVariable("visible", false);
+				}
+				this.checkCreatableDefinitions();
+				this.inherited(arguments);
+				]]>
+			</method>
+
+			<!---
+				Check the list of creatable definitions.
+			-->
+			<method args="e" name="checkCreatableDefinitions">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				this.checkCreatableDefinitionsDel.disconnectAll();
+				this.checkCreatableDefinitionsDel.connect(this.classroot, "ontoolbarEnabled");
+				this.currentDefinition = null;
+				this.defaultActionDefinition = null;
+				for (var i = 0; i < this.actionDefinitions.length; i++) {
+					var def = this.actionDefinitions[i];
+					if (def.isCreatable(null, null, this.checkCreatableDefinitionsDel)) {
+						this.enableActionDefinition(def);
+						if (this.defaultActionDefinition == null) {
+							this.currentDefinition = def;
+							this.defaultActionDefinition = def;
+						}
+					}
+					else {
+						this.disableActionDefinition(def);
+					}
+				}
+				this.selectDefaultActionDefinition();
+				this.setVariable("enabled", this.defaultActionDefinition != null && this.classroot.toolbarEnabled);
+				]]>
+			</method>
+
+			<!---
+				Perform the create action for the current definition.
+			-->
+			<method args="definition" name="doAction">
+				<![CDATA[
+				if (definition) {
+					this.currentDefinition = definition;
+				}
+				if (this.currentDefinition) {
+					var contextObject = this.classroot.oEditor.getSelectedObject();
+					this.currentDefinition.doCreate({
+						contextObject: contextObject
+					});
+				}
+				]]>
+			</method>
+		</ActionListButton>
+		
+		<ToolBarButton buttonResource="openToolbarIcon" enabled="${this.classroot.oEditor.openEnabled}" name="openButton">
+			<Tooltip text="${foundationResources.Singleton.toolbarOpen.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doOpen();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="saveToolbarIcon" enabled="${this.classroot.toolbarEnabled}" name="saveButton">
+			<Tooltip extendedText="${foundationResources.Singleton.toolbarSaveExtendedHelp.string}" text="${foundationResources.Singleton.toolbarSave.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doSave();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="refreshToolbarIcon" enabled="${this.classroot.oEditor.refreshEnabled}" name="refreshButton">
+			<Tooltip linkURL="tasks/ttfgeneral.htm" text="${foundationResources.Singleton.toolbarRefresh.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doRefresh();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="stopToolbarIcon" enabled="${this.classroot.toolbarEnabled}" name="stopButton">
+			<Tooltip linkURL="tasks/ttfgeneral.htm" text="${foundationResources.Singleton.toolbarStop.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				ModelUtil.Singleton.doStop();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="languageSelectionIcon" enabled="false" name="selectInputLanguage" visible="${this.parent.oEditor.multipleInputLanguages}">
+			<Tooltip extendedText="${foundationResources.Singleton.toolbarSelectLangExtendedHelp.string}" linkURL="tasks/ttfinputlanguage.htm" text="${foundationResources.Singleton.toolbarSelectLang.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				var caller = this;
+				require(["cmc/foundation/LanguageSelectionDialog"], function(LanguageSelectionDialog) {
+					LanguageSelectionDialog.Singleton.openLanguageSelectionDialog(caller.parent.oEditor.localContext);
+				});
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="editColumnButtonIcon" enabled="${this.classroot.oEditor.editColumnEnabled}" name="editColumn">
+			<Tooltip text="${foundationResources.Singleton.toolbarEditColumn.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doEditColumn();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+	  	<ToolBarButton buttonResource="previewButton" enabled="${this.classroot.toolbarEnabled}" name="preview" visible="${this.parent.oEditor.showStorePreview}">
+			<Tooltip linkURL="tasks/tpvpreview_store.htm" text="${foundationResources.Singleton.storePreviewToolbarTip.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.openStorePreviewDialog();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="coremetricsAnalyticsToolbarIcon" name="launchCoremetricsDashboardButton" visible="false">
+			<Tooltip text="${foundationResources.Singleton.toolbarLaunchCoremetricsAnalytics.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				var caller = this;
+				require(["cmc/foundation/GetAnalyticsSSOTokenService"], function(GetAnalyticsSSOTokenService) {
+					GetAnalyticsSSOTokenService.Singleton.doRequest(caller.parent.oEditor);
+				});
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="marketingCenterToolbarIcon" name="launchMarketingCenterDashboardButton" visible="false">
+			<Tooltip text="${foundationResources.Singleton.toolbarLaunchMarketingCenter.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				var caller = this;
+				require(["cmc/foundation/GetMarketingCenterSSOTokenService"], function(GetMarketingCenterSSOTokenService) {
+					GetMarketingCenterSSOTokenService.Singleton.doRequest(caller.parent.oEditor);
+				});
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+
+		<ToolBarButton buttonResource="copyIcon" enabled="${this.classroot.oEditor.copyEnabled}" name="copyButton">
+			<Tooltip text="${foundationResources.Singleton.toolbarCopy.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doCopy();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="pasteIcon" enabled="${this.classroot.oEditor.pasteEnabled}" name="pasteButton">
+			<Tooltip text="${foundationResources.Singleton.toolbarPaste.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doPaste();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="deleteButtonIcon" enabled="${this.classroot.oEditor.deleteEnabled}" name="deleteButton">
+			<Tooltip text="${foundationResources.Singleton.toolbarDelete.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doDelete();
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="findAndReplaceButtonIcon" enabled="${this.classroot.oEditor.findEnabled}" name="findAndReplaceButton">
+			<Tooltip text="${foundationResources.Singleton.toolbarFindAndReplace.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.doFindAndReplace();
+				]]>
+			</handler>
+		</ToolBarButton>
+			
+
+		<ViewOptionsButton name="viewOptionsButton" visible="false">
+			<Tooltip text="${foundationResources.Singleton.toolbarViewOptions.string}"/>
+		</ViewOptionsButton>
+
+		<ToolBarButton buttonResource="propertyToolbarIcon" name="showProperties">
+			<Tooltip text="${foundationResources.Singleton.toolbarShowPropertiesView.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.showProperties();
+				]]>
+			</handler>
+		</ToolBarButton>
+	
+		<ToolBarButton buttonResource="navigationViewToolbarIcon" enabled="${this.classroot.toolbarEnabled}" name="toggleNavigationView">
+			<Tooltip text="${this.parent.parent.oEditor.navigationViewVisible ? foundationResources.Singleton.toolbarHideNavigationView.string : foundationResources.Singleton.toolbarShowNavigationView.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.toggleNavigationView();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="workAreaDetailsBelowToolbarIcon" enabled="${this.parent.oEditor.workAreaDetailsEnabled}" name="toggleWorkAreaDetailsBelowList" visible="${(!this.parent.oEditor.compareViewVisible)}">
+			<Tooltip text="${this.parent.parent.oEditor.workAreaDetailsBelowVisible ? foundationResources.Singleton.toolbarHideDetailsBelowList.string : foundationResources.Singleton.toolbarShowDetailsBelowList.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.toggleWorkAreaDetailsBelow();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="workAreaDetailsBesideToolbarIcon" enabled="${this.parent.oEditor.workAreaDetailsEnabled}" name="toggleWorkAreaDetailsBesideList" visible="${(!this.parent.oEditor.compareViewVisible)}">
+			<Tooltip text="${this.parent.parent.oEditor.workAreaDetailsBesideVisible ? foundationResources.Singleton.toolbarHideDetailsBesideList.string : foundationResources.Singleton.toolbarShowDetailsBesideList.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.toggleWorkAreaDetailsBeside();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="compareViewHorizontalSplitToolbarIcon" name="splitCompareViewHorizontally" visible="${this.parent.oEditor.compareViewVisible}">
+			<Tooltip text="${foundationResources.Singleton.toolbarShowDetailsBelowList.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.splitCompareViewVertically(false);
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="compareViewVerticalSplitToolbarIcon" name="splitCompareViewVertically" visible="${this.parent.oEditor.compareViewVisible}">
+			<Tooltip text="${foundationResources.Singleton.toolbarShowDetailsBesideList.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.splitCompareViewVertically(true);
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="utilitiesToolbarIcon" enabled="${this.classroot.toolbarEnabled}" name="utilities" visible="${this.parent.oEditor.showUtilitiesView}">
+			<Tooltip extendedText="${foundationResources.Singleton.toolbarShowUtilitiesViewExtendedHelp.string}" linkURL="tasks/ttfutilitiespane.htm" text="${this.parent.parent.oEditor.utilitiesViewVisible ? foundationResources.Singleton.toolbarHideUtilitiesView.string : foundationResources.Singleton.toolbarShowUtilitiesView.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.oEditor.toggleUtilitiesView();
+				]]>
+			</handler>
+		</ToolBarButton>
+
+		<ToolBarButton buttonResource="workOnBaseButton" enabled="${this.classroot.toolbarEnabled}" name="workOnBase" visible="${this.parent.oEditor.name == 'workspaceManagement' &amp;&amp; !ConfigProperties.Singleton.readOnlyOnApprovedContent}">
+			<Tooltip linkURL="tasks/twoprodreadywm.htm" text="${foundationResources.Singleton.menuWorkspaceWorkOnBase.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+				});
+				]]>
+			</handler>
+		</ToolBarButton>
+		
+		<ToolBarButton buttonResource="workOnBaseButton" enabled="${this.classroot.toolbarEnabled}" name="workOnBaseInReadOnlyMode" visible="${this.parent.oEditor.name == 'workspaceManagement' &amp;&amp; ConfigProperties.Singleton.readOnlyOnApprovedContent}">
+			<Tooltip linkURL="tasks/twoprodreadywm.htm" text="${foundationResources.Singleton.menuWorkspaceWorkOnBaseInReadOnlyMode.string}"/>
+			<handler name="onclick">
+				<![CDATA[
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+				});
+				]]>
+			</handler>
+		</ToolBarButton>
+	</Component>
+	
+	<!---
+		@keywords private
+
+		Custom service toolbar button.
+	-->
+	<ToolBarButton classDefinition="true" definitionName="cmc/foundation/CustomServiceButton">
+		<!---
+			Business object editor instance. This is a required attribute.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			Custom service instance. This is a required attribute.
+		-->
+		<variable name="customService"/>
+		
+		<handler name="onclick">
+			<![CDATA[
+			this.oEditor.doCustomService(this.customService);
+			]]>
+		</handler>
+
+		<Tooltip name="tooltip" text="${this.parent.customService != null ? this.parent.customService.displayName : ''}"/>
+	</ToolBarButton>
+	
+	<!---
+		@keywords private
+
+		Client action toolbar button.
+	-->
+	<ToolBarButton classDefinition="true" definitionName="cmc/foundation/ClientActionButton">
+		<!---
+			Business object editor instance. This is a required attribute.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			Client action instance. This is a required attribute.
+		-->
+		<variable name="clientAction"/>
+		
+		<handler name="onclick">
+			<![CDATA[
+			this.oEditor.doClientAction(this.clientAction);
+			]]>
+		</handler>
+
+		<Tooltip name="tooltip" text="${this.parent.clientAction != null ? this.parent.clientAction.displayName : ''}"/>
+	</ToolBarButton>
+	
+	<!---
+		@keywords private
+		
+		Navigation list toolbar button.
+	-->
+	<ToolBarButton classDefinition="true" definitionName="cmc/foundation/NavigationListDefinitionButton">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Business object editor instance. This is a required attribute.
+		-->
+		<variable name="oEditor"/>
+		<!---
+			Navigation list definition. This is a required attribute.
+		-->
+		<variable name="navigationListDefinition"/>
+
+		<handler name="onclick">
+			<![CDATA[
+			this.oEditor.showNavigationList(this.navigationListDefinition);
+			]]>
+		</handler>
+
+		<Tooltip name="tooltip" text="${this.parent.navigationListDefinition != null ? foundationResources.Singleton.replaceValues('menuShowNavigationList', [this.parent.navigationListDefinition.displayName]) : ''}"/>
+	</ToolBarButton>
+
+	<!---
+		@keywords private
+
+		View options toolbar button.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/ViewOptionsButton">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="ListItem" moduleName="cmc/foundation/ListItem"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<!---
+			View options.
+		-->
+		<variable name="viewOptions" value="${null}"/>
+
+		<!---
+			Flag that saves the current state of the view option list.
+		-->
+		<variable name="viewOptionListOpen" value="${this.viewOptionList.visible}"/>
+
+		<!---
+			The list of items.
+		-->
+		<variable name="items" value="${[]}"/>
+
+		<BaseButton imageSet="viewOptionsToolbarIcon" name="viewOptionIcon">
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.openViewOptionList();
+				]]>
+			</handler>
+		</BaseButton>
+
+		<FloatingList attach="bottom" name="viewOptionList" visible="false">
+			<!--- @keywords private -->
+			<method name="updateAttachLocation">
+				<![CDATA[
+				this.inherited(arguments);
+				var right = this.x + this.width;
+				if (right > RootComponent.Singleton.width) {
+					var newX = this.x - (right - RootComponent.Singleton.width);
+					if (newX < 0) {
+						newX = 0;
+					}
+					this.setVariable("x", newX);
+				}
+				]]>
+			</method>
+
+			<!--- @keywords private -->
+			<handler args="k" name="onkeydown">
+				<![CDATA[
+				var startIndex = 0;
+				for (var i = 0; i < this.owner.items.length; i++) {
+					var item = this.owner.items[i];
+					if (item.hilited == true && String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+						startIndex = i + 1;
+						break;
+					}
+				}
+				for (var i = 0; i < this.owner.items.length; i++) {
+					if (startIndex >= this.owner.items.length) {
+						startIndex = 0;
+					}
+					var item = this.owner.items[startIndex];
+					if (String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+						this.setHilite(item);
+						this.setVariable("doesenter", true);
+						break;
+					}
+					startIndex++;
+				}
+				]]>
+			</handler>
+			
+			<!--- @keywords private -->
+			<method name="getNextSelection">
+				<![CDATA[
+
+				]]>
+			</method>
+			<!--- @keywords private -->
+	        <method name="getPrevSelection">
+				<![CDATA[
+
+				]]>
+			</method>
+	        
+		</FloatingList>
+
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			this.checkWidthDel = new EventHandler.Class(this, "checkWidth");
+			this.updateDisplayNamesDel = new EventHandler.Class(this, "updateDisplayNames");
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler eventSource="this.viewOptionList" name="onblur">
+			<![CDATA[
+			this.closeViewOptionList();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onviewOptionListOpen">
+			<![CDATA[
+			this.viewOptionIcon._callShow();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 13 || k == 32 || k == 40) {
+				this.openViewOptionList();
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler args="k" eventSource="this.viewOptionList" name="onkeydown">
+			<![CDATA[
+			if (k == 27) {
+				this.closeViewOptionList();
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler args="v" eventSource="this.viewOptionList" name="onselect">
+			<![CDATA[
+			if (v.value.viewOptionGroup != null) {
+				v.value.setVariable("value", true);
+				for (var i = 0; i < v.value.parent.viewOptions.length; i++) {
+					var viewOption = v.value.parent.viewOptions[i];
+					if (viewOption.viewOptionGroup == v.value.viewOptionGroup) {
+						viewOption.setVariable("value", v.value == viewOption);
+					}
+				}
+			}
+			else {
+				v.value.setVariable("value", !v.value.value);
+			}
+			this.closeViewOptionList();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onviewOptions">
+			<![CDATA[
+			this.updateViewOptions();
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateViewOptions();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.viewOptionList.autoscrollbar = false;
+			this.checkMouseDel.disconnectAll();
+			delete this.checkMouseDel;
+			this.checkWidthDel.disconnectAll();
+			delete this.checkWidthDel;
+			this.updateDisplayNamesDel.disconnectAll();
+			delete this.updateDisplayNamesDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the list of view options.
+		-->
+		<method name="updateViewOptions">
+			<![CDATA[
+			this.checkWidthDel.disconnectAll();
+			this.updateDisplayNamesDel.disconnectAll();
+			var options = this.viewOptions;
+			if (options == null) {
+				options = [];
+			}
+			while (this.items.length > 0) {
+				var item = this.items.pop();
+				item.setVariable("visible", false);
+				item.setVariable("value", null);
+			}
+			for (var i = 0; i < options.length; ++i) {
+				this.addViewOption(options[i]);
+			}
+			this.setVariable("visible", options.length > 0);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Append the specified view option to the drop down.
+			@param object viewOption: the view option
+		-->
+		<method args="viewOption" name="addViewOption">
+			<![CDATA[
+			var item = new ListItem.Class(this.viewOptionList, {
+				value: viewOption,
+				icon: viewOption.icon ? viewOption.icon : null,
+				displayName: viewOption.displayName,
+				selectedIcon: "checkmarkIcon"
+			});
+			this.items.push(item);
+			this.checkWidthDel.connect(item.title, "onwidth");
+			this.updateDisplayNamesDel.connect(viewOption, "ondisplayName");
+			this.checkWidth();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.viewOptionList.containsPt(this.viewOptionList.getMouse("x"), this.viewOptionList.getMouse("y"))) {
+				this.closeViewOptionList();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="checkWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = 0;
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				var itemWidth = item.title.width;
+				if (itemWidth > newWidth) {
+					newWidth = itemWidth;
+				}
+			}
+			this.viewOptionList.setVariable('width', newWidth + 10);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Display the selected indicator on the current default item from the list.
+			@param object v: the item selected from the list
+		-->
+		<method args="v" name="checkSelected">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				if (v.value == this.items[i].value) {
+					this.items[i].title.selectedIconHolder.selectedIconIndicator.setVariable("visible", this.items[i].value.value);
+					break;
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="openViewOptionList">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				this.items[i].title.selectedIconHolder.selectedIconIndicator.setVariable("visible", this.items[i].value.value);
+			}
+			this.viewOptionList.clearSelection();
+			this.viewOptionList.setVariable("visible", true);
+			this.viewOptionList.bringToFront();
+			ModalUtil.makeModal(this.viewOptionList);
+			FocusUtil.setFocus(this.viewOptionList, false);
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			this.setVariable("viewOptionListOpen", true);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="closeViewOptionList">
+			<![CDATA[
+			if (this.viewOptionListOpen) {
+				this.setVariable("viewOptionListOpen", false);
+				ModalUtil.release(this.viewOptionList);
+				this.viewOptionList.setVariable("visible", false);
+				FocusUtil.setFocus(this, false);
+				this.checkMouseDel.disconnectAll();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateDisplayNames">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.items.length; i++) {
+				this.items[i].setVariable("displayName", this.items[i].value.displayName);
+			}
+			]]>
+		</method>
+	</FocusableComponent>
+</Definitions>

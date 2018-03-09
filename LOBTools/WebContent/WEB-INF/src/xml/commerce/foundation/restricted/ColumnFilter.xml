@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<Component classDefinition="true" definitionName="cmc/foundation/ColumnFilterButton" focusable="false" height="${this.parent.height}">
+		<dependency localName="ValueSelectorList" moduleName="cmc/foundation/ValueSelectorList"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ShowAllValue" moduleName="cmc/foundation/ShowAllValue"/>
+		<dependency localName="StateButton" moduleName="cmc/foundation/StateButton"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<variable name="buttonResource" type="string" value="comboxBoxButton"/>
+		<variable name="column"/>
+		<variable name="selectorLocation" type="string" value="bottomleft"/>
+		<variable name="selectorXOffset" type="number" value="3"/>
+		<!---
+			@keywords private
+			Indicates that the dropdown list is open.
+		-->
+		<variable name="listOpen" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Array of values.
+		-->
+		<variable name="values" value="${null}"/>
+		<!---
+			@keywords private
+			Currently selected filter.
+		-->
+		<variable name="selectedValue" value="${ShowAllValue.Singleton}"/>
+		<!--- @keywords private -->
+		<variable name="defaultItemIndent" type="number" value="0"/>
+		<variable name="displaySelectedIndicator" type="boolean" value="true"/>
+		<variable name="selectedIcon" type="string" value="checkmarkIcon"/>
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.resetFilterDel = new EventHandler.Class(this, "resetFilter");
+			]]>
+		</method>
+
+		<method name="destroy">
+			<![CDATA[
+			if (this.resetFilterDel) {
+				this.resetFilterDel.disconnectAll();
+				delete this.resetFilterDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="openList">
+			<![CDATA[
+			var selectedText = this.selectedValue == null ? null : this.selectedValue.value;
+			this.values = [ShowAllValue.Singleton];
+			var tempVals = {};
+			var objects = this.column.parent.oList.getMatchingModelObjects();
+			for (var i = 0; i < objects.length; i++) {
+				var displayValue = this.column.getColumnFilterDisplayValue(objects[i]);
+				if (displayValue && typeof (tempVals[displayValue]) == "undefined") {
+					tempVals[displayValue] = true;
+					var value = {
+						value: displayValue,
+						displayName: displayValue
+					};
+					this.values.push(value);
+					if (value.value == selectedText) {
+						this.selectedValue = value;
+					}
+				}
+			}
+			ValueSelectorList.Singleton.openList(this);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="newValue" name="selectValue">
+			<![CDATA[
+			this.resetFilterDel.disconnectAll;
+			if (newValue == null) {
+				newValue = ShowAllValue.Singleton;
+			}
+			if (newValue.value != this.selectedValue.value) {
+				var objectGrid = this.column.parent;
+				if (objectGrid.oList) {
+					var filterList = objectGrid.oList.filterList;
+					if (this.selectedValue != null && this.selectedValue.value != null) {
+						var index = filterList.indexOf(this.column.columnFilter);
+						if (index != -1) {
+							filterList.splice(index, 1);
+						}
+					}
+					this.column.columnFilter.displayValue = newValue.value;
+					if (newValue.value != null) {
+						filterList.push(this.column.columnFilter);
+						this.resetFilterDel.connect(objectGrid.oList, "onreset");
+					}
+					this.setVariable("selectedValue", newValue);
+					objectGrid.oList.setVariable("filterList", filterList);
+				}
+			}
+			else {
+				this.column.parent.oList.refreshFilteredObjects();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Reset the filter so that no filter is chosen. 
+		-->
+		<method args="e" name="resetFilter">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.selectValue(ShowAllValue.Singleton);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="restoreFocus">
+			<![CDATA[
+			FocusUtil.setFocus(this.column);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onlistOpen">
+			<![CDATA[
+			this.mainView.filterDropdown._callShow();
+			]]>
+		</handler>
+		
+		<Component name="mainView">	
+			<BaseButton imageSet="${this.classroot.buttonResource}" name="filterDropdown" y="${(this.classroot.height - this.height)/2}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.openList();
+					]]>
+				</handler>
+			</BaseButton>
+		</Component>	
+	</Component>
+	
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/ShowAllValue" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="displayName" type="string" value="${foundationResources.Singleton.gridFilterShowAll.string}"/>
+		<variable name="value" value="${null}"/>
+	</Node>
+</Definitions>

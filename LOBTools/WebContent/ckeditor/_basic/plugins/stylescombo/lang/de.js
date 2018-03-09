@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","de",{label:"Formatvorlagen",panelTitle:"Formatvorlagen",panelTitle1:"Block-Formatvorlagen",panelTitle2:"Inline-Formatvorlagen",panelTitle3:"Objekt-Formatvorlagen"});

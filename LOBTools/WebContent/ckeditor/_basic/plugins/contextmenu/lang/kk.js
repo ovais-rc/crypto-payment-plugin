@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("contextmenu","kk",{options:"Мәтінмәндік мәзір параметрлері"});

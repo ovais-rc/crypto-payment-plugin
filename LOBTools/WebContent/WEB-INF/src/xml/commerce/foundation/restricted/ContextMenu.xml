@@ -1,0 +1,2541 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- @keywords private -->
+	<ContextMenu definitionName="cmc/foundation/CanvasMenu" singletonDefinition="true">
+		<method name="init">
+			<![CDATA[
+			this.menu = {isCanvasMenu: true};
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!--- @keywords private -->
+	<Node classDefinition="true" definitionName="cmc/foundation/ContextMenu">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="BaseContextMenu" moduleName="cmc/foundation/BaseContextMenu"/>
+		<variable name="menu" value="${null}"/>
+
+		<!---
+			@keywords private
+			
+			Thie flag controls whether a visual separator will appear before menu items that are created by
+			{@link cmc/foundation/ContextMenu#addMenuItem}.
+		 -->
+		<variable name="addSeparatorBefore" type="boolean" value="false"/>
+
+		<method name="init">
+			<![CDATA[
+			this.menu = new BaseContextMenu.Class();
+			this.menu.setVariable('delegate', new EventHandler.Class(this, "openMenu"));
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<handler name="ondestroy">
+			<![CDATA[
+			if (this.menu) {
+				this.menu.destroy();
+				this.menu = null;
+			}
+			]]>
+		</handler>
+
+		<method args="v, recurse" name="addView">
+			<![CDATA[
+			if (typeof(recurse) == "undefined") recurse = true;
+			if (v) {
+				v.setVariable('contextMenu', this.menu);
+				if (recurse) {
+					this.addSubViews(v.childComponents);
+				}
+			}
+			]]>
+		</method>
+		
+		<method args="views" name="addSubViews">
+			<![CDATA[
+			for (var i = 0; i < views.length; i++) {
+				var v = views[i];
+				if (!v.contextmenu) {
+					v.setVariable('contextMenu', this.menu);
+				}
+				this.addSubViews(v.childComponents);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			This method perform any necessary initializations when a context menu is opened.
+			It clears any existing menu items and resets {@link cmc/foundation/ContextMenu#addSeparatorBefore} to <code>false</code>
+		 -->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.menu.clearItems();
+			this.addSeparatorBefore = false;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			This method adds menu items to the {@link cmc/foundation/ContextMenu#menu current context menu}.
+			When this method is called, if {@link cmc/foundation/ContextMenu#addSeparatorBefore} is <code>true</code>, a separator
+			will appear before the newly created menu item. The addSeparatorBefore flag is always set to <code>false</code>
+			after this method completes.
+		 -->
+		<method args="menuText, callbackObject, callbackMethod, args, enabled" name="addMenuItem">
+			<![CDATA[
+			var menuItem = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				if (typeof (enabled) != "boolean") {
+					enabled = true;
+				}
+				menuItem = this.menu.makeMenuItem(menuText, new EventHandler.Class(this, "doMenuItem"));
+				menuItem.setVariable('caption', menuText);
+				menuItem.setVariable("name", menuText);
+				if (typeof (args) != "undefined" && args != null) {
+					menuItem.setVariable("args", args);
+				}
+				menuItem.setVariable("callbackObject", callbackObject);
+				menuItem.setVariable("callbackMethod", callbackMethod);
+				if (typeof (enabled) != "undefined") {
+					menuItem.setVariable('enabled', enabled);
+				}
+				menuItem.setVariable('separatorbefore', this.addSeparatorBefore);
+				this.menu.addItem(menuItem);
+				this.addSeparatorBefore = false;
+			}
+			return menuItem;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			This method effectively adds a visual separator <b>after</b> the latest menu item already in the menu
+			by setting the {@link cmc/foundation/ContextMenu#addSeparatorBefore} flag to <code>true</code>. This causes the <b>next</b> menu item
+			created using {@link cmc/foundation/ContextMenu#addMenuItem} to display a visual separator before rendering said menu item.
+			<p>
+		 -->
+		<method name="addSeparator">
+			<![CDATA[
+			this.addSeparatorBefore = true;
+			]]>
+		</method>
+				
+		<method args="menuItem" name="doMenuItem">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ContextMenu", "doclick", "Start for Menuitem " + menuItem.name);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/ContextMenu doMenuItem: " + menuItem.name);
+			if ("args" in menuItem) {
+				menuItem.callbackObject[menuItem.callbackMethod](menuItem.args);
+			}
+			else {
+				menuItem.callbackObject[menuItem.callbackMethod]();
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ContextMenu", "doclick", "End for Menuitem " + menuItem.name);
+			}
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		
+		cmc/foundation/ContextMenuUtil sets or restores default context menu
+	 -->	
+	<Node definitionName="cmc/foundation/ContextMenuUtil" singletonDefinition="true">
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+	
+		<!---
+			@keywords private
+			
+			The {@link cmc/foundation/ContextMenu} that will be set as default context menu
+		 -->
+		<variable name="defaultMenu" value="${null}"/>
+		
+		<!---
+			@keywords private
+			
+			Current context menu before a new {@link cmc/foundation/ContextMenu} is set
+		 -->
+		<variable name="restoreMenu" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method args="menu" name="setAsDefault">
+			<![CDATA[
+			if (this.defaultMenu != null) {
+				this.resetDefault(this.defaultMenu);
+			}
+			this.defaultMenu = menu;
+			this.restoreMenu = RootComponent.Singleton.contextmenu;
+			RootComponent.Singleton.setDefaultContextMenu(menu.menu);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="menu" name="resetDefault">
+			<![CDATA[
+			if (menu == this.defaultMenu) {
+				RootComponent.Singleton.setDefaultContextMenu(this.restoreMenu);
+				this.defaultMenu = null;
+				this.restoreMenu = null;
+			}
+			]]>
+		</method>
+	</Node>
+
+	<!--- @keywords private -->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/TreeMenu">
+		<variable name="tree" value="${null}"/>
+
+		<!---
+			Open and populate the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			this.tree.changeFocus(this.tree);
+			this.createMenuItems();
+			]]>
+		</method>
+		
+		<method name="createMenuItems">
+			<![CDATA[
+
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!---
+		@keywords private
+		
+		Context menu for the search results node in the navigation view.
+	-->
+	<TreeMenu classDefinition="true" definitionName="cmc/foundation/SearchResultTreeMenu">
+		<!--- Array of search definitions. -->
+		<variable name="searchDefinitions" value="${null}"/>
+
+		<!---
+			Show the search results view.
+		-->
+		<method args="args" name="showSearchResults">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			this.tree.setVariable("searchDefinition", args.definition);
+			]]>
+		</method>
+	</TreeMenu>	
+
+	<!---
+		@keywords private
+		
+		Context menu for the active work node in the navigation view.
+	-->
+	<TreeMenu classDefinition="true" definitionName="cmc/foundation/ActiveWorkTreeMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Populate the context menu.
+	 	-->
+		<method name="createMenuItems">
+			<![CDATA[
+			if (this.tree.oEditor.model.openObjects.length > 0) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuCloseAll.string, this, "doCloseAll");
+			}
+			if (this.tree.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Invoke the close all action.
+		-->
+		<method name="doCloseAll">
+			<![CDATA[
+			this.tree.oEditor.model.closeOpenObjects(true);
+			]]>
+		</method>
+		
+		<method name="doPaste">
+			<![CDATA[
+			this.tree.setVariable("selected", true);
+			this.tree.doPaste();
+			]]>
+		</method>
+	</TreeMenu>
+
+	<!---
+		@keywords private
+		
+		Base context menu for an object tree node in the navigation view.
+	-->
+	<TreeMenu classDefinition="true" definitionName="cmc/foundation/ObjectTreeMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ActionUtil" moduleName="cmc/foundation/ActionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+
+		<!---
+			Create the new object menu items.
+		-->
+		<method args="navigationEnabled" name="createNewMenuItems">
+			<![CDATA[
+			if (typeof(navigationEnabled) == "undefined") navigationEnabled = true;
+			var separatorRequired = false;
+			var treeRef = this.tree.o.getReferencedObject(this.menu._showDel);
+			if (navigationEnabled) {
+				if (treeRef != null) {
+					var defs = treeRef.objectDefinition.parentReferenceObjectDefinitions;
+					defs = defs.concat(treeRef.objectDefinition.collectionReferenceObjectDefinitions);
+					for (var i = 0; i < defs.length; i++) {
+						if (defs[i].isCreatable(treeRef, null, this.menu._showDel)) {
+							var referencedDefinitions = defs[i].getReferencedDefinitions(this.menu._showDel);
+							if (referencedDefinitions != null) {
+								for (var j = 0; j < referencedDefinitions.length; j++) {
+									var newDef = referencedDefinitions[j];
+									if (newDef != null && newDef.isCreatable(treeRef, null, this.menu._showDel)) {
+										this.addMenuItem(newDef.getNewObjectMenuItemText(), this, "doCreateObject", {
+											definition: newDef
+										});
+										separatorRequired = true;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			var objDef = this.tree.o.objectDefinition;
+			if (navigationEnabled && objDef.organizedObjectTypes && objDef.addNewActionsToExplorerContextMenu) {
+				var organizedObjectDefinitions = objDef.getOrganizedObjectDefinitions(this.menu._showDel);
+				if (organizedObjectDefinitions != null) {
+					for (var i = 0; i < organizedObjectDefinitions.length; i++) {
+						if (organizedObjectDefinitions[i] != null && organizedObjectDefinitions[i].isCreatable(null, null, this.menu._showDel)) {
+							this.addMenuItem(organizedObjectDefinitions[i].getNewObjectMenuItemText(), this, "doCreateObject", {
+								definition: organizedObjectDefinitions[i]
+							});
+							separatorRequired = true;
+						}
+					}
+				}
+			}
+			if (objDef.clientActions) {
+				var o = this.tree.o;
+				for (var i = 0; i < objDef.clientActions.length; i++) {
+					if (objDef.clientActions[i].newObjectAction && objDef.clientActions[i].isEnabled(o)) {
+						this.addMenuItem(objDef.clientActions[i].getMenuDisplayName(), this, "invokeClientAction", {
+							clientAction: objDef.clientActions[i],
+							useReferencedObject: false
+						});
+						separatorRequired = true;
+					}
+				}
+			}
+			if (treeRef != null) {
+				if (objDef != treeRef.objectDefinition) {
+					objDef = treeRef.objectDefinition;
+					if (objDef.clientActions) {
+						var po = treeRef;
+						for (var i = 0; i < objDef.clientActions.length; i++) {
+							if (objDef.clientActions[i].newObjectAction && objDef.clientActions[i].isEnabled(po)) {
+								this.addMenuItem(objDef.clientActions[i].getMenuDisplayName(), this, "invokeClientAction", {
+									clientAction: objDef.clientActions[i],
+									useReferencedObject: true
+								});
+								separatorRequired = true;
+							}
+						}
+					}
+				}
+			}
+			if (separatorRequired) {
+				this.addSeparator();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the open menu item.
+		-->
+		<method name="createOpenMenuItem">
+			<![CDATA[
+			if (this.tree.o.isOpenEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuOpen.string, this, "doOpen");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the refresh menu item.
+		-->
+		<method name="createRefreshMenuItem">
+			<![CDATA[
+			var referencedObject = this.tree.o.getReferencedObject();
+			if (!referencedObject.newObject && (referencedObject.objectDefinition.primary || referencedObject.objectDefinition.organizational) && (this.tree.parent != this.tree.oEditor.navigationTree.activeWorkTree || referencedObject.objectDefinition.refreshService != null || this.tree.navigationListDefinition != null)) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuRefresh.string, this, "doRefresh");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the copy menu item.
+		-->
+		<method name="createCopyMenuItem">
+			<![CDATA[
+			var oDef = this.tree.o.getReferencedObject().objectDefinition;
+			if (!oDef.organizational) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuCopy.string, this, "doCopy");
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the copy to clipboard menu item.
+		-->
+		<method name="createCopyToClipboardMenuItem">
+			<![CDATA[
+			var oDef = this.tree.o.getReferencedObject().objectDefinition;
+			if (oDef.primary && this.tree.oEditor.showUtilitiesView) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuCopyToClipboard.string, this, "doCopyToClipboard");
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the duplicate menu item.
+		-->
+		<method name="createDuplicateMenuItem">
+			<![CDATA[
+			if (ActionUtil.Singleton.isDuplicateActionEnabled([this.tree.o])) {
+				this.addMenuItem(foundationResources.Singleton.menuDuplicate.string, this, "doDuplicate");
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the delete menu item.
+		-->
+		<method name="createDeleteMenuItem">
+			<![CDATA[
+			var o = this.tree.o;
+			if (o.objectDefinition.parentReference || o.objectDefinition.collectionReference) {
+				o = o.getReferencedObject();
+			}
+			if (o.isDeletable() || this.tree.o.objectDefinition.collectionReference && this.tree.o.isDeletable()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuDelete.string, this, "doDelete");
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the custom service menu items.
+		-->
+		<method args="fromUtilitiesView" name="createCustomServiceMenuItems">
+			<![CDATA[
+			if (typeof(fromUtilitiesView) == "undefined") fromUtilitiesView = false;
+			var oDef = this.tree.o.getReferencedObject().objectDefinition;
+			if (oDef.customServices) {
+				var po = this.tree.o.getReferencedObject();
+				for (var i = 0; i < oDef.customServices.length; i++) {
+					if ((oDef.customServices[i].isEnabled(po)) && ((!fromUtilitiesView && oDef.customServices[i].addToExplorerContextMenu) || (fromUtilitiesView && oDef.customServices[i].addToUtilitiesContextMenu))) {
+						this.addMenuItem(oDef.customServices[i].getMenuDisplayName(), this, "invokeCustomService", {
+							customService: oDef.customServices[i]
+						});
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the client action menu items.
+		-->
+		<method args="fromUtilitiesView" name="createClientActionMenuItems">
+			<![CDATA[
+			if (typeof(fromUtilitiesView) == "undefined") fromUtilitiesView = false;
+			var oDef = this.tree.o.objectDefinition;
+			if (oDef.clientActions) {
+				var o = this.tree.o;
+				for (var i = 0; i < oDef.clientActions.length; i++) {
+					if (!oDef.clientActions[i].newObjectAction && (oDef.clientActions[i].isEnabled(o)) && ((!fromUtilitiesView && oDef.clientActions[i].addToExplorerContextMenu) || (fromUtilitiesView && oDef.clientActions[i].addToUtilitiesContextMenu))) {
+						this.addMenuItem(oDef.clientActions[i].getMenuDisplayName(), this, "invokeClientAction", {
+							clientAction: oDef.clientActions[i],
+							useReferencedObject: false
+						});
+					}
+				}
+			}
+			if (oDef != this.tree.o.getReferencedObject().objectDefinition) {
+				oDef = this.tree.o.getReferencedObject().objectDefinition;
+				if (oDef.clientActions) {
+					var po = this.tree.o.getReferencedObject();
+					for (var i = 0; i < oDef.clientActions.length; i++) {
+						if (!oDef.clientActions[i].newObjectAction && (oDef.clientActions[i].isEnabled(po)) && ((!fromUtilitiesView && oDef.clientActions[i].addToExplorerContextMenu) || (fromUtilitiesView && oDef.clientActions[i].addToUtilitiesContextMenu))) {
+							this.addMenuItem(oDef.clientActions[i].getMenuDisplayName(), this, "invokeClientAction", {
+								clientAction: oDef.clientActions[i],
+								useReferencedObject: true
+							});
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the navigation list menu items.
+			@param boolean suppressSingleMenuItem: true indicates that a single navigation list menu item should be suppressed
+			@param boolean open: true indicates the object will be opened when showing the navigation list
+		-->
+		<method args="supressSingleMenuItem, open" name="createNavigationListMenuItems">
+			<![CDATA[
+			if (typeof(supressSingleMenuItem) == "undefined") supressSingleMenuItem = false;
+			if (typeof(open) == "undefined") open = false;
+			var o = this.tree.o.getReferencedObject();
+			var defs = [];
+			for (var i = 0; i < o.objectDefinition.navigationListDefinitions.length; i++) {
+				if (o.objectDefinition.navigationListDefinitions[i].isEnabled(o)) {
+					defs.push(o.objectDefinition.navigationListDefinitions[i]);
+				}
+			}
+			var currentView = this.tree.navigationListDefinition;
+			if (!supressSingleMenuItem || defs.length > 1) {
+				for (var i = 0; i < defs.length; i++) {
+					var navigationListDef = defs[i];
+					var enable = (currentView != navigationListDef) || !this.tree.selected;
+					var item = this.addMenuItem(foundationResources.Singleton.replaceValues("menuShowNavigationList", [navigationListDef.displayName]), this, "showNavigationList", {
+						definition: navigationListDef,
+						open: open
+					}, enable);
+					if (i == 0 && item != null) {
+						item.setVariable('separatorbefore', true);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the object trace menu item.
+		-->
+		<method name="createObjectTraceMenuItem">
+			<![CDATA[
+			if (Logger.Singleton.display) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLogObject.string, this, "doShowObjectInfo");
+				this.addMenuItem(foundationResources.Singleton.contextMenuLogDefinition.string, this, "doShowDefinitionInfo");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			var list = this.tree.oList;
+			if (list && list.statusObject != null) {
+				if (list.statusObject.lastPageNum > list.statusObject.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			var list = this.tree.oList;
+			if (list != null && list.statusObject != null && list.statusObject.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Open the selected object.
+		-->
+		<method name="doOpen">
+			<![CDATA[
+			this.tree.o.doOpen();
+			]]>
+		</method>
+		
+		<!---
+			Create a new object.
+		-->
+		<method args="args" name="doCreateObject">
+			<![CDATA[
+			var po = this.tree.o.getReferencedObject();
+			args.definition.doCreate({
+				contextObject: po
+			});
+			]]>
+		</method>
+		
+		<!---
+			Refresh the selected object.
+		-->
+		<method name="doRefresh">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			var po = this.tree.o.getReferencedObject();
+			po.model.refreshDescendants(po, true);
+			]]>
+		</method>
+		
+		<!---
+			Copy the selected object.
+		-->
+		<method name="doCopy">
+			<![CDATA[
+			this.tree.oEditor.model.setClipboardObjects([this.tree.o]);
+			]]>
+		</method>
+
+		<!---
+			Copy the selected object to the utilities clipboard.
+		-->
+		<method name="doCopyToClipboard">
+			<![CDATA[
+			this.tree.oEditor.model.setClipboardObjects([this.tree.o]);
+			var oEditor = this.tree.oEditor;
+			require(["cmc/foundation/UtilitiesSplitView"], function(UtilitiesSplitView) {
+				if (!oEditor.utilities) {
+					new UtilitiesSplitView.Class(oEditor.content.workAreaUtilitiesSplit, {
+						name: "utilitiesSplit",
+						oEditor: oEditor
+					});
+				}
+				if (!oEditor.utilitiesViewVisible) {
+					oEditor.utilities.open();
+				}
+				oEditor.utilities.setVariable("activePane", oEditor.utilities.panes.clipboardPane);
+				oEditor.utilities.panes.clipboardPane.doPaste();
+			});
+			]]>
+		</method>
+		
+		<!---
+			Duplicate the selected object.
+		-->
+		<method name="doDuplicate">
+			<![CDATA[
+			ActionUtil.Singleton.triggerDuplicate([this.tree.o]);
+			]]>
+		</method>
+
+		<!---
+			Delete the selected object.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			var o = this.tree.o;
+			if (this.tree.o.objectDefinition.parentReference) {
+				o.getReferencedObject().deleteObject(true);
+			}
+			else if (this.tree.o.objectDefinition.collectionReference) {
+				if (o.isDeletable() && o.getReferencedObject().isDeletable()) {
+					require(["cmc/foundation/CollectionReferenceObjectDeleteConfirmationDialog"], function(CollectionReferenceObjectDeleteConfirmationDialog) {
+						CollectionReferenceObjectDeleteConfirmationDialog.Singleton.openCollectionReferenceObjectDeleteConfirmationDialog(o);
+					});
+				}
+				else if (o.isDeletable()) {
+					require(["cmc/foundation/CollectionReferenceObjectRemoveConfirmationDialog"], function(CollectionReferenceObjectRemoveConfirmationDialog) {
+						CollectionReferenceObjectRemoveConfirmationDialog.Singleton.openCollectionReferenceObjectRemoveConfirmationDialog(o);
+					});
+				}
+				else {
+					o.getReferencedObject().deleteObject(true);
+				}
+			}
+			else {
+				o.deleteObject(true);
+			}
+			]]>
+		</method>
+		
+		<method name="doShowObjectInfo">
+			<![CDATA[
+			var o = this.tree.o.getReferencedObject();
+			o.logObjectGroup();
+			]]>
+		</method>
+		
+		<method name="doShowDefinitionInfo">
+			<![CDATA[
+			var o = this.tree.o.getReferencedObject();
+			o.objectDefinition.logDefinition();
+			]]>
+		</method>
+		
+		<!---
+			Invoke the custom service.
+		-->
+		<method args="args" name="invokeCustomService">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			var o = this.tree.o.getReferencedObject();
+			if (o.isOpenGroupDirty(true)) {
+				require(["cmc/foundation/CustomServiceUnsavedDialog"], function(CustomServiceUnsavedDialog) {
+					CustomServiceUnsavedDialog.Singleton.openCustomServiceUnsavedDialog(args.customService);
+				});
+			}
+			else {
+				args.customService.doRequest(o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Invoke the client action.
+		-->
+		<method args="args" name="invokeClientAction">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			var o = args.useReferencedObject ? this.tree.o.getReferencedObject() : this.tree.o;
+			args.clientAction.performAction([o]);
+			]]>
+		</method>
+		
+		<!---
+			Show the navigation list view.
+		-->
+		<method args="args" name="showNavigationList">
+			<![CDATA[
+			if (args.open) {
+				var o = this.tree.o.getReferencedObject();
+				if (o != null) {
+					o.openGroupObject.setVariable("open", true);
+					o.model.oEditor.selectOpenObject(o.openGroupObject, args.definition);
+				}
+			}
+			else {
+				this.tree.setVariable('selected', true);
+				this.tree.setVariable("navigationListDefinition", args.definition);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			var o = this.tree.parentO;
+			var oDefs = this.tree.oList.getChildObjectDefinitions();
+			o.model.refreshDescendants(o, true, oDefs, pageNum);
+			]]>
+		</method>
+		
+		<!---
+			Create the open in compare view menu item.
+		-->
+		<method name="createOpenInCompareViewMenuItem">
+			<![CDATA[
+			if (this.tree.oEditor.showCompareView) {
+				if (this.tree.o.isOpenInCompareViewEnabled()) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuOpenInCompareView.string, this, "doOpenInCompareView");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Open the selected object in compare view.
+		-->
+		<method name="doOpenInCompareView">
+			<![CDATA[
+			var po = this.tree.o.getReferencedObject();
+			this.tree.oEditor.openObjectsInCompareView(po);
+			]]>
+		</method>
+	</TreeMenu>
+	
+	<!---
+		@keywords private
+		
+		Open object navigation node menu item.
+	-->
+	<ObjectTreeMenu classDefinition="true" definitionName="cmc/foundation/OpenObjectTreeMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Populate the menu.
+		-->
+		<method name="createMenuItems">
+			<![CDATA[
+			this.createNewMenuItems();
+			this.addMenuItem(foundationResources.Singleton.contextMenuClose.string, this, "doClose");
+			if (this.tree.o.openGroupObject.openGroupDirty) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuSave.string, this, "doSave");
+			}
+			this.createRefreshMenuItem();
+			this.createCopyMenuItem();
+			this.createCopyToClipboardMenuItem();
+			this.createDuplicateMenuItem();
+			this.createDeleteMenuItem();
+			this.createOpenInCompareViewMenuItem();
+			this.createCustomServiceMenuItems();
+			this.createClientActionMenuItems();
+			this.createNavigationListMenuItems();
+			var o = this.tree.o.getReferencedObject();
+			var defs = [];
+			for (var i = 0; i < o.objectDefinition.navigationListDefinitions.length; i++) {
+				if (o.objectDefinition.navigationListDefinitions[i].isEnabled(o)) {
+					defs.push(o.objectDefinition.navigationListDefinitions[i]);
+				}
+			}
+			if ((this.tree.o.objectDefinition.propertiesClass_moduleName != null) && (defs.length > 0)) {
+				var enable = (this.tree.navigationListDefinition != null);
+				this.addMenuItem(foundationResources.Singleton.contextMenuProperties.string, this, "displayProperties", null, enable);
+			}
+			this.createObjectTraceMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Close the selected object.
+		-->
+		<method name="doClose">
+			<![CDATA[
+			this.tree.o.closeObject(true);
+			]]>
+		</method>
+		
+		<!---
+			Save the selected object.
+		-->
+		<method name="doSave">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			this.tree.o.saveObject();
+			]]>
+		</method>
+		
+		<!---
+			Show the properties view.
+		-->
+		<method name="displayProperties">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			this.tree.setVariable("navigationListDefinition", null);
+			]]>
+		</method>
+		
+		<!---
+			Refresh the selected object.
+		-->
+		<method name="doRefresh">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			var po = this.tree.o.getReferencedObject();
+			if (this.tree.navigationListDefinition == null) {
+				po.refreshObject(true);
+			}
+			else {
+				po.model.refreshDescendants(po, true);
+			}
+			]]>
+		</method>
+
+	</ObjectTreeMenu>	
+
+	<!---
+		@keywords private
+		
+		Browse object navigation node context menu.
+	-->
+	<ObjectTreeMenu classDefinition="true" definitionName="cmc/foundation/BrowseObjectTreeMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Populate the menu.
+		-->
+		<method name="createMenuItems">
+			<![CDATA[
+			this.createNewMenuItems(this.tree.navigationEnabled);
+			this.createOpenMenuItem();
+			if (this.tree.navigationEnabled) {
+				this.createRefreshMenuItem();
+			}
+			this.createCopyMenuItem();
+			this.createCopyToClipboardMenuItem();
+			this.createDuplicateMenuItem();
+			if (this.tree.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			}
+			this.createDeleteMenuItem();
+			this.createOpenInCompareViewMenuItem();
+			this.createNavigationListMenuItems(true, !this.tree.navigationEnabled);
+			this.createClientActionMenuItems();
+			this.createCustomServiceMenuItems();
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			this.createObjectTraceMenuItem();
+			]]>
+		</method>
+		
+		<method name="doPaste">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			this.tree.doPaste();
+			]]>
+		</method>
+		
+		<method name="doRefresh">
+			<![CDATA[
+			this.tree.setVariable('selected', true);
+			var po = this.tree.o.getReferencedObject();
+			if (this.tree.navigationListDefinition == null) {
+				po.refreshObject(true);
+			}
+			else {
+				po.model.refreshDescendants(po, true);
+			}
+			]]>
+		</method>
+		
+	</ObjectTreeMenu>
+	
+	<!--- @keywords private -->
+	<ObjectTreeMenu classDefinition="true" definitionName="cmc/foundation/UtilitiesBrowseObjectTreeMenu">
+		<!---
+			Populate the menu.
+		-->
+		<method name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem();
+			this.createRefreshMenuItem();
+			this.createCopyMenuItem();
+			this.createCopyToClipboardMenuItem();
+			this.createOpenInCompareViewMenuItem();
+			this.createClientActionMenuItems(true);
+			this.createCustomServiceMenuItems(true);
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			this.createObjectTraceMenuItem();
+			]]>
+		</method>
+	</ObjectTreeMenu>
+	<!--- 
+		@keywords private
+		The context menu for {@link cmc/foundation/PropertyBrowseObjectTree}
+	-->
+	<ObjectTreeMenu classDefinition="true" definitionName="cmc/foundation/PropertyBrowseObjectTreeMenu">
+		<!---
+			Populate the menu.
+		-->
+		<method name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem();
+			this.createRefreshMenuItem();
+			this.createCopyMenuItem();
+			this.createCopyToClipboardMenuItem();
+			this.createOpenInCompareViewMenuItem();
+			this.createObjectTraceMenuItem();
+			if (this.tree.getRoot().parent.enabled) {
+				var actions = this.tree.getRoot().parent.propertyTree.actions;
+				var o = this.tree.getRoot().parent.o;
+				for (var i = 0; i < actions.length; i++) {
+					if (actions[i].isEnabled(o, this.tree.o)) {
+						this.addMenuItem(actions[i].getMenuDisplayName(), this, "invokeTreeAction", {
+							action: actions[i],
+							o: o,
+							treeNodeObject: this.tree.o
+						});
+					}
+				}
+			}
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args" name="invokeTreeAction">
+			<![CDATA[
+			args.action.performAction(args.o, args.treeNodeObject);
+			this.tree.setVariable('selected', false);
+			this.tree.setVariable('selected', true);
+			]]>
+		</method>
+	</ObjectTreeMenu>
+	
+	
+	<!---
+		@keywords private
+		Base class for a grid row context menu.
+	-->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/GridRowMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="ActionUtil" moduleName="cmc/foundation/ActionUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			The parent row for this context menu.
+		-->
+		<variable name="row" value="${null}"/>
+		<!---
+			The parent cell for this context menu.
+		-->
+		<variable name="cell" value="${null}"/>
+
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.row.parent.panel != null) {
+				this.row.parent.model.setVariable("activeSelectionView", this.row.parent);
+			}
+			FocusUtil.setFocus(this.row);
+			if (!this.row.selected) {
+				this.row.select();
+			}
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			this.createMenuItems(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			Create the context menu items.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			this.createCopyToClipboardMenuItem(selectedObjects);
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			this.createEditColumnMenuItem();
+			this.createCustomServiceMenuItems(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects);
+			this.createObjectTraceMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the open menu item.
+		-->
+		<method args="selectedObjects" name="createOpenMenuItem">
+			<![CDATA[
+			var openable = selectedObjects.length > 0;
+			for (var i = 0; i < selectedObjects.length; i++) {
+				if (!selectedObjects[i].isOpenEnabled()) {
+					openable = false;
+					break;
+				}
+			}
+			if (openable) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuOpen.string, this, "doOpen");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the copy menu item.
+		-->
+		<method args="selectedObjects" name="createCopyMenuItem">
+			<![CDATA[
+			this.addMenuItem(foundationResources.Singleton.contextMenuCopy.string, this, "doCopy");
+			]]>
+		</method>
+
+		<!---
+			Create the copy to clipboard menu item.
+		-->
+		<method args="selectedObjects" name="createCopyToClipboardMenuItem">
+			<![CDATA[
+			if (selectedObjects.length > 0 && selectedObjects[0].model.oEditor.showUtilitiesView) {
+				for (var i = 0; i < selectedObjects.length; i++) {
+					if (!selectedObjects[i].getReferencedObject().objectDefinition.primary) {
+						return;
+					}
+				}
+				this.addMenuItem(foundationResources.Singleton.contextMenuCopyToClipboard.string, this, "doCopyToClipboard");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the duplicate menu item.
+		-->
+		<method args="selectedObjects" name="createDuplicateMenuItem">
+			<![CDATA[
+			if (selectedObjects.length > 0 && ActionUtil.Singleton.isDuplicateActionEnabled(selectedObjects)) {
+				this.addMenuItem(foundationResources.Singleton.menuDuplicate.string, this, "doDuplicate");
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the paste menu item.
+		-->
+		<method args="selectedObjects" name="createPasteMenuItem">
+			<![CDATA[
+			this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			]]>
+		</method>
+		
+		<!---
+			Create the delete menu item.
+		-->
+		<method args="selectedObjects" name="createDeleteMenuItem">
+			<![CDATA[
+			this.addMenuItem(foundationResources.Singleton.contextMenuDelete.string, this, "doDelete");
+			]]>
+		</method>
+		
+		<!---
+			Create the edit column menu item.
+		-->
+		<method name="createEditColumnMenuItem">
+			<![CDATA[
+			if (this.row.parent.isEditColumnEnabled(null)) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuEditColumn.string, this, "doEditColumn");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the select all menu item.
+		-->
+		<method args="selectedObjects" name="createSelectAllMenuItem">
+			<![CDATA[
+			this.addMenuItem(foundationResources.Singleton.menuSelectAll.string, this, "doSelectAll");
+			]]>
+		</method>
+		
+		<!---
+			Create the deselect all menu item.
+		-->
+		<method args="selectedObjects" name="createDeselectAllMenuItem">
+			<![CDATA[
+			if (selectedObjects.length > 0) {
+				this.addMenuItem(foundationResources.Singleton.menuDeselectAll.string, this, "doDeselectAll");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the custom service menu items.
+		-->
+		<method args="selectedObjects, fromUtilitiesView" name="createCustomServiceMenuItems">
+			<![CDATA[
+			if (typeof(fromUtilitiesView) == "undefined") fromUtilitiesView = false;
+			if (selectedObjects.length > 0) {
+				var oDef = selectedObjects[0].getReferencedObject().objectDefinition;
+				for (var i = 0; i < oDef.customServices.length; i++) {
+					var customService = oDef.customServices[i];
+					if ((customService.allowMultipleSelection || selectedObjects.length == 1) && ((!fromUtilitiesView && customService.addToListContextMenu) || (fromUtilitiesView && customService.addToUtilitiesContextMenu))) {
+						var serviceEnabled = true;
+						for (var j = 0; j < selectedObjects.length; j++) {
+							var po = selectedObjects[j].getReferencedObject();
+							if (!po.objectDefinition.isCustomServiceDefined(customService) || !customService.isEnabled(po)) {
+								serviceEnabled = false;
+								break;
+							}
+						}
+						if (serviceEnabled) {
+							this.addMenuItem(customService.getMenuDisplayName(), this, "invokeCustomService", {
+								customService: customService
+							});
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the client action menu items.
+		-->
+		<method args="selectedObjects, fromUtilitiesView" name="createClientActionMenuItems">
+			<![CDATA[
+			if (typeof(fromUtilitiesView) == "undefined") fromUtilitiesView = false;
+			if (selectedObjects.length > 0) {
+				var oDef = selectedObjects[0].objectDefinition;
+				for (var i = 0; i < oDef.clientActions.length; i++) {
+					var clientAction = oDef.clientActions[i];
+					if ((clientAction.allowMultipleSelection || selectedObjects.length == 1) && ((!fromUtilitiesView && clientAction.addToListContextMenu) || (fromUtilitiesView && clientAction.addToUtilitiesContextMenu))) {
+						var clientActionEnabled = true;
+						for (var j = 0; j < selectedObjects.length; j++) {
+							var o = selectedObjects[j];
+							if (!o.objectDefinition.isClientActionDefined(clientAction) || !clientAction.isEnabled(o)) {
+								clientActionEnabled = false;
+								break;
+							}
+						}
+						if (clientActionEnabled) {
+							if (clientAction.newObjectAction) {
+								this.addSeparator();
+							}
+							this.addMenuItem(clientAction.getMenuDisplayName(), this, "invokeClientAction", {
+								clientAction: clientAction,
+								useReferencedObject: false
+							});
+						}
+					}
+				}
+				if (oDef != selectedObjects[0].getReferencedObject().objectDefinition) {
+					oDef = selectedObjects[0].getReferencedObject().objectDefinition;
+					for (var i = 0; i < oDef.clientActions.length; i++) {
+						var clientAction = oDef.clientActions[i];
+						if ((clientAction.allowMultipleSelection || selectedObjects.length == 1) && ((!fromUtilitiesView && clientAction.addToListContextMenu) || (fromUtilitiesView && clientAction.addToUtilitiesContextMenu))) {
+							var clientActionEnabled = true;
+							for (var j = 0; j < selectedObjects.length; j++) {
+								var po = selectedObjects[j].getReferencedObject();
+								if (!po.objectDefinition.isClientActionDefined(clientAction) || !clientAction.isEnabled(po)) {
+									clientActionEnabled = false;
+									break;
+								}
+							}
+							if (clientActionEnabled) {
+								if (clientAction.newObjectAction) {
+									this.addSeparator();
+								}
+								this.addMenuItem(clientAction.getMenuDisplayName(), this, "invokeClientAction", {
+									clientAction: clientAction,
+									useReferencedObject: true
+								});
+							}
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the open menu item.
+		-->
+		<method args="selectedObjects" name="createNavigationListMenuItems">
+			<![CDATA[
+			if (selectedObjects.length == 1) {
+				var o = selectedObjects[0].getReferencedObject();
+				var oDef = o.objectDefinition;
+				var defs = [];
+				for (var i = 0; i < oDef.navigationListDefinitions.length; i++) {
+					if (oDef.navigationListDefinitions[i].isEnabled(o)) {
+						defs.push(oDef.navigationListDefinitions[i]);
+					}
+				}
+				for (var i = 0; i < defs.length; i++) {
+					var navigationListDef = defs[i];
+					var item = this.addMenuItem(foundationResources.Singleton.replaceValues("menuShowNavigationList", [navigationListDef.displayName]), this, "doShowNavigationList", {
+						navigationListDefinition: navigationListDef
+					});
+					if (i == 0 && item != null) {
+						item.setVariable('separatorbefore', true);
+					}
+				}
+			}
+			]]>
+		</method>
+						
+		<!---
+			Create the object trace menu item.
+		-->
+		<method name="createObjectTraceMenuItem">
+			<![CDATA[
+			if (Logger.Singleton.display) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLogObject.string, this, "doShowObjectInfo");
+				this.addMenuItem(foundationResources.Singleton.contextMenuLogDefinition.string, this, "doShowDefinitionInfo");
+			}
+			]]>
+		</method>
+
+		<!---
+			Open the selected object.
+		-->
+		<method name="doOpen">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			for (var i = 0; i < selectedObjects.length; i++) {
+				selectedObjects[i].doOpen(i == (selectedObjects.length - 1));
+			}
+			]]>
+		</method>
+		
+		<!---
+			Show the navigation list view.
+		-->
+		<method args="args" name="doShowNavigationList">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			var po = null;
+			for (var i = 0; i < selectedObjects.length; i++) {
+				po = selectedObjects[i].getReferencedObject();
+				po.openGroupObject.setVariable("open", true);
+			}
+			if (po != null) {
+				po.model.oEditor.selectOpenObject(po.openGroupObject, args.navigationListDefinition);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Copy the selected objects.
+		-->
+		<method name="doCopy">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			if (selectedObjects.length > 0) {
+				selectedObjects[0].model.setClipboardObjects(selectedObjects);
+			}
+			]]>
+		</method>
+
+		<!---
+			Copy the selected object to the utilities clipboard.
+		-->
+		<method name="doCopyToClipboard">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			if (selectedObjects.length > 0) {
+				selectedObjects[0].model.setClipboardObjects(selectedObjects);
+				if (!selectedObjects[0].model.oEditor.utilitiesViewVisible) {
+					selectedObjects[0].model.oEditor.utilities.open();
+				}
+				selectedObjects[0].model.oEditor.utilities.setVariable("activePane", selectedObjects[0].model.oEditor.utilities.panes.clipboardPane);
+				selectedObjects[0].model.oEditor.utilities.panes.clipboardPane.doPaste();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Duplicate the selected objects.
+		-->
+		<method name="doDuplicate">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			if (selectedObjects.length > 0) {
+				ActionUtil.Singleton.triggerDuplicate(selectedObjects);
+			}
+			]]>
+		</method>
+
+		<!---
+			Paste the selected objects.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!---
+			Delete the selected objects.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			var objects = this.row.parent.getSelectedObjects();
+			var selectedObjects = [];
+			for (var i = 0; i < objects.length; i++) {
+				selectedObjects[i] = objects[i];
+			}
+			var deleteObjects = [];
+			var isCollectionReferenceObjects = true;
+			for (var i = 0; i < selectedObjects.length; i++) {
+				var o = selectedObjects[i];
+				var oDef = o.objectDefinition;
+				if (oDef.openGroupTop) {
+					deleteObjects.push(o);
+				}
+				else if (oDef.parentReference || oDef.collectionReference) {
+					deleteObjects.push(o.getReferencedObject());
+				}
+				else if (!oDef.organizational) {
+					o.deleteObject();
+				}
+				if (isCollectionReferenceObjects && !oDef.collectionReference) {
+					isCollectionReferenceObjects = false;
+				}
+			}
+			if (isCollectionReferenceObjects) {
+				var deleteCollectionReferencedObjectEnabled = true;
+				var deleteCollectionReferenceEnabled = true;
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var o = selectedObjects[i];
+					if (!o.getReferencedObject().isDeletable()) {
+						deleteCollectionReferencedObjectEnabled = false;
+						break;
+					}
+					if (!o.isDeletable()) {
+						deleteCollectionReferenceEnabled = false;
+						break;
+					}
+				}
+				if (deleteObjects.length == 1) {
+					if (deleteCollectionReferencedObjectEnabled && deleteCollectionReferenceEnabled) {
+						require(["cmc/foundation/CollectionReferenceObjectDeleteConfirmationDialog"], function(CollectionReferenceObjectDeleteConfirmationDialog) {
+							CollectionReferenceObjectDeleteConfirmationDialog.Singleton.openCollectionReferenceObjectDeleteConfirmationDialog(selectedObjects[0]);
+						});
+					}
+					else if (deleteCollectionReferencedObjectEnabled) {
+						deleteObjects[0].deleteObject(true);
+					}
+					else if (deleteCollectionReferenceEnabled) {
+						require(["cmc/foundation/CollectionReferenceObjectRemoveConfirmationDialog"], function(CollectionReferenceObjectRemoveConfirmationDialog) {
+							CollectionReferenceObjectRemoveConfirmationDialog.Singleton.openCollectionReferenceObjectRemoveConfirmationDialog(selectedObjects[0]);
+						});
+					}
+				}
+				else if (deleteObjects.length > 0) {
+					if (deleteCollectionReferencedObjectEnabled && deleteCollectionReferenceEnabled) {
+						require(["cmc/foundation/MultipleCollectionReferenceObjectDeleteConfirmationDialog"], function(MultipleCollectionReferenceObjectDeleteConfirmationDialog) {
+							MultipleCollectionReferenceObjectDeleteConfirmationDialog.Singleton.openMultipleCollectionReferenceObjectDeleteConfirmationDialog(selectedObjects);
+						});
+					}
+					else if (deleteCollectionReferencedObjectEnabled) {
+						require(["cmc/foundation/MultipleDeleteConfirmationDialog"], function(MultipleDeleteConfirmationDialog) {
+							MultipleDeleteConfirmationDialog.Singleton.openMultipleDeleteConfirmationDialog(deleteObjects);
+						});
+					}
+					else if (deleteCollectionReferenceEnabled) {
+						require(["cmc/foundation/MultipleCollectionReferenceObjectRemoveConfirmationDialog"], function(MultipleCollectionReferenceObjectRemoveConfirmationDialog) {
+							MultipleCollectionReferenceObjectRemoveConfirmationDialog.Singleton.openMultipleCollectionReferenceObjectRemoveConfirmationDialog(selectedObjects);
+						});
+					}
+				}
+			}
+			else {
+				if (deleteObjects.length == 1) {
+					deleteObjects[0].deleteObject(true);
+				}
+				else if (deleteObjects.length > 0) {
+					require(["cmc/foundation/MultipleDeleteConfirmationDialog"], function(MultipleDeleteConfirmationDialog) {
+						MultipleDeleteConfirmationDialog.Singleton.openMultipleDeleteConfirmationDialog(deleteObjects);
+					});
+				}
+			}
+			]]>
+		</method>
+		
+		<method name="doEditColumn">
+			<![CDATA[
+			var caller = this;
+			require(["cmc/foundation/EditColumnDialog"], function(EditColumnDialog) {
+				EditColumnDialog.Singleton.openEditColumnDialog(caller.row.parent);
+			});
+			]]>
+		</method>
+
+		<!---
+			Select all objects.
+		-->
+		<method name="doSelectAll">
+			<![CDATA[
+			this.row.parent.selectAll();
+			]]>
+		</method>
+		
+		<!---
+			Deselect all objects.
+		-->
+		<method name="doDeselectAll">
+			<![CDATA[
+			this.row.parent.deselectAll();
+			]]>
+		</method>
+		
+		<!---
+			Invoke a custom service for all of the selected objects.
+			@param object args: argument map
+		-->
+		<method args="args" name="invokeCustomService">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			var unSaved = false;
+			for (var i = 0; i < selectedObjects.length; i++) {
+				var o = selectedObjects[i].getReferencedObject();
+				if (o.isOpenGroupDirty(true)) {
+					unSaved = true;
+				}
+			}
+			if (unSaved) {
+				require(["cmc/foundation/CustomServiceUnsavedDialog"], function(CustomServiceUnsavedDialog) {
+					CustomServiceUnsavedDialog.Singleton.openCustomServiceUnsavedDialog(args.customService);
+				});
+			}
+			else {
+				for (var i = 0; i < selectedObjects.length; i++) {
+					var o = selectedObjects[i].getReferencedObject();
+					args.customService.doRequest(o);
+				}
+			}
+			]]>
+		</method>		
+						
+		<!---
+			Invoke a client action for all of the selected objects.
+			@param object args: argument map
+		-->
+		<method args="args" name="invokeClientAction">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			var objects = [];
+			for (var i = 0; i < selectedObjects.length; i++) {
+				objects.push(args.useReferencedObject ? selectedObjects[i].getReferencedObject() : selectedObjects[i]);
+			}
+			args.clientAction.performAction(objects);
+			]]>
+		</method>		
+						
+		<method name="doShowObjectInfo">
+			<![CDATA[
+			this.row.o.getReferencedObject().logObjectGroup();
+			]]>
+		</method>
+						
+		<method name="doShowDefinitionInfo">
+			<![CDATA[
+			this.row.o.getReferencedObject().objectDefinition.logDefinition();
+			]]>
+		</method>
+		
+		<!---
+			Create the open in compare view menu item.
+		-->
+		<method args="selectedObjects" name="createOpenInCompareViewMenuItem">
+			<![CDATA[
+			if (selectedObjects.length > 0 && selectedObjects.length < 3 && selectedObjects[0].model.oEditor.showCompareView) {
+				for (var i = 0; i < selectedObjects.length; i++) {
+					if (!selectedObjects[i].isOpenInCompareViewEnabled()) {
+						return;
+					}
+				}
+				this.addMenuItem(foundationResources.Singleton.contextMenuOpenInCompareView.string, this, "doOpenInCompareView");
+			}
+			]]>
+		</method>
+		
+		<method name="doOpenInCompareView">
+			<![CDATA[
+			var selectedObjects = this.row.parent.getSelectedObjects();
+			if (selectedObjects.length == 1 || selectedObjects.length == 2) {
+				var o1 = selectedObjects[0];
+				o1 = o1.getReferencedObject();
+				var o2 = null;
+				if (selectedObjects.length == 2) {
+					o2 = selectedObjects[1];
+					o2 = o2.getReferencedObject();
+				}
+				o1.model.oEditor.openObjectsInCompareView(o1, o2);
+			}
+			]]>
+		</method>
+	</ContextMenu>
+
+	<!--- @keywords private -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/SearchResultsMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="searchResultsView" value="${this.row.parent.parent}"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.searchResultsView.isDeleteEnabled()) {
+				this.createDeleteMenuItem(selectedObjects);
+			}
+			this.createCustomServiceMenuItems(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects);
+			this.createNavigationListMenuItems(selectedObjects);
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null) {
+				if (this.searchResultsView.searchResults.lastPageNum > this.searchResultsView.searchResults.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null && this.searchResultsView.searchResults.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			this.searchResultsView.searchResults.loadByPageNum(pageNum);
+			]]>
+		</method>
+	</GridRowMenu>
+
+	<!--- @keywords private -->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/SearchResultsBackgroundMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="grid" value="${null}"/>
+		<variable name="searchResultsView" value="${this.grid.parent}"/>
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.grid.panel != null) {
+				this.grid.model.setVariable("activeSelectionView", this.grid);
+			}
+			var selectedObjects = this.grid.getSelectedObjects();
+			this.createMenuItems(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			Create the context menu items.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null) {
+				if (this.searchResultsView.searchResults.lastPageNum > this.searchResultsView.searchResults.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null && this.searchResultsView.searchResults.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			this.searchResultsView.searchResults.loadByPageNum(pageNum);
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!--- @keywords private -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/ChildListMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="childListEditor" value="${this.row.parent.parent}"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			this.createCopyToClipboardMenuItem(selectedObjects);
+			if (this.childListEditor.allowDuplicate) {
+				this.createDuplicateMenuItem(selectedObjects);
+			}
+			if (this.childListEditor.isPasteEnabled()) {
+				this.createPasteMenuItem(selectedObjects);
+			}
+			if (this.childListEditor.isDeleteEnabled()) {
+				this.createDeleteMenuItem(selectedObjects);
+			}
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createSequenceUpMenuItem();
+			this.createSequenceDownMenuItem();
+			this.createEditColumnMenuItem();
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			this.createCustomServiceMenuItems(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects);
+			this.createNavigationListMenuItems(selectedObjects);
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			this.createObjectTraceMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			var list = this.row.parent.oList;
+			if (list && list.statusObject != null) {
+				if (list.statusObject.lastPageNum > list.statusObject.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			var list = this.row.parent.oList;
+			if (list != null && list.statusObject != null && list.statusObject.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			var o = this.row.parent.parentO;
+			var oDefs = this.row.parent.oList.getChildObjectDefinitions();
+			o.model.refreshDescendants(o, true, oDefs, pageNum);
+			]]>
+		</method>		
+		
+		<!---
+			Create the menu item for moving the list item up in sequence.
+		-->
+		<method name="createSequenceUpMenuItem">
+			<![CDATA[
+			if (this.childListEditor.isSequenceUpEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuSequenceUp.string, this.childListEditor, "doSequenceUp");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the menu item for moving the list item down in sequence.
+		-->
+		<method name="createSequenceDownMenuItem">
+			<![CDATA[
+			if (this.childListEditor.isSequenceDownEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuSequenceDown.string, this.childListEditor, "doSequenceDown");
+			}
+			]]>
+		</method>
+		
+		<method name="doPaste">
+			<![CDATA[
+			this.childListEditor.doPaste();
+			]]>
+		</method>
+				
+	</GridRowMenu>
+	
+	<!--- @keywords private -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/ReferenceListMenu">
+		<variable name="listEditor" value="${this.row.parent.parent}"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			this.createCopyToClipboardMenuItem(selectedObjects);
+			if (this.listEditor.allowDuplicate) {
+				this.createDuplicateMenuItem(selectedObjects);
+			}
+			if (this.listEditor.isDeleteEnabled()) {
+				this.createDeleteMenuItem(selectedObjects);
+			}
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			this.createEditColumnMenuItem();
+			this.createCustomServiceMenuItems(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects);
+			this.createObjectTraceMenuItem();
+			]]>
+		</method>		
+	</GridRowMenu>
+	
+	<!--- @keywords private -->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/ReferenceMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			this.createMenuItems();
+			]]>
+		</method>
+		
+		<!---
+			Create the context menu items.
+		-->
+		<method name="createMenuItems">
+			<![CDATA[
+			this.createPasteMenuItem();
+			this.createDeleteMenuItem();
+			this.createOpenMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the paste menu item.
+		-->
+		<method name="createPasteMenuItem">
+			<![CDATA[
+			if (this.parent.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this.parent, "doPaste");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the delete menu item.
+		-->
+		<method name="createDeleteMenuItem">
+			<![CDATA[
+			if (this.parent.isDeleteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuDelete.string, this.parent, "doDelete");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the open menu item.
+		-->
+		<method name="createOpenMenuItem">
+			<![CDATA[
+			if (this.parent.isOpenEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuOpen.string, this.parent, "doOpen");
+			}
+			]]>
+		</method>
+	</ContextMenu>
+
+	<!---
+		@keywords private
+		
+		Menu for the search results grid in the utilities Pane
+	 -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/UtilitiesSearchResultsMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="searchResultsView" value="${this.row.parent.parent.parent}"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			this.createCopyToClipboardMenuItem(selectedObjects);
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects, true);
+			this.createCustomServiceMenuItems(selectedObjects, true);
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null) {
+				if (this.searchResultsView.searchResults.lastPageNum > this.searchResultsView.searchResults.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null && this.searchResultsView.searchResults.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			this.searchResultsView.searchResults.loadByPageNum(pageNum);
+			]]>
+		</method>
+	</GridRowMenu>
+	
+	<!--- @keywords private -->
+	<SearchResultsBackgroundMenu classDefinition="true" definitionName="cmc/foundation/UtilitiesSearchResultsBackgroundMenu">
+		<variable name="searchResultsView" value="${this.grid.parent.parent}"/>
+	</SearchResultsBackgroundMenu>
+	
+	<!---
+		@keywords private
+		
+		Menu for the details grid on the browse tab in the utilities pane
+	 -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/UtilitiesDetailsMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			this.createCopyToClipboardMenuItem(selectedObjects);
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createNavigationListMenuItems(selectedObjects);
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects, true);
+			this.createCustomServiceMenuItems(selectedObjects, true);
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			var list = this.row.parent.oList;
+			if (list && list.statusObject != null) {
+				if (list.statusObject.lastPageNum > list.statusObject.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			var list = this.row.parent.oList;
+			if (list != null && list.statusObject != null && list.statusObject.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			var o = this.row.parent.parentO;
+			var oDefs = this.row.parent.oList.getChildObjectDefinitions();
+			o.model.refreshDescendants(o, true, oDefs, pageNum);
+			]]>
+		</method>
+	</GridRowMenu>
+
+	<!--- @keywords private -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/UtilitiesClipboardMenuRow">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			if (this.row.parent.parent.isPasteEnabled()) {
+				this.createPasteMenuItem(selectedObjects);
+			}
+			this.createDeleteMenuItem(selectedObjects);
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			this.createClientActionMenuItems(selectedObjects, true);
+			this.createCustomServiceMenuItems(selectedObjects, true);
+			]]>
+		</method>
+		
+		<!---
+			Create the delete menu item.
+		-->
+		<method args="selectedObjects" name="createDeleteMenuItem">
+			<![CDATA[
+			this.addMenuItem(foundationResources.Singleton.clipboardClear.string, this, "doDelete");
+			]]>
+		</method>
+		
+		<!---
+			Remove objects from clipboard.
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			this.row.parent.parent.doDelete();
+			]]>
+		</method>
+		
+		<!---
+			Paste CMC clipboard objects into the utilities clipboard.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			this.row.parent.parent.doPaste();
+			]]>
+		</method>
+	</GridRowMenu>
+	
+	<!---
+		@keywords private
+		
+		Grid column header context menu.
+	-->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/GridColumnMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<!--- The column. -->
+		<variable name="column" value="${null}"/>
+		<!---
+			@keywords private
+			Indicates that the column is only filler and can not be hidden or selected
+		 -->
+		<variable name="dummyColumn" type="boolean" value="false"/>
+
+		<!---
+			Open and populate the context menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.column.parent.isConfigurable) {
+				if (!this.dummyColumn) {
+					FocusUtil.setFocus(this.column);
+					if (!this.column.required && !this.column.parent.isOnlyColumnVisible(this.column)) {
+						this.addMenuItem(foundationResources.Singleton.contextMenuHide.string, this, "doHide");
+					}
+				}
+				this.addMenuItem(foundationResources.Singleton.contextMenuConfigureColumns.string, this, "doConfigureColumns");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Hide the column.
+		-->
+		<method name="doHide">
+			<![CDATA[
+			this.column.setVariable("visible", false);
+			this.column.parent.savePreferences();
+			]]>
+		</method>
+		
+		<!---
+			Configure columns.
+		-->
+		<method name="doConfigureColumns">
+			<![CDATA[
+			this.column.parent.configure();
+			]]>
+		</method>
+	</ContextMenu>
+			
+	<!--- @keywords private -->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/ChildListBackgroundMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="grid" value="${null}"/>
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.grid.panel != null) {
+				this.grid.model.setVariable("activeSelectionView", this.grid);
+			}
+			var selectedObjects = this.grid.getSelectedObjects();
+			this.createMenuItems(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			Create the context menu items.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createPasteMenuItem(selectedObjects);
+			this.addSeparator();
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the paste menu item.
+		-->
+		<method args="selectedObjects" name="createPasteMenuItem">
+			<![CDATA[
+			if (this.grid.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			var list = this.grid.oList;
+			if (list && list.statusObject != null) {
+				if (list.statusObject.lastPageNum > list.statusObject.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			var list = this.grid.oList;
+			if (list != null && list.statusObject != null && list.statusObject.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", list.statusObject.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Paste the clipboard objects into the child list editor.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			this.grid.doPaste();
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			var o = this.grid.parentO;
+			var oDefs = this.grid.oList.getChildObjectDefinitions();
+			o.model.refreshDescendants(o, true, oDefs, pageNum);
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!--- @keywords private -->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/UtilitiesClipboardMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="grid" value="${null}"/>
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.grid.panel != null) {
+				this.grid.model.setVariable("activeSelectionView", this.grid);
+			}
+			var selectedObjects = this.grid.getSelectedObjects();
+			this.createMenuItems(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			Create the context menu items.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createPasteMenuItem(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			Create the paste menu item.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createPasteMenuItem">
+			<![CDATA[
+			if (this.grid.parent.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Paste the CMC clipboard objects into the utilities clipboard.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			this.grid.parent.doPaste();
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!--- @keywords private -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/ChildListViewerMenu">
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			]]>
+		</method>
+	</GridRowMenu>
+	
+	<!---
+		@keywords private
+		Context menu for the grid in collection list editor.
+	-->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/CollectionListMenu">
+		<!---
+			The collection list editor.
+		-->
+		<variable name="collectionListEditor" value="${this.row.parent.parent}"/>
+
+		<!---
+			@keywords private
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createOpenMenuItem(selectedObjects);
+			this.createCopyMenuItem(selectedObjects);
+			this.createCopyToClipboardMenuItem(selectedObjects);
+			if (this.collectionListEditor.isPasteEnabled()) {
+				this.createPasteMenuItem(selectedObjects);
+			}
+			if (this.collectionListEditor.isDeleteEnabled()) {
+				this.createDeleteMenuItem(selectedObjects);
+			}
+			this.createOpenInCompareViewMenuItem(selectedObjects);
+			this.createSelectAllMenuItem(selectedObjects);
+			this.createDeselectAllMenuItem(selectedObjects);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="doDelete">
+			<![CDATA[
+			this.collectionListEditor.doDeleteObjects(this.row.parent.getSelectedObjects());
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			this.collectionListEditor.doPaste();
+			]]>
+		</method>
+	</GridRowMenu>
+
+	<!---
+		@keywords private
+		Collection list editor context menu.
+	-->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/CollectionListBackgroundMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Collection list editor grid.
+		-->
+		<variable name="grid" value="${null}"/>
+
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.grid.panel != null) {
+				this.grid.model.setVariable("activeSelectionView", this.grid);
+			}
+			var selectedObjects = this.grid.getSelectedObjects();
+			this.createMenuItems(selectedObjects);
+			]]>
+		</method>
+
+		<!---
+			Create the context menu items.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createPasteMenuItem(selectedObjects);
+			]]>
+		</method>
+
+		<!---
+			Create the paste menu item.
+		-->
+		<method args="selectedObjects" name="createPasteMenuItem">
+			<![CDATA[
+			if (this.grid.parent.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			}
+			]]>
+		</method>
+
+		<!---
+			Paste the clipboard objects into the collection list editor.
+		-->
+		<method name="doPaste">
+			<![CDATA[
+			this.grid.parent.doPaste();
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!---
+		@keywords private
+		
+		Menu for the template picker search results grid.
+	 -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/TemplatePickerSearchResultsMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="searchResultsView" value="${this.row.parent.templatePicker}"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null) {
+				if (this.searchResultsView.searchResults.lastPageNum > this.searchResultsView.searchResults.currPageNum) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum + 1);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			if (this.searchResultsView.searchResults != null && this.searchResultsView.searchResults.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", this.searchResultsView.searchResults.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			this.searchResultsView.searchResults.loadByPageNum(pageNum);
+			]]>
+		</method>
+	</GridRowMenu>
+	
+	<!--- @keywords private -->
+	<SearchResultsBackgroundMenu classDefinition="true" definitionName="cmc/foundation/TemplatePickerSearchResultsBackgroundMenu">
+		<variable name="searchResultsView" value="${this.grid.templatePicker}"/>
+	</SearchResultsBackgroundMenu>
+	
+	<!--- @keywords private -->
+	<GridRowMenu classDefinition="true" definitionName="cmc/foundation/TemplatePickerListMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+		
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			var templatePicker = this.row.parent.templatePicker;
+			if (templatePicker.lastPageNum > templatePicker.currPageNum) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", templatePicker.currPageNum + 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			if (this.row.parent.templatePicker.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", this.row.parent.templatePicker.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			this.row.parent.templatePicker.loadByPageNum(pageNum);
+			]]>
+		</method>
+	</GridRowMenu>
+	
+	<!--- @keywords private -->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/TemplatePickerListBackgroundMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<variable name="grid" value="${null}"/>
+		<!---
+			Populate and open the menu.
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			var selectedObjects = this.grid.getSelectedObjects();
+			this.createMenuItems(selectedObjects);
+			]]>
+		</method>
+		
+		<!---
+			Create the context menu items.
+			@param array selectedObjects: array of cmc/foundation/ModelObject instances
+		-->
+		<method args="selectedObjects" name="createMenuItems">
+			<![CDATA[
+			this.createLoadNextPageMenuItem();
+			this.createLoadPreviousPageMenuItem();
+			]]>
+		</method>
+
+		<!---
+			Create the load next page menu item.
+		-->
+		<method name="createLoadNextPageMenuItem">
+			<![CDATA[
+			var templatePicker = this.grid.templatePicker;
+			if (templatePicker.lastPageNum > templatePicker.currPageNum) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadNextPage.string, this, "doLoadByPageNum", templatePicker.currPageNum + 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Create the load previous page menu item.
+		-->
+		<method name="createLoadPreviousPageMenuItem">
+			<![CDATA[
+			if (this.grid.templatePicker.currPageNum > 1) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuLoadPreviousPage.string, this, "doLoadByPageNum", this.grid.templatePicker.currPageNum - 1);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Load the page of child objects by page number.
+		-->
+		<method args="pageNum" name="doLoadByPageNum">
+			<![CDATA[
+			if (typeof(pageNum) == "undefined") pageNum = 1;
+			this.grid.templatePicker.loadByPageNum(pageNum);
+			]]>
+		</method>
+	</ContextMenu>
+	
+	<!---
+		@keywords private
+		
+		Context menu for the compare view in the navigation view.
+	-->
+	<TreeMenu classDefinition="true" definitionName="cmc/foundation/CompareViewTreeMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<!---
+			Populate the context menu.
+	 	-->
+		<method name="createMenuItems">
+			<![CDATA[
+			if (this.tree.isPasteEnabled()) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuPaste.string, this, "doPaste");
+			}
+			]]>
+		</method>
+		
+		<method name="doPaste">
+			<![CDATA[
+			this.tree.setVariable("selected", true);
+			this.tree.doPaste();
+			]]>
+		</method>
+	</TreeMenu>
+</Definitions>

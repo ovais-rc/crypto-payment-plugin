@@ -1,0 +1,116 @@
+<!-- ========================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (c) Copyright IBM Corp. 2001, 2002
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ ===========================================================================-->
+<%@page import="java.util.*"%>
+<%@page import="java.math.*" %>
+<%@page import="java.sql.*" %>
+<%@page import="com.ibm.commerce.command.*" %>
+<%@page import="com.ibm.commerce.tools.reporting.reports.*" %>
+<%@page import="com.ibm.commerce.beans.DataBeanManager" %>
+<%@page import="com.ibm.commerce.command.CommandContext"%>
+<%@page import="com.ibm.commerce.utils.TimestampHelper"%>
+<%@page import="com.ibm.commerce.server.ECConstants"%>
+<%@page import="com.ibm.commerce.tools.util.*"%>
+<%@page import="com.ibm.commerce.common.beans.StoreDataBean" %>
+<%@page import="com.ibm.commerce.common.objects.StoreAccessBean" %>
+<%@page import="javax.servlet.http.*"%>
+
+<%!
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Generates the output heading and description
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   private String biGenerateOutputHeading(String reportPrefix, Hashtable biNLS) {
+      StringBuffer buff = new StringBuffer();
+      buff.append("   <H1>" + biNLS.get(reportPrefix) + "</H1>\n");
+      buff.append("   <p>\n");
+      return buff.toString();
+   }
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Display the report input criteria
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   private String biGenerateOutputInputCriteria(String reportPrefix, Hashtable biNLS, Locale locale) {
+      StringBuffer buff = new StringBuffer("");
+   	  Hashtable aReportDataBeanEnv = aReportDataBean.getEnv();
+      String reportType = (String) aReportDataBeanEnv.get("Time");
+      Timestamp currentTime = TimestampHelper.getCurrentTime();
+      buff.append("<DIV ID=pageBody STYLE=\"display: block; margin-left: 20\">\n");
+      buff.append("<b>" + biNLS.get("Report") + ":</b>  " + reportType + "<br>\n");
+      buff.append("<b>" + biNLS.get("contextListColumn2Heading") + ":</b>  " + biNLS.get(reportPrefix + "Description") + "<br>\n");
+      buff.append("<b>" + biNLS.get("ReportOutputViewRunDateTitle") + ":</b> ");
+      buff.append((String) TimestampHelper.getDateFromTimestamp(currentTime, locale) + " ");
+      buff.append((String) TimestampHelper.getTimeFromTimestamp(currentTime) + "<BR>");
+      buff.append("</DIV>\n<BR><BR>\n");
+      return buff.toString();
+   }
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // This function generates html elements that appear between the <HEAD> and </HEAD> tags
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   private String biGenerateHeaderInformation(String reportPrefix, Hashtable biNLS, HttpServletRequest request) throws ServletException {
+
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       // Generate the store data bean
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       cmdContext = (CommandContext) request.getAttribute(ECConstants.EC_COMMANDCONTEXT);
+       try {
+          aStoreAccessBean = cmdContext.getStore();
+       } catch (Exception ex) {
+          System.out.println("Can't get store... unable to continue.");
+          return "";
+       }
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       // Generate the reporting data bean
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       try {
+       	  aReportDataBean.setRequestProperties(null);
+       	  
+          // d96171 - Reset ViewCommandContext, so that DataBeanManager will set the latest ViewCommandContext from the request.
+          aReportDataBean.setViewCommandContext(null);
+       } catch (Exception ex) {
+          System.out.println("Cannot set requestProperties to null ...");
+       }
+
+       DataBeanManager.activate(aReportDataBean, request);
+       Hashtable aReportDataBeanEnv = aReportDataBean.getEnv();
+       parameterObject = (Hashtable) aReportDataBean.getUserDefinedParameters();
+       if (parameterObject.isEmpty()) {
+          System.out.println("Parameter Object is empty... unable to continue.");
+          return "";
+       }
+
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       // set the column attributes from the xml file
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       setColumnAttributes();
+
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       // use string buffer to compose output.
+       ///////////////////////////////////////////////////////////////////////////////////////////////////////
+       StringBuffer buff = new StringBuffer();
+
+       // generate style sheet information
+       buff.append("<STYLE type='text/css'>");
+       buff.append((String) parameterObject.get("THStyle"));
+       buff.append((String) parameterObject.get("TDStyle"));
+       buff.append("</STYLE>");
+
+       // generate title
+       buff.append("   <TITLE>" + biNLS.get(reportPrefix) + "</TITLE>\n");
+
+       // generate print and cancel button handle javascript functions
+       generatePrintCancelButtonHandlers(buff);
+       return buff.toString();
+    }
+
+%>

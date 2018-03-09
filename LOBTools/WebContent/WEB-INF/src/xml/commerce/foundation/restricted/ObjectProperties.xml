@@ -1,0 +1,2944 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This is the base class for object properties view. This class should not be instantiated directly nor should it be extended
+		from directly.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseObjectProperties">
+		<dependency localName="PropertyTabPane" moduleName="cmc/foundation/PropertyTabPane"/>
+		<dependency localName="ObjectSaveAndCloseButton" moduleName="cmc/foundation/ObjectSaveAndCloseButton"/>
+		<dependency localName="ObjectCloseButton" moduleName="cmc/foundation/ObjectCloseButton"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="PropertyGroup" moduleName="cmc/foundation/PropertyGroup"/>
+		<dependency localName="ObjectPropertiesActionDefinition" moduleName="cmc/foundation/ObjectPropertiesActionDefinition"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="PropertiesComponent" moduleName="cmc/foundation/PropertiesComponent"/>
+		<dependency localName="ObjectPropertiesUtil" moduleName="cmc/foundation/ObjectPropertiesUtil"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ObjectSaveButton" moduleName="cmc/foundation/ObjectSaveButton"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="ObjectSaveAndPreviewButton" moduleName="cmc/foundation/ObjectSaveAndPreviewButton"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="IntroPrompt" moduleName="cmc/foundation/IntroPrompt"/>
+		<dependency localName="PropertyPane" moduleName="cmc/foundation/PropertyPane"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			A comma separated list of component object names. A named component
+			object can be used as the component object of a properties component
+			declared within this properties views. The named object is typically managed by
+			one of the other properties components. For example, if you specify the 
+			{@link cmc/foundation/PropertyChildListEditor#selectedObjectName} attribute on a child list
+			editor, then you can set up another properties component to listen to the selected
+			object by specifying the same value as the {@link cmc/foundation/PropertiesComponent#componentObjectName}
+			attribute. All component object names must be declared using this attribute before they can
+			be used.
+		-->
+		<variable name="componentObjectNames" type="string" value="${null}"/>	
+		<!---
+			@keywords private
+			The title of the view. The default value is the empty string.
+		-->
+		<variable name="title" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="splittable" value="true"/>
+		<!---
+			@keywords private
+			The view that contains the properties view. This value is set by calling {@link cmc/foundation/PanelManager#findPanel} with this as
+			the parameter.
+		-->
+		<variable name="panel" value="${PanelManager.Singleton.findPanel(this)}"/>		
+		<!---
+			@keywords private
+			The message to display below the title of the view. The default value is the empty string.
+		-->
+		<variable name="errorMessage" type="string" value=""/>
+		<!---
+			@keywords private
+			The message to display behind the title of the view. The default value is the empty string.
+		-->
+		<variable name="titleQualifier" type="string" value=""/>
+		<!---
+			@keywords private
+			The icon to be displayed in the view's header. This should be the name of a resource available in the library.
+		-->
+		<variable name="headerIconResource" type="string" value=""/>
+		<!---
+			@keywords private
+			This attribute indicates that this object properties view has an error. The default value is "false".
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the instance of {@link cmc/foundation/Model}. It is set by calling {@link cmc/foundation/ModelUtil#findModelForView}
+			with this as the parameter.
+		-->
+		<variable name="model" value="${ModelUtil.Singleton.findModelForView(this)}"/>
+		<!---
+			@keywords private
+			This attribute is true if this view is being shown as the details view of a list class. The default value for this attribute is
+			"false".
+		-->
+		<variable name="inDetails" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Array of actions. These are instances of {@link cmc/foundation/ObjectPropertiesActionDefinition} that are created when the class is initalized.
+			If {@link cmc/foundation/ObjectProperties#inDetails} is true, there is one {@link cmc/foundation/ObjectPropertiesActionDefinition} created with
+			{@link cmc/foundation/ObjectSaveButton} as the {@link cmc/foundation/ObjectPropertiesActionDefinition#actionWidgetClass}. Otherwise, two are created
+			with {@link cmc/foundation/ObjectSaveButton} and {@link cmc/foundation/ObjectCloseButton} as their respective values for
+			{@link cmc/foundation/ObjectPropertiesActionDefinition#actionWidgetClass}.
+		-->
+		<variable name="actions" value="${[]}"/>
+		<!---
+			@keywords private
+			A reference to the instance of the {@link cmc/foundation/ModelObject} whose properties are being displayed by the view.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			@keywords private
+			This variable indicates whether or not to add right padding to this view. The default value for this attribute is "true".
+			@see Panel#addRightSpacing Panel
+		-->
+		<variable name="addRightSpacing" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			An array of enablement condition delegates that exist in any of this view's descendants. This array
+			is populated by the descendant that contains an {@link cmc/foundation/EnablementCondition enablement condition}.
+		-->
+		<variable name="enablementConditionDels" value="${[]}"/>
+		
+		<!--- Text to ask the user whether or not to launch the Information Center. -->
+		<variable name="introDialogPromptText" type="string" value=""/>
+		<!---
+			The name of the preference key that the Preference Manager should check before launching the introduction dialog.
+			If the preference key returns a "true" value, the dialog will not be presented to the user. If this attribute is not specified,
+			the introduction dialog will also be shown to the user the first time they launch this properties view in every session.
+		-->
+		<variable name="hideIntroPreferenceKey" type="string" value=""/>
+		<!--- Relative URL in the Information Center to launch if the user selects "Yes" to the introduction dialog. -->
+		<variable name="introUrl" type="string" value=""/>	
+
+		<!---
+			@keywords private
+			An instance of {@link cmc/foundation/DisplayNameStyle} that the framework will use to display the display name of this
+			business object. If this value is null, then the default display name style will
+			be used.
+		-->
+		<variable name="displayNameStyle" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this.inDetails) {
+				if (this.o.objectDefinition.getPreviewURLService != null && ConfigProperties.Singleton.showSaveAndPreviewOnProperties) {
+					this.actions.push(new ObjectPropertiesActionDefinition.Class(this, {
+						actionWidgetClass: ObjectSaveAndPreviewButton
+					}));
+				}
+				if (ConfigProperties.Singleton.showSaveAndCloseOnProperties) {
+					this.actions.push(new ObjectPropertiesActionDefinition.Class(this, {
+						actionWidgetClass: ObjectSaveAndCloseButton
+					}));
+				}
+				else {
+					this.actions.push(new ObjectPropertiesActionDefinition.Class(this, {
+						actionWidgetClass: ObjectSaveButton
+					}));
+				}
+				this.actions.push(new ObjectPropertiesActionDefinition.Class(this, {
+					actionWidgetClass: ObjectCloseButton
+				}));
+			}
+			else {
+				this.actions.push(new ObjectPropertiesActionDefinition.Class(this, {
+					actionWidgetClass: ObjectSaveButton
+				}));
+			}
+			if (this.introDialogPromptText && this.introDialogPromptText != "" && this.introUrl && this.introUrl != "") {
+				var showDialog = true;
+				if (this.hideIntroPreferenceKey && this.hideIntroPreferenceKey != "") {
+					showDialog = PreferenceManager.Singleton.getPreference(this.hideIntroPreferenceKey) != "true";
+				}
+				if (showDialog) {
+					IntroPrompt.Singleton.openIntroPrompt(this.introDialogPromptText, this.introUrl, this.hideIntroPreferenceKey);
+				}
+			}
+			this.resetComponentObjects();
+			]]>
+		</method>
+
+		<method name="resetComponentObjects">
+			<![CDATA[
+			if (this.componentObjectNames != null) {
+				if (this._componentObjectNames == null) {
+					this._componentObjectNames = StringUtil.Singleton.splitAndTrim(this.componentObjectNames, ",");
+				}
+				for (var i = 0; i < this._componentObjectNames.length; i++) {
+					this.setVariable("o_" + this._componentObjectNames[i], null);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateHeaderDel) {
+				this.updateHeaderDel.disconnectAll();
+				delete this.updateHeaderDel;
+			}
+			if (this.updateDisplayNameStyleDel) {
+				this.updateDisplayNameStyleDel.disconnectAll();
+				delete this.updateDisplayNameStyleDel;
+			}
+			if (this.updateValidationErrorDel) {
+				this.updateValidationErrorDel.disconnectAll();
+				delete this.updateValidationErrorDel;
+			}
+			if (this.releaseModelObjectDel) {
+				this.releaseModelObjectDel.disconnectAll();
+				delete this.releaseModelObjectDel;
+			}
+			if (this.openModelObjectDel) {
+				this.openModelObjectDel.disconnectAll();
+				delete this.openModelObjectDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method args="s, p, args" name="determinePlacement">
+			<![CDATA[
+			if (s instanceof PropertyGroup.Class) {
+				if (this.propertyPane) {
+					return this.propertyPane;
+				}
+				else {
+					return new PropertyPane.Class(this, {name: "propertyPane"});
+				}
+			}
+			else {
+				return this.inherited(arguments);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the {@link cmc/foundation/ModelObject} for this properties view. This method is declared as the setter for
+			{@link cmc/foundation/ObjectProperties#o}.
+			@param cmc/foundation/ModelObject newObject The new object to set for this properties view.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+				}
+				if (this.openModelObjectDel) {
+					this.openModelObjectDel.disconnectAll();
+				}
+				else {
+					if (!this.inDetails) {
+						this.openModelObjectDel = new EventHandler.Class(this, "handleOpenModelObject");
+					}
+				}
+				if (this.updateValidationErrorDel) {
+					this.updateValidationErrorDel.disconnectAll();
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					if (!this.inDetails) {
+						this.openModelObjectDel.connect(this.o.model, "openObjectsUpdated");
+					}
+				}
+				this.updateHeader();
+				this.updateDisplayNameStyle();
+				if (this.enablementConditionDels) {
+					for (var i = 0; i < this.enablementConditionDels.length; i++) {
+						this.enablementConditionDels[i].execute(this.o);
+					}
+				}
+				this.resetComponentObjects();
+				EventUtil.trigger(this, "ono", this.o);
+				this.updateValidationError();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			This method is called whenever the {@link cmc/foundation/ModelObject#open open} flag on the current object is changed.
+			If the flag is <code>false</code>, the associated model object for this object properties class is
+			set to <code>null</code>.
+		-->
+		<method args="e" name="handleOpenModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && !this.o.open) {
+				this.setVariable("o", null);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update display name style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateDisplayNameStyleDel) {
+				this.updateDisplayNameStyleDel.disconnectAll();
+			}
+			else {
+				this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			}
+			var style = null;
+			if (this.o != null) {
+				this.updateDisplayNameStyleDel.connect(this.o, "ondisplayNameStyle");
+				style = this.o.displayNameStyle;
+			}
+			if (style != this.displayNameStyle) {
+				this.setVariable("displayNameStyle", style);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			This method updates the panel's header.
+		-->
+		<method args="e" name="updateHeader">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateHeaderDel) {
+				this.updateHeaderDel.disconnectAll();
+			}
+			else {
+				this.updateHeaderDel = new EventHandler.Class(this, "updateHeader");
+			}
+			var newTitle = "";
+			var newHeaderIconResource = null;
+			var newTitleQualifier = "";
+			var newHasError = false;
+			if (this.o != null) {
+				this.updateHeaderDel.connect(this.o, "onobjectDisplayName");
+				if (this.o.isOpenGroupObject()) {
+					this.updateHeaderDel.connect(this.o, "onopenGroupReadOnly");
+					this.updateHeaderDel.connect(this.o, "onopenGroupPartiallyEditable");
+					this.updateHeaderDel.connect(this.o, "onopenGroupDirty");
+					this.updateHeaderDel.connect(this.o, "onerrorInOpenGroup");
+				}
+				this.updateHeaderDel.connect(foundationResources.Singleton.readOnly, "onstring");
+				this.updateHeaderDel.connect(foundationResources.Singleton.partiallyEditable, "onstring");
+				if (this.o.objectDisplayName != null) {
+					newTitle = StringUtil.Singleton.escapeText(this.o.objectDisplayName);
+					if (this.o.openGroupReadOnly) {
+						newTitleQualifier = foundationResources.Singleton.readOnly.string;
+					}
+					else {
+						if (this.o.openGroupDirty) {
+							newTitle = "*" + newTitle;
+						}
+						if (this.o.openGroupObject.openGroupPartiallyEditable) {
+							newTitleQualifier = foundationResources.Singleton.partiallyEditable.string;
+						}
+					}
+				}
+				newHeaderIconResource = this.o.objectDefinition.headerIcon;
+				newHasError = this.o.openGroupObject.errorInOpenGroup;
+			}
+			if (this.title != newTitle) {
+				this.setVariable("title", newTitle);
+			}
+			if (this.titleQualifier != newTitleQualifier) {
+				this.setVariable("titleQualifier", newTitleQualifier);
+			}
+			if (this.headerIconResource != newHeaderIconResource) {
+				this.setVariable("headerIconResource", newHeaderIconResource);
+			}
+			if (this.hasError != newHasError) {
+				this.setVariable("hasError", newHasError);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method updates the validation error in the header.
+			This method should not be invoked manually from anywhere. This method gets triggered whenever the error state changes in the openGroupObject.
+		-->
+		<method args="e" name="updateValidationError">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateValidationErrorDel) {
+				this.updateValidationErrorDel.disconnectAll();
+			}
+			else {
+				this.updateValidationErrorDel = new EventHandler.Class(this, "updateValidationError");
+			}
+			var newErrorMessage = "";
+			if (this.o) {
+				this.updateValidationErrorDel.connect(this.o, "onopenGroupError");
+				if (this.o.serverErrors.length > 0) {
+					newErrorMessage = this.o.serverErrors[0];
+				}
+				if (newErrorMessage == "") {
+					var firstError = this.getFirstError(this);
+					if (firstError != null) {
+						newErrorMessage = firstError;
+					}
+				}
+				if (newErrorMessage == "" && this.o.openGroupError != null) {
+					newErrorMessage = this.o.openGroupError;
+				}
+			}
+			if (this.errorMessage != newErrorMessage) {
+				this.setVariable("errorMessage", newErrorMessage);
+			}
+			]]>
+		</method>
+	
+		<!---
+			@keywords private
+			This method recursively searches the properties view for the first error returned by a properties component.
+
+			@param cmc/foundation/Component v The view from which the search should begin.
+			@returns string error The first error.
+		-->
+		<method args="v" name="getFirstError">
+			<![CDATA[
+			var error = null;
+			if (v instanceof PropertiesComponent.Class) {
+				error = v.getFirstError(this.updateValidationErrorDel);
+			}
+			else {
+				if (!v.isinited) {
+					this.updateValidationErrorDel.connect(v, "oninit");
+				}
+				else {
+					if (v.childComponents != null) {
+						for (var i = 0; i < v.childComponents.length; i++) {
+							var currentView = v.childComponents[i];
+							if ("enablementCondition" in currentView) {
+								this.updateValidationErrorDel.connect(currentView, "onvisible");
+							}
+							if (!("enablementCondition" in currentView) || ("visible" in currentView && currentView.visible)) {
+								error = this.getFirstError(currentView);
+								if (error != null) {
+									break;
+								}
+							}
+						}
+					}
+					if (v.childNodes != null) {
+						for (var i = 0; i < v.childNodes.length; i++) {
+							var currentView = v.childNodes[i];
+							if (!currentView.isinited) {
+								this.updateValidationErrorDel.connect(currentView, "oninit");
+							}
+						}
+					}
+				}
+			}
+			return error;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the focus to the first enabled {@link cmc/foundation/PropertiesComponent}
+		-->
+		<method args="e" name="setFocusToFirstComponent">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.o && !this.o.readOnly){
+				var propertyComponent = this.getFirstEditableComponent(this);
+				if (propertyComponent != null) {
+					FocusUtil.setFocus(propertyComponent.editor, false);
+				}
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Sets the focus to the {@link cmc/foundation/PropertiesComponent} that is passed in. This method does not check any
+			characteristic of the properties component to ensure it is visible or editable.
+			@param cmc/foundation/PropertiesComponent propertyComponent The cmc/foundation/PropertiesComponent to set the focus to.
+		-->
+		<method args="propertyComponent" name="setFocusToComponent">
+			<![CDATA[
+			FocusUtil.setFocus(propertyComponent.editor, false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			
+			<p>This method searches the object properties view looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one 
+			of an {@link cmc/foundation/ModelProperty object property} or a {@link cmc/foundation/Validator#validatorType validator type}. The matching properties component must
+			match either the specified property, or the specified object and validator type.
+			
+			<p>If a match is found, this method ensures that the {@link cmc/foundation/PropertiesComponent properties component} is visible by making
+			it and all of its ancestors visible. This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and the changing of {@link cmc/foundation/PropertyTab tabs}. The method then sets the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and returns true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or display.
+						
+			@param cmc/foundation/ModelObject errorObject the model object that contains the error
+			@param cmc/foundation/ModelProperty errorProperty the model property that contains the error
+			@param string validatorType the validator type of the validator that reported the error
+			@return boolean true if the focus was set to the specified error, false otherwise
+		-->
+		<method args="errorObject, errorProperty, validatorType" name="setFocusToError">
+			<![CDATA[
+			return ObjectPropertiesUtil.Singleton.setFocusToError(this, errorObject, errorProperty, validatorType);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			
+			<p>This method will recursively search the subnodes of the specified view, looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one
+			of an optional {@link cmc/foundation/ModelProperty object property}.
+			
+			<p>If the specified view is a {@link cmc/foundation/PropertiesComponent properties component} then
+			this method will call its {@link cmc/foundation/PropertiesComponent#matches matches} to determine if it is a match.
+			
+			<p>If a match is found, this method will make the {@link cmc/foundation/PropertiesComponent properties component} visible by ensuring
+			that it and all of its ancestors are visible as well. This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and changing of {@link cmc/foundation/PropertyTab tabs}. The method will then set the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and return true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or what's currently being displayed.
+						
+			@param cmc/foundation/Component v The view from which to begin the recursive search for the matching {@link cmc/foundation/PropertiesComponent}.
+			@param cmc/foundation/ModelObject o The model object of the matching property component.
+			@param cmc/foundation/ModelProperty property The object property of the matching property component. If the property cannot be found,
+				it will default to using the property component. This parameter can be null.
+			@param cmc/foundation/ModelObject viewObject The model object associated with v.
+			@return boolean true if the properties component with the error was found, and the focus was set to it. false otherwise.
+		-->
+		<method args="v, o, property, viewObject" name="setFocusOnComponent">
+			<![CDATA[
+			var matches = false;
+			if (v instanceof PropertiesComponent.Class) {
+				matches = v.matches(viewObject, o, property);
+				if (matches == true) {
+					if (!v.isinited) {
+						v.completeInstantiation();
+					}
+					var currentView = v;
+					while (currentView != null && currentView != this) {
+						var currentView = currentView.parent;
+						if (currentView instanceof PropertyTabPane.Class && currentView.parent.activePane != currentView) {
+							currentView.parent.setVariable("activePane", currentView);
+						}
+						else if (currentView instanceof PropertyGroup.Class && currentView.collapsable && !currentView.open) {
+							currentView.setVariable("open", true);
+						}
+					}
+					if (typeof (this.setFocusToComponentDel) == "undefined") {
+						this.setFocusToComponentDel = new EventHandler.Class(this, "setFocusToComponent");
+					}
+					CallbackUtil.Singleton.addDeferredCallback(this.setFocusToComponentDel, v, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				}
+			}
+			else {
+				if (!v.isinited) {
+					if (v instanceof PropertyPane.Class || v instanceof PropertyGroup.Class) {
+						v.forceInstantiation("force");
+					}
+					else {
+						v.completeInstantiation();
+					}
+				}
+				if ((!v.enablementCondition || v.oView.o != null && v.enablementCondition.isEnabled(v.oView.o)) && (v.childNodes != null)) {
+					for (var i = 0; i < v.childNodes.length; i++) {
+						var currentView = v.childNodes[i];
+						matches = this.setFocusOnComponent(currentView, o, property, v.oView ? v.oView.o : viewObject);
+						if (matches == true) {
+							break;
+						}
+					}
+				}
+			}
+			return matches;
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method recursively searches the properties view for the first enabled properties component.
+
+			@param cmc/foundation/Component v The view from which the search should begin.
+			@returns {@link cmc/foundation/PropertiesComponent#propertyComponent} The first enabled properties component.
+		-->
+		<method args="v" name="getFirstEditableComponent">
+			<![CDATA[
+			var propertyComponent = null;
+			if (v instanceof PropertiesComponent.Class) {
+				if (v.enabled) propertyComponent = v;
+			}
+			else {
+				if (v.childNodes != null) {
+					for (var i = 0; i < v.childNodes.length; i++) {
+						var currentView = v.childNodes[i];
+						if (currentView.visible) {
+							propertyComponent = this.getFirstEditableComponent(currentView);
+							if (propertyComponent != null) {
+								break;
+							}
+						}
+					}
+				}
+			}
+			return propertyComponent;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the model object from this properties view by setting {@link cmc/foundation/ObjectProperties#o} to null.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords abstract
+		
+ 		This class is the base class for a business object properties view. The properties view of a business object is an editor that
+ 		is presented to a business user whenever the object is opened or a new object needs to be created. It allows business user to
+ 		edit or enter all the properties of a business object as an input form. Primary business objects are required to provide a
+ 		{@link cmc/foundation/ObjectDefinition#propertiesClass} attribute which contains the name of a class which extends this abstract class.
+ 		
+ 		<p>An extension class of cmc/foundation/ObjectProperties can accept two different type of children view classes. One is for the properties
+ 		view to have a row of tab(s), and therefore the expected children class is an instance of {@link cmc/foundation/PropertyTabs}. And the
+ 		second option is to just have one content pane, and therefore the expected children class is an instance of {@link cmc/foundation/PropertyPane}.
+ 		 		
+ 		<p>This class is an abstract class and should not be used directly nor should instances of it be created. Instead, create
+ 		an extension class and use the class as the {@link cmc/foundation/ObjectDefinition#propertiesClass} attribute of a {@link cmc/foundation/ObjectDefinition}.
+ 		
+ 		<p>This first example below shows how to create a properties view that has two tabs:
+		@START_CODE
+			<ObjectProperties definitionName="sampleObjectProperties">
+				<PropertyTabs name="samplePropertyTabs">
+					<PropertyTabPane name="samplePropertyTabPane_1" text="Tab 1">
+						<PropertyPane name="samplePropertyPane_1">
+							...
+						</PropertyPane>
+					</PropertyTabPane>
+					<PropertyTabPane name="samplePropertyTabPane_2" text="Tab 2">
+						<PropertyPane name="samplePropertyPane_2">
+							...
+						</PropertyPane>
+					</PropertyTabPane>
+				</PropertyTabs>
+			</ObjectProperties>
+		@END_CODE
+		
+		<p>This second example below shows how to create a properties view with one content pane without tabs:
+		
+		@START_CODE
+			<ObjectProperties definitionName="sampleObjectProperties">
+				<PropertyPane name="samplePropertyPane">
+					...
+				</PropertyPane>
+			</ObjectProperties>
+		@END_CODE
+	-->
+	<BaseObjectProperties classDefinition="true" definitionName="cmc/foundation/ObjectProperties">
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="IntroPrompt" moduleName="cmc/foundation/IntroPrompt"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>		
+		<!--- @keywords private
+			  A handler for onconstruct.
+		-->
+		<handler name="onconstruct">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "FINER", "cmc/foundation/ObjectProperties", "onconstruct", "Initialize begin...");
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private
+			  A handler for oninit.
+		-->
+		<handler name="oninit">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "FINER", "cmc/foundation/ObjectProperties", "oninit", "Initialize end.");
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (typeof (this.initializePropertiesViewDel) == "undefined") {
+				this.initializePropertiesViewDel = new EventHandler.Class(this, "initializePropertiesView");
+			}
+			this.initializePropertiesViewDel.connect(this.panel, "onactiveView");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.initializePropertiesViewDel) {
+				this.initializePropertiesViewDel.disconnectAll();
+				delete this.initializePropertiesViewDel;
+			}
+			if (this.setFocusToFirstComponentDel) {
+				this.setFocusToFirstComponentDel.disconnectAll();
+				delete this.setFocusToFirstComponentDel;
+			}
+			if (this.setFocusToComponentDel) {
+				this.setFocusToComponentDel.disconnectAll();
+				delete this.setFocusToComponentDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method sets the {@link cmc/foundation/ModelObject} for this properties view. This method is declared as the setter for
+			{@link cmc/foundation/ObjectProperties#o}.
+			@param cmc/foundation/ModelObject newObject The new object to set for this properties view.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				var oldObject = this.o;
+				this.inherited(arguments);
+				this.initializePropertiesView();
+				if (oldObject) {
+					oldObject.releaseReleasableProperties();
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="initializePropertiesView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.panel && this.panel.activeView == this && this.o != null && this.o.viewState == "") {
+				this.panel.scrollToTop();
+				this.o.setVariable("viewState", "initialized");
+				for (var i = 0; i < this.childComponents.length; i++) {
+					var v = this.childComponents[i];
+					if (v.reset) {
+						v.reset();
+					}
+				}
+				if (!this.inDetails && !IntroPrompt.Singleton.isOpen) {
+					if (typeof (this.setFocusToFirstComponentDel) == "undefined") {
+						this.setFocusToFirstComponentDel = new EventHandler.Class(this, "setFocusToFirstComponent");
+					}
+					CallbackUtil.Singleton.addDeferredCallback(this.setFocusToFirstComponentDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				}
+			}
+			]]>
+		</method>
+	</BaseObjectProperties>
+
+	<!---
+		The cmc/foundation/PropertyTabs class can be used to create a row of tabs for the object properties view. The cmc/foundation/PropertyTabs class
+		takes instances of {@link cmc/foundation/PropertyTabPane} as children and it creates a tab for each one. The cmc/foundation/PropertyTabs controls
+		the visibility of a stack of {@link cmc/foundation/PropertyTabPane} making sure that only one tab can be selected at a time and that
+		only the selected tab's contents is made visible.
+		
+		This class is to be used within an instance of {@link cmc/foundation/ObjectProperties}. Each {@link cmc/foundation/ObjectProperties} can contain
+		a single cmc/foundation/PropertyTabs.
+		
+		The following example shows how to define a tab row with two tabs as defined by the two {@link cmc/foundation/PropertyTabPane}:
+		
+		@START_CODE
+			<PropertyTabs name="samplePropertyTabs">
+				<PropertyTabPane name="samplePropertyTabPane" text="Sample Property Tab Pane">
+					...
+				</PropertyTabPane>
+				<PropertyTabPane name="samplePropertyTabPane2" text="Sample Property Tab Pane2">
+					...
+				</PropertyTabPane>
+			</PropertyTabs>
+		@END_CODE
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/PropertyTabs">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="PropertyTab" moduleName="cmc/foundation/PropertyTab"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="PropertyTabHeader" moduleName="cmc/foundation/PropertyTabHeader"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the active {@link cmc/foundation/PropertyTabPane}.
+		-->
+		<variable name="activePane" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute holds an array of {@link cmc/foundation/PropertyTab} objects. One object is created for each child {@link cmc/foundation/PropertyTabPane} of this.
+		-->
+		<variable name="tabs" value="${[]}"/>
+		<!---
+			@keywords private
+			This attribute holds an array of {@link cmc/foundation/PropertyTabPane} objects that are children of this cmc/foundation/PropertiesTabs object.
+		-->
+		<variable name="tabPanes" value="${[]}"/>
+		<!---
+			@keywords private
+			This attribute holds a refrence to the view that contains the property tabs. This value is found using {@link cmc/foundation/PanelManager#findPanel}
+			and passing in this as the parameter.
+		-->
+		<variable name="panel" value="${PanelManager.Singleton.findPanel(this)}"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the instance of {@link cmc/foundation/PropertyTabHeader}. It is null by default, but will be set a value
+			when it is created in the {@link cmc/foundation/PropertyTabs#init} method.
+		-->
+		<variable name="tabHeader" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute indicates that this view currently has registered shortcut keys.
+		-->
+		<variable name="keysRegistered" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.tabHeader = new PropertyTabHeader.Class(this.panel.tabArea, {
+				propertyTabs: this
+			});
+			for (var i = 0; i < this.tabPanes.length; i++) {
+				var tab = new PropertyTab.Class(this.tabHeader, {
+					propertyTabs: this,
+					tabPane: this.tabPanes[i]
+				});
+				this.tabs.push(tab);
+			}
+			this.reset();
+			this.tabHeader.checkOverflowTabs();
+			this.moveToNextTabDel = new EventHandler.Class(this, "moveToNextTab");
+			this.moveToPreviousTabDel = new EventHandler.Class(this, "moveToPreviousTab");
+			this.checkVisibilityDel = new EventHandler.Class(this, "checkVisibility");
+			this.checkActiveDel = new EventHandler.Class(this, "checkActive");
+			this.checkVisibility();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.moveToNextTabDel.disconnectAll();
+			delete this.moveToNextTabDel;
+			this.moveToPreviousTabDel.disconnectAll();
+			delete this.moveToPreviousTabDel;
+			this.checkVisibilityDel.disconnectAll();
+			delete this.checkVisibilityDel;
+			this.checkActiveDel.disconnectAll();
+			delete this.checkActiveDel;
+			this.tabHeader.destroy();
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method checks whether or not this property tab is currently visible and updates its views accordingly.
+		-->
+		<method args="e" name="checkVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var isVisible = false;
+			this.checkVisibilityDel.disconnectAll();
+			this.checkActiveDel.disconnectAll();
+			this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+			if (this.visibilityView != null) {
+				this.checkVisibilityDel.connect(this.visibilityView, "onvisible");
+			}
+			else if (!this.visible) {
+				this.checkVisibilityDel.connect(this, "onvisible");
+			}
+			else {
+				isVisible = true;
+				ViewUtil.Singleton.registerVisibilityDelegate(this, this.checkVisibilityDel);
+			}
+			if (isVisible) {
+				this.checkActiveDel.connect(this.panel, "onactive");
+				this.checkActive();
+			}
+			if (this.tabHeader.visible != isVisible) {
+				this.tabHeader.setVariable("visible", isVisible);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method checks if this tabs view should be active and updates the shortcut keys accordingly.
+		-->
+		<method args="e" name="checkActive">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.panel.active) {
+				this.registerShortcutKeys();
+			}
+			else {
+				this.unregisterShortcutKeys();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method registers the shortcut keys. It is called from {@link cmc/foundation/PropertyTabs#checkActive}.
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.keysRegistered = true;
+				KeyUtil.callOnKeyCombo(this.moveToNextTabDel, ["Control", "Pagedown"]);
+				KeyUtil.callOnKeyCombo(this.moveToPreviousTabDel, ["Control", "Pageup"]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method unregisters the shortcut keys. It is called from {@link cmc/foundation/PropertyTabs#checkActive}.
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.keysRegistered = false;
+				KeyUtil.removeKeyComboCall(this.moveToNextTabDel, ["Control", "Pagedown"]);
+				KeyUtil.removeKeyComboCall(this.moveToPreviousTabDel, ["Control", "Pageup"]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method sets the active tab pane. It is used as the setter method for {@link cmc/foundation/PropertyTabs#activePane}.
+			
+			@param cmc/foundation/PropertyTabPane pane The tab pane that should be set as the active pane.
+		-->
+		<method args="pane" name="setActivePane">
+			<![CDATA[
+			if (this.activePane != pane) {
+				for (var i = 0; i < this.tabPanes.length; i++) {
+					var tab = this.tabs[i];
+					if (pane == this.tabPanes[i]) {
+						tab.setVariable("active", true);
+					}
+					else if (tab.active) {
+						tab.setVariable("active", false);
+					}
+				}
+				this.activePane = pane;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method sets the next tab in {@link cmc/foundation/PropertyTabs#tabs} as the active tab. If the last tab is currently active,
+			then it will go back to the beginning of the list.
+		-->
+		<method args="e" name="moveToNextTab">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				var nextTabIndex = -1;
+				for (var i = 0; i < this.tabs.length; i++) {
+					if (this.tabs[i].active) {
+						nextTabIndex = i;
+						break;
+					}
+				}
+				if (nextTabIndex != -1) {
+					for (var i = 0; i < this.tabs.length; i++) {
+						nextTabIndex = (nextTabIndex + 1) % this.tabs.length;
+						var nextTab = this.tabs[nextTabIndex];
+						if (nextTab.tabPane.tabEnabled) {
+							FocusUtil.setFocus(nextTab);
+							this.setActivePane(nextTab.tabPane);
+							break;
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the previous tab in {@link cmc/foundation/PropertyTabs#tabs} as the active tab. If the first tab is currently active,
+			then it will go back to the end of the list.
+		-->
+		<method args="e" name="moveToPreviousTab">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				var previousTabIndex = -1;
+				for (var i = 0; i < this.tabs.length; i++) {
+					if (this.tabs[i].active) {
+						previousTabIndex = i;
+						break;
+					}
+				}
+				if (previousTabIndex != -1) {
+					for (var i = 0; i < this.tabs.length; i++) {
+						previousTabIndex = (previousTabIndex - 1) % this.tabs.length;
+						var previousTab = this.tabs[previousTabIndex];
+						if (previousTab.tabPane.tabEnabled) {
+							FocusUtil.setFocus(previousTab);
+							this.setActivePane(previousTab.tabPane);
+							break;
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method resets the property tabs view to be the first tab in {@link cmc/foundation/PropertyTabs#tabs}.
+		-->
+		<method name="reset">
+			<![CDATA[
+			for (var i = 0; i < this.tabs.length; i++) {
+				var nextTab = this.tabs[i];
+				if (nextTab.tabPane.tabEnabled) {
+					this.setActivePane(nextTab.tabPane);
+					break;
+				}
+			}
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="activePane" name="set_activePane">
+			<![CDATA[
+			this.setActivePane(activePane);
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords private
+		Tabs header class. Used by cmc/foundation/PropertyTabs class
+	-->
+	<FocusableComponent classDefinition="true" defaultplacement="tabs" definitionName="cmc/foundation/PropertyTabHeader" focusable="false" width="${this.immediateParent.width}">
+		<dependency localName="TabOverflowButton" moduleName="cmc/foundation/TabOverflowButton"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Reference to its cmc/foundation/PropertyTabs instance.
+		-->
+		<variable name="propertyTabs"/>
+		<!---
+			Reference to overflow button.
+		-->
+		<variable name="overflowButton"/>
+		<Component height="1" y="42" bgcolor="#c1c1c1" width="${this.parent.width - 50}" x="25"/>
+		<Component name="tabs" x="25">
+			<AxisLayout axis="x"/>
+		</Component>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkOverflowTabsDel = new EventHandler.Class(this, "checkOverflowTabs");
+			]]>
+		</method>	
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.checkOverflowTabsDel.disconnectAll();
+			delete this.checkOverflowTabsDel;
+			this.inherited(arguments);
+			]]>
+		</method>	
+
+		<!---
+			Checks the overflow tabs and creates the overflow tabs list button.
+		-->
+		<method args="e" name="checkOverflowTabs">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.checkOverflowTabsDel.disconnectAll();
+			this.checkOverflowTabsDel.connect(this, "onwidth");
+			var tabsWidth = this.tabs.x;
+			var overflowTabs = [];
+			for (var i = 0; i < this.propertyTabs.tabs.length; i++) {
+				var tab = this.propertyTabs.tabs[i];
+				if (tab.visible) {
+					tabsWidth += tab.width;
+					if (tabsWidth > this.width) {
+						overflowTabs.push(tab);
+						tab.setVariable("focusable", false);
+					}
+					else {
+						tab.setVariable("focusable", true);
+					}
+				}
+				this.checkOverflowTabsDel.connect(tab, "onvisible");
+				this.checkOverflowTabsDel.connect(tab, "onwidth");
+			}
+			if (overflowTabs.length > 0) {
+				if (!this.overflowButton) {
+					this.overflowButton = new TabOverflowButton.Class(this, {
+						placement: "header",
+						actionDefinitions: overflowTabs
+					});
+				}
+				else {
+					this.overflowButton.setVariable("actionDefinitions", overflowTabs);
+					this.overflowButton.setVariable("visible", true);
+				}
+				this.overflowButton.setVariable('x', this.width - this.overflowButton.width);
+				this.overflowButton.bringToFront();
+				this.overflowButton.setVariable("focusable", true);
+			}
+			else if (this.overflowButton) {
+				this.overflowButton.setVariable("visible", false);
+				this.overflowButton.setVariable("focusable", false);
+			}
+			]]>
+		</method>	
+
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		Tab overflow button. Used by {@link cmc/foundation/PropertyTabHeader}
+	-->
+	<ActionListButton classDefinition="true" definitionName="cmc/foundation/TabOverflowButton" showSingle="true">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<variable name="dropdownResource" value="propertyDropDownResource"/>
+		<!---
+			Perform the action.
+			@param object definition: optional action definition
+		-->
+		<method args="definition" name="doAction">
+			<![CDATA[
+			if (definition != null) {
+				EventUtil.trigger(definition, "onclick");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.actionDropdown.setVariable("yoffset", -2);
+			this.actionList.setVariable("yoffset", -2);
+			]]>
+		</handler>
+	</ActionListButton>
+
+	<!---
+		This class is used to define a tab within a {@link cmc/foundation/PropertyTabs}. There can be multiple cmc/foundation/PropertyTabPane defined
+		within a {@link cmc/foundation/PropertyTabs}. Each one of them represent a different tab in the properties view. Use the text
+		attribute to declare the name that is displayed for the tab.
+		
+		A single instance of {@link cmc/foundation/EnablementCondition} can be declared as the child of an instance of cmc/foundation/PropertyTabPane.
+		If the enablement condition evaluates to "true", then the tab will be visible. If the enablement condition evaluates
+		to "false", then the tab will not be visible.		
+		
+		The cmc/foundation/PropertyTabPane expects a {@link cmc/foundation/PropertyPane} object as its children in order to define the actual content
+		shown when the tab is selected.
+		
+		The following example shows how to define a cmc/foundation/PropertyTabPane:
+		
+		@START_CODE
+			<PropertyTabs name="samplePropertyTabs">
+				<PropertyTabPane name="samplePropertyTabPane" text="Sample Property Tab Pane">
+					<PropertyPane name="samplePropertyPane_1">
+						...
+					</PropertyPane>
+				</PropertyTabPane>
+			</PropertyTabs>
+		@END_CODE
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/PropertyTabPane" visible="false">
+		<dependency localName="PropertyGroup" moduleName="cmc/foundation/PropertyGroup"/>
+		<dependency localName="PropertyPane" moduleName="cmc/foundation/PropertyPane"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			This attribute contains the text to be displayed on the tab. The default value is an empty string.
+		-->
+		<variable name="text" type="string" value=""/>
+		
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.updateEnablementDel = new EventHandler.Class(this, "updateEnablement");
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateEnablementDel.disconnectAll();
+			delete this.updateEnablementDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			var tabPanes = this.parent.tabPanes;
+			if (!tabPanes) {
+				tabPanes = [];
+				this.parent.tabPanes = tabPanes;
+			}
+			tabPanes.push(this);
+			if (this.enablementCondition && this.oView && this.oView.enablementConditionDels) {
+				this.oView.enablementConditionDels.push(this.updateEnablementDel);
+				this.updateEnablement();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<variable name="tabEnabled" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			This attribute holds a reference to the nearest ancestor view that defines a model object. This attribute value is found
+			by invoking {@link cmc/foundation/ModelUtil#findObjectView} with this as the parameter.
+		-->
+		<variable name="oView" value="${ModelUtil.Singleton.findObjectView(this)}"/>
+		
+		<!---
+			@keywords private
+			Update the visible attribute based on the current value of the enablement condition.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.enablementCondition) {
+				this.updateEnablementDel.disconnectAll();
+				if (this.oView.o != null) {
+					this.enablementCondition.registerDelegate(this.oView.o, this.updateEnablementDel);
+				}
+				this.setVariable("tabEnabled", this.oView != null && this.oView.o != null && this.enablementCondition.isEnabled(this.oView.o));
+				if (!this.tabEnabled && (typeof (this.parent.activePane) != "undefined" && this.parent.activePane == this)) {
+					this.parent.reset();
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->		
+		<method args="s, p, args" name="determinePlacement">
+			<![CDATA[
+			if (s instanceof PropertyGroup.Class) {
+				if (this.propertyPane) {
+					return this.propertyPane;
+				}
+				else {
+					return new PropertyPane.Class(this, {name: "propertyPane"});
+				}
+			}
+			else {
+				return this.inherited(arguments);
+			}
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords private
+		This is the base class for the property tab. Instances of cmc/foundation/PropertyTab are created in {@link cmc/foundation/PropertyTabs#init}  each
+		{@link cmc/foundation/PropertyTabPane} with its {@link cmc/foundation/PropertyTabHeader} and {@link cmc/foundation/PropertyTabs}.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/PropertyTab" visible="${this.tabPane.tabEnabled}">
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			@keywords private
+			A reference to the instance of {@link cmc/foundation/PropertyTabs}.
+		-->
+		<variable name="propertyTabs"/>
+		<!---
+			@keywords private
+			Reference to the instance of {@link cmc/foundation/PropertyTabPane}
+		-->
+		<variable name="tabPane"/>
+		<!---
+			@keywords private
+			A boolean variable that indicates whether tab is active. The default value is "false".
+		-->
+		<variable name="active" type="boolean" value="false"/>
+		<!---
+			This attribute is the number of pixels to use for the left and right spacing. The default value is 10.
+		-->
+		<variable name="margin" type="number" value="20"/>
+		<!---
+			@keywords private
+			This attribute indicates the width of tab. The default value is bound to the width of the {@link cmc/foundation/PropertyTab#displayName}
+			plus spacing for the left and right margins.
+		-->
+		<variable name="width" value="${this.txt.width + this.margin * 2}"/>
+		<!---
+			@keywords private
+			The display name of the tab. The default value is bound to {@link cmc/foundation/PropertyTabPane#text} of {@link cmc/foundation/PropertyTab#tabPane}.
+		-->
+		<variable name="displayName" type="string" value="${this.tabPane.text}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This is an event handler for the active attribute.
+		-->
+		<handler name="onactive">
+			<![CDATA[
+			if (this.active) {
+				this.tabPane.setVariable("visible", true);
+				this.tabPane.bringToFront();
+				this.txt.setVariable("fgcolor", "#4178be");
+			}
+			else {
+				this.tabPane.setVariable("visible", false);
+				this.txt.setVariable("fgcolor", "#464646");
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This is an event handler for onclick.
+		-->				
+		<handler name="onclick">
+			<![CDATA[
+			this.propertyTabs.setActivePane(this.tabPane);
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This is an event handler for the onkeydown event.
+		-->		
+		<handler args="code" name="onkeydown">
+			<![CDATA[
+			if (code == 13 || code == 32) {
+				EventUtil.trigger(this, "onclick");
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this.txt
+				});
+			}
+			]]>
+		</handler>
+		
+		<Component width="${this.parent.width}" imageSet="${this.parent.active ? 'toolTabActive' : 'toolTabInactive'}" stretches="width"/>
+		<TextComponent name="txt" text="${this.classroot.displayName}" x="${this.classroot.margin}" valign="middle" fontsize="14"/>
+	</FocusableComponent>
+
+	<!---
+		A cmc/foundation/PropertyPane is the class that holds the contents of a pane in the properties view. A cmc/foundation/PropertyPane has two type of usages:
+		one usage is to declare it as a direct child of {@link cmc/foundation/ObjectProperties} if the properties view of the business object has no tabs.
+		And a second usage is to use it as a child of {@link cmc/foundation/PropertyTabPane} if the contents pane is for a tab that is within the properties
+		view.
+		
+		<p>To build up the contents of a cmc/foundation/PropertyPane in the properties view, create instances of the widgets that have been specially
+		created for use in the property views. These widgets are the classes that extend the {@link cmc/foundation/PropertiesComponent}. Some sample
+		widgets that can be used here are {@link cmc/foundation/PropertyCheckbox}, {@link cmc/foundation/PropertyInputText}, {@link cmc/foundation/PropertyRichTextEditor} or
+		{@link cmc/foundation/PropertyTimePicker}.
+		
+		<p>The following example shows how to define a cmc/foundation/PropertyPane within a tab of a properties view:
+		@START_CODE
+			<ObjectProperties definitionName="sampleObjectProperties">
+				<PropertyTabs name="samplePropertyTabs">
+					<PropertyTabPane name="samplePropertyTabPane" text="Sample Property Tab Pane">
+						<PropertyPane name="samplePropertyPane_1">
+							...
+						</PropertyPane>
+					</PropertyTabPane>
+				</PropertyTabs>
+			</ObjectProperties>
+		@END_CODE
+		
+		<p>This second example below shows how to create a cmc/foundation/PropertyPane directly under a {@link cmc/foundation/ObjectProperties}:
+		@START_CODE
+			<ObjectProperties definitionName="sampleObjectProperties">
+				<PropertyPane name="samplePropertyPane">
+					...
+				</PropertyPane>
+			</ObjectProperties>
+		@END_CODE
+	-->
+	<Component classDefinition="true" defaultplacement="content" definitionName="cmc/foundation/PropertyPane">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the this view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			@keywords private
+			This attribute holds the width available to descendant views. This value should not be changed directly,
+			as it is maintained	by {@link cmc/foundation/PropertyPane#updateAvailableWidth}, but can be accessed if needed.
+		-->
+		<variable name="availableWidth" type="number" value="0"/>
+		<!---
+			@keywords private
+			The minimum width of the editor to be retained by the layout manager, if sizeToAvailableWidth is true for
+			any property component. The default value for this attribute is 235.
+		-->
+		<variable name="minWidth" type="number" value="235"/>
+		<!---
+			@keywords private
+			This attribute indicates that initialization should be defered until explicity invoked.
+		-->
+		<variable name="initstage" value="defer"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the closest invisible ancestor view when this view is constructed.
+			This attribute is set in the {@link cmc/foundation/PropertyPane#onconstruct} handler by calling
+			{@link cmc/foundation/ViewUtil#getInvisibleAncestor} with this as a parameter.
+		-->
+		<variable name="visibilityView"/>
+		<!---
+			This attribute defines the width of the left column in the property pane which contains the prompt. The default value is 164px.
+		-->
+		<variable name="promptWidth" type="number" value="${(typeof (this.parent.promptWidth) != 'undefined') ? this.parent.promptWidth : 164}"/>
+		<!---
+			@keywords private
+			This attribute indicates the prompt location. Valid values are "left" and "above". It is bound to the parent's value of promptLocation,
+			but if that is not defined it will default to "left".
+		-->
+		<variable name="promptLocation" type="string" value="${(typeof (this.parent.promptLocation) != 'undefined') ? this.parent.promptLocation : 'left'}"/>
+
+		<!---
+			@keywords private
+			This attribute specifies whether or not a {@link cmc/foundation/DividerLine} will be shown under the HeaderText, set this to 
+			<code>true</code> will also remove the Header background.
+		-->
+		<variable name="showHeaderDivider" type="boolean" value="${(typeof (this.parent.showHeaderDivider) != 'undefined') ? this.parent.showHeaderDivider : false}"/>
+		
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.forceInstantiationDel = new EventHandler.Class(this, "forceInstantiation");
+			this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+			if (this.visibilityView != null) {
+				this.forceInstantiationDel.connect(this.visibilityView, "onvisible");
+			}
+			else {
+				this.initstage = null;
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="force" name="forceInstantiation">
+			<![CDATA[
+			if (typeof(force) == "undefined") force = null;
+			if (force == "force") {
+				this.forceInstantiationDel.disconnectAll();
+				Component.Class.prototype.completeInstantiation.call(this);
+				DefinitionUtil.completeCreateDefinitionChildren(this);
+			}
+			else {
+				this.completeInstantiation();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="completeInstantiation">
+			<![CDATA[
+			if (this.visibilityView.visible) {
+				this.forceInstantiationDel.disconnectAll();
+				this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+				if (this.visibilityView != null) {
+					this.forceInstantiationDel.connect(this.visibilityView, "onvisible");
+				}
+				else {
+					this.inherited(arguments);
+					DefinitionUtil.completeCreateDefinitionChildren(this);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+			this.updateAvailableWidthDel.connect(this.availableWidthView, "onavailableWidth");
+			this.updateAvailableWidth();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.forceInstantiationDel.disconnectAll();
+			delete this.forceInstantiationDel;
+			if (this.updateAvailableWidthDel) {
+				this.updateAvailableWidthDel.disconnectAll();
+				delete this.updateAvailableWidthDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the available width of the property pane.
+		-->
+		<method args="e" name="updateAvailableWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("availableWidth", this.availableWidthView.availableWidth - this.content.x);
+			]]>
+		</method>
+		
+		<Component name="content" x="27" y="8">
+			<AxisLayout axis="y"/>
+		</Component>
+		<Component height="10" name="bottomPadding" y="${this.parent.content.y + this.parent.content.height}"/>
+	</Component>
+	
+	<!---
+		@keywords private
+		Property group header. A property group header will be created for property groups that have a title.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/PropertyGroupHeader">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the this view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			cmc/foundation/PropertyGroup reference.
+		-->
+		<variable name="group"/>
+
+		<!---
+			Update the header to match the current "open" state.
+		-->
+		<method name="updateOpen">
+			<![CDATA[
+			if (this.group.open) {
+				this.headertext.headbutton.setVariable("currentImage", 2);
+			}
+			else {
+				this.headertext.headbutton.setVariable("currentImage", 1);
+			}
+			]]>
+		</method>
+		
+		<AxisLayout axis="y"/>
+		<Component height="${this.classroot.group.open ? 20 : 12}"/>
+		<Component focusable="${this.classroot.group.collapsable}" name="headertext" width="${this.classroot.availableWidthView.availableWidth}">
+			<AxisLayout axis="x"/>
+			
+			<Component imageSet="propertyDrawerResource" name="headbutton" visible="${this.classroot.group.collapsable}" y="3">
+				<handler name="onclick">
+					<![CDATA[
+					FocusUtil.setFocus(this.parent, false);
+					EventUtil.trigger(this.parent, "onclick");
+					]]>
+				</handler>
+			</Component>
+			<Component width="3" visible="${this.classroot.group.collapsable}"/>
+			<TextComponent fontsize="15" fontstyle="bold" text="${this.classroot.group.groupTitle + this.classroot.group.titleQualifier}"/>
+
+			<handler args="code" name="onkeydown">
+				<![CDATA[
+				if (code == 13 || code == 32) {
+					EventUtil.trigger(this.headbutton, "onclick");
+				}
+				]]>
+			</handler>
+
+			<handler name="onclick">
+				<![CDATA[
+				if (this.classroot.group.collapsable) {
+					this.classroot.group.setVariable("open", !this.classroot.group.open);
+					if (this.classroot.group.open) {
+						var panel = PanelManager.Singleton.findPanel(this);
+						panel.show(this.classroot.group);
+					}
+				}
+				]]>
+			</handler>
+
+			<!---
+				Scroll to display the header if not in clipped view. Reset the stored value of the cursor postion and the stored selection size.
+			-->
+			<handler name="onfocus">
+				<![CDATA[
+				var panel = PanelManager.Singleton.findPanel(this);
+				panel.show(this.classroot.group);
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this.headbutton
+					});
+				}
+				]]>
+			</handler>
+			
+		</Component>
+		<DividerLine name="headerDivider" visible="${this.classroot.group.showHeaderDivider}" ignoreLayout="false"/>
+		<Component height="3" name="innerPadding" visible="${this.classroot.group.open || !this.classroot.group.collapsable}"/>
+	</Component>
+
+	<!---
+		This class is used to group together related properties components within an instance of {@link cmc/foundation/ObjectProperties}. An instance of cmc/foundation/PropertyGroup
+		can be instantiated as a child of {@link cmc/foundation/PropertyPane} or another instance of cmc/foundation/PropertyGroup. Multiple instances of
+		of {@link cmc/foundation/PropertiesComponent} and cmc/foundation/PropertyGroup can be instantiated as children of an instance of cmc/foundation/PropertyGroup.
+		A property group can be used if you need to add a title, create a collapsable section or otherwise indicate visually that related properties components are
+		grouped together. You can also use a properties group if you need to conditionally control the visibility of one or more property components.
+		A single instance of {@link cmc/foundation/EnablementCondition} can be declared as the child of an instance of cmc/foundation/PropertyGroup. If the enablement condition
+		evaluates to "true", then the property group will be visible. If the enablement condition evaluates to "false", then the property group will not be visible.
+		
+		<p>The following example demonstrates the declaration of a collapsable property group that contains a single child properties component that
+		will display a product's merchandising associations.
+		@START_CODE
+			<PropertyGroup groupTitle="${catalogResources.merchandisingAssociationReference}"
+					open="true"
+					name ="productReferenceMerchandisingAssociations">
+				<PropertyReferenceList
+						name="merchandisingAssociationsRefList"
+						listDefinition="cmc/catalog/BackReferenceAssociationGrid"
+						promptText="${catalogResources.merchandisingAssociationReference}"
+						referenceObjectPaths="CatalogEntry/MerchandisingAssociationReferencedCatalogEntries"
+						/>
+			</PropertyGroup>
+		@END_CODE
+
+	-->
+	<Component classDefinition="true" defaultplacement="content" definitionName="cmc/foundation/PropertyGroup">
+		<dependency localName="PropertyGroupHeader" moduleName="cmc/foundation/PropertyGroupHeader"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="PropertyAreaBackground" moduleName="cmc/foundation/PropertyAreaBackground"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="DividerLine" moduleName="cmc/foundation/DividerLine"/>
+		<!---
+			This attribute indicates that this property group should have the store name of the store that owns the current
+			object appended to the {@link cmc/foundation/PropertyGroup#groupTitle}. The default value for this attribute is "false".
+		-->
+		<variable name="displayObjectStoreName" type="boolean" value="false"/>
+		<!---
+			This attribute indicates that this properties group has the currently selected store name appended
+			next to the {@link cmc/foundation/PropertyGroup#groupTitle}. The default value for this attribute is "false".
+		-->
+		<variable name="displayStoreName" type="boolean" value="false"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="titleQualifier" type="string" value=""/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the instance of {@link cmc/foundation/Model}. The instance is found using
+			{@link cmc/foundation/ModelUtil#findModelForView} and passing in this as a parameter.
+		-->
+		<variable name="model" value="${ModelUtil.Singleton.findModelForView(this)}"/>
+		<!---
+			This attribute contains the title of the group that is displayed in the header that appears before the group of widgets. The default value is the empty string.
+		-->
+		<variable name="groupTitle" type="string" value=""/>
+		<!---
+			This attribute specifies whether the group is collapsable or not. The default value for this attribute is "true".
+			If the group is not collapsable, the widgets are always displayed, indented under the header.
+		-->
+		<variable name="collapsable" type="boolean" value="true"/>
+		<!---
+			This attribute specifies whether the group is initially in the open state. This value is ignored if {@link cmc/foundation/PropertyGroup#collapsable} is false.
+			The default value for this attribute is "false".
+			
+			If the group is in the open state, all widgets that are part of this property group are displayed to the user.
+		-->
+		<variable name="open" type="boolean" value="false"/>
+		<!---
+			This attribute specifies whether or not the header will be shown regardless of {@link cmc/foundation/PropertyGroup#groupTitle} or {@link cmc/foundation/PropertyGroup#collapsable}
+			values. Default value is <code>true</code>.
+		-->
+		<variable name="showHeader" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			This attribute specifies whether or not a {@link cmc/foundation/DividerLine} will be shown under the HeaderText, set this to <code>true</code> will also remove the Header background.
+			Default value is <code>false</code>.
+		-->
+		<variable name="showHeaderDivider" type="boolean" value="${(typeof (this.parent.showHeaderDivider) != 'undefined') ? this.parent.showHeaderDivider : false}"/>
+		<!---
+			This attribute specifies whether the header is hidden if this is the only visible group. The default value is <code>false</code>.
+		-->
+		<variable name="hideHeaderWhenOnlyGroup" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The minimum width of the twistie area. The default value for this is the parent {@link cmc/foundation/PropertyPane#minWidth}. Otherwise
+			if no parent value is available, it will default to 235 pixels.
+		-->
+		<variable name="minWidth" type="number" value="${(this.parent.minWidth) ? this.parent.minWidth : 235}"/>
+		<!---
+			@keywords private
+			This attribute holds a reference to the nearest ancestor view that defines a model object. This attribute value is found
+			by invoking {@link cmc/foundation/ModelUtil#findObjectView} with this as the parameter.
+		-->
+		<variable name="oView"/>
+		<!---
+			The name of the component object for this properties component. You
+			can specify a named component object for properties components if you
+			want the properties component to be dependent on another properties component.
+			All named component objects must be declared in the
+			{@link cmc/foundation/ObjectProperties#componentObjectNames} attribute of the containing
+			properties view.
+		-->
+		<variable name="componentObjectName" type="string" value="${null}"/>
+		<!-- 
+			@keywords private
+			The resolved {@link cmc/foundation/ObjectDefinition} for this properties component.
+		-->
+		<variable name="objectDefinition"/>
+		<!---
+			@keywords private
+			
+			Defer initialization until explicity invoked.
+		-->
+		<variable name="initstage" value="defer"/>
+		<!---
+			@keywords private
+			This attribute contains a reference to the closest invisible ancestor view when this view is constructed.
+		-->
+		<variable name="visibilityView"/>
+		<!---
+			@keywords private
+			This attribute indicates that this view is a container view. The default value for this is "true".
+		-->
+		<variable name="componentContainer" type="boolean" value="true"/>
+		<!---
+			Indicates that when this group is displayed, there will be a visual indication that the components
+			contained within this group are grouped together.
+		 -->
+		<variable name="displayGrouping" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			True if a divider should be drawn above this group. False otherwise.
+		 -->
+		<variable name="dividerAtTop" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			True if a divider should be drawn below this group. False otherwise.
+		-->
+		<variable name="dividerAtBottom" type="boolean" value="true"/>
+		
+		<!---
+			This attribute indicates that the background area is highlighted.
+		-->
+		<variable name="displayBackground" type="boolean" value="false"/>
+		<!---
+			This attribute defines the width of the left column in the property pane which contains the prompt. The default value is 164px.
+		-->
+		<variable name="promptWidth" type="number" value="${(typeof (this.parent.promptWidth) != 'undefined') ? this.parent.promptWidth : 164}"/>
+		<!---
+			@keywords private
+			This attribute indicates the prompt location. Valid values are "left" and "above". It is bound to the parent's value of promptLocation,
+			but if that is not defined it will default to "left".
+		-->
+		<variable name="promptLocation" type="string" value="${(typeof (this.parent.promptLocation) != 'undefined') ? this.parent.promptLocation : 'left'}"/>
+
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.handleShowHeaderDel = new EventHandler.Class(this, "handleShowHeader");
+			this.updateEnablementDel = new EventHandler.Class(this, "updateEnablement");
+			this.updateOpenDel = new EventHandler.Class(this, "updateOpen");
+			this.forceInstantiationDel = new EventHandler.Class(this, "forceInstantiation");
+			this.updateTitleQualifierDel = new EventHandler.Class(this, "updateTitleQualifier");
+			this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+			if (this.visibilityView != null) {
+				this.forceInstantiationDel.connect(this.visibilityView, "onvisible");
+			}
+			else {
+				this.initstage = null;
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method args="force" name="forceInstantiation">
+			<![CDATA[
+			if (typeof(force) == "undefined") force = null;
+			if (force == "force") {
+				this.forceInstantiationDel.disconnectAll();
+				Component.Class.prototype.completeInstantiation.call(this);
+				DefinitionUtil.completeCreateDefinitionChildren(this);
+			}
+			else {
+				this.completeInstantiation();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="completeInstantiation">
+			<![CDATA[
+			if (this.visibilityView.visible) {
+				this.forceInstantiationDel.disconnectAll();
+				this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+				if (this.visibilityView != null) {
+					this.forceInstantiationDel.connect(this.visibilityView, "onvisible");
+				}
+				else {
+					this.inherited(arguments);
+					DefinitionUtil.completeCreateDefinitionChildren(this);
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.oView = ModelUtil.Singleton.findObjectView(this.parent, this.getComponentObjectName());
+			if (this.displayBackground) {
+				new PropertyAreaBackground.Class(this, {
+					name: "background",
+					placement: "group",
+					x: this.content.promptWidth + this.content.xspacing / 2 - 1
+				});
+				this.background.sendToBack();
+			}
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			if (this.enablementCondition && this.oView && this.oView.enablementConditionDels) {
+				if (this.getComponentObjectName() == "o") {
+					this.oView.enablementConditionDels.push(this.updateEnablementDel);
+				}
+				this.updateEnablement();
+			}
+			this.handleShowHeader();
+			this.updateOpenDel.connect(this, "onopen");
+			this.updateOpenDel.connect(this, "oncollapsable");
+			this.updateOpen();
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			if (this.displayStoreName || this.displayObjectStoreName || this.groupTitleResolver) {
+				this.updateTitleQualifier();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.handleShowHeaderDel.disconnectAll();
+			delete this.handleShowHeaderDel;
+			this.updateEnablementDel.disconnectAll();
+			delete this.updateEnablementDel;
+			this.updateOpenDel.disconnectAll();
+			delete this.updateOpenDel;
+			this.forceInstantiationDel.disconnectAll();
+			delete this.forceInstantiationDel;
+			this.updateTitleQualifierDel.disconnectAll();
+			delete this.updateTitleQualifierDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Shows and hides the header when the <code>showHeader</code> flag changes and handles
+			the creation of {@link cmc/foundation/PropertyGroupHeader} when required.
+		-->
+		<method args="e" name="handleShowHeader">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.handleShowHeaderDel.disconnectAll();
+			this.handleShowHeaderDel.connect(this, "onshowHeader");
+			if ((this.groupTitle || this.collapsable || this.displayStoreName || this.displayObjectStoreName || this.groupTitleResolver) && this.showHeader && !this.headerArea.header) {
+				new PropertyGroupHeader.Class(this.headerArea, {
+					name: "header",
+					group: this
+				});
+			}
+			var show = this.showHeader;
+			if (show && this.hideHeaderWhenOnlyGroup) {
+				this.handleShowHeaderDel.connect(this.immediateParent, "oninit");
+				show = false;
+				for (var i = 0; i < this.immediateParent.childComponents.length; i++) {
+					var v = this.immediateParent.childComponents[i];
+					if (v != this) {
+						this.handleShowHeaderDel.connect(v, "onvisible");
+						if (v.visible) {
+							show = true;
+						}
+					}
+				}
+			}
+			this.headerArea.setVariable("visible", show);
+			if (show && this.collapsable) {
+				if (!this.footerArea.bottomLine) {
+					new DividerLine.Class(this.footerArea, {
+						name: "bottomLine",
+						ignoreSize: true
+					});
+				}
+			}
+			this.footerArea.setVariable("visible", show && this.collapsable);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getComponentObjectName">
+			<![CDATA[
+			return this.componentObjectName == null ? "o" : "o_" + this.componentObjectName;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the title qualifier.
+		-->
+		<method args="e" name="updateTitleQualifier">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateTitleQualifierDel.disconnectAll();
+			var objectName = this.getComponentObjectName();
+			this.updateTitleQualifierDel.connect(this.oView, "on" + objectName);
+			var resolvedGroupTitle = "";
+			var storeName = "";
+			if (this.oView[objectName]) {
+				if (this.groupTitleResolver) {
+					resolvedGroupTitle = this.groupTitleResolver.getValue(this.oView[objectName]);
+					this.groupTitleResolver.registerDelegate(this.oView[objectName], this.updateTitleQualifierDel);
+				}
+				if (this.displayObjectStoreName && this.oView[objectName].objectStoreId != "") {
+					var store = StoreUtil.Singleton.storeMap[this.oView[objectName].objectStoreId];
+					if (store == null) {
+						this.updateTitleQualifierDel.connect(StoreUtil.Singleton, "storeLoaded");
+					}
+					else {
+						storeName = store.displayName;
+					}
+				}
+				else if (this.displayStoreName) {
+					var storeConfig = ContextUtil.Singleton.findStoreConfig(this.oView[objectName], this.updateTitleQualifierDel);
+					if (storeConfig != null) {
+						storeName = storeConfig.storeName;
+					}
+				}
+			}
+			var qualifier = "";
+			if (resolvedGroupTitle && resolvedGroupTitle != "") {
+				qualifier = resolvedGroupTitle;
+				if (this.groupTitle) {
+					qualifier = " (" + qualifier + " )";
+				}
+			}
+			if (storeName && storeName != "") {
+				if (this.groupTitle || qualifier != "") {
+					qualifier += " (" + storeName + ")";
+				}
+				else {
+					qualifier = storeName;
+				}
+			}
+			this.setVariable("titleQualifier", qualifier);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the visible attribute based on the current value of the enablement condition.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.enablementCondition) {
+				this.updateEnablementDel.disconnectAll();
+				var objectName = this.getComponentObjectName();
+				if (objectName != "o") {
+					this.updateEnablementDel.connect(this.oView, "on" + objectName);
+				}
+				if (this.oView[objectName] != null) {
+					this.enablementCondition.registerDelegate(this.oView[objectName], this.updateEnablementDel);
+				}
+				var newVisible = this.oView != null && this.oView[objectName] != null && this.enablementCondition.isEnabled(this.oView[objectName]);
+				if (this.visible != newVisible) {
+					this.setVariable("visible", newVisible);
+					if (this.oView.updateHeader) {
+						this.oView.updateHeader();
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Updates the visible attribute according to the open state.
+		-->
+		<method args="e" name="updateOpen">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.open || !this.collapsable) {
+				this.content.setVariable("visible", true);
+			}
+			else {
+				this.content.setVariable("visible", false);
+			}
+			if (this.headerArea.header) {
+				this.headerArea.header.updateOpen();
+			}
+			]]>
+		</method>
+		
+		<AxisLayout axis="y"/>
+		<Component name="headerArea" visible="false"/>
+		<PropertyArea name="content" visible="false" xspacing="${this.parent.showHeaderDivider ? 18 : (this.parent.displayBackground ? 12 : 6)}"/>
+		<Component visible="${this.parent.footerArea.visible}" height="${this.parent.content.visible ? 30 : 12}"/>
+		<Component name="footerArea" visible="false"/>
+	</Component>
+
+	<!---
+		@keywords private
+		
+		This class defines the property area. The cmc/foundation/Property area has a layout defined with two columns, and is used internally
+		by {@link cmc/foundation/PropertyGroup}.
+		
+		This class should always be used within an instance of {@link cmc/foundation/PropertyGroup} or {@link cmc/foundation/PropertyPane}.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/PropertyArea" height="0">
+		<dependency localName="PropertiesComponent" moduleName="cmc/foundation/PropertiesComponent"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="DividerLine" moduleName="cmc/foundation/DividerLine"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="PropertyGroup" moduleName="cmc/foundation/PropertyGroup"/>
+		<!---
+			@keywords private
+			The closest ancestor view that defines an "availableWidth" attribute. This
+			is used to calculate the this view's available width.
+		-->
+		<variable name="availableWidthView" value="${ViewUtil.Singleton.getAvailableWidthView(this)}"/>
+		<!---
+			This attribute defines the spacing between components in the property pane along the x axis. The default value is 6px.
+		-->
+		<variable name="xspacing" type="number" value="6"/>
+		<!---
+			This attribute defines the spacing between components in the property pane along the y axis. The default value is 8px.
+		-->
+		<variable name="yspacing" type="number" value="8"/>
+		<!---
+			This attribute defines the width of the left column in the property pane which contains the prompt. The default value is 164px.
+		-->
+		<variable name="promptWidth" type="number" value="${(typeof (this.parent.promptWidth) != 'undefined') ? this.parent.promptWidth : 164}"/>
+		<!---
+			@keywords private
+			This attribute indicates the prompt location. Valid values are "left" and "above". It is bound to the parent's value of promptLocation,
+			but if that is not defined it will default to "left".
+		-->
+		<variable name="promptLocation" type="string" value="${(typeof (this.parent.promptLocation) != 'undefined') ? this.parent.promptLocation : 'left'}"/>
+		<!---
+			This attribute hold a reference to the nearest ancestor view that defines a model object. This attribute value is found
+			by invoking {@link cmc/foundation/ModelUtil#findObjectView} with this as the parameter.
+		-->
+		<variable name="oView"/>
+		<!---
+			The name of the component object for this properties component. You
+			can specify a named component object for properties components if you
+			want the properties component to be dependent on another properties component.
+			All named component objects must be declared in the
+			{@link cmc/foundation/ObjectProperties#componentObjectNames} attribute of the containing
+			properties view.
+		-->
+		<variable name="componentObjectName" type="string" value="${null}"/>
+		<!---
+			This attribute indicates that this view is a container view. The default value for this attribute is "true".
+		-->
+		<variable name="componentContainer" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.oView = ModelUtil.Singleton.findObjectView(this.parent, this.getComponentObjectName());
+			if (!this._definition) {
+				this.postCreateDefinitionChildren();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.updateEnablementDel = new EventHandler.Class(this, "updateEnablement");
+			if (this.enablementCondition && this.oView && this.oView.enablementConditionDels) {
+				if (this.getComponentObjectName() == "o") {
+					this.oView.enablementConditionDels.push(this.updateEnablementDel);
+				}
+				this.updateEnablement();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getComponentObjectName">
+			<![CDATA[
+			return this.componentObjectName == null ? "o" : "o_" + this.componentObjectName;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateEnablementDel.disconnectAll();
+			delete this.updateEnablementDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			This method updates the visible attribute based on the current value of the enablement condition.
+		-->
+		<method args="e" name="updateEnablement">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.enablementCondition) {
+				this.updateEnablementDel.disconnectAll();
+				var objectName = this.getComponentObjectName();
+				if (objectName != "o") {
+					this.updateEnablementDel.connect(this.oView, "on" + objectName);
+				}
+				if (this.oView[objectName] != null) {
+					this.enablementCondition.registerDelegate(this.oView[objectName], this.updateEnablementDel);
+				}
+				var newVisible = this.enablementCondition.isEnabled(this.oView[objectName]);
+				if (this.visible != newVisible) {
+					this.setVariable("visible", newVisible);
+					this.oView.updateHeader();
+				}
+			}
+			]]>
+		</method>
+		
+		<Layout name="layout">
+			<!---
+				@keywords private
+				An array of dividers used to separate subviews that are managed by this layout
+			 -->
+			<variable name="dividers" value="${[]}"/>
+			
+			<!---
+				@keywords private
+				Returns a visible divider that is to be displayed. This divider is guaranteed to
+				be visible.
+				@return cmc/foundation/DividerLine a visible divider to be used
+			 -->
+			<method name="getDivider">
+				<![CDATA[
+				for (var i = 0; i < this.dividers.length; i++) {
+					var divider = this.dividers[i];
+					if (!divider.visible) {
+						divider.setVariable("visible", true);
+						return divider;
+					}
+				}
+				var divider = new DividerLine.Class(this.classroot, {
+					visible: true
+				});
+				this.dividers.push(divider);
+				return divider;
+				]]>
+			</method>
+
+			<!---
+				@keywords private
+				Releases all the existing dividers maintained by this layout
+				so they can be used for other views. A released divider becomes invisible.
+			 -->
+			<method name="releasesDividers">
+				<![CDATA[
+				for (var i = 0; i < this.dividers.length; ++i) {
+					this.dividers[i].setVariable("visible", false);
+				}
+				]]>
+			</method>
+	
+			<!---
+				This method is called whenever a new subview is added to the layout.
+				@param cmc/foundation/Component v The view to add to the layout.
+			-->
+			<method args="v" name="addComponent">
+				<![CDATA[
+				if (!this.deferredUpdateDel) {
+					this.deferredUpdateDel = new EventHandler.Class(this, "deferredUpdate");
+				}
+				this.deferredUpdateDel.connect(v, "onheight");
+				this.deferredUpdateDel.connect(v, "onvisible");
+				this.deferredUpdateDel.connect(v, "ondisplayGrouping");
+				this.deferredUpdateDel.connect(v, "ondividerAtTop");
+				this.deferredUpdateDel.connect(v, "ondividerAtBottom");
+				this.inherited(arguments);
+				var subnodeIndex = this.immediateParent.childNodes.indexOf(v);
+				var index = this.immediateParent.childComponents.indexOf(v);
+				for (var i = index - 1; i >= 0; i--) {
+					var v1 = this.immediateParent.childComponents[i];
+					if (subnodeIndex > this.immediateParent.childNodes.indexOf(v1)) {
+						break;
+					}
+					this.immediateParent.childComponents.swap(index, index - 1);
+					index--;
+				}
+				index = this.components.indexOf(v);
+				for (var i = index - 1; i >= 0; i--) {
+					var v1 = this.components[i];
+					if (subnodeIndex > this.immediateParent.childNodes.indexOf(v1)) {
+						break;
+					}
+					this.setLayoutOrder(v, v1);
+				}
+				if (!(v instanceof PropertiesComponent.Class) && !(v instanceof PropertyGroup.Class)) {
+					this.update();
+				}
+				]]>
+			</method>
+			
+			
+			<!---
+				This method triggers a deferred update.
+			-->
+			<method args="e" name="deferredUpdate">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				CallbackUtil.Singleton.cancelCallback(this.updateHandler);
+				CallbackUtil.Singleton.addDeferredCallback(this.updateHandler, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Finds the first visible view that is above the view with the given index in the subviews managed by
+				this layout.
+				@param subviewIndex the index of the given subview in the subviews managed by this layout
+				@return cmc/foundation/Component the found view. If no view is found, null will be returned.
+			 -->
+			<method args="subviewIndex" name="getViewAbove">
+				<![CDATA[
+				for (var i = subviewIndex - 1; i >= 0; i--) {
+					var v = this.components[i];
+					if (v.visible) {
+						return v;
+					}
+				}
+				return null;
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Finds the first visible view that is below the view with the given index in the subviews managed by
+				this layout.
+				@param subviewIndex the index of the given subview in the subviews managed by this layout
+				@return cmc/foundation/Component the found view. If no view is found, null will be returned.
+			 -->
+			<method args="subviewIndex" name="getViewBelow">
+				<![CDATA[
+				for (var i = subviewIndex + 1; i < this.components.length; i++) {
+					var v = this.components[i];
+					if (v.visible) {
+						return v;
+					}
+				}
+				return null;
+				]]>
+			</method>
+
+			
+			<!---
+				@keywords private
+				Checks if a divider should be inserted before adding a specified view. A divider should
+				be placed above the subview with the specified subview index if one of the following conditions is satisfied:
+					<ol>
+						<li>The subview is not the first visible subview in the subview array, this view's attribute
+							displayGrouping or dividerAtTop is set to true, and the view does not have a header.
+						</li>
+						
+						<li>
+							The subivew displayed above the given subview has its attribute displayGrouping or dividerAtBottom
+							set to true, and the given subview does not have a header.
+						</li>
+					</ol>
+				@param Number subviewIndex the index of the subview that this method examines in the array this.subviews
+				@return boolean true if a divider should be inserted. False otherwise.
+			 -->
+			<method args="subviewIndex" name="checkDivider">
+				<![CDATA[
+				var subview = this.components[subviewIndex];
+				if (!subview || !subview.visible) {
+					return false;
+				}
+				var viewAbove = this.getViewAbove(subviewIndex);
+				if (viewAbove == null) {
+					return false;
+				}
+				return (viewAbove.dividerAtBottom || viewAbove.displayGrouping || subview.displayGrouping || subview.dividerAtTop);
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Checks if the parent of this area should have a divider line on top of it. The parent of this area
+				will have divider on top of it if this area has at least one visible view, and the top visible view
+				needs a divider at the top, and does not have a header. The parent's attribute "dividerAtTop" will
+				be updated if the value is different from the result of this checking.
+			 -->
+			<method name="checkDividerAtTop">
+				<![CDATA[
+				for (var i = 0; i < this.components.length; i++) {
+					var subview = this.components[i];
+					if (subview.visible) {
+						var dividerAtTop = !(subview.collapsable || subview.groupTitle || subview.displayStoreName || subview.displayObjectStoreName || subview.groupTitleResolver) && (subview.displayGrouping || subview.dividerAtTop);
+						if (this.classroot.parent.dividerAtTop != dividerAtTop) {
+							this.classroot.parent.setVariable("dividerAtTop", dividerAtTop);
+						}
+						return;
+					}
+				}
+				if (this.classroot.parent.dividerAtTop) {
+					this.classroot.parent.setVariable("dividerAtTop", false);
+				}
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Checks if the parent of this area should have a divider line below it. The parent of this area
+				will have divider below it if this area has at least one visible view, and the bottom visible view
+				needs a divider at bottom, and does not have a header. The parent's attribute "dividerAtBottom" will
+				be updated if the value is different from the result of this checking.
+			 -->
+			<method name="checkDividerAtBottom">
+				<![CDATA[
+				for (var i = this.components.length - 1; i >= 0; i--) {
+					var subview = this.components[i];
+					if (subview.visible) {
+						var dividerAtBottom = !!(subview.displayGrouping || subview.dividerAtBottom);
+						if (this.classroot.parent.dividerAtBottom != dividerAtBottom) {
+							this.classroot.parent.setVariable("dividerAtBottom", dividerAtBottom);
+						}
+						return;
+					}
+				}
+				if (this.classroot.parent.dividerAtBottom) {
+					this.classroot.parent.setVariable("dividerAtBottom", false);
+				}
+				]]>
+			</method>
+			
+			<!---
+				@keywords private
+				Inserts a divider at the given y-coordinate.
+				@return the divider that is inserted
+			 -->
+			<method args="y" name="insertDivider">
+				<![CDATA[
+				var divider = this.getDivider();
+				divider.setVariable("y", y);
+				return divider;
+				]]>
+			</method>
+			
+			<!---
+				This method updates the layout.
+			-->
+			<method args="e" name="update">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (!this.locked) {
+					this.locked = true;
+					var yPos = 0;
+					this.releasesDividers();
+					for (var i = 0; i < this.components.length; i++) {
+						var v = this.components[i];
+						if (v.visible) {
+							if (!v.componentContainer) {
+								yPos += this.classroot.yspacing;
+							}
+							if (this.checkDivider(i)) {
+								if (v.componentContainer) {
+									yPos += this.classroot.yspacing;
+								}
+								yPos += 30 - this.classroot.yspacing;
+								var divider = this.insertDivider(yPos);
+								yPos += 20 - this.classroot.yspacing;
+								if (!v.componentContainer) {
+									yPos += this.classroot.yspacing;
+								}
+								yPos += divider.height;
+							}
+							if (yPos != v.y) {
+								if (v.yoffset > this.classroot.yspacing) {
+									v.yoffset = this.classroot.yspacing;
+								}
+								v.setVariable("y", yPos);
+							}
+							yPos += v.height;
+						}
+					}
+					this.checkDividerAtTop();
+					this.checkDividerAtBottom();
+					if (this.parent.height != yPos) {
+						this.parent.setVariable("height", yPos);
+					}
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+		
+		<Layout name="horizontalLayout">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				this.updateHandler.connect(this.classroot.availableWidthView, "onavailableWidth");
+				]]>
+			</method>
+			
+			<!---
+				This method is called whenever a new subview is added to the layout.
+				@param cmc/foundation/Component v The view to add to the layout.
+			-->
+			<method args="v" name="addComponent">
+				<![CDATA[
+				if (!v.componentContainer && this.classroot.availableWidthView) {
+					this.updateHandler.connect(v, "onsizeToAvailableWidth");
+					if (!this.locked) {
+						this.updateSubviewWidth(v, this.classroot.availableWidthView.availableWidth);
+					}
+				}
+				this.inherited(arguments);
+				]]>
+			</method>
+	
+			<!---
+				@keywords private
+				Updates the width of a given subview. The given subview will be scaled to
+				fit the given availableWidth if its attribute "sizeToAvailableWidth" is
+				true. If the available width is smaller than the given view's minimum width,
+				the minimum width will be used as the available width.
+				
+				@param cmc/foundation/Component v the subview whose width will be set
+				@param availableWidth the availableWidth this subview may be scaled to
+			 -->
+			<method args="v, availableWidth" name="updateSubviewWidth">
+				<![CDATA[
+				this.updateHandler.disconnect(v, "onx");
+				this.updateHandler.disconnect(v, "onvisible");
+				if (v.sizeToAvailableWidth) {
+					if (v.visible) {
+						var newWidth = availableWidth - v.x;
+						if (typeof (v.promptWidth) == "undefined") {
+							if (v.minWidth > newWidth) {
+								newWidth = v.minWidth;
+							}
+						}
+						else if (v.minWidth > newWidth - this.classroot.promptWidth - this.classroot.xspacing) {
+							newWidth = this.classroot.promptWidth + this.classroot.xspacing + v.minWidth;
+						}
+						if (newWidth != v.width) {
+							v.setVariable("width", newWidth);
+						}
+						this.updateHandler.connect(v, "onx");
+					}
+					else {
+						this.updateHandler.connect(v, "onvisible");
+					}
+				}
+				]]>
+			</method>
+			
+			<!---
+				This method updates the layout.
+			-->
+			<method args="e" name="update">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (!this.locked) {
+					this.locked = true;
+					var availableWidth = this.classroot.availableWidthView.availableWidth;
+					for (var i = 0; i < this.components.length; i++) {
+						var v = this.components[i];
+						if (!v.componentContainer) {
+							this.updateSubviewWidth(v, availableWidth);
+						}
+					}
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+	</Component>
+
+	<!---
+		Declares the value that will be used as the group title.
+		The algorithm used to determine this value is in {@link cmc/foundation/ValueResolver}.
+		
+		In the following sample, the value of the "storeIdentifier" property in the praent object is displayed as the property group title.	
+		@START_CODE
+		<PropertyGroup name="staticPageESiteUrlKeywordSection" componentObjectName="selectedStaticPage">
+			<PropertyGroupTitle parentProperty="true" propertyName="storeIdentifier"/>
+			...
+		</PropertyGroup>	    
+		@END_CODE
+
+		A single instance of this value can be declared as the child of an instance of cmc/foundation/PropertyGroup.
+	-->
+	<ValueResolver classDefinition="true" definitionName="cmc/foundation/PropertyGroupTitle">
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.groupTitleResolver = this;
+			]]>
+		</method>
+	</ValueResolver>
+
+	<!---
+		@keywords private
+		
+		This classs describes the definition of an action that can be performed on a model object.
+	 -->
+	<Node classDefinition="true" definitionName="cmc/foundation/ObjectPropertiesActionDefinition">
+		<!---
+			The class of the action widget that user interacts.
+			For example, it could a button class. When the button
+			is clicked, the model object will be closed. This
+			action widget can be instantiated by an active view
+			container when a properties viewer is set active.
+		-->
+		<variable name="actionWidgetClass" type="module" value="${null}"/>
+		<!---
+			@keywords private
+			The instance of actionWidgetClass.
+		-->
+		<variable name="actionWidget" value="${null}"/>
+		
+		<!---
+			Creates an action widget that is located inside the given container.
+			@param cmc/foundation/Component container: the parent view of the widget
+			@return the new widget instance
+		-->
+		<method args="container" name="createActionWidget">
+			<![CDATA[
+			if (this.actionWidget != null) {
+				this.actionWidget.setVariable("visible", true);
+			}
+			else {
+				this.actionWidget = new this.actionWidgetClass.Class(container, {
+					actionDefinition: this
+				});
+			}
+			return this.actionWidget;
+			]]>
+		</method>
+		
+		<!---
+			Release the action widget.
+		-->
+		<method name="releaseActionWidget">
+			<![CDATA[
+			if (this.actionWidget != null) {
+				this.actionWidget.setVariable("visible", false);
+			}
+			]]>
+		</method>
+	</Node>
+
+
+	<!---
+		@keywords private
+		This class represents a divider line that visually divides displayed widgets. The height of the divider line instance
+		is determined by the resource used by the instance. The width of a divider line is the available width of the view
+		specified in the attribute "availableWidthView", whose default is the first parent view that has the attribute "availableWidth".
+		To following two examples show how to use this class. The first examples creates a divider line whose width is the same as the
+		availaleWidth of the default availableWidthView. The second example creates a divider line whose width is the same as the
+		availabelWidth of the given availableWidthView.
+		
+		@START_CODE
+			<DividerLine/>
+		@END_CODE
+		
+		@START_CODE
+			<DividerLine availbleWidthView="myAvailableWidthView"/>
+		@END_CODE
+	 -->
+	<Component classDefinition="true" definitionName="cmc/foundation/DividerLine" ignoreLayout="true" height="1" bgcolor="#d0d0d0">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			This attribute specifies a view whose available width will used as the width of
+			this divider line. It is by default the first ancestor view that has attribute
+			"availableWidth".
+		 -->
+		<variable initialValue="${ViewUtil.Singleton.getAvailableWidthView(this)}" name="availableWidthView"/>
+		
+		<!---
+			@keywords private
+		 -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateDividerWidthDel = new EventHandler.Class(this, "updateDividerWidth");
+			this.updateDividerWidthDel.connect(this.availableWidthView, "onavailableWidth");
+			this.updateDividerWidth();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		 -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateDividerWidthDel.disconnectAll();
+			delete this.updateDividerWidthDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		 -->
+		<handler name="onavailableWidthView">
+			<![CDATA[
+			if (this.updateDividerWidthDel) {
+				this.updateDividerWidthDel.disconnectAll();
+				if (this.availableWidthView) {
+					this.updateDividerWidthDel.connect(this.availableWidthView, "onavailableWidth");
+					this.updateDividerWidth();
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Sets the width of this divider line with the available width of availeWidthView.
+		 -->
+		<method args="e" name="updateDividerWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("width", this.availableWidthView.availableWidth);
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords private
+		This class is used as the background area for a property group.
+	 -->
+	<Component bgcolor="#d0d0d0" classDefinition="true" definitionName="cmc/foundation/PropertyAreaBackground" height="${this.parent.content.height + 8}" ignoreLayout="true" y="${this.parent.content.y}">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			This attribute specifies a view whose available width will used as the width of
+			this divider line. It is by default the first ancestor view that has attribute
+			"availableWidth".
+		 -->
+		<variable initialValue="${ViewUtil.Singleton.getAvailableWidthView(this)}" name="availableWidthView"/>
+		
+		<!---
+			@keywords private
+		 -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateBackgroundWidthDel = new EventHandler.Class(this, "updateBackgroundWidth");
+			this.updateBackgroundWidthDel.connect(this.availableWidthView, "onavailableWidth");
+			this.updateBackgroundWidthDel.connect(this.parent.content, "onwidth");
+			this.updateBackgroundWidth();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		 -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateBackgroundWidthDel.disconnectAll();
+			delete this.updateBackgroundWidthDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets the width of this background view with the available width of availeWidthView.
+		 -->
+		<method args="e" name="updateBackgroundWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = this.availableWidthView.availableWidth;
+			if (newWidth < this.parent.content.width) {
+				newWidth = this.parent.content.width;
+			}
+			this.setVariable("width", newWidth - this.x);
+			]]>
+		</method>
+		
+		<Component bgcolor="#f9f9f9" height="${this.parent.height - 2}" name="background" width="${this.parent.width - 2}" x="1" y="1"/>
+	</Component>
+	
+	<!---
+		@keywords private
+		Singleton that provides common methods for managing object properties views.
+	-->
+	<Node definitionName="cmc/foundation/ObjectPropertiesUtil" singletonDefinition="true">
+		<dependency localName="PropertyTabPane" moduleName="cmc/foundation/PropertyTabPane"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="PropertyGroup" moduleName="cmc/foundation/PropertyGroup"/>
+		<!---
+			@keywords private
+			
+			<p>This method searches the object properties view looking for a {@link cmc/foundation/PropertiesComponent properties component}
+			that is enabled and matches the specified arguments. An {@link cmc/foundation/ModelObject object} must be passed in to this method as well as one 
+			of an {@link cmc/foundation/ModelProperty object property} or a {@link cmc/foundation/Validator#validatorType validator type}. The matching properties component must
+			match either the specified property, or the specified object and validator type.
+			
+			<p>If a match is found, this method ensures that the {@link cmc/foundation/PropertiesComponent properties component} is visible by making
+			it and all of its ancestors visible. This can result in the expansion of {@link cmc/foundation/PropertyGroup property groups}
+			and the changing of {@link cmc/foundation/PropertyTab tabs}. The method then sets the focus to the {@link cmc/foundation/PropertiesComponent properties component}
+			and returns true.
+			
+			<p>If no match is found, then this method returns false and does not affect the focus or display.
+						
+			@param cmc/foundation/ObjectProperties objectPropertiesView the object properties view
+			@param cmc/foundation/ModelObject errorObject the model object that contains the error
+			@param cmc/foundation/ModelProperty errorProperty the model property that contains the error
+			@param string validatorType the validator type of the validator that reported the error
+			@return boolean true if the focus was set to the specified error, false otherwise
+		-->
+		<method args="objectPropertiesView, errorObject, errorProperty, validatorType" name="setFocusToError">
+			<![CDATA[
+			var errorFound = false;
+			var parentViews = [objectPropertiesView];
+			while (!errorFound && parentViews.length > 0) {
+				var newParentViews = [];
+				for (var i = 0; !errorFound && i < parentViews.length; i++) {
+					var parentView = parentViews[i];
+					for (var j = 0; !errorFound && j < parentView.childNodes.length; j++) {
+						var v = parentView.childNodes[j];
+						if (v.setFocusToError) {
+							if (v.forceInstantiation) {
+								v.forceInstantiation("force");
+							}
+							errorFound = v.setFocusToError({
+								objectPropertiesView: objectPropertiesView,
+								errorObject: errorObject,
+								errorProperty: errorProperty,
+								validatorType: validatorType
+							});
+						}
+						else if (v instanceof Component.Class) {
+							if (v.forceInstantiation) {
+								v.forceInstantiation("force");
+							}
+							else {
+								v.completeInstantiation();
+							}
+							if (v.childNodes != null) {
+								var enabled = true;
+								if (v.enablementCondition && v.oView != null) {
+									var objectName = v.getComponentObjectName ? v.getComponentObjectName() : "o";
+									if (!v.enablementCondition.isEnabled(v.oView[objectName])) {
+										enabled = false;
+									}
+								}
+								if (enabled) {
+									newParentViews.push(v);
+								}
+							}
+						}
+					}
+				}
+				parentViews = newParentViews;
+			}
+			return errorFound;
+			]]>
+		</method>
+		
+		<!---
+			Ensure that the specified properties component is visible.
+			@param cmc/foundation/ObjectPropertiesView objectPropertiesView the object properties view
+			@param cmc/foundation/PropertiesComponent component the properties component
+		-->
+		<method args="objectPropertiesView, component" name="showComponent">
+			<![CDATA[
+			var currentView = component;
+			while (currentView != null && currentView != objectPropertiesView) {
+				var currentView = currentView.parent;
+				if (currentView instanceof PropertyTabPane.Class && currentView.parent.activePane != currentView) {
+					currentView.parent.setVariable("activePane", currentView);
+				}
+				else if (currentView instanceof PropertyGroup.Class && currentView.collapsable && !currentView.open) {
+					currentView.setVariable("open", true);
+				}
+			}
+			var panel = PanelManager.Singleton.findPanel(objectPropertiesView);
+			if (panel != null) {
+				panel.show(component);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the focus to the specified view. The focus is set through a deferred callback.
+			@param cmc/foundation/Component v the view to which focus will be set
+		-->
+		<method args="v" name="setDeferredFocus">
+			<![CDATA[
+			if (typeof (this.setDeferredFocusCallbackDel) == "undefined") {
+				this.setDeferredFocusCallbackDel = new EventHandler.Class(this, "setDeferredFocusCallback");
+			}
+			CallbackUtil.Singleton.addDeferredCallback(this.setDeferredFocusCallbackDel, v, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="v" name="setDeferredFocusCallback">
+			<![CDATA[
+			FocusUtil.setFocus(v, false);
+			]]>
+		</method>
+	</Node>
+</Definitions>

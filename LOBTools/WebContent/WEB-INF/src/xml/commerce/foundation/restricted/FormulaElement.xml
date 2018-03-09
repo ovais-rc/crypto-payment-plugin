@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		This class provides a basic view for element in formula viewer.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/FormulaElement">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<!---
+			cmc/foundation/ModelObject instances associated with this element instance.
+		-->
+		<variable name="o" value="${null}"/>
+
+		<!---
+			@keywords private
+			Name of the resource for this element's icon.
+		-->
+		<variable name="icon" type="string" value="${null}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.updateElementTextDel = new EventHandler.Class(this, "updateElementText");
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateElementTextDel.disconnectAll();
+			delete this.updateElementTextDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the model object instance for this element.
+			@param cmc/foundation/ModelObject newObject: the new model object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.o = newObject;
+			}
+			if (this.o) {
+				var formulaIcon = this.o.getFormulaIcon();
+				if (typeof (formulaIcon) == "undefined") {
+					this.setVariable("icon", null);
+				}
+				else {
+					this.setVariable("icon", formulaIcon);
+				}
+				this.updateElementText();
+			}
+			else if (this.updateElementTextDel) {
+				this.updateElementTextDel.disconnectAll();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the text of the element, or the label for element icon if the icon is displayed.
+		-->
+		<method args="e" name="updateElementText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateElementTextDel.disconnectAll();
+			var propertyValue = null;
+			var propertyType = null;
+			var oDef = this.o.objectDefinition;
+			if (oDef.formulaTextProperty != null) {
+				var propertyObject = this.o;
+				if (oDef.formulaTextObjectPath != null) {
+					propertyObject = this.o.getObject(oDef.formulaTextObjectPath, false, null, this.updateElementTextDel);
+				}
+				if (propertyObject != null) {
+					var property = propertyObject.getProperty(oDef.formulaTextProperty);
+					propertyValue = property.value;
+					if (property.propertyDefinition) {
+						propertyType = property.propertyDefinition.type;
+					}
+					this.updateElementTextDel.connect(property, "onvalue");
+				}
+			}
+			var newText = "";
+			var newPropertyName = "";
+			var newPropertyValue = "";
+			if (this.icon == null) {
+				if (propertyValue != null) {
+					if (propertyType != null && propertyType == "number") {
+						newText = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(propertyValue, null, this.updateElementTextDel);
+					}
+					else {
+						newText = propertyValue;
+					}
+				}
+			}
+			else {
+				if (oDef.formulaText != null) {
+					newPropertyName = oDef.formulaText;
+					this.updateElementTextDel.connect(oDef, "onformulaText");
+					if (propertyValue != null) {
+						newPropertyValue = foundationResources.Singleton.replaceValues("formulaElementPropertyValue", [propertyValue]);
+						this.updateElementTextDel.connect(foundationResources.Singleton.formulaElementPropertyValue, "onstring");
+					}
+				}
+			}
+			if (newText != this.textView.text) {
+				this.textView.setVariable("text", newText);
+			}
+			if (newPropertyName != this.iconView.elementPropertyName.text) {
+				this.iconView.elementPropertyName.setVariable("text", newPropertyName);
+			}
+			if (newPropertyValue != this.iconView.elementPropertyValue.text) {
+				this.iconView.elementPropertyValue.setVariable("text", newPropertyValue);
+			}
+			]]>
+		</method>
+
+		<Component name="iconView" visible="${this.classroot.icon != null}">
+			<Component align="center" imageSet="${this.classroot.icon}" name="elementIcon"/>
+			<TextComponent align="center" name="elementPropertyName"/>
+			<TextComponent align="center" name="elementPropertyValue"/>
+			<AxisLayout axis="y"/>
+		</Component>
+		<TextComponent fontsize="30" name="textView" visible="${this.classroot.icon == null}"/>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Component>
+
+</Definitions>

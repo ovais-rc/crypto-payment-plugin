@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		@keywords private
+		Value selector with an Input Text field
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/InputTextValueSelector" height="30">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="LongListItem" moduleName="cmc/foundation/LongListItem"/>
+		<!---
+			@keywords private
+			The list of items.
+		-->
+		<variable name="items" value="${[]}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="availableItems" value="${[]}"/>		
+		<!---
+			@keywords private
+			The list is being displayed or not
+		-->
+		<variable name="listOpen" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			The text value currently in the inputText.
+		-->
+		<variable name="text" type="string" value=""/>
+		
+		<Component name="inputTextArea">
+			<InputText bgcolor="white" name="inputText" width="${this.classroot.width - this.classroot.dropDown.width - 8}" y="1" borderSize="0" height="28">
+				<handler name="ontext">
+					<![CDATA[
+					this.classroot.setVariable('text', this.getText());
+					this.classroot.checkSelected();
+					]]>
+				</handler>
+				<!--- @keywords private -->
+				<handler args="k" name="onkeydown">
+					<![CDATA[
+					if (k == 40) {
+						this.classroot.openList();
+					}
+					]]>
+				</handler>
+			</InputText>
+			<FloatingList attach="bottom" name="dropdownList" visible="false" width="${this.owner.parent.width}">
+				<handler name="onvisible">
+					<![CDATA[
+					if (this.visible) {
+						this.bringToFront();
+						ModalUtil.makeModal(this);
+						if (typeof (this.closeListDel) === "undefined") {
+							this.closeListDel = new EventHandler.Class(this.owner.classroot, "closeList");
+						}
+						KeyUtil.callOnKeyCombo(this.closeListDel, ['esc']);
+					}
+					else {
+						if (typeof (this.closeListDel) !== "undefined") {
+							KeyUtil.removeKeyComboCall(this.closeListDel, ['esc']);
+						}
+						ModalUtil.release(this);
+					}
+					]]>
+				</handler>
+				
+				<!--- @keywords private -->
+				<method name="getNextSelection">
+					<![CDATA[
+
+					]]>
+				</method>
+				<!--- @keywords private -->
+		        <method name="getPrevSelection">
+					<![CDATA[
+
+					]]>
+				</method>
+		        
+			</FloatingList>
+		</Component> 
+		
+		<BaseButton imageSet="comboxBoxButton" name="dropDown" valign="middle" x="${this.parent.width - this.width - 8}">
+			<handler name="on_msin">
+				<![CDATA[
+				this._callShow();
+				]]>
+			</handler>
+			
+			<handler name="on_msdown">
+				<![CDATA[
+				this._callShow();
+				]]>
+			</handler>
+			
+			<method name="_callShow">
+				<![CDATA[
+				if (this.classroot.listOpen || (this._msdown && this._msin)) {
+					this.showDown();
+				}
+				else if (this._msin) {
+					this.showOver();
+				}
+				else {
+					this.showUp();
+				}
+				]]>
+			</method>
+			<handler name="onclick">
+				<![CDATA[
+				this.classroot.openList();
+				]]>
+			</handler>
+		</BaseButton>
+		<Component height="${this.parent.height}" bgcolor="#959595" width="1"  x="0" y="0"/>
+		<Component height="${this.parent.height}" bgcolor="#959595" width="1" x="${this.parent.width - this.width}" y="0"/>
+		<Component bgcolor="#959595" height="1"  width="${this.parent.width }" x="0" y="0"/>
+		<Component bgcolor="#959595" height="1" width="${this.parent.width}" x="0" y="${this.parent.height - this.height}"/>
+		
+		<!--- @keywords private -->
+		<handler name="onconstruct">
+			<![CDATA[
+			this.updateTextDel = new EventHandler.Class(this, "updateText");
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.inputTextArea.dropdownList" name="onblur">
+			<![CDATA[
+			if (this.listOpen == true) {
+				this.closeList();
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onlistOpen">
+			<![CDATA[
+			this.dropDown._callShow();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 40) {
+				this.openList();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handler that gets executed when an item from the drop down list is selected
+		-->
+		<handler args="item" eventSource="this.inputTextArea.dropdownList" name="onselect">
+			<![CDATA[
+			this.closeList();
+			this.handleSelect(item.value);
+			this.checkSelected();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					offset: 1
+				});
+			}
+			]]>
+		</handler>
+		
+		<!---
+			This method is called when a value is selected from the list. This implementation sets the input field's 
+			text to match the value's text.
+			@param Object v: the selected value object
+		-->
+		<method args="v" name="handleSelect">
+			<![CDATA[
+			this.inputTextArea.inputText.setText(v.text);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method updates the list to display a checkmark next to the item that matches the text currently in the input field.
+		-->
+		<method name="checkSelected">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				if (this.items[i].selectable && this.text == this.items[i].value.text) {
+					this.items[i].title.selectedIconHolder.selectedIconIndicator.setVariable("visible", true);
+				}
+				else {
+					this.items[i].title.selectedIconHolder.selectedIconIndicator.setVariable("visible", false);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private	-->
+		<handler name="oninit">
+			<![CDATA[
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			]]>
+		</handler>
+		
+		<!--- @keywords private	-->
+		<method name="destroy">
+			<![CDATA[
+			this.inputTextArea.dropdownList.autoscrollbar = false;
+			if (this.checkMouseDel) {
+				this.checkMouseDel.disconnectAll();
+				delete this.checkMouseDel;
+			}
+			if (this.updateTextDel) {
+				this.updateTextDel.disconnectAll();
+				delete this.updateTextDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will append the specified value to the drop down.  Inside the newValue object, text is the string that is displayed
+			in the dropdown, icon is the icon resource that can be displayed beside the text, alias is the value that can be displayed in the dropdown
+			after the text as a short form of the text, addSeperatorBefore is a line that will be displayed directly above the text, and selectable
+			will allow the item to have the selected checkmark show up when it is the currently selected item.
+			@param object newValue: value to add to list
+		-->
+		<method args="newValue" name="addListValue">
+			<![CDATA[
+			var foundItem = false;
+			for (var i = 0; i < this.items.length; i++) {
+				if (newValue.text == this.items[i].value.text) {
+					foundItem = true;
+					break;
+				}
+			}
+			if (!foundItem) {
+				var textKey = newValue.textKey ? newValue.textKey : null;
+				var text;
+				if (textKey != null) {
+					text = textKey.string;
+				}
+				else {
+					text = newValue.text;
+				}
+				var aliasQualifierKey = newValue.aliasQualifierKey ? newValue.aliasQualifierKey : null;
+				var aliasQualifier = "";
+				if (aliasQualifierKey != null) {
+					aliasQualifier = aliasQualifierKey.string;
+				}
+				else if (newValue.aliasQualifier) {
+					aliasQualifier = newValue.aliasQualifier;
+				}
+				var item;
+				if (this.availableItems.length > 0) {
+					item = this.availableItems.shift();
+					item.setVariable("value", newValue);
+					item.setVariable("icon", newValue.icon ? newValue.icon : null);
+					item.setVariable("text", text);
+					item.setVariable("alias", newValue.alias ? newValue.alias : "");
+					item.setVariable("aliasQualifier", aliasQualifier);
+					item.setVariable("addSeparatorBefore", newValue.addSeparatorBefore ? newValue.addSeparatorBefore : false);
+					item.setVariable("selectable", typeof (newValue.selectable) == "undefined" ? true : newValue.selectable);
+					item.setVariable("visible", true);
+				}
+				else {
+					item = new LongListItem.Class(this.inputTextArea.dropdownList, {
+						value: newValue,
+						icon: newValue.icon ? newValue.icon : null,
+						text: text,
+						alias: newValue.alias ? newValue.alias : "",
+						aliasQualifier: aliasQualifier,
+						addSeparatorBefore: newValue.addSeparatorBefore ? newValue.addSeparatorBefore : false,
+						selectable: typeof (newValue.selectable) == "undefined" ? true : newValue.selectable
+					});
+				}
+				if (textKey != null) {
+					this.updateTextDel.connect(textKey, "onstring");
+				}
+				if (aliasQualifierKey != null) {
+					this.updateTextDel.connect(aliasQualifierKey, "onstring");
+				}
+				this.items.push(item);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Sets a list of values to the drop-down list.
+			@param cmc/foundation/LongListItem[] values: The array of values to be added to the list. 
+		-->
+		<method args="values" name="setListValues">
+			<![CDATA[
+			this.updateTextDel.disconnectAll();
+			if (values == null) {
+				values = [];
+			}
+			while (this.items.length > 0) {
+				var item = this.items.pop();
+				if (item.title.selectedIconHolder.selectedIconIndicator.visible == true) {
+					item.title.selectedIconHolder.selectedIconIndicator.setVariable("visible", false);
+				}
+				item.setVariable("visible", false);
+				item.setVariable("value", null);
+				this.availableItems.unshift(item);
+			}
+			this.inputTextArea.dropdownList.clearSelection();
+			for (var i = 0; i < values.length; ++i) {
+				this.addListValue(values[i]);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			checks mouse location, if its outside the dropdown area, close the action list
+		-->		
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.inputTextArea.dropdownList.containsPt(this.inputTextArea.dropdownList.getMouse("x"), this.inputTextArea.dropdownList.getMouse("y"))) {
+				this.closeList();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			open action list
+		-->		
+		<method name="openList">
+			<![CDATA[
+			this.checkSelected();
+			var item = null;
+			for (var i = 0; i < this.items.length; i++) {
+				this.items[i].setHilite(false);
+				if (this.items[i].title.selectedIconHolder.selectedIconIndicator.visible) {
+					item = this.items[i];
+				}
+			}
+			if (!item && this.items.length > 0) {
+				item = this.items[0];
+			}
+			if (item) {
+				item.setHilite(true);
+				this.inputTextArea.dropdownList.hilitedItem = item;
+			}
+			this.inputTextArea.dropdownList.clearSelection();
+			this.inputTextArea.dropdownList.setVariable("visible", true);
+			FocusUtil.setFocus(this.inputTextArea.dropdownList);
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			this.setVariable("listOpen", true);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				if (item.value.textKey) {
+					item.setVariable("text", item.value.textKey.string);
+				}
+				if (item.value.aliasQualifierKey) {
+					item.setVariable("aliasQualifier", item.value.aliasQualifierKey.string);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			close action list
+		-->		
+		<method args="e" name="closeList">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("listOpen", false);
+			this.inputTextArea.dropdownList.setVariable("visible", false);
+			this.checkMouseDel.disconnectAll();
+			FocusUtil.setFocus(this, false);
+			]]>
+		</method>
+		
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		
+		Long list item.  Allows for an alias that maps to the text
+	-->
+	<BaseListItem classDefinition="true" definitionName="cmc/foundation/LongListItem">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			Icon.
+		-->
+		<variable name="icon" type="string"/>
+		<!---
+			The text that will be displayed in the drop down.
+		-->
+		<variable name="text" type="string" value=""/>
+		<!---
+			Alias name.
+		-->
+		<variable name="alias" type="string" value=""/>
+		<!---
+			Alias qualifier.
+		-->
+		<variable name="aliasQualifier" type="string" value=""/>
+		<!---
+			Declare whether to add a separator before this list item or not
+		-->
+		<variable name="addSeparatorBefore" type="boolean" value="false"/>
+		<!---
+			If true, this item will display the selected icon.
+		-->
+		<variable name="selectable" type="boolean" value="true"/>
+		<!---
+			Available width for the value text. If the value is too long the text will be truncated.
+		-->
+		<variable name="valueWidth" type="number" value="${this.width * (this.aliasWidth &gt; 0 ? .6 : .85)}"/>
+		<!---
+			Available width for the alias text. If the alias is too long, the text will be truncated.
+		-->
+		<variable name="aliasWidth" type="number" value="${this.alias != '' ? this.width * .25 : 0}"/>
+		
+		<!--- @keywords private -->
+		<method args="s" name="_applystyle">
+			<![CDATA[
+			if (this.style != null) {
+				this.inherited(arguments);
+				if (this._enabled) {
+					if (this.hilited) {
+						this.title.textArea.valueText.setVariable("fgcolor", this.style.texthilitecolor);
+						this.title.textArea.valueDots.setVariable("fgcolor", this.style.texthilitecolor);
+						this.title.textArea.aliasText.setVariable("fgcolor", this.style.texthilitecolor);
+						this.title.textArea.aliasDots.setVariable("fgcolor", this.style.texthilitecolor);
+					}
+					else if (this.selected) {
+						this.title.textArea.valueText.setVariable("fgcolor", this.style.textselectedcolor);
+						this.title.textArea.valueDots.setVariable("fgcolor", this.style.textselectedcolor);
+						this.title.textArea.aliasText.setVariable("fgcolor", this.style.textselectedcolor);
+						this.title.textArea.aliasDots.setVariable("fgcolor", this.style.textselectedcolor);
+					}
+					else {
+						this.title.textArea.valueText && this.title.textArea.valueText.setVariable("fgcolor", this.style.textcolor);
+						this.title.textArea.valueDots && this.title.textArea.valueDots.setVariable("fgcolor", this.style.textcolor);
+						this.title.textArea.aliasText && this.title.textArea.aliasText.setVariable("fgcolor", this.style.textcolor);
+						this.title.textArea.aliasDots && this.title.textArea.aliasDots.setVariable("fgcolor", this.style.textcolor);
+					}
+				}
+				else {
+					if (this.hilited) {
+						this.title.textArea.valueText.setVariable("fgcolor", "#9d9d9d");
+						this.title.textArea.valueDots.setVariable("fgcolor", "#9d9d9d");
+						this.title.textArea.aliasText.setVariable("fgcolor", "#9d9d9d");
+						this.title.textArea.aliasDots.setVariable("fgcolor", "#9d9d9d");
+					}
+					else {
+						this.title.textArea.valueText.setVariable("fgcolor", this.style.textdisabledcolor);
+						this.title.textArea.valueDots.setVariable("fgcolor", this.style.textdisabledcolor);
+						this.title.textArea.aliasText.setVariable("fgcolor", this.style.textdisabledcolor);
+						this.title.textArea.aliasDots.setVariable("fgcolor", this.style.textdisabledcolor);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<Component bgcolor="${this.classroot.style.bordercolor}" height="1" name="separator" visible="${this.parent.addSeparatorBefore}" width="${this.parent.width}"/>
+		<Component name="title" valign="middle" x="1" height="28">
+			<AxisLayout axis="x" spacing="4"/>
+			<Component height="16" name="selectedIconHolder" visible="true" width="16" valign="middle">
+				<Component imageSet="checkmarkIcon" name="selectedIconIndicator" valign="middle" visible="false"/>
+			</Component>
+			<Component name="textArea" height="${this.parent.height}">
+				<TextComponent name="valueText" resize="false" text="${this.classroot.text}" valign="middle" x="0">
+					<!--- @keywords private -->
+					<handler name="oninit">
+						<![CDATA[
+						this.refreshWidthDel = new EventHandler.Class(this, "refreshWidth");
+						this.refreshWidthDel.connect(this, "ontext");
+						this.refreshWidthDel.connect(this.classroot, "onvalueWidth");
+						this.refreshWidth();
+						]]>
+					</handler>
+					<!--- @keywords private -->
+					<method name="destroy">
+						<![CDATA[
+						this.refreshWidthDel.disconnectAll();
+						delete this.refreshWidthDel;
+						this.inherited(arguments);
+						]]>
+					</method>
+					<!--- 
+						@keywords private 
+						updates the width and sets the truncation dots to visible
+					-->
+					<method args="e" name="refreshWidth">
+						<![CDATA[
+						if (typeof(e) == "undefined") e = null;
+						if (this.getTextWidth() > this.classroot.valueWidth) {
+							this.setVariable("width", this.classroot.valueWidth);
+							this.parent.valueDots.setVariable("visible", true);
+						}
+						else {
+							this.parent.valueDots.setVariable("visible", false);
+						}
+						]]>
+					</method>
+					<Tooltip enabled="${this.parent.parent.valueDots.visible}" text="${this.parent.text}"/>
+				</TextComponent>
+				<TextComponent name="valueDots" text="${foundationResources.Singleton.gridTruncationText.string}" x="${this.classroot.valueWidth}" valign="middle"/>
+				<TextComponent name="aliasText" resize="false" text="${this.classroot.alias + (this.classroot.aliasQualifier != '' ? (' - ' + this.classroot.aliasQualifier) : '')}" valign="middle" x="${this.classroot.valueWidth + (this.parent.valueDots.width + 15)}">
+					<!--- @keywords private -->
+					<handler name="oninit">
+						<![CDATA[
+						this.refreshWidthDel = new EventHandler.Class(this, "refreshWidth");
+						this.refreshWidthDel.connect(this, "ontext");
+						this.refreshWidthDel.connect(this.classroot, "onaliasWidth");
+						this.refreshWidth();
+						]]>
+					</handler>
+					<!--- @keywords private -->
+					<method name="destroy">
+						<![CDATA[
+						this.refreshWidthDel.disconnectAll();
+						delete this.refreshWidthDel;
+						this.inherited(arguments);
+						]]>
+					</method>
+					<!--- 
+						@keywords private 
+						updates the width and sets the truncation dots to visible
+					-->
+					<method args="e" name="refreshWidth">
+						<![CDATA[
+						if (typeof(e) == "undefined") e = null;
+						if (this.getTextWidth() > this.classroot.aliasWidth) {
+							this.setVariable("width", this.classroot.aliasWidth);
+							this.parent.aliasDots.setVariable("visible", true);
+						}
+						else {
+							this.parent.aliasDots.setVariable("visible", false);
+						}
+						]]>
+					</method>
+					<Tooltip enabled="${this.parent.parent.aliasDots.visible}" text="${this.parent.text}"/>
+				</TextComponent>
+				<TextComponent name="aliasDots" text="${foundationResources.Singleton.gridTruncationText.string}" visible="false" x="${this.parent.aliasText.x + this.parent.aliasText.width}" valign="middle"/>
+			</Component>
+		</Component>
+	</BaseListItem>
+</Definitions>

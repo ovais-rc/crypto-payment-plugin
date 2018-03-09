@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","hu",{block:"Sorkizárt igazítás",center:"Igazítás középre",left:"Igazítás balra",right:"Igazítás jobbra"});

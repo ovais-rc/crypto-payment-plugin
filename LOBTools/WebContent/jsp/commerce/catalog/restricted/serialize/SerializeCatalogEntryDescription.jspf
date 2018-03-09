@@ -1,0 +1,110 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"%>
+
+<c:set var="langs" value=""/>
+
+<c:forEach var="description" items="${catalogEntry.description}">
+	<c:if test="${fn:length(langs) > 0 }" >
+		<c:set var="langs" value="${langs},${description.language}"/>
+	</c:if>
+	<c:if test="${fn:length(langs) == 0 }" >
+		<c:set var="langs" value="${description.language}"/>
+	</c:if>
+	<object objectType="CatalogEntryDescription">
+		<languageId><wcf:cdata data="${description.language}"/></languageId>
+		<objectStoreId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+		<catalogEntryId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.uniqueID}"/></catalogEntryId>
+		<name><wcf:cdata data="${description.name}"/></name>
+		<sDesc><wcf:cdata data="${description.shortDescription}"/></sDesc>
+		<lDesc><wcf:cdata data="${description.longDescription}"/></lDesc>
+		<keyword><wcf:cdata data="${description.keyword}"/></keyword>
+		
+		<c:set var="hasFullImageInExternalContent" value="false"/>
+		<c:set var="hasThumbnailImageInExternalContent" value="false"/>
+		<c:forEach var="userDataField" items="${description.attributes}">
+			<c:choose>
+	  			<c:when test="${(userDataField.typedKey == 'hasFullImageInExternalContent') and (not empty userDataField.typedValue) and (userDataField.typedValue == 'true')}">
+	  				<c:set var="hasFullImageInExternalContent" value="true"/>
+	  			</c:when>
+	   			<c:when test="${(userDataField.typedKey == 'hasThumbnailImageInExternalContent') and (not empty userDataField.typedValue) and (userDataField.typedValue == 'true')}">
+	   				<c:set var="hasThumbnailImageInExternalContent" value="true"/>
+	   			</c:when>
+	   			<c:otherwise>
+	   				<xdesc_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xdesc_${userDataField.typedKey}>
+	   			</c:otherwise>
+			</c:choose>
+		</c:forEach>
+		<hasFullImageInExternalContent>${hasFullImageInExternalContent}</hasFullImageInExternalContent>
+		<hasThumbnailImageInExternalContent>${hasThumbnailImageInExternalContent}</hasThumbnailImageInExternalContent>
+
+		<fImage readonly="${hasFullImageInExternalContent}"><wcf:cdata data="${description.fullImage}"/></fImage>
+		<tImage readonly="${hasThumbnailImageInExternalContent}"><wcf:cdata data="${description.thumbnail}"/></tImage>
+	</object>
+	<c:if test="${!empty description.override}">
+	<c:set var="override" value="${description.override[0]}"/>
+		<object objectType="CatalogEntryDescriptionOverride">
+			<c:set var="showVerb" value="${showVerb}" scope="request"/>
+			<c:set var="businessObject" value="${description.override[0]}" scope="request"/>
+			<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+			<objectStoreId>${param.storeId}</objectStoreId>
+			<languageId><wcf:cdata data="${description.language}"/></languageId>
+			<overrideId><wcf:cdata data="${description.override[0].descriptionOverrideIdentifier.uniqueID}"/></overrideId>
+			<overrideName><wcf:cdata data="${description.override[0].name}"/></overrideName>
+			<overrideSDesc><wcf:cdata data="${description.override[0].shortDescription}"/></overrideSDesc>
+			<overrideLDesc><wcf:cdata data="${description.override[0].longDescription}"/></overrideLDesc>
+			<overrideKeyword><wcf:cdata data="${description.override[0].keyword}"/></overrideKeyword>
+			<overrideFImage><wcf:cdata data="${description.override[0].fullImage}"/></overrideFImage>
+			<overrideTImage><wcf:cdata data="${description.override[0].thumbnail}"/></overrideTImage>
+			<c:set var="publishedFound" value="false"/>
+			<c:forEach var="userDataField" items="${description.override[0].attributes}">
+				<c:if test="${userDataField.typedKey == 'published'}">
+					<c:set var="publishedFound" value="true"/>
+				</c:if>
+				<xdescovr_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xdescovr_${userDataField.typedKey}>
+			</c:forEach>
+			<c:if test="${publishedFound != true}">
+				<xdescovr_published></xdescovr_published>
+			</c:if>
+		</object>
+		</c:if>
+</c:forEach>
+<%--
+	Need to initialize other language child object in the case were we are
+	loading other languages, otherwise publish flag gets set
+	by default in the UI.
+	Uses dataLanguageIds if specified, otherwise fall back to use defaultLanguageId.
+--%>
+<c:set var="languages" value="${param.dataLanguageIds}"/>
+<c:if test="${empty languages}" >
+	<c:set var="languages" value="${param.defaultLanguageId}"/>
+</c:if>
+<c:if test="${!(empty languages)}" >
+	<c:forTokens var="language" items="${languages}" delims="," >
+		<c:set var="found" value="false" />
+		<c:forTokens var="lang" items="${langs}" delims="," >
+			<c:if test="${lang == language}" >
+				<c:set var="found" value="true" />
+			</c:if>
+		</c:forTokens>
+		<c:if test="${!found}" >
+			<object objectType="CatalogEntryDescription">
+				<languageId><wcf:cdata data="${language}"/></languageId>
+				<objectStoreId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/></objectStoreId>
+				<catalogEntryId><wcf:cdata data="${catalogEntry.catalogEntryIdentifier.uniqueID}"/></catalogEntryId>
+				<xdesc_published>0</xdesc_published>
+			</object>
+		</c:if>
+	</c:forTokens>
+</c:if>

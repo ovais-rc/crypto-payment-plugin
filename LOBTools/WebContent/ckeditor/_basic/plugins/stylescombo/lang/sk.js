@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","sk",{label:"Štýly",panelTitle:"Štýly",panelTitle1:"Štýly blokov",panelTitle2:"Inline štýly",panelTitle3:"Štýly objektov"});

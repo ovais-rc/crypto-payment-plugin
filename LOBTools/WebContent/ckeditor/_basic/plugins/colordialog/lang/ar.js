@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","ar",{clear:"محو",highlight:"اظهار",options:"اختيارات اللون",selected:"اللون المحدد",title:"تحديد لون",ibm:{currentColor:"اللون الحالي"}});

@@ -1,0 +1,1100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class describes a named property of a business object. Instances of this class 
+		can only be declared as immediate sub-nodes of {@link cmc/foundation/ObjectDefinition}. Property 
+		definitions can be used to define information that will be automatically validated by
+		the validators. Not all the properties of a business
+		object need to be defined using {@link cmc/foundation/PropertyDefinition}, only the ones with 
+		special processing information.
+		
+		<p>The following example shows how to define a weight measure property for an object with
+		a few property values:  
+		@START_CODE	
+			<PropertyDefinition propertyName="xprop_weightMeasure">
+				<PropertyValue displayName="Kilogram" value="KGM"/>
+				<PropertyValue displayName="milligram" value="LBR"/>
+				<PropertyValue displayName="1 Unit" value="C62"/>
+			</PropertyDefinition>
+		@END_CODE
+		
+		<p>Multiple instances of {@link cmc/foundation/PropertyValue} may be declared as children of a property definition. The values
+		will be used by property editors that display a list of values from which the user may select.
+
+		<p>A single instance of {@link cmc/foundation/PropertyValueService} may be declared as a child of a property definition.
+		The value service will be invoked when the property definition is instantiated. The value service must return
+		possible values for the property.
+
+		<p>Multiple instances of {@link cmc/foundation/Validator} may be declared as children of a property definition. Validators declared as
+		immediate children of a property definition are expected to perform property level validation.
+		
+		<p>A single instance of {@link cmc/foundation/EnablementCondition} may be declared as a child of a property definition. If
+		the enablement condition evaluates to false for a property instance, then the property will not be available.
+		Validation will only be performed for properties that are currently enabled.
+		
+		<p>Multiple instances of {@link cmc/foundation/PunchOutEditService} may be declared as a child of a property definition. Property editors
+		that allow the business user to edit the property described by this property definition will allow punch-out editing
+		when one or more of the punch-out edit service is enabled.
+		
+		<p>A single instance of {@link cmc/foundation/URLResolver} may be declared as a child of a property definition. When the framework
+		is required to interpret the property value as a URL, the URL resolver will be invoked to resolve the URL. For example,
+		the cmc/foundation/ImageEditor property editor will resolve the property value into a URL before loading the image.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/PropertyDefinition">
+		<dependency localName="PropertyValueTypeValidator" moduleName="cmc/foundation/PropertyValueTypeValidator"/>
+		<dependency localName="PropertyRangeValidator" moduleName="cmc/foundation/PropertyRangeValidator"/>
+		<dependency localName="DecimalPlacesValidator" moduleName="cmc/foundation/DecimalPlacesValidator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="PropertyValue" moduleName="cmc/foundation/PropertyValue"/>
+		<dependency localName="PropertySizeValidator" moduleName="cmc/foundation/PropertySizeValidator"/>
+		<dependency localName="RequiredPropertyValidator" moduleName="cmc/foundation/RequiredPropertyValidator"/>
+		<!---
+			@keywords private
+			A map of property values.
+		-->
+		<variable name="propertyValues" value="${{}}"/>
+		<!---
+			@keywords private
+			An array of available property values for re-use.
+		-->
+		<variable name="availablePropertyValues" value="${[]}"/>
+		<!---
+			@keywords private
+			The constant for the value key for the base set of property values declared with the property definition.
+		-->
+		<variable name="BASE_VALUES_KEY" type="string" value="base"/>
+		<!---
+			The name of the property being defined.
+		-->
+		<variable name="propertyName" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			The handler to the {@link cmc/foundation/PropertyValueService} instance that is used
+			to retrieve the values of this property.
+		-->
+		<variable name="valueService" value="${null}"/>
+		<!---
+			@keywords private
+			This map keeps a list of value services that have been requested for a particular
+			value service key.
+		-->
+		<variable name="requestedValueServices" value="${{}}"/>
+		<!---
+			Display name for this property.
+		-->
+		<variable name="displayName" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Display name qualifier. This value is used to distinguish between properties that have the same display name.
+		-->
+		<variable name="displayNameQualifier" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			Qualified display name for this property. This attribute will be set to the concatenated values
+			of displayName and displayNameQualifier.
+		-->
+		<variable name="qualifiedDisplayName" type="string" value="${null}"/>
+		<!---
+			Indicates that this property is a required field. The Management Center user
+			interface will automatically append an asterisk besides the required properties.
+			@type boolean
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			The maximum size for this property. This value is used by the property size 
+			validator.
+		-->
+		<variable name="maximumSize" type="number" value="${null}"/>
+		<!---
+			The maximum decimal places for this property. This value is used by the property decimal places 
+			validator.
+		-->
+		<variable name="maximumDecimalPlaces" type="number" value="${null}"/>
+		<!---
+			The maximum value for this property. This value is used by the property range 
+			validator.
+		-->
+		<variable name="maxValue" type="number" value="${null}"/>
+		<!---
+			Th minimum value for this property. This value is used by the property range 
+			validator.
+		-->
+		<variable name="minValue" type="number" value="${null}"/>
+		<!---
+			The data type for this property.
+			Valid values are "string", "number", "integer", "date", "datetime", "time", "currency" and "email". The default value is "string".
+		-->
+		<variable name="type" type="string" value="string"/>
+		<!---
+			Flag to indicate that this property should not be copied when the parent object
+			is copied.
+		-->
+		<variable name="copyProtected" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			A list of {@link cmc/foundation/Validator} instances that will be used to validate this 
+			property.
+		-->
+		<variable name="validators" value="${[]}"/>
+		<!---
+			@keywords private
+			The enablement condition for this property. Enablement condition refers to the
+			state needed for this property to be active and seen by the user. If the condition 
+			is not satisfied then this property is not visible to the user.
+		-->
+		<variable name="enablementCondition" value="${null}"/>
+		<!---
+			Flag to indicate whether or not this property should be trimmed before sending
+			it to the server.
+		-->
+		<variable name="trim" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			String to indicate the format type of this property. For example, HTML text format.
+			This attribute is used for displaying a more informative error message in case
+			of a validator error.
+		-->
+		<variable name="format" type="string" value="${null}"/>
+		<!--- 
+			Flag to indicate whether or not this property should be sent to the server as a URL parameter
+			when the framework invokes the {@link cmc/foundation/CreateService create service} or
+			{@link cmc/foundation/UpdateService update service}.
+			The default value is <code>true</code>.
+		-->	
+		<variable name="send" type="boolean" value="true"/>
+		<!--- 
+			@keywords private
+			Flag to indicate whether or not this property is defined as an XML element.
+		-->
+		<variable name="xmlArgument" type="boolean" value="false"/>
+		<!--- 
+			Flag to indicate that this property's value is managed by the server. Set this flag to "true" if this property is returned in 
+			the response of the {@link cmc/foundation/CreateService} or {@link cmc/foundation/UpdateService}. This will tell the framework to wait until the 
+			response comes back from the create or update service before resolving a {@link cmc/foundation/ServiceParam} instance that refers to this property.
+		-->
+		<variable name="serverManaged" type="boolean" value="false"/>
+		<!---
+			Indicates that validation is to be performed on the parent object of this property's parent object when the property
+			value is changed.
+		-->
+		<variable name="forceParentValidation" type="boolean" value="false"/>
+		<!---
+			Indicates that the parent object will be recreated when the property value is changed. The
+			object will be recreated by calling the object's delete and create services instead of the
+			update service.
+		-->
+		<variable name="recreateObject" type="boolean" value="false"/>
+		<!---
+			Indicates that the property should be marked as dirty if it has been changed and needs to be saved.
+		-->
+		<variable name="markDirtyOnChange" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			The array of punch-out edit services associated with this property. When a property editor is bound to
+			the described property, the editor will allow punch-out editing if one or more of the punch-out edit services
+			is enabled.
+		-->
+		<variable name="punchOutEditServices" value="${[]}"/>
+		<!---
+			The help text that is associated with punch-out editing. The help text is used to create 
+			a tooltip for the punch-out button. The default value of this attribute is an empty string.
+		-->
+		<variable name="punchOutEditHelpText" type="string" value=""/>
+		<!---
+			The question to ask the user when there is more than one punch-out edit service available. 
+			The default value of this attribute is an empty string.
+		-->
+		<variable name="punchOutEditDialogQuestion" type="string" value=""/>
+		<!---
+			@keywords private
+			The URL resolver associated with this property. When the framework is required to treat the described property
+			as a URL, it will first resolve it by invoking the url resolver.
+		-->
+		<variable name="urlResolver" value="${null}"/>
+		
+		<!--- 
+			@keywords private
+			Initialization method for this class.
+		-->
+		<method name="init">
+			<![CDATA[
+			var definitions = this.parent.propertyDefinitions;
+			if (!definitions) {
+				definitions = {};
+				this.parent.propertyDefinitions = definitions;
+			}
+			var propDefArray = definitions[this.propertyName];
+			if (typeof (propDefArray) == "undefined") {
+				propDefArray = [];
+				definitions[this.propertyName] = propDefArray;
+			}
+			propDefArray.push(this);
+			this.updateQualifiedDisplayNameDel = new EventHandler.Class(this, "updateQualifiedDisplayName");
+			this.updateQualifiedDisplayNameDel.connect(this, "ondisplayName");
+			this.updateQualifiedDisplayNameDel.connect(this, "ondisplayNameQualifier");
+			this.updateQualifiedDisplayName();
+			if (this.valueService != null) {
+				var model = ModelUtil.Singleton.findModelForView(this);
+				if (model != null) {
+					this.doRefreshOnInitDel = new EventHandler.Class(this, "doRefreshOnInit");
+					this.doRefreshOnInitDel.connect(model, "onmodelInitialized");
+					this.doRefreshOnInit(model.modelInitialized);
+				}
+			}
+			this.inherited(arguments);
+			if (this.required) {
+				new RequiredPropertyValidator.Class(this);
+			}
+			if (this.maximumSize != null) {
+				new PropertySizeValidator.Class(this, {
+					maximumSize: this.maximumSize
+				});
+			}
+			if (this.maximumDecimalPlaces != null) {
+				new DecimalPlacesValidator.Class(this, {
+					maximumDecimalPlaces: this.maximumDecimalPlaces
+				});
+			}
+			if (this.minValue != null || this.maxValue != null) {
+				new PropertyRangeValidator.Class(this, {
+					minValue: this.minValue,
+					maxValue: this.maxValue
+				});
+			}
+			if (this.type != "string") {
+				new PropertyValueTypeValidator.Class(this);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateQualifiedDisplayNameDel.disconnectAll();
+			delete this.updateQualifiedDisplayNameDel;
+			if (this.doRefreshOnInitDel) {
+				this.doRefreshOnInitDel.disconnectAll();
+				delete this.doRefreshOnInitDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Creates a new property value for the given arguments.
+			@param Map args: A map of arguments for the new property value
+			@return cmc/foundation/PropertyValue: The new cmc/foundation/PropertyValue instance
+		 -->
+		<method args="args" name="createPropertyValue">
+			<![CDATA[
+			var newPropertyValue = null;
+			if (this.availablePropertyValues.length > 0) {
+				newPropertyValue = this.availablePropertyValues.pop();
+			}
+			else {
+				newPropertyValue = new PropertyValue.Class(this);
+			}
+			newPropertyValue.initializePropertyValue(args);
+			return newPropertyValue;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Release the property values associated with the specified key.
+			@param String key: The key for the set of values
+		 -->
+		<method args="key" name="releasePropertyValues">
+			<![CDATA[
+			var values = this.propertyValues[key];
+			if (typeof values != "undefined") {
+				for (var i = 0; i < values.length; i++) {
+					values[i].release();
+					this.availablePropertyValues.push(values[i]);
+				}
+				delete this.propertyValues[key];
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			When the model is re-initialized, this method removes all the service based
+			property values
+		 -->
+		<method args="modelInitialized" name="doRefreshOnInit">
+			<![CDATA[
+			if (modelInitialized == true) {
+				for (var key in this.propertyValues) {
+					if (key != this.BASE_VALUES_KEY) {
+						var values = this.propertyValues[key];
+						for (var i = 0; i < values.length; i++) {
+							values[i].release();
+							this.availablePropertyValues.push(values[i]);
+						}
+						delete this.propertyValues[key];
+					}
+				}
+				this.requestedValueServices = {};
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the qualified display name.
+			@keywords private
+		-->
+		<method args="e" name="updateQualifiedDisplayName">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newName = null;
+			if (this.displayName != null) {
+				newName = this.displayName;
+				if (this.displayNameQualifier != null) {
+					newName += this.displayNameQualifier;
+				}
+			}
+			this.setVariable("qualifiedDisplayName", newName);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns an instance of cmc/foundation/PropertyValue associated with the given value
+			@param @param cmc/foundation/ModelProperty property: The model property of the property value to look up
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change due to a value service.
+			@return cmc/foundation/PropertyValue: The instance of cmc/foundation/PropertyValue for the associated value
+		-->
+		<method args="property, del" name="getPropertyValue">
+			<![CDATA[
+			var propValues = this.getPropertyValues(property.o, del, true);
+			for (var i = 0; i < propValues.length; i++) {
+				if (propValues[i].value == property.value) {
+					return propValues[i];
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns the property values for this property definition.
+			@param cmc/foundation/ModelObject o The model object that contains the property.
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change due to a value service.
+			@return Array: An array of property values
+		-->
+		<method args="o, del, all" name="getPropertyValues">
+			<![CDATA[
+			if (typeof(o) == "undefined") o = null;
+			if (typeof(del) == "undefined") del = null;
+			if (typeof(all) == "undefined") all = false;
+			var propValues = [];
+			var values = this.propertyValues[this.BASE_VALUES_KEY];
+			if (values) {
+				for (var i = 0; i < values.length; i++) {
+					if (all || values[i].enablementCondition == null || values[i].enablementCondition.isEnabled(o)) {
+						propValues.push(values[i]);
+					}
+					if (del && values[i].enablementCondition != null) {
+						values[i].enablementCondition.registerDelegate(o, del);
+					}
+				}
+			}
+			if (this.valueService != null) {
+				var valuesKey = this.valueService.getValuesKey(o, del);
+				if (valuesKey != null) {
+					var values = this.propertyValues[valuesKey];
+					if (values) {
+						for (var i = 0; i < values.length; i++) {
+							propValues.push(values[i]);
+						}
+					}
+					if (del) {
+						del.connect(this, "onvalueServiceComplete");
+					}
+					if (!this.requestedValueServices[valuesKey]) {
+						this.requestedValueServices[valuesKey] = true;
+						this.valueService.doRequest(o);
+					}
+				}
+			}
+			return propValues;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Returns the instance of cmc/foundation/PropertyValue that has <code>isDefault</code> set to <code>true</code>,
+			if one exists.
+			@param cmc/foundation/ModelObject o The model object that contains the property.
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change due to a value service.
+			@return cmc/foundation/PropertyValue: The default instance of cmc/foundation/PropertyValue. <code>null</code> if there is no default cmc/foundation/PropertyValue.
+		-->
+		<method args="o, del" name="getDefaultPropertyValue">
+			<![CDATA[
+			var defaultValue = null;
+			var propValues = this.getPropertyValues(o, del);
+			for (var i = 0; i < propValues.length; i++) {
+				if (propValues[i].isDefault) {
+					defaultValue = propValues[i];
+				}
+			}
+			return defaultValue;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns true if this property definition is required.
+			
+			@param cmc/foundation/ModelObject o The model object that contains the property.
+			@param cmc/foundation/EventHandler del Delegate do be called if the required condition changes.
+			@return boolean This method returns true if this property definition is required.
+		-->
+		<method args="o, del" name="isRequired">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var required = this.required;
+			if (!required) {
+				for (var i = 0; i < this.validators.length; i++) {
+					var validator = this.validators[i];
+					if (validator instanceof RequiredPropertyValidator.Class) {
+						if (del && validator.enablementCondition) {
+							validator.enablementCondition.registerDelegate(o, del);
+						}
+						if (validator.isEnabled(o)) {
+							required = true;
+							break;
+						}
+					}
+				}
+			}
+			return required;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns a name suitable for use within messages that are displayed to the
+			user. If <code>displayName</code> is not specified, then this method will
+			return the <code>propertyName</code>.
+			@return string: the display name for this property definition
+		-->
+		<method name="getDisplayName">
+			<![CDATA[
+			return this.qualifiedDisplayName != null ? this.qualifiedDisplayName : this.propertyName;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Initialize this property definition.
+		-->
+		<method args="model" name="initializeDefinition">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if the specified value is valid. False if it is invalid there
+			is a validator that does not support checkPropertyValue.
+			@param cmc/foundation/ModelObject o the model object associated to the property
+			@param String value the value of the property to check to see whether or not it is valid
+			@return boolean <code>true</code> if all associated, enabled validators verify that the provided <code>value</code> is valid 
+		-->
+		<method args="o, value" name="checkPropertyValue">
+			<![CDATA[
+			var valid = true;
+			for (var i = 0; i < this.validators.length; i++) {
+				var validator = this.validators[i];
+				if (!validator.checkPropertyValue || (validator.isEnabled(o) && !validator.checkPropertyValue(this, value))) {
+					valid = false;
+					break;
+				}
+			}
+			return valid;
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		This class is used for defining currency property in an object for the default currency of the current store. While using this class, 
+		unlike its parent class {@link cmc/foundation/PropertyDefinition}, the <code>propertyName</code> attribute need not be specified. It gets the 
+		default currency of the current store and sets the currency code to the <code>propertyName</code> attribute and adds itself to the 
+		object definition. {@link cmc/foundation/GridCurrency} uses the currency properties in an object to define the columns in the currency list view. 
+		The default and non-default currencies are treated differently by {@link cmc/foundation/GridCurrency}. 
+		
+		<p>Instances of this class can only be declared as immediate sub-nodes of {@link cmc/foundation/ObjectDefinition}.
+		
+		<p>The following example demonstrates the declaration of a default currency property for an object. If 'USD' is the default
+		currency for a store, then the following code will create a property definition with the name 'USD'.
+		
+		@START_CODE	
+			<ChildObjectDefinition objectType="ProductListPrice">
+				...
+				<DefaultCurrencyPropertyDefinition type="number" minValue="0"/>
+			</ChildObjectDefinition>
+		@END_CODE
+	-->
+	<PropertyDefinition classDefinition="true" definitionName="cmc/foundation/DefaultCurrencyPropertyDefinition">
+		<dependency localName="EnablementAndCondition" moduleName="cmc/foundation/EnablementAndCondition"/>
+		<dependency localName="PropertyDefinition" moduleName="cmc/foundation/PropertyDefinition"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="CurrencyFormatValidator" moduleName="cmc/foundation/CurrencyFormatValidator"/>
+		<dependency localName="EnablementCondition" moduleName="cmc/foundation/EnablementCondition"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<!---
+			Check that the specified number of decimal places does not exceed the maximum
+			allowed for the default currency.
+		-->
+		<variable name="validateDecimalPlaces" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Map of all cloned currency properties
+		-->
+		<variable name="currencyProperties" value="${{}}"/>
+		
+		<!--- 
+			@keywords private
+			Initialization method for this class.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.propertyName = "defaultCurrencyProperty";
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Initialize this property definition.
+			@param cmc/foundation/ModelObject model The model object being used.
+		-->
+		<method args="model" name="initializeDefinition">
+			<![CDATA[
+			this.parent.removePropertyDefinition(this);
+			this.updateDefaultCurrencyDel = new EventHandler.Class(this, "updateDefaultCurrency");
+			var storeConfig = StoreUtil.Singleton.getStore("0");
+			this.updateDefaultCurrencyDel.connect(storeConfig, "onconfigurationLoaded");
+			if (!storeConfig.configurationLoaded) {
+				storeConfig.loadConfiguration();
+			}
+			this.updateDefaultCurrency();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private 
+			Destroy method for this class.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateDefaultCurrencyDel.disconnectAll();
+			delete this.updateDefaultCurrencyDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private 
+			Update the default currency property definition when user switches to a new store.
+		-->
+		<method args="e" name="updateDefaultCurrency">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var storeConfig = StoreUtil.Singleton.getStore("0");
+			if (storeConfig.supportedCurrencies != null) {
+				var addedNew = false;
+				var currencies = storeConfig.supportedCurrencies;
+				for (var i = 0; i < currencies.length; i++) {
+					var currencyCode = currencies[i].currencyCode;
+					var definition = this.currencyProperties[currencyCode];
+					if (definition == null) {
+						definition = new PropertyDefinition.Class(this.parent, {
+							propertyName: currencyCode,
+							propertyValues: this.propertyValues,
+							valueService: this.valueService,
+							copyProtected: this.copyProtected,
+							trim: this.trim,
+							xmlArgument: this.xmlArgument,
+							send: this.send
+						});
+						this.currencyProperties[currencyCode] = definition;
+						definition.type = this.type;
+						for (var i = 0; i < this.validators.length; i++) {
+							definition.validators.push(this.validators[i]);
+						}
+						if (this.validateDecimalPlaces) {
+							new CurrencyFormatValidator.Class(definition, {
+								name: "currencyValidator",
+								valuePropertyName: currencyCode,
+								currencyCode: currencyCode
+							});
+						}
+						var defaultCurrencyEnablementCondition = new EnablementCondition.Class(definition, {
+							contextName: "defaultCurrencyCode",
+							enablementValue: currencyCode
+						});
+						if (this.enablementCondition) {
+							var enablementAndCondition = new EnablementAndCondition.Class(definition);
+							enablementAndCondition.enablementConditions.push(defaultCurrencyEnablementCondition);
+							enablementAndCondition.enablementConditions.push(this.enablementCondition);
+						}
+						else {
+							definition.enablementCondition = defaultCurrencyEnablementCondition;
+						}
+						addedNew = true;
+					}
+					var currencyDesc = currencies[i].currencyDescription;
+					definition.setVariable("displayNameQualifier", " (" + currencyDesc + ")");
+				}
+				if (addedNew) {
+					EventUtil.trigger(this.parent, "onpropertyDefinitions");
+				}
+			}
+			]]>
+		</method>
+	</PropertyDefinition>
+
+	<!---
+		@keywords private
+		This class is used for determining the enablement of an alternative currency property definition. If the specified
+		currency is a supported currency that is not the default currency, then the property definition is enabled. 
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/AlternateCurrencyPropertyDefinitionEnablementCondition">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<variable name="currencyCode" required="true" type="string"/>
+	
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var result = false;
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(o);
+			if (storeConfig != null && storeConfig.supportedCurrencies != null) {
+				var currencies = storeConfig.supportedCurrencies;
+				var defaultCurrencyCode = storeConfig.defaultCurrency != null ? storeConfig.defaultCurrency.currencyCode : null;
+				for (var i = 0; i < currencies.length; i++) {
+					var code = currencies[i].currencyCode;
+					if (defaultCurrencyCode != code) {
+						if (code == this.currencyCode) {
+							result = true;
+							break;
+						}
+					}
+				}
+			}
+			return result;
+			]]>
+		</method>
+		
+		<!---
+			Register a delegate to be executed when the resolved value changes
+			for the specified model object.
+			@param cmc/foundation/ModelObject o: the model object
+			@param cmc/foundation/EventHandler del: the delegate
+		-->
+		<method args="o, del" name="registerDelegate">
+			<![CDATA[
+			ContextUtil.Singleton.findStoreConfig(o, del);
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		This class is used for defining currency properties in an object for all the available currencies in the current store excluding the 
+		default currency. While using this class, unlike its parent class {@link cmc/foundation/PropertyDefinition}, the <code>propertyName</code> attribute
+		need not be specified. It iterates through all the available currencies in the selected store excluding the default currency and for 
+		each currency it creates a {@link cmc/foundation/PropertyDefinition} instance with the <code>propertyName</code> attribute set to the currency code
+		and adds this {@link cmc/foundation/PropertyDefinition} instance to the object definition. {@link cmc/foundation/GridCurrency} uses the currency properties in 
+		an object to define the columns in the currency list view. The default and non-default currencies are treated differently by 
+		{@link cmc/foundation/GridCurrency}. 
+		
+		<p>Instances of this class can only be declared as immediate sub-nodes of {@link cmc/foundation/ObjectDefinition}.
+		
+		<p>The following example demonstrates the declaration of the non-default currency properties for an object. If 'USD', 'EUR', 'CAD' and 'INR'
+		are the currency codes available for the current store and 'USD' is the default currency, then the following
+		code will create property definitions for the currency codes 'EUR', 'CAD' and 'INR'.
+		
+		@START_CODE	
+			<ChildObjectDefinition objectType="ProductListPrice">
+				...
+				<AlternativeCurrencyPropertyDefinition type="number" minValue="0"/>
+			</ChildObjectDefinition>
+		@END_CODE
+	-->
+	<PropertyDefinition classDefinition="true" definitionName="cmc/foundation/AlternativeCurrencyPropertyDefinition">
+		<dependency localName="EnablementAndCondition" moduleName="cmc/foundation/EnablementAndCondition"/>
+		<dependency localName="PropertyDefinition" moduleName="cmc/foundation/PropertyDefinition"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="CurrencyFormatValidator" moduleName="cmc/foundation/CurrencyFormatValidator"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="AlternateCurrencyPropertyDefinitionEnablementCondition" moduleName="cmc/foundation/AlternateCurrencyPropertyDefinitionEnablementCondition"/>
+		<!---
+			Check that the specified number of decimal places does not exceed the maximum
+			allowed for the currency.
+		-->
+		<variable name="validateDecimalPlaces" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			Map of all cloned currency properties
+		-->
+		<variable name="currencyProperties" value="${{}}"/>
+		
+		<!--- 
+			@keywords private
+			Initialization method for this class.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.propertyName = "alternativeCurrencyProperty";
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Initialize this property definition.
+			@param cmc/foundation/ModelObject model The model object being used.
+		-->
+		<method args="model" name="initializeDefinition">
+			<![CDATA[
+			this.parent.removePropertyDefinition(this);
+			this.updateAlternativeCurrencyDel = new EventHandler.Class(this, "updateAlternativeCurrencies");
+			var storeConfig = StoreUtil.Singleton.getStore("0");
+			this.updateAlternativeCurrencyDel.connect(storeConfig, "onconfigurationLoaded");
+			if (!storeConfig.configurationLoaded) {
+				storeConfig.loadConfiguration();
+			}
+			this.updateAlternativeCurrencyDel.connect(this, "ondisplayName");
+			this.updateAlternativeCurrencies();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private 
+			Destroy method for this class.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.updateAlternativeCurrencyDel.disconnectAll();
+			delete this.updateAlternativeCurrencyDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the property definitions of alternative currencies when user switches to a new store.
+		-->
+		<method args="e" name="updateAlternativeCurrencies">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var storeConfig = StoreUtil.Singleton.getStore("0");
+			if (storeConfig.supportedCurrencies != null) {
+				var addedNew = false;
+				var currencies = storeConfig.supportedCurrencies;
+				for (var i = 0; i < currencies.length; i++) {
+					var currencyCode = currencies[i].currencyCode;
+					var definition = this.currencyProperties[currencyCode];
+					if (definition == null) {
+						definition = new PropertyDefinition.Class(this.parent, {
+							propertyName: currencyCode,
+							propertyValues: this.propertyValues,
+							valueService: this.valueService,
+							copyProtected: this.copyProtected,
+							trim: this.trim,
+							xmlArgument: this.xmlArgument,
+							send: this.send
+						});
+						this.currencyProperties[currencyCode] = definition;
+						definition.type = this.type;
+						for (var i = 0; i < this.validators.length; i++) {
+							definition.validators.push(this.validators[i]);
+						}
+						if (this.validateDecimalPlaces) {
+							new CurrencyFormatValidator.Class(definition, {
+								name: "currencyValidator",
+								valuePropertyName: currencyCode,
+								currencyCode: currencyCode
+							});
+						}
+						var alternateCurrencyEnablementCondition = new AlternateCurrencyPropertyDefinitionEnablementCondition.Class(definition, {
+							currencyCode: currencyCode
+						});
+						if (this.enablementCondition) {
+							var enablementAndCondition = new EnablementAndCondition.Class(definition);
+							enablementAndCondition.enablementConditions.push(alternateCurrencyEnablementCondition);
+							enablementAndCondition.enablementConditions.push(this.enablementCondition);
+						}
+						else {
+							definition.enablementCondition = alternateCurrencyEnablementCondition;
+						}
+						addedNew = true;
+					}
+					var currencyDesc = currencies[i].currencyDescription;
+					var dName = this.displayName;
+					var qualifier = null;
+					if (dName == null) {
+						dName = currencyDesc;
+					}
+					else {
+						qualifier = " (" + currencyDesc + ")";
+					}
+					definition.setVariable("displayName", dName);
+					definition.setVariable("displayNameQualifier", qualifier);
+				}
+				if (addedNew) {
+					EventUtil.trigger(this.parent, "onpropertyDefinitions");
+				}
+			}
+			]]>
+		</method>
+	</PropertyDefinition>
+	
+	<!---
+		<p>Use this class to declare a property definition for a {@link cmc/foundation/ModelProperty property} that represents a currency.
+		Do not explicitly include instances of {@link cmc/foundation/PropertyValue} with this class. An instance of {@link cmc/foundation/PropertyValue} 
+		is implicitly created for each supported currency in the selected store. The three-letter currency code 
+		(for example, USD) is the attribute value of each instance of {@link cmc/foundation/PropertyValue}.</p>
+		
+		<p>Instances of this class can only be declared as immediate sub-nodes of {@link cmc/foundation/ObjectDefinition}.</p>
+		
+		<p>The following example shows how to declare a property used to manage the purchase currency of an object.
+		@START_CODE	
+			<CurrencyPropertyDefinition propertyName="purchaseCurrency" displayName="Purchase currency"/>
+		@END_CODE
+		</p>
+	-->
+	<PropertyDefinition classDefinition="true" definitionName="cmc/foundation/CurrencyPropertyDefinition">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			@keywords private
+			Returns the property values for the given property
+			@param cmc/foundation/ModelObject o The model object that contains the property.
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change.
+			@return Array: An array of property values
+		-->
+		<method args="o, del, all" name="getPropertyValues">
+			<![CDATA[
+			if (typeof(o) == "undefined") o = null;
+			if (typeof(del) == "undefined") del = null;
+			if (typeof(all) == "undefined") all = false;
+			var propValues = [];
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(o != null ? o : this.parent.model.oEditor, del);
+			if ((storeConfig != null) && (storeConfig.supportedCurrencies != null)) {
+				var values = this.propertyValues[storeConfig.storeId];
+				if (typeof (values) == "undefined") {
+					values = [];
+					this.propertyValues[storeConfig.storeId] = values;
+				}
+				var defaultCurrency = storeConfig.defaultCurrency;
+				var currencies = storeConfig.supportedCurrencies;
+				for (var i = 0; i < currencies.length; i++) {
+					var propertyValue = null;
+					if (values.length > i) {
+						propertyValue = values[i];
+					}
+					else {
+						propertyValue = this.createPropertyValue({
+							valuesKey: storeConfig.storeId
+						});
+					}
+					propertyValue.value = currencies[i].currencyCode;
+					propertyValue.displayName = currencies[i].currencyDescription;
+					if (defaultCurrency != null) {
+						propertyValue.isDefault = currencies[i].currencyCode == defaultCurrency.currencyCode;
+					}
+					else if (i == 0) {
+						propertyValue.isDefault = true;
+					}
+					propValues.push(propertyValue);
+				}
+			}
+			return propValues;
+			]]>
+		</method>
+	</PropertyDefinition>
+	
+	<!---
+		<p>Use this class to declare a property definition for a {@link cmc/foundation/ModelProperty property} that represents a 
+		language. Do not explicitly include instances of {@link cmc/foundation/PropertyValue} with this class. An instance of 
+		{@link cmc/foundation/PropertyValue} is implicitly created for each supported language in the selected store. 
+		The attribute value of each instance of {@link cmc/foundation/PropertyValue} can be the language ID (for example, -1), 
+		or the locale (for example, en_US). This is controlled by the <code>{@link cmc/foundation/LanguagePropertyDefinition#useLanguageId useLanguageId}</code> attribute.</p>
+		
+		<p>Instances of this class can only be declared as immediate sub-nodes of {@link cmc/foundation/ObjectDefinition}.</p>
+		
+		<p>The following example shows how to declare a property used to manage the language of a shopper based on the
+		locale name.
+		@START_CODE	
+			<LanguagePropertyDefinition propertyName="shopperLanguage" displayName="Shopper language"/>
+		@END_CODE
+		</p>
+	-->
+	<PropertyDefinition classDefinition="true" definitionName="cmc/foundation/LanguagePropertyDefinition">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<!---
+			Indicates that the language ID (for example, '-1') is to be used as the value when saving the property.
+			If this value is <code>false</code>, the locale (for example, 'en_US') will be used as the value. 
+			The default value is <code>false</code>.
+		-->
+		<variable name="useLanguageId" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Returns the property values for the given property
+			@param cmc/foundation/ModelObject o The model object that contains the property.
+			@param cmc/foundation/EventHandler del: An optional parameter, to register a delegate if the property 
+									values change.
+			@return Array: An array of property values
+		-->
+		<method args="o, del, all" name="getPropertyValues">
+			<![CDATA[
+			if (typeof(o) == "undefined") o = null;
+			if (typeof(del) == "undefined") del = null;
+			if (typeof(all) == "undefined") all = false;
+			var propValues = [];
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(o != null ? o : this.parent.model.oEditor, del);
+			if ((storeConfig != null) && (storeConfig.supportedLanguages != null)) {
+				var values = this.propertyValues[storeConfig.storeId];
+				if (typeof (values) == "undefined") {
+					values = [];
+					this.propertyValues[storeConfig.storeId] = values;
+				}
+				var defaultLang = storeConfig.defaultLanguage;
+				var languages = storeConfig.supportedLanguages;
+				for (var i = 0; i < languages.length; i++) {
+					var propertyValue = null;
+					if (values.length > i) {
+						propertyValue = this.values[i];
+					}
+					else {
+						propertyValue = this.createPropertyValue({
+							valuesKey: storeConfig.storeId
+						});
+					}
+					if (this.useLanguageId) {
+						propertyValue.value = languages[i].languageId;
+					}
+					else {
+						propertyValue.value = languages[i].localeName;
+					}
+					propertyValue.displayName = languages[i].languageDescription;
+					if (defaultLang != null) {
+						propertyValue.isDefault = languages[i].languageId == defaultLang.languageId;
+					}
+					else if (i == 0) {
+						propertyValue.isDefault = true;
+					}
+					propValues.push(propertyValue);
+				}
+			}
+			return propValues;
+			]]>
+		</method>
+	</PropertyDefinition>
+	
+	<!---
+		<p>Use this class to declare a property definition for a {@link cmc/foundation/ModelProperty property} that represents a 
+		county. 
+		
+		<p>The following example shows how to declare a property used to manage countries.
+		@START_CODE	
+			<CountriesPropertyDefinition propertyName="country" displayName="${stoStoreResources.countryLabel}" />
+		@END_CODE
+		</p>
+	-->
+	<PropertyDefinition classDefinition="true" definitionName="cmc/foundation/CountriesPropertyDefinition">
+		<PropertyValueService url="/cmc/GetCountries"/>
+	</PropertyDefinition>
+	
+	<!---
+		<p>Use this class to declare a property definition for a {@link cmc/foundation/ModelProperty property} that represents a 
+		state or province. 
+		
+		<p>The following example shows how to declare a property used to manage the states or provinces.
+		@START_CODE	
+			<StateProvincesPropertyDefinition propertyName="stateOrProvinceName" displayName="${stoStoreResources.stateLabel}" />
+		@END_CODE
+		</p>
+	-->
+	<PropertyDefinition classDefinition="true" definitionName="cmc/foundation/StateProvincesPropertyDefinition">
+		<PropertyValueService url="/cmc/GetStateProvinces"/>
+	</PropertyDefinition>
+
+	<!---
+		@keywords abstract
+	
+		<p>Extend this class and override the resolveURL method to provide a URL resolver for a property.</p>
+		
+		<p>Instances of cmc/foundation/URLResolver can only be declared as children of an instances
+		of {@link cmc/foundation/PropertyDefinition}.
+		
+		<p>The following example demonstrates the implementation and declaration of a URL resolver.
+
+		@START_CODE
+		<class name="extMyURLResolver" extends="cmc/foundation/ULRResolver">
+			<method name="resolveURL" args="property">
+				<![CDATA[
+				return extMyURLResolverUtil.resolveURL(property.value);
+				]]>
+			</method>
+		</class>
+		
+		<PropertyDefinition propertyName="url">
+			<MyURLResolver package="ext"/>
+		</PropertyDefinition>
+		@END_CODE
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/URLResolver">
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.urlResolver = this;
+			]]>
+		</method>
+	
+		<!---
+			@keywords abstract
+	
+			This method is invoked when the framework is required to treat a property value as a URL. The method 
+			accepts a property and returns the resolved URL.
+			
+			@param cmc/foundation/ModelProperty property The property that is to be resolved to a URL
+			@return the resolved URL
+		-->				
+		<method args="property" name="resolveURL">
+			<![CDATA[
+
+			]]>
+		</method>
+	</Node>
+</Definitions>

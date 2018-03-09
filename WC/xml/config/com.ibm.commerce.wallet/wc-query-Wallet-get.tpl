@@ -1,0 +1,57 @@
+BEGIN_SYMBOL_DEFINITIONS
+	COLS:WALLET = WALLET:*
+END_SYMBOL_DEFINITIONS
+
+BEGIN_XPATH_TO_SQL_STATEMENT
+	name=/Wallet[WalletIdentifier[(UniqueID=)]]+IBM_Store_Details
+	base_table=WALLET
+	sql=
+		SELECT
+			WALLET.$COLS:WALLET$
+		FROM
+			WALLET
+		WHERE
+			WALLET.WALLET_ID IN (?UniqueID?)
+END_XPATH_TO_SQL_STATEMENT
+
+BEGIN_XPATH_TO_SQL_STATEMENT
+	name=/Wallet[WalletIdentifier/ExternalIdentifier[@ownerID= and Name= and StoreIdentifier[UniqueID=]]]+IBM_Store_Details
+	base_table=WALLET
+	dbtype=oracle
+	sql=
+		SELECT
+			WALLET.$COLS:WALLET$
+		FROM
+			WALLET
+		WHERE
+			WALLET.STOREENT_ID = ?UniqueID? AND WALLET.MEMBER_ID = ?ownerID? AND (WALLET.NAME = ?Name? OR WALLET.NAME IS NULL AND ?Name? IS NULL)
+	dbtype=any
+	sql=
+		SELECT
+			WALLET.$COLS:WALLET$
+		FROM
+			WALLET
+		WHERE
+			WALLET.STOREENT_ID = ?UniqueID? AND WALLET.MEMBER_ID = ?ownerID? AND WALLET.NAME = ?Name?
+END_XPATH_TO_SQL_STATEMENT
+
+BEGIN_XPATH_TO_SQL_STATEMENT
+	name=/Wallet[WalletIdentifier/ExternalIdentifier[Name=]]+IBM_Store_Details
+	base_table=WALLET
+	dbtype=oracle
+	sql=
+		SELECT
+			WALLET.$COLS:WALLET$
+		FROM
+			WALLET
+		WHERE
+			WALLET.STOREENT_ID = $CTX:STORE_ID$ AND WALLET.MEMBER_ID = $CTX:MEMBER_ID$ AND (WALLET.NAME = ?Name? OR WALLET.NAME IS NULL AND ?Name? IS NULL)
+	dbtype=any
+	sql=
+		SELECT
+			WALLET.$COLS:WALLET$
+		FROM
+			WALLET
+		WHERE
+			WALLET.STOREENT_ID = $CTX:STORE_ID$ AND WALLET.MEMBER_ID = $CTX:MEMBER_ID$ AND WALLET.NAME = ?Name?
+END_XPATH_TO_SQL_STATEMENT

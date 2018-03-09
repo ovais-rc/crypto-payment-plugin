@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","ru",{keystrokeForContextMenu:"Для отображения дополнительных опций нажмите Ctrl и щелкните правой кнопкой мыши",keystrokeForContextMenuMac:"Для отображения дополнительных опций нажмите Cmd и щелкните правой кнопкой мыши"});

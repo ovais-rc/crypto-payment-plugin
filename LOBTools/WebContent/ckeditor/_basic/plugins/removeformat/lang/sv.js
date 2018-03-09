@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("removeformat","sv",{toolbar:"Ta bort formatering"});

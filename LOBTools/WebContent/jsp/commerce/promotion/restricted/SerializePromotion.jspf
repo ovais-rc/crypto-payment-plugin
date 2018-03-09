@@ -1,0 +1,178 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"%>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf"%>
+
+<c:set var="inherited" value=""/>
+<c:if test="${promotion.promotionIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+	<c:set var="inherited" value="Inherited"/>
+</c:if>
+
+<c:set var="readonly" value="true" />
+<c:set var="deletable" value="false" />
+<c:if test="${promotion.status == 'Inactive'}">
+	<c:set var="deletable" value="true" />
+	<c:if test="${promotion.controlParameter == 'CMC'}">
+		<c:set var="readonly" value="false" />
+	</c:if>
+</c:if>
+<c:if test="${promotion.status == 'Archived'}">
+	<c:set var="deletable" value="true" />
+	<c:set var="readonly" value="true" />
+</c:if>
+<object objectType="${inherited}Promotion" readonly="${readonly}" deletable="${deletable}">
+	<promotionId>${promotion.promotionIdentifier.uniqueID}</promotionId>
+	<objectStoreId>${promotion.promotionIdentifier.externalIdentifier.storeIdentifier.uniqueID}</objectStoreId>
+	<identifier	readonly="true">
+		<wcf:cdata data="${promotion.promotionIdentifier.externalIdentifier.name}"/>
+	</identifier> 
+	<adminName>
+		<wcf:cdata data="${promotion.administrativeName}"/>
+	</adminName>	
+	<promotionType>${promotion.promotionType}</promotionType>
+	<priority>${promotion.priority}</priority>
+	<status>${promotion.status}</status>
+	<promotionExclusiveness>${promotion.exclusiveType}</promotionExclusiveness>
+	
+	<couponRequired>${promotion.couponRequired}</couponRequired>
+	<promotionCodeRequired>${promotion.promotionCodeRequired}</promotionCodeRequired>
+	<daysCouponExpires>${promotion.couponAttribute.couponRelativeExpirationDays}</daysCouponExpires>
+
+
+	<promotionCodePopulationStatus>${promotion.promotionCodeSpecification.promotionCodePopulationStatus}</promotionCodePopulationStatus>	
+	<codeCount>${promotion.promotionCodeSpecification.promotionCodeGenerationDefinition.count}</codeCount>
+	
+	<c:set var="promotionCodeCreation" value="${promotion.promotionCodeSpecification.promotionCodeCreation}"/>
+	<c:set var="codePattern" value="${promotion.promotionCodeSpecification.promotionCodeGenerationDefinition.pattern}"/>
+	<c:choose>
+		<c:when test="${promotionCodeCreation == '' || promotionCodeCreation == null}">
+			<promotionCodeCreation>PublicCode</promotionCodeCreation>	
+		</c:when>
+		<c:otherwise>
+			<promotionCodeCreation>${promotionCodeCreation}</promotionCodeCreation>	
+		</c:otherwise>	
+	</c:choose>	
+	
+	<codePattern>${codePattern}</codePattern>	
+	
+	<c:if test="${promotionCodeCreation == 'GeneratedCode'}">
+		<c:set var="promotionCodeGeneration" value="AdvancedGeneratedCode"/>
+		<c:set var="indexOfOpenBracket" value="${fn:indexOf(codePattern, '[')}"/>
+		<c:set var="indexOfCloseBracket" value="${fn:indexOf(codePattern, ']')}"/>		
+		<c:if test="${indexOfOpenBracket >= 0 && indexOfCloseBracket >= 0}">
+			<c:choose>
+				<c:when test="${fn:indexOf(fn:substring(codePattern, indexOfOpenBracket + 1, fn:length(codePattern)), '[') > 0}">
+					<c:set var="promotionCodeGeneration" value="AdvancedGeneratedCode"/>			
+				</c:when>
+				<c:otherwise>
+					<c:set var="uniqueCodePattern" value="${fn:substring(codePattern, indexOfOpenBracket + 1, indexOfCloseBracket)}"/>
+					<c:if test="${fn:replace(uniqueCodePattern, 'X', '') == ''}">
+						<c:set var="promotionCodeGeneration" value="BasicGeneratedCode"/>				
+					</c:if>
+				</c:otherwise> 
+			</c:choose>
+		</c:if>	
+	<promotionCodeGeneration>${promotionCodeGeneration}</promotionCodeGeneration>			
+	</c:if>
+	
+	<c:set var="promotionCodeImportId" value=""/>
+	<c:if test="${promotionCodeCreation == 'ImportedCode'}">
+		<c:set var="promotionCodeImportId" value="${promotion.promotionCodeSpecification.promotionCodeFileUploadID}"/>
+		<promotionCodeImportId>${promotionCodeImportId}</promotionCodeImportId> 
+	</c:if>
+	
+	<c:choose>
+		<c:when test="${promotion.redemptionLimit.totalLimit == -1}">
+			<isLimitedInTotal>false</isLimitedInTotal>
+		</c:when>
+		<c:otherwise>
+			<isLimitedInTotal>true</isLimitedInTotal>
+		</c:otherwise>
+	</c:choose>
+	<maxRedemptionInTotal>${promotion.redemptionLimit.totalLimit}</maxRedemptionInTotal>
+	<c:choose>
+		<c:when test="${promotion.redemptionLimit.perShopperLimit == -1}">
+			<isLimitedPerCustomer>false</isLimitedPerCustomer>
+		</c:when>
+		<c:otherwise>
+			<isLimitedPerCustomer>true</isLimitedPerCustomer>
+		</c:otherwise>
+	</c:choose>
+	<maxRedemptionPerCustomer>${promotion.redemptionLimit.perShopperLimit}</maxRedemptionPerCustomer>
+	<c:choose>
+		<c:when test="${promotion.redemptionLimit.perOrderLimit == -1}">
+			<isLimitedPerOrder>false</isLimitedPerOrder>
+		</c:when>
+		<c:otherwise>
+			<isLimitedPerOrder>true</isLimitedPerOrder>
+		</c:otherwise>
+	</c:choose>
+	<maxRedemptionPerOrder>${promotion.redemptionLimit.perOrderLimit}</maxRedemptionPerOrder>
+	
+	<startDate>${promotion.schedule.startDate}</startDate>
+	<c:choose>
+		<c:when
+			test="${fn:startsWith(promotion.schedule.endDate, '9999-12-31')}">
+			<isAlwaysInEffect>true</isAlwaysInEffect>
+		</c:when>
+		<c:otherwise>
+			<isAlwaysInEffect>false</isAlwaysInEffect>
+			<endDate>${promotion.schedule.endDate}</endDate>		
+		</c:otherwise>
+	</c:choose>
+	
+	<c:choose>
+		<c:when test="${fn:length(promotion.schedule.weekDays) == 7}">
+			<isEveryDayOfTheWeek>true</isEveryDayOfTheWeek>
+		</c:when>
+		<c:otherwise>
+			<isEveryDayOfTheWeek>false</isEveryDayOfTheWeek>
+			<c:forEach var="weekday" items="${promotion.schedule.weekDays}">
+				<object objectType="WeekDay">
+					<day>${weekday}</day>
+				</object>
+			</c:forEach>
+		</c:otherwise>
+	</c:choose>
+	
+	<c:choose>
+		<c:when
+			test="${(promotion.schedule.dailyEndTime == '23:59:59.999') && (promotion.schedule.dailyStartTime == '00:00:00.001')}">
+			<isAllThroughTheDay>true</isAllThroughTheDay>
+		</c:when>
+		<c:otherwise>
+			<isAllThroughTheDay>false</isAllThroughTheDay>
+			<startTime>${promotion.schedule.dailyStartTime}</startTime>
+			<endTime>${promotion.schedule.dailyEndTime}</endTime>
+		</c:otherwise>
+	</c:choose>
+		
+	<targetSales>${promotion.targetSales.value}</targetSales>
+	
+	<adminDescription>
+		<wcf:cdata data="${promotion.comments}"/>
+	</adminDescription>
+	<jsp:directive.include file="SerializePromotionDescription.jspf" />
+	
+	<c:if test="${promotionCodeImportId != null && promotionCodeImportId != ''}">
+		<jsp:directive.include file="GetReferencedPromotionCodeImport.jspf"/>
+	</c:if>
+	
+	<c:forEach var="userDataField" items="${promotion.userData.userDataField}">
+		<x_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></x_${userDataField.typedKey}>
+	</c:forEach>
+	
+	<jsp:include page="/cmc/SerializeChangeControlMetaData" />
+</object>

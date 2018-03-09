@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","nl",{button:"Sjablonen",emptyListMsg:"(Geen sjablonen gedefinieerd)",insertOption:"Werkelijke content vervangen",options:"Opties voor sjablonen",selectPromptMsg:"Selecteer de sjabloon die u wilt openen in de editor",title:"Contentsjablonen"});

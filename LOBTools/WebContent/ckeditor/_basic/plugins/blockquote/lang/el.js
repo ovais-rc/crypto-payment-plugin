@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("blockquote","el",{toolbar:"Ενότητα παράθεσης"});

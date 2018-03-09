@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","pl",{button:"Szablony",emptyListMsg:"(nie zdefiniowano szablonów)",insertOption:"Zastąp bieżącą treść",options:"Opcje szablonu",selectPromptMsg:"Wybierz szablon, który ma zostać otwarty w edytorze",title:"Szablony treści"});

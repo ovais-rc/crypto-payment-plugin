@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- Global instance of the config properties class. -->
+	<ConfigPropertiesClass definitionName="cmc/shell/ConfigProperties" package="cmc/shell" singletonDefinition="true"/>
+
+	<!--- Global instance of the shell resource bundle for NL enablement. -->
+	<ResourceBundle baseName="com.ibm.commerce.foundation.client.lobtools.properties.ShellLOB" definitionName="cmc/shell/ShellResources" singletonDefinition="true"/>
+
+	<!--- Global instance of the tools controller class. -->
+	<ToolsControllerClass definitionName="cmc/shell/ToolsController" package="cmc/shell" singletonDefinition="true"/>
+
+	<!--- Global instance of the help manager class. -->
+	<HelpManagerClass definitionName="cmc/shell/HelpManager" package="cmc/shell" singletonDefinition="true"/>
+
+	<!--- Global instance of the preference manager class. -->
+	<PreferenceManagerClass definitionName="cmc/shell/PreferenceManager" singletonDefinition="true" userPreferenceDialogClass="${UserPreferenceDialog}">
+		<dependency localName="UserPreferenceDialog" moduleName="cmc/shell/UserPreferenceDialog"/></PreferenceManagerClass>
+
+	<!--- Global instance of the message logger class. -->
+	<MessageLoggerClass definitionName="cmc/shell/MessageLogger" package="cmc/shell" singletonDefinition="true"/>
+
+	<!--- Global instance of the logout dialog class. -->
+	<LogoutDialogClass definitionName="cmc/shell/LogoutDialog" package="cmc/shell" singletonDefinition="true"/>
+
+
+	<Component classDefinition="true" definitionName="cmc/shell/ManagementCenter" fgcolor="#464646">
+		<dependency localName="SingletonRegistry" moduleName="cmc/foundation/SingletonRegistry"/>
+		<dependency localName="LogonDialog" moduleName="cmc/shell/LogonDialog"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<dependency localName="StandardStyle" moduleName="cmc/foundation/StandardStyle"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="MainWorkbench" moduleName="cmc/shell/MainWorkbench"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="LogonPanel" moduleName="cmc/shell/LogonPanel"/>
+		<dependency localName="AlertDialog" moduleName="cmc/foundation/AlertDialog"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="GetTimeZoneService" moduleName="cmc/shell/GetTimeZoneService"/>
+		<dependency localName="ResolveWCTokensService" moduleName="cmc/shell/ResolveWCTokensService"/>
+		<dependency localName="ResolveIdentityService" moduleName="cmc/shell/ResolveIdentityService"/>
+		<dependency localName="ResolveIbmIdService" moduleName="cmc/shell/ResolveIbmIdService"/>
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<variable name="relogonAlertDialog"/>
+		<variable name="logonDialog"/>
+		<variable name="updateDefaultFontSizeDel"/>
+		<variable name="mainWorkbench"/>
+		<variable name="focusclass" value="${null}"/>
+		<variable name="style"/>
+		<variable name="newWCToken"/>
+		<variable name="resolveWCTokenOnly"/>
+		<variable name="WCTokenPendingActions"/>
+		<variable name="isWorkbenchActive"/>
+		<variable name="modalContext" type="boolean" value="false"/>
+		<variable name="relogon"/>
+		<variable name="externalCallbackValue" type="string" value="${null}"/>
+		<variable name="rtlMirroring" type="boolean" value="false"/>
+		<method name="resolveWCTokenSuccessful">
+			<![CDATA[
+			if (this.relogonAlertDialog != undefined && this.relogonAlertDialog != null && this.relogonAlertDialog.isOpen) {
+				if (this.relogonAlertDialog.callBackMethod != undefined && this.relogonAlertDialog.callBackMethod != null) {
+					delete this.relogonAlertDialog.callBackMethod;
+				}
+				this.relogonAlertDialog.closeWindow();
+			}
+			if (this.relogon) {
+				this.logonDialog.closeWindow();
+				this.relogon = false;
+			}
+			if (this.newWCToken.length > 0) {
+				ContextUtil.Singleton.findContextValue(null, "WCToken").setVariable("value", this.newWCToken[0]);
+				ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").setVariable("value", this.newWCToken[1]);
+				this.newWCToken = [];
+			}
+			this.triggerWCTokenPendingActions();
+			]]>
+		</method>
+		<method args="toolId" name="openToolByToolId">
+			<![CDATA[
+			if (typeof (SingletonRegistry[toolId]) != "undefined") {
+				SingletonRegistry[toolId].openBusinessObjectEditor();
+			}
+			]]>
+		</method>
+		<method args="WCToken, WCTrustedToken, logonId" name="resolveWCToken">
+			<![CDATA[
+			this.newWCToken = [];
+			var contextWCToken = ContextUtil.Singleton.findContextValue(null, "WCToken").value;
+			var contextWCTrustedToken = ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").value;
+			if (contextWCToken != WCToken && contextWCTrustedToken != WCTrustedToken) {
+				this.newWCToken = [WCToken, WCTrustedToken];
+				ContextUtil.Singleton.findContextValue(null, "identityId").setVariable("value", null);
+				ContextUtil.Singleton.findContextValue(null, "identitySignature").setVariable("value", null);
+				ContextUtil.Singleton.findContextValue(null, "WCToken").setVariable("value", null);
+				ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").setVariable("value", null);
+				ResolveWCTokensService.Singleton.doRequest(this, {
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value,
+					WCToken: WCToken,
+					WCTrustedToken: WCTrustedToken
+				});
+			}
+			else {
+				this.triggerWCTokenPendingActions();
+			}
+			]]>
+		</method>
+		<method args="val, isEmptyStr" name="setCallbackValue">
+			<![CDATA[
+			RootComponent.Singleton.setVariable("externalCallbackValue", isEmptyStr ? "" : val);
+			EventUtil.trigger(RootComponent.Singleton, "oncallbackvalue", RootComponent.Singleton.externalCallbackValue);
+			]]>
+		</method>
+		<method name="logoutSuccessful">
+			<![CDATA[
+			this.resolveWCTokenOnly = false;
+			this.isWorkbenchActive = false;
+			this.resetMainWorkbench();
+			this.mainWorkbench.setVariable("visible", false);
+			ModelUtil.Singleton.clearObjectStoreMap();
+			RootComponent.Singleton.logoutProgressDialog.closeWindow();
+			if (!SingletonRegistry.logonPanel) {
+				new LogonPanel.Class(RootComponent.Singleton, {
+					id: "logonPanel"
+				});
+			}
+			else if (!SingletonRegistry.logonPanel.visible) {
+				SingletonRegistry.logonPanel.setVariable("visible", true);
+				SingletonRegistry.logonPanel.resetForm();
+			}
+			setUserLogonId();
+			EventUtil.trigger(RootComponent.Singleton, "onnewIdentity");
+			]]>
+		</method>
+		<method name="getWindowName">
+			<![CDATA[
+			return window.name;
+			]]>
+		</method>
+		<method args="functionName, arg" name="callJSFunction">
+			<![CDATA[
+			flash.external.ExternalInterface.call(functionName, arg);
+			]]>
+		</method>
+		<method name="doSessionTerminated">
+			<![CDATA[
+			this.startReLogon(shellResources.Singleton.errorSessionTerminated.string);
+			]]>
+		</method>
+		<method name="triggerWCTokenPendingActions">
+			<![CDATA[
+			while (this.WCTokenPendingActions.length > 0) {
+				var action = this.WCTokenPendingActions.shift();
+				if (action.name == "openToolByToolId") {
+					this.openToolByToolId(action.toolId);
+				}
+				else {
+					this.triggerAction(action.name, action.args);
+				}
+			}
+			]]>
+		</method>
+		<method name="resolveIbmId">
+			<![CDATA[
+			ResolveIbmIdService.Singleton.doRequest(this.relogon ? RootComponent.Singleton.logonDialog.logonInputWidget : SingletonRegistry.logonPanel.logonPane.logonInputWidget, {
+				channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+			});
+			]]>
+		</method>
+		<method name="logonSuccessful">
+			<![CDATA[
+			setUserLogonId(ContextUtil.Singleton.findContextValue(null, "logonId").value);
+			if (this.relogon) {
+				this.logonDialog.closeWindow();
+				this.relogon = false;
+			}
+			else {
+				EventUtil.trigger(RootComponent.Singleton, "onnewIdentity", ContextUtil.Singleton.findContextValue(null, "logonId").value);
+				if (SingletonRegistry.logonPanel) {
+					SingletonRegistry.logonPanel.setVariable("visible", false);
+				}
+				this.mainWorkbench.setVariable("visible", true);
+				PreferenceManager.Singleton.load();
+				if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+					ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "true");
+				}
+				var focusView = FocusUtil.getFocus();
+				if (focusView == null || !focusView.visible || ViewUtil.Singleton.getInvisibleAncestor(focusView) != null) {
+					FocusUtil.setFocus(SingletonRegistry.applicationMenu, false);
+				}
+				if (cmcConfig.testdata) {
+					AutomationUtil.Singleton.run(cmcConfig.testdata);
+				}
+			}
+			this.isWorkbenchActive = true;
+			this.resolveWCTokenOnly = true;
+			]]>
+		</method>
+		<method name="resolveWCTokenFail">
+			<![CDATA[
+			this.WCTokenPendingActions = [];
+			this.doSessionCorrupted();
+			]]>
+		</method>
+		<method name="resetKeys">
+			<![CDATA[
+			KeyUtil.__allKeysUp();
+			]]>
+		</method>
+		<method name="doSessionTimeout">
+			<![CDATA[
+			this.startReLogon(shellResources.Singleton.errorSessionExpired.string);
+			]]>
+		</method>
+		<method name="resetMainWorkbench">
+			<![CDATA[
+			setLoggedInUserLocale(cmcConfig.locale);
+			ContextUtil.Singleton.findContextValue(null, "locale").setVariable("value", cmcConfig.locale);
+			ContextUtil.Singleton.findContextValue(null, "accessibleTools").setVariable("value", "");
+			MessageLogger.Singleton.clearAll();
+			ToolsController.Singleton.closeAllTools();
+			PreferenceManager.Singleton.resetPreferenceValues();
+			if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.clearContext();
+				});
+			}
+			]]>
+		</method>
+		<method args="e" name="updateDefaultFontSize">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+
+			if (this.updateDefaultFontSizeDel) {
+				this.updateDefaultFontSizeDel.disconnectAll();
+			}
+			else {
+				this.updateDefaultFontSizeDel = new EventHandler.Class(this, "updateDefaultFontSize");
+			}
+			var defaultFontSize = ViewUtil.Singleton.getDefaultFontSize(this.updateDefaultFontSizeDel);
+			this.setVariable("fontsize", defaultFontSize);
+			]]>
+		</method>
+		<method name="startApp">
+			<![CDATA[
+			var WCToken = ContextUtil.Singleton.findContextValue(null, "WCToken").value;
+			var WCTrustedToken = ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").value;
+			if (WCToken != null && WCTrustedToken != null) {
+				ResolveWCTokensService.Singleton.doRequest(this, {
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value,
+					WCToken: WCToken,
+					WCTrustedToken: WCTrustedToken
+				});
+			}
+			else {
+				ResolveIdentityService.Singleton.doRequest(this, {
+					channelId: ContextUtil.Singleton.findContextValue(null, "channelId").value
+				});
+			}
+			this.mainWorkbench = new MainWorkbench.Class(RootComponent.Singleton);
+			]]>
+		</method>
+		<method args="actionHandler, params" name="triggerAction">
+			<![CDATA[
+			require(["cmc/foundation/ActionManager", actionHandler], function(ActionManager, actionHandlerModule) {
+				var action = {
+					actionHandler: actionHandlerModule.Singleton
+				};
+				for (var i in params) {
+					action[i] = params[i];
+				}
+				ActionManager.Singleton.addAction(action);
+			});
+			]]>
+		</method>
+		<method args="alertMessage" name="startReLogon">
+			<![CDATA[
+			var callBackMethod = function(e) {
+				ContextUtil.Singleton.findContextValue(null, "identityId").setVariable("value", null);
+				ContextUtil.Singleton.findContextValue(null, "identitySignature").setVariable("value", null);
+				ContextUtil.Singleton.findContextValue(null, "WCToken").setVariable("value", null);
+				ContextUtil.Singleton.findContextValue(null, "WCTrustedToken").setVariable("value", null);
+				if (typeof (RootComponent.Singleton.logonDialog) == "undefined") {
+					RootComponent.Singleton.logonDialog = new LogonDialog.Class(RootComponent.Singleton);
+				}
+				else {
+					RootComponent.Singleton.logonDialog.logonInputWidget.resetForm();
+				}
+				RootComponent.Singleton.logonDialog.openWindow();
+				setUserLogonId();
+				RootComponent.Singleton.relogon = true;
+			};
+			if (this.isWorkbenchActive) {
+				this.isWorkbenchActive = false;
+				if (typeof (this.relogonAlertDialog) == "undefined") {
+					this.relogonAlertDialog = new AlertDialog.Class(RootComponent.Singleton, null);
+				}
+				this.relogonAlertDialog.openAlertDialog(alertMessage, callBackMethod);
+			}
+			]]>
+		</method>
+		<method args="action" name="addWCTokenPendingActions">
+			<![CDATA[
+			this.WCTokenPendingActions.push(action);
+			]]>
+		</method>
+		<method name="doSessionCorrupted">
+			<![CDATA[
+			this.startReLogon(shellResources.Singleton.errorSessionCorrupted.string);
+			]]>
+		</method>
+		<method name="updateRtlMirroring">
+			<![CDATA[
+			if (this.updateRtlMirroringDel) {
+				this.updateRtlMirroringDel.disconnectAll();
+			}
+			else {
+				this.updateRtlMirroringDel = new EventHandler.Class(this, "updateRtlMirroring");
+			}
+			var locale = ContextUtil.Singleton.findContextValue(null, "locale", this.updateRtlMirroringDel);
+			if (locale && locale.value) {
+				var newRtlMirroring = LangUtil.Singleton.isBiDiLanguage(locale.value);
+				if (rtlMirroring != newRtlMirroring) {
+					this.setVariable("rtlMirroring", newRtlMirroring);
+					this.inherited(arguments);
+				}
+			}
+			]]>
+		</method>
+		<handler name="onconstruct">
+			<![CDATA[
+			if (typeof (Array.prototype.swap) == "undefined") {
+				Array.prototype.swap = function(fromIndex, toIndex) {
+					var temp = this[toIndex];
+					this[toIndex] = this[fromIndex];
+					this[fromIndex] = temp;
+				};
+			}
+			if (typeof (cmcConfig.testdata) == "undefined") {
+				cmcConfig.testdata = null;
+			}
+			if (typeof (cmcConfig.languageId) == "undefined" || cmcConfig.languageId == null) {
+				cmcConfig.languageId = -1;
+			}
+			if (typeof (cmcConfig.locale) == "undefined" || cmcConfig.locale == null) {
+				cmcConfig.locale = ConfigProperties.Singleton.defaultPreferredLanguage;
+			}
+			if (typeof (cmcConfig.serviceContextRoot) == "undefined") {
+				cmcConfig.serviceContextRoot = null;
+			}
+			if (typeof (cmcConfig.helpServerHostName) == "undefined") {
+				cmcConfig.helpServerHostName = null;
+			}
+			if (typeof (cmcConfig.helpServerPort) == "undefined") {
+				cmcConfig.helpServerPort = null;
+			}
+			if (typeof (cmcConfig.helpServerContextPath) == "undefined") {
+				cmcConfig.helpServerContextPath = null;
+			}
+			if (typeof (cmcConfig.previewProtocol) == "undefined") {
+				cmcConfig.previewProtocol = null;
+			}
+			if (typeof (cmcConfig.previewPort) == "undefined") {
+				cmcConfig.previewPort = null;
+			}
+			if (typeof (cmcConfig.previewWebPath) == "undefined") {
+				cmcConfig.previewWebPath = null;
+			}
+			if (typeof (cmcConfig.previewWebAlias) == "undefined") {
+				cmcConfig.previewWebAlias = null;
+			}
+			if (typeof (cmcConfig.restWebAlias) == "undefined") {
+				cmcConfig.restWebAlias = null;
+			}
+			this.style = new StandardStyle.Class(this, {
+				isdefault: true
+			});
+			this.setVariable("bgcolor", this.style.rootComponentColor);
+			this.setVariable("fontsize", 13);
+			this.relogon = false;
+			this.isWorkbenchActive = false;
+			this.resolveWCTokenOnly = false;
+			this.WCTokenPendingActions = [];
+			this.newWCToken = [];
+			]]>
+		</handler>
+		<handler name="oninit">
+			<![CDATA[
+			this.updateDefaultFontSize();
+			this.updateRtlMirroring();
+			this.startApp();
+			cmcApplicationInitialized();
+			]]>
+		</handler>
+		<handler eventSource="PreferenceManager.Singleton" name="onload">
+			<![CDATA[
+			var gettingStartedPreference = PreferenceManager.Singleton.getPreference("CMCGettingStartedPage");
+			if (typeof (gettingStartedPreference) == "undefined" || gettingStartedPreference == "true") {
+				SingletonRegistry["gettingStarted"].logonAction = true;
+				SingletonRegistry["gettingStarted"].invokeAction();
+			}
+			else if (SingletonRegistry["workspaceManagement"].logonAction) {
+				SingletonRegistry["workspaceManagement"].logonAction = false;
+				SingletonRegistry["workspaceManagement"].invokeAction();
+			}
+			]]>
+		</handler>
+	</Component>
+</Definitions>

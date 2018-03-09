@@ -1,0 +1,492 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:set var="search" value='"'/>
+<c:set var="replaceStr" value="'"/>
+<c:set var="search01" value="'"/>
+<c:set var="search02" value='"'/>
+<c:set var="replaceStr01" value="\\\\'"/>
+<c:set var="replaceStr02" value='\\\\"'/>
+
+<c:set var="replaceCmprStr" value=""/>
+
+<flow:ifEnabled feature="ShowProductInNewWindow">
+	<c:set var="ShowProductInNewWindow" value="target=\"_blank\"" />
+</flow:ifEnabled>
+
+<c:set var="disableProductCompare" value="false" scope="request"/>
+<c:if test="${param.showCompareBox == 'false' || param.disableProductCompare == 'true'}">
+	<c:set var="disableProductCompare" value = "true" />
+</c:if>
+
+<%-- Set catalogEntryDetails to catalogEntryView before including CatalogEntryThumbnailDisplayForDynamicKits.jspf --%>
+<c:if test="${empty catalogEntryDetails}">
+	<c:catch var="searchServerException">
+		<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${catEntryIdentifier}" >
+			<wcf:param name="langId" value="${langId}" />
+			<wcf:param name="currency" value="${env_currencyCode}" />
+			<wcf:param name="responseFormat" value="json" />
+			<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+		</wcf:rest>
+		<c:set var = "catalogEntryDetails" value = "${catalogNavigationView.catalogEntryView[0]}"/>
+	</c:catch>
+</c:if>
+
+<c:set var="catalogEntryView" value="${catalogEntryDetails}"/>
+<c:set var="catalogEntryID" value="${catalogEntryDetails.uniqueID}" />
+<c:set var="productName" value="${catalogEntryDetails.name}"  />
+<c:set var="productShortDescription" value="${catalogEntryDetails.shortDescription}"  />
+<c:set var="attributes" value="${catalogEntryDetails.attributes}"/>
+<c:set var="partNumber" value="${catalogEntryDetails.partNumber}"/>
+
+<c:forEach var="attribute" items="${attributes}">
+	<c:if test="${attribute.storeDisplay eq true && attribute.usage ne 'Defining'}">
+		<c:set var="adRibbonStyle" value="${attribute.identifier}"/>
+		<c:set var="adRibbonText" value=""/>
+		<c:forEach var="e" items="${attribute.values}">
+			<c:set var="adRibbonText" value="${e.value}"/>
+		</c:forEach>
+		<c:set target="${adRibbonMap}" property="${adRibbonStyle}" value="${adRibbonText}"/>
+	</c:if>
+</c:forEach>
+
+<%-- if someone had passed just catalogEntryDetails object without catEntryIdentifier, then this will make sure that we always have catEntryIdentifier set --%>
+<c:if test="${empty catEntryIdentifier}">
+	<c:set var="catEntryIdentifier" value="${catalogEntryDetails.uniqueID}" />
+</c:if>
+<c:choose>
+	<c:when test="${(fn:startsWith(catalogEntryDetails.thumbnail, 'http://') || fn:startsWith(catalogEntryDetails.thumbnail, 'https://'))}">
+		<wcst:resolveContentURL var="productThumbNail" url="${catalogEntryDetails.thumbnail}"/>
+	</c:when>
+	<c:when test="${fn:startsWith(catalogEntryDetails.thumbnail, '/store/0/storeAsset')}">
+		<c:set var="productThumbNail" value="${storeContextPath}${catalogEntryDetails.thumbnail}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="productThumbNail" value="${catalogEntryDetails.thumbnail}" />
+	</c:otherwise>
+</c:choose>
+<c:choose>
+	<c:when test="${(fn:startsWith(catalogEntryDetails.fullImage, 'http://') || fn:startsWith(catalogEntryDetails.fullImage, 'https://'))}">
+		<wcst:resolveContentURL var="productFullImage" url="${catalogEntryDetails.fullImage}"/>
+	</c:when>
+	<c:when test="${fn:startsWith(catalogEntryDetails.fullImage, '/store/0/storeAsset')}">
+		<c:set var="productFullImage" value="${storeContextPath}${catalogEntryDetails.fullImage}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="productFullImage" value="${catalogEntryDetails.fullImage}" />
+	</c:otherwise>
+</c:choose>
+
+<c:choose>
+	<c:when test="${!empty productThumbNail}">
+		<c:set var="imgSource" value="${productThumbNail}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="imgSource" value="${jspStoreImgDir}images/NoImageIcon_sm.jpg" />
+	</c:otherwise>
+</c:choose>
+
+<c:set var="altImgText">
+	<c:out value='${fn:replace(productName, search, replaceStr)} ${formattedPriceString}' escapeXml='false'/>
+</c:set>
+
+<c:set var="highlightedName" value="${catalogEntryDetails.metaData.name}" />
+<c:if test="${empty highlightedName}">
+	<c:set var="highlightedName" value="${productName}" />
+</c:if>
+
+<c:set var="highlightedShortDescription" value="${catalogEntryDetails.metaData.shortDescription}" />
+<c:if test="${empty highlightedShortDescription}">
+	<c:set var="highlightedShortDescription" value="${productShortDescription}" />
+</c:if>
+
+<c:if test="${not empty catalogEntryDetails.metaData.score}">
+	<fmt:formatNumber var="searchScore" type="number" maxFractionDigits="15" groupingUsed="true" value="${catalogEntryDetails.metaData.score}" />
+</c:if>
+
+<c:set var="buyable" value="${catalogEntryDetails.buyable}"/>
+
+<c:set var="singleSKU" value="false"/>
+<c:choose>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'BundleBean'}">
+		<c:set var="type" value="bundle" />
+		<c:set var="singleSKU" value="${catalogEntryDetails.hasSingleSKU}"/>
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'PackageBean'}">
+		<c:set var="type" value="package" />
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'ItemBean'}">
+		<c:set var="type" value="item" />
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'ProductBean'}">
+		<c:set var="type" value="product" />
+		<c:set var="singleSKU" value="${catalogEntryDetails.hasSingleSKU}"/>
+	</c:when>
+	<c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'DynamicKitBean' || catalogEntryDetails.catalogEntryTypeCode == 'PredDynaKitBean'}">
+		<c:choose>
+            <c:when test="${catalogEntryDetails.catalogEntryTypeCode == 'PredDynaKitBean'}">
+                <c:set var="type" value="preddynakit" />
+            </c:when>
+            <c:otherwise>
+                <c:set var="type" value="dynamickit" />
+            </c:otherwise>
+        </c:choose>
+
+		<c:set var="dynamicKitConfigurable" value="${catalogEntryDetails.dynamicKitConfigurable}"/>
+	    <c:set var="parentDynamicKitConfigurable" value="${catalogEntryDetails.parentDynamicKitConfigurable}"/>
+	    <c:if test="${parentDynamicKitConfigurable eq '0' }">
+	        <c:set var="dynamicKitConfigurable" value="0"/>
+	    </c:if>
+	    <c:choose>
+            <c:when test="${dynamicKitConfigurable eq '1'}">
+                <c:set var="dynamicKitConfigurable" value="true"/>
+            </c:when>
+            <c:otherwise>
+                <c:set var="dynamicKitConfigurable" value="false"/>
+            </c:otherwise>
+        </c:choose>
+		<c:set var="singleSKU" value="false"/>
+		<c:set var="isDKConfigurable" value="${!empty catalogEntryView.dynamicKitModelReference}"/>
+		<c:if test="${empty isDKConfigurable}">
+			<c:set var="isDKConfigurable" value="false"/>
+		</c:if>
+
+		<c:if test="${empty isDKPreConfigured}">
+			<%-- determine if the kit is pre-configured or not --%>
+			<c:set var="isDKPreConfigured" value="${catalogEntryView.dynamicKitDefaultConfigurationComplete}"/>
+			<c:if test="${isDKPreConfigured == 1}">
+				<c:set var="isDKPreConfigured" value="true"/>
+			</c:if>
+		</c:if>
+	</c:when>
+</c:choose>
+
+<c:if test="${!empty WCParam.categoryId && empty globalbreadcrumbs}">
+	<%--Retrieve the breadcrumb hierarchy from the CatalogNavigationView based on the categoryId --%>
+	<c:catch var="searchServerException">
+		<wcf:rest var="bcCategoryCatalogNavigationView1" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byCategory/${WCParam.categoryId}" >	
+			<wcf:param name="langId" value="${langId}"/>
+			<wcf:param name="currency" value="${env_currencyCode}"/>
+			<wcf:param name="responseFormat" value="json"/>		
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<wcf:param name="profileName" value="IBM_BreadCrumbByCategoryUniqueId" />
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+	</c:catch>
+	<c:set var="globalbreadcrumbs" value="${bcCategoryCatalogNavigationView1}" scope="request"/>
+</c:if>
+<c:if test="${!empty globalbreadcrumbs}">
+	<c:set var="searchBreadcrumb" value="${globalbreadcrumbs.breadCrumbTrailEntryViewExtended[0]}"/>
+	<%-- Find the best matching breadcrumb for category page based on all the paths returned by search service --%>
+	<c:if test="${!empty WCParam.top_category || !empty WCParam.parent_category_rn || !empty WCParam.categoryId}">
+		<c:set var="exactHierarchyFound" value="false"/>
+		<c:set var="expectedHierarchy" value=""/>
+		<c:choose>
+			<c:when test="${empty WCParam.searchTerm}">
+				<%-- Catalog browsing page --%>
+				<c:if test="${!empty WCParam.top_category5}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category5}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category5}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category4}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category4}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category4}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category3}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category3}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category3}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category2}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category2}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category2}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.top_category}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.top_category}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.top_category}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.parent_category_rn && WCParam.top_category != WCParam.parent_category_rn}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.parent_category_rn}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.parent_category_rn}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+				<c:if test="${!empty WCParam.categoryId && WCParam.categoryId != WCParam.parent_category_rn && WCParam.categoryId != WCParam.top_category}">
+					<c:choose>
+						<c:when test="${empty expectedHierarchy}">
+							<c:set var="expectedHierarchy" value="${WCParam.categoryId}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="expectedHierarchy" value="${expectedHierarchy},${WCParam.categoryId}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:when>
+			<c:otherwise>
+				<%-- Search results page --%>
+				<c:if test="${!empty WCParam.categoryFacetHierarchyPath}">
+					<c:set var="expectedHierarchy" value="${WCParam.categoryFacetHierarchyPath}"/>
+				</c:if>
+			</c:otherwise>
+		</c:choose>
+		
+		<c:forEach var="aFullBreadcrumb" items="${globalbreadcrumbs.breadCrumbTrailEntryViewExtended}">
+			<c:set var="currentHierarchy" value=""/>
+			<c:forEach var="breadcrumbKey" begin="0" end="${fn:length(aFullBreadcrumb)}">
+				<c:set var="breadcrumbKeyStr">${breadcrumbKey}</c:set>
+				<c:set var="aBreadcrumbEntry" value="${aFullBreadcrumb[breadcrumbKeyStr]}"/>
+				<c:if test="${aBreadcrumbEntry.type_ == 'FACET_ENTRY_CATEGORY'}">
+					<c:choose>
+						<c:when test="${empty currentHierarchy}">
+							<c:set var="currentHierarchy" value="${aBreadcrumbEntry.value}"/>
+						</c:when>
+						<c:otherwise>
+							<c:set var="currentHierarchy" value="${currentHierarchy},${aBreadcrumbEntry.value}"/>
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+			<c:choose>
+				<c:when test="${currentHierarchy eq expectedHierarchy}">
+					<c:set var="exactMatchBreadcrumb" value="${aFullBreadcrumb}"/>
+				</c:when>
+				<c:when test="${fn:contains(currentHierarchy, expectedHierarchy)}">
+					<c:set var="bestMatchBreadcrumb" value="${aFullBreadcrumb}"/>
+				</c:when>
+			</c:choose>
+		</c:forEach>
+	</c:if>
+	<c:choose>
+		<c:when test="${!empty exactMatchBreadcrumb}">
+			<c:set var="searchBreadcrumb" value="${exactMatchBreadcrumb}"/>
+		</c:when>
+		<c:when test="${!empty bestMatchBreadcrumb}">
+			<c:set var="searchBreadcrumb" value="${bestMatchBreadcrumb}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="searchBreadcrumb" value="${globalbreadcrumbs.breadCrumbTrailEntryView}"/>
+		</c:otherwise>
+	</c:choose>
+
+	<c:forEach var="searchBreadcrumbKey" begin="0" end="${fn:length(searchBreadcrumb)}">
+			<c:set var="searchBreadcrumbKeyStr">${searchBreadcrumbKey}</c:set>
+			<c:set var="breadcrumb" value="${searchBreadcrumb[searchBreadcrumbKeyStr]}"/>
+			<c:if test="${breadcrumb.type_ == 'FACET_ENTRY_CATEGORY'}">
+			
+			<c:choose>
+				<c:when test="${empty searchTopCategory5Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 7}">
+					<c:set var="searchTopCategory5Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategory4Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 6}">
+					<c:set var="searchTopCategory4Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategory3Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 5}">
+					<c:set var="searchTopCategory3Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategory2Id && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 4}">
+					<c:set var="searchTopCategory2Id" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchTopCategoryId && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7  && fn:length(searchBreadcrumb) >= 3}">
+					<c:set var="searchTopCategoryId" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+				<c:when test="${empty searchParentCategoryId && fn:length(searchBreadcrumb)-searchBreadcrumbKey-1 < 7 && fn:length(searchBreadcrumb) >= 2}">
+					<c:set var="searchParentCategoryId" value="${breadcrumb.value}" scope="request"/>
+				</c:when>
+			</c:choose>
+			</c:if>
+	</c:forEach>
+</c:if>
+
+
+<c:choose>
+	<%-- Use the context parameters if they are available; usually in a subcategory --%>
+	<c:when test="${empty WCParam.categoryId || (!empty param.emsName && param.fromWidget ne 'CatalogEntryList')}">
+		<%-- categoryId is empty..just display product URL --%>
+		<%-- eSpots: parents unknown --%>
+		<c:set var="patternName" value="ProductURL"/>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<c:set var="categoryId" value="${WCParam.categoryId}" />
+	</c:when>
+	<c:when test="${!empty searchTopCategory5Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="top_category3" value="${searchTopCategory3Id}" />
+			<c:set var="top_category4" value="${searchTopCategory4Id}" />
+			<c:set var="top_category5" value="${searchTopCategory5Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith7LevelCategory"/>
+	</c:when>
+	<c:when test="${!empty searchTopCategory4Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="top_category3" value="${searchTopCategory3Id}" />
+			<c:set var="top_category4" value="${searchTopCategory4Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith6LevelCategory"/>
+	</c:when>
+	<c:when test="${!empty searchTopCategory3Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="top_category3" value="${searchTopCategory3Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith5LevelCategory"/>
+	</c:when>
+	<c:when test="${!empty searchTopCategory2Id}">
+			<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="top_category2" value="${searchTopCategory2Id}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWith4LevelCategory"/>
+	</c:when>
+	<c:when test="${searchParentCategoryId == WCParam.categoryId}">
+			<%-- CategoryId is present..but it is same as parent category Id --%>
+			<c:set var="parent_category_rn" value="${searchTopCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWithCategory"/>
+			<c:if test="${!empty top_category && top_category != searchParentCategoryId}">
+				<c:set var="patternName" value="ProductURLWithParentCategory"/>
+			</c:if>
+	</c:when>
+	<c:when test="${!empty searchParentCategoryId && !empty searchTopCategoryId}">
+		<%-- both parent and top category are present.. display full product URL --%>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<c:set var="categoryId" value="${WCParam.categoryId}" />
+		<c:set var="patternName" value="ProductURLWithParentAndTopCategory"/>
+		<c:if test="${top_category == parent_category_rn}">
+			<%-- But both top and parent category are same..display only parent category in product URL --%>
+			<c:set var="patternName" value="ProductURLWithParentCategory"/>
+		</c:if>
+	</c:when>
+	<c:when test="${!empty searchParentCategoryId}">
+		<%-- parent category is not empty..use product URL with parent category --%>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<c:set var="categoryId" value="${WCParam.categoryId}" />
+		<c:set var="patternName" value="ProductURLWithParentCategory"/>
+	</c:when>
+	<c:when test="${!empty WCParam.categoryId}">
+			<c:set var="parent_category_rn" value="${searchTopCategoryId}" />
+			<c:set var="top_category" value="${searchTopCategoryId}" />
+			<c:set var="categoryId" value="${WCParam.categoryId}" />
+			<c:set var="patternName" value="ProductURLWithCategory"/>
+	</c:when>
+	<%-- Store front main page; usually eSpots, parents unknown --%>
+	<c:otherwise>
+		<c:set var="parent_category_rn" value="${searchParentCategoryId}" />
+		<c:set var="top_category" value="${searchTopCategoryId}" />
+		<%-- Just display productURL without any category info --%>
+		<c:set var="patternName" value="ProductURL"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var = "categoryId_local" value = "${WCParam.categoryId}"/>
+<c:if test = "${param.useClickInfoURL == 'true'}">
+  <c:set var = "categoryId_local" value = ""/>
+</c:if>
+
+<c:set var="productIdForURL" value="${catEntryIdentifier}"/>
+<c:if test="${env_displaySKUContextData && singleSKU}">
+  <c:set var="productIdForURL" value="${catalogEntryDetails.singleSKUCatalogEntryID}"/>
+</c:if>
+<c:if test="${empty WCParam.searchTerm && param.fromWidget eq 'CatalogEntryList' && not empty catalogEntryDetails.imageDisplayItemID}">
+	<%-- If on a category page using the CatalogEntryList widget and featured image is set, use the feature image SKU ID as productId --%>
+	<c:set var="productIdForURL" value="${catalogEntryDetails.imageDisplayItemID}"/>
+</c:if>
+
+<wcf:url var="catEntryDisplayUrl" patternName="${patternName}" value="Product2">
+	<wcf:param name="catalogId" value="${catalogId}"/>
+	<wcf:param name="storeId" value="${storeId}"/>
+	<wcf:param name="productId" value="${productIdForURL}"/>
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="errorViewName" value="ProductDisplayErrorView"/>
+	<wcf:param name="categoryId" value="${categoryId_local}" />
+	<wcf:param name="top_category5" value="${top_category5}" />
+	<wcf:param name="top_category4" value="${top_category4}" />
+	<wcf:param name="top_category3" value="${top_category3}" />
+	<wcf:param name="top_category2" value="${top_category2}" />
+	<wcf:param name="top_category" value="${top_category}" />
+	<wcf:param name="parent_category_rn" value="${parent_category_rn}" />
+	<wcf:param name="urlLangId" value="${urlLangId}" />
+</wcf:url>
+
+<c:choose>
+	<c:when test = "${param.useClickInfoURL == 'true'}" >
+		<c:url var="ClickInfoURL" value="${param.clickInfoURL}">
+			<c:choose>
+				<c:when test="${(fn:contains(catEntryDisplayUrl, '?'))}">
+					<c:param name="URL" value="${catEntryDisplayUrl}" />
+				</c:when>
+				<c:otherwise>
+					<c:param name="URL" value="${catEntryDisplayUrl}?evtype=&mpe_id=&intv_id=&storeId=&catalogId=&langId=&experimentId=&testElementId=&controlElement=&expDataType=&expDataUniqueID=" />
+				</c:otherwise>
+			</c:choose>
+		</c:url>
+		<%-- Replace catEntryDisplayUrl with clickInfoURL --%>
+		<c:set var = "catEntryDisplayUrl" value = "${env_absoluteUrl}${ClickInfoURL}" />
+	</c:when>
+	<c:when test="${! empty experimentId}">
+		<wcf:url var="catEntryDisplayUrl" value="ClickInfo">
+			<wcf:param name="storeId" value="${WCParam.storeId}"/>
+			<wcf:param name="evtype" value="CpgnClick" />
+			<wcf:param name="mpe_id" value="${mpe_id}" />
+			<wcf:param name="intv_id" value="${intv_id}" />
+			<wcf:param name="experimentId" value="${experimentId}" />
+			<wcf:param name="testElementId" value="${testElementId}" />
+			<wcf:param name="expDataType" value="CatalogEntryId" />
+			<wcf:param name="expDataUniqueID" value="${catEntryIdentifier}" />
+			<wcf:param name="URL" value="${catEntryDisplayUrl}" />
+		</wcf:url>
+	</c:when>
+</c:choose>

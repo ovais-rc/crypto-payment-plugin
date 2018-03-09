@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","sl",{block:"Poravnaj obojestransko",center:"Poravnaj na sredino",left:"Poravnaj levo",right:"Poravnaj desno"});

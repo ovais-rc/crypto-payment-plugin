@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","kk",{bulletedlist:"Таңбаланған тізім",numberedlist:"Нөмірленген тізім",ibm:{numberedTitle:"Нөмірленген тізім",bulletedTitle:"Таңбаланған тізім",description:"Ағымдағы тізім деңгейіне арналған параметрлер пайда болады",fontsize:"Қаріп өлшемі:"}});

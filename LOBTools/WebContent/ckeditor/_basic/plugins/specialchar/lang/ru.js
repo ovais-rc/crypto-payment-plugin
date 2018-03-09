@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","ru",{options:"Параметры специальных символов",title:"Специальный символ",toolbar:"Вставить специальный символ"});

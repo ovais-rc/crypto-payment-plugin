@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","ru",{label:"Стили",panelTitle:"Стили",panelTitle1:"Стили блоков",panelTitle2:"Локальные стили",panelTitle3:"Стили объектов"});

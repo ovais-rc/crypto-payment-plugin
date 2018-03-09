@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","iw",{alt:"מעבר עמוד",toolbar:"הוספת מעבר עמוד"});

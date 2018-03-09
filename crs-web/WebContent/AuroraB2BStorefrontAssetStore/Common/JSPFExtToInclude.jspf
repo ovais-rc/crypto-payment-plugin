@@ -1,0 +1,91 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:if test="${!empty env_includeJSPFExtension && env_includeJSPFExtension == 'true'}">
+	<%-- Include this extension jspf at the end of every store page for allowing business partners to add some JSPF--%>
+	<c:if test="${empty extensionJSPIdentifier}">
+		<c:set var="extensionJSPIdentifier" value="wc.pgl.jspInclude_" />
+	</c:if>
+
+	<c:set var="key1" value="store/${storeId}/online_store"/>
+	<c:set var="onlineStore" value="${cachedOnlineStoreMap[key1]}"/>
+	<c:if test="${empty onlineStore}">
+		<wcf:rest var="queryStoreInfoResult" url="store/{storeId}/online_store" scope="request" cached="true">
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		</wcf:rest>
+		<c:set var="onlineStore" value="${queryStoreInfoResult.resultList[0]}"/>
+		<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${onlineStore}"/>
+	</c:if>
+		
+	<wcf:useBean var="storeList" classname="java.util.ArrayList"/>
+	
+	<c:if test="${empty storeList}">
+		<wcf:set target="${storeList}" value="${storeId}" />
+		<c:if test="${!empty onlineStore.relatedStores}">
+			<c:forEach var="item" items="${onlineStore.relatedStores}">
+				<c:if test="${item.relationshipType == '-11' && storeId != item.relatedStoreId}" >
+					<wcf:set target="${storeList}" value="${item.relatedStoreId}" />
+				</c:if>
+			</c:forEach>
+		</c:if>
+	</c:if>
+
+	<wcf:useBean var="pglExtensionMap" classname="java.util.HashMap"/>
+	<c:if test="${!empty storeList}">
+		<c:forEach var="relatedStoreId" items="${storeList}">
+			<%-- We have onlineStore object for current store already retrieved in above getData call.. Avoid it...--%>
+			<c:if test="${!empty relatedStoreId}">
+				<c:if test="${relatedStoreId eq storeId}">
+					<c:forEach var="storeConfEntry" items="${onlineStore.userData}" >
+						<c:set var="storeConfEntryName" value="${storeConfEntry.key}" />
+						<c:if test="${!empty storeConfEntryName && fn:startsWith(storeConfEntryName, extensionJSPIdentifier)}">
+							<c:set property="${storeConfEntryName}" value="${storeConfEntry.value}" target="${pglExtensionMap}" />
+						</c:if>
+					</c:forEach>
+				</c:if>
+				<c:if test="${!(relatedStoreId eq storeId)}">
+					<c:set var="key1" value="store/${relatedStoreId}/online_store+IBM_Store_Conf"/>
+					<c:set var="relatedOnlineStore" value="${cachedOnlineStoreMap[key1]}"/>
+					<c:if test="${empty relatedOnlineStore}">
+						<wcf:rest var="queryStoreInfoDetailsResult" url="store/{storeId}/online_store" cached="true">
+							<wcf:var name="storeId" value="${relatedStoreId}" encode="true"/>
+							<wcf:param name="profileName" value="IBM_Store_Conf" />
+						</wcf:rest>
+						<c:set var="relatedOnlineStore" value="${queryStoreInfoDetailsResult.resultList[0]}"/>
+						<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${relatedOnlineStore}"/>
+					</c:if>
+					<c:if test="${!empty relatedOnlineStore}" >
+						<c:forEach var="storeConfEntry" items="${relatedOnlineStore.userData}" >
+							<c:set var="storeConfEntryName" value="${storeConfEntry.key}" />
+							<c:if test="${!empty storeConfEntryName && fn:startsWith(storeConfEntryName, extensionJSPIdentifier)}">
+								<c:set property="${storeConfEntryName}" value="${storeConfEntry.value}" target="${pglExtensionMap}" />
+							</c:if>
+						</c:forEach>
+					</c:if>
+				</c:if>
+			</c:if>
+		</c:forEach>
+	</c:if>
+
+	<c:forEach var="storeConfEntry" items="${pglExtensionMap}" >
+		<c:if test="${!empty storeConfEntry.value}">
+			<%out.flush();%>
+			<c:import url = "${storeConfEntry.value}" />
+			<%out.flush();%>
+		</c:if>
+	</c:forEach>
+
+	<c:remove var="pglExtensionMap"/>
+	<c:remove var="extensionJSPIdentifier"/>
+</c:if>

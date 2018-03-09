@@ -1,0 +1,124 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ page import="com.ibm.commerce.catalog.facade.datatypes.AttributeAllowedValueType"%>
+<%--
+	This fragment requires the following vars to be set
+		attribute
+--%>
+<jsp:directive.include file="SerializeCatalogEntryAttributeConstants.jspf"/>
+<c:if test="${ !empty attribute.allowedValue }">
+	<%--
+		==========================================================================
+		Hashmap used to keep track of attribute values read in from the web service.
+		This is needed because the web service returns attributes in alternate
+		languages as separate logical objects.  Therefore creating the
+		CMC objects on the fly is not do-able, as all the language sensitive child
+		description objects must be returned under their parent object.
+		==========================================================================
+	--%>
+	<jsp:useBean id="ALLOWED_VALUE_HASH_MAP" class="java.util.HashMap" type="java.util.Map"/>
+	<jsp:useBean id="PROCESSED_VALUES" class="java.util.ArrayList" type="java.util.List"/>
+	<%--
+		==========================================================================
+			Iterate over all of the attribute values for this attribute and
+			construct a Hashmap of the attribute allowed values
+			with the key of [IDENTIFIER_LANGUAGE_ID]
+		==========================================================================
+	--%>
+	<c:forEach var="allowedValue" items="${attribute.allowedValue}">
+		<%--
+			Store the allowed values in the Hashmap using id and language as the key.
+		--%>
+		<c:set target="${ALLOWED_VALUE_HASH_MAP}" property="${allowedValue.identifier}_${allowedValue.language}" value="${allowedValue}"/>
+	</c:forEach>
+	<%--
+		==========================================================================
+			Iterate over all of the values for this attribute and construct the 
+			appropriate CMC objects.
+		==========================================================================
+	--%>
+	<c:forEach var="allowedValue" items="${attribute.allowedValue}">
+		<%
+		//------------------------------------------------------------------------------------//
+		// Need to keep track of the processed attributes so they do not get processed again
+		// We only want to add the attribute once.
+		//------------------------------------------------------------------------------------//
+		AttributeAllowedValueType attributeValue = (AttributeAllowedValueType)pageContext.getAttribute("allowedValue");
+		if(attributeValue != null && PROCESSED_VALUES != null)
+		{
+			String attributeValueID = attributeValue.getIdentifier();
+			if(attributeValueID !=null)
+			{
+				attributeValueID = attributeValueID.trim();
+				// Check if the attribute was processed already
+				if(!PROCESSED_VALUES.contains(attributeValueID))
+				{
+					%>
+					<%-- Test if value is inherited --%>
+					<c:set var="inheritedValue" value="" />
+					<c:if test="${allowedValue.storeID != param.storeId}">
+						<c:set var="inheritedValue" value="Inherited" />
+					</c:if>
+					<c:set var="allowedValueObjectType" value="${inheritedValue}AttributeDictionaryAttribute${attribute.attributeDataType}Value" />
+					<object objectType="${allowedValueObjectType}">
+						<attrValId>${allowedValue.identifier}</attrValId>
+						<objectStoreId>${allowedValue.storeID}</objectStoreId>
+						<default <c:if test="${attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID != allowedValue.storeID}">readonly="true"</c:if>>${allowedValue['default']}</default>
+						<xvaldata_AttributeValueIdentifier><wcf:cdata data="${allowedValue.extendedValue.AttributeValueIdentifier}"/></xvaldata_AttributeValueIdentifier>
+						<xvaldata_AttributeValueField1><wcf:cdata data="${allowedValue.extendedValue.AttributeValueField1}"/></xvaldata_AttributeValueField1>
+						<xvaldata_AttributeValueField2><wcf:cdata data="${allowedValue.extendedValue.AttributeValueField2}"/></xvaldata_AttributeValueField2>
+						<xvaldata_AttributeValueField3><wcf:cdata data="${allowedValue.extendedValue.AttributeValueField3}"/></xvaldata_AttributeValueField3>
+						<c:forEach var="userDataField" items="${allowedValue.userData.userDataField}">
+							<xval_${userDataField.typedKey}><wcf:cdata data="${userDataField.typedValue}"/></xval_${userDataField.typedKey}>
+						</c:forEach>
+						<%--
+							Iterate over all the languages currently enabled in the UI and place the language
+							sensitive objects under their parent object.
+							In some cases dataLanguageIds may be empty, so use default language.
+						--%>
+						<c:set var="languages" value="${param.dataLanguageIds}" />
+						<c:if test="${ empty languages }">
+							<c:set var="languages" value="${allowedValue.language}" />
+						</c:if>
+						<c:forTokens items="${languages}" delims="," var="attributeValueLanguageBeingManaged">
+							<%--
+								Determine the key and retrieve the allowed value description
+							--%>
+							<c:set var="UNIQUE_ID_AND_LANGUAGE_ID" value="${allowedValue.identifier}_${attributeValueLanguageBeingManaged}"/>
+							<c:set var="ALLOWED_VALUE" value="${ALLOWED_VALUE_HASH_MAP[UNIQUE_ID_AND_LANGUAGE_ID]}"/>
+							<%-- Check that there is data for this language id --%>
+							<c:set var="attributeValueLanguage_desc" value="${ALLOWED_VALUE.language}"/>
+							<c:set var="attributeValue_desc" value="${ALLOWED_VALUE}"/>
+							<jsp:directive.include file="SerializeAttributeDictionaryAttributeAllowedValueDescription.jspf"/>
+						</c:forTokens>
+					</object>
+					<%
+					// Mark the attribute as processed
+					PROCESSED_VALUES.add(attributeValueID);
+				}
+			}
+		}
+		%>
+	</c:forEach>
+	<%
+		// Clear Hashmaps
+		if(ALLOWED_VALUE_HASH_MAP!=null && ALLOWED_VALUE_HASH_MAP.size() > 0) {
+			ALLOWED_VALUE_HASH_MAP.clear();
+		}
+		if(PROCESSED_VALUES!=null && PROCESSED_VALUES.size() > 0) {
+			PROCESSED_VALUES.clear();
+		}
+	%>
+</c:if>

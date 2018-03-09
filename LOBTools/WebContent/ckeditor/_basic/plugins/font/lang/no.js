@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","no",{fontSize:{label:"Størrelse",voiceLabel:"Skriftstørrelse",panelTitle:"Skriftstørrelse"},label:"Skrift",panelTitle:"Skriftnavn",voiceLabel:"Skrift"});

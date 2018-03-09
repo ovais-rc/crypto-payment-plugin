@@ -1,0 +1,101 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2007, 2010 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf"%>
+<wcf:getData
+	type="com.ibm.commerce.price.facade.datatypes.PriceRuleType"
+	var="parentPriceRule" expressionBuilder="findPriceRuleElementsByPriceRuleID">
+	<wcf:param name="priceRuleId" value="${priceRule.priceRuleIdentifier.uniqueID}" />
+	<wcf:contextData name="storeId" data="${param.storeId}" />
+</wcf:getData>
+<c:forEach var="element" items="${parentPriceRule.priceRuleElement}">
+	<c:set var="showVerb" value="${showVerb}" scope="request"/>
+	<c:set var="businessObject" value="${element}" scope="request"/>
+	<c:set var="typeOfAction" value="${element.elementTemplateIdentifier.externalIdentifier.name}"/>
+	<c:set var="foundMatch" value="false"/>
+	<c:set var="refType" value=""/>
+	<c:set var="refId" value="referenceId"/>
+	<c:forEach var="elementVariable" items="${element.elementAttribute}">
+		<c:if test="${(elementVariable.name == 'inputOperandReferenceId') && (elementVariable.value == param.priceEquationId)}">
+			<c:set var="foundMatch" value="true" />
+			<c:set var="refType" value="InputPriceEquation" />
+		</c:if>
+		<c:if test="${(elementVariable.name == 'comparisonOperandReferenceId') && (elementVariable.value == param.priceEquationId)}">
+			<c:set var="foundMatch" value="true" />
+			<c:set var="refType" value="ComparisonPriceEquation" />
+		</c:if>
+		<c:if test="${(elementVariable.name == 'priceEquationId') && (elementVariable.value == param.priceEquationId)}">
+			<c:set var="foundMatch" value="true" />
+			<c:set var="refType" value="RefPriceEquation" />
+			<c:set var="refId" value="priceEquationId" />
+		</c:if>
+	</c:forEach>
+	
+	<c:if test="${(foundMatch == 'true') && (typeOfAction == 'compareCondition' || typeOfAction == 'calculatePrice')}">
+		<reference>
+			<wcf:getData
+				type="com.ibm.commerce.price.facade.datatypes.PriceEquationType"
+				var="priceEquation" expressionBuilder="getPriceEquationByID"
+				varShowVerb="showVerb">
+				<wcf:contextData name="storeId" data="${param.storeId}" />
+				<wcf:param name="priceEquationId" value="${param.priceEquationId}" />
+			</wcf:getData>
+								
+			<c:set var="objectType" value="${refType}" />
+			<c:set var="objStoreId" value="${priceEquation.formulaIdentifier.externalIdentifier.storeIdentifier.uniqueID}" />
+			<c:if test="${objStoreId == '0'}">
+				<c:set var="objStoreId" value="${param.storeId}"/>
+			</c:if>
+			<c:if test="${(param.storeId) != objStoreId}">
+				<c:set var="objectType" value="Inherited${refType}" />
+			</c:if>
+			<object objectType="${objectType}">
+				<${refId}>${param.priceEquationId}</${refId}>
+				<parent>
+					<object objectType="${typeOfAction}">
+						<elemTemplateName><wcf:cdata data="${element.elementTemplateIdentifier.externalIdentifier.name}" /></elemTemplateName>
+						<elementName>${element.elementIdentifier.name}</elementName>
+						<parent>
+							<c:set var="curPriceRule" value="${parentPriceRule}" scope="request"/>
+							<c:set var="searchElementName" value="${element.parentElementIdentifier.name}" scope="request"/>
+							<%
+								com.ibm.commerce.price.facade.datatypes.PriceRuleType curPriceRule = (com.ibm.commerce.price.facade.datatypes.PriceRuleType)request.getAttribute("curPriceRule");
+								String name = (String)request.getAttribute("searchElementName");
+								java.util.List ancestry = com.ibm.commerce.price.internal.client.lobtools.PriceRuleBuilderUtils.getElementAncestry(curPriceRule, name);
+								request.setAttribute("ancestry", ancestry);
+							%>
+							<c:forEach var="obj" items="${ancestry}" varStatus="status">
+								<c:forTokens var="type" items="${obj}" delims="," begin="0" end="0">
+									<object objectType="${type}">
+								</c:forTokens>
+								<c:forTokens var="name" items="${obj}" delims="," begin="1" end="1">
+									<elementName>${name}</elementName>
+								</c:forTokens>
+								
+								<parent>
+								<c:if test="${status.last}">
+									<jsp:directive.include file="SerializePriceRule.jspf" />
+								</c:if>
+							</c:forEach>
+							<c:forEach var="obj" items="${ancestry}" varStatus="status">
+						  		</parent>
+								</object>
+							</c:forEach>									
+						</parent>
+					</object>
+				</parent>
+			</object>
+		</reference>
+	</c:if>
+</c:forEach>

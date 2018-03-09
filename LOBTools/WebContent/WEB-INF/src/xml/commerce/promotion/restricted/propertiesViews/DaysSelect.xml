@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- 
+		@keywords private 
+		DaySelect base class.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/promotion/BaseDaySelect" focusable="false">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="objectType" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="day" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="selectedPropertyName" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="selectedPropertyValue" type="string" value=""/>
+		<!---
+			@keywords private
+		-->
+		<variable name="dayObject" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<variable name="_inited" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateDayObjectDel) {
+				this.updateDayObjectDel.disconnectAll();
+				delete this.updateDayObjectDel;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (newObject != this.o) {
+				this.o = newObject;
+				if (this.o) {
+					this.updateDayObject();
+				}
+				else {
+					this.dayObject = null;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateDayObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.updateDayObjectDel) {
+				this.updateDayObjectDel = new EventHandler.Class(this, "updateDayObject");
+			}
+			else {
+				this.updateDayObjectDel.disconnectAll();
+			}
+			if (this.o) {
+				this.dayObject = this.o.model.findObject(this.o, this.o.model.getObjectDefinition(this.o, this.objectType), this.day);
+				if (!this.dayObject || this.dayObject.pendingDelete) {
+					this.dayObject = null;
+				}
+				if (this.input) {
+					this.input.setValue(this.dayObject != null);
+				}
+				var selectedProperty = this.o.getProperty(this.selectedPropertyName);
+				this.updateDayObjectDel.connect(selectedProperty, "onvalue");
+				this.updateDayObjectDel.connect(this.o, "onchildObjects");
+				if (selectedProperty.value == this.selectedPropertyValue) {
+					this.input.setValue(true);
+				}
+			}
+			]]>
+		</method>
+		
+		<BaseCheckbox enabled="${this.classroot.enabled}" name="input">
+			<handler name="oninit">
+				<![CDATA[
+				this.classroot._inited = true;
+				this.classroot.updateDayObject();
+				]]>
+			</handler>
+			<handler name="onvalue">
+				<![CDATA[
+				if (this.classroot.o && this.classroot._inited) {
+					if (this.value && this.classroot.dayObject == null) {
+						this.classroot.dayObject = this.classroot.o.model.findObject(this.classroot.o, this.classroot.o.model.getObjectDefinition(this.classroot.o, this.classroot.objectType), this.classroot.day);
+						if (!this.classroot.dayObject) {
+							this.classroot.dayObject = this.classroot.o.model.createObject(this.classroot.o, this.classroot.o.model.getObjectDefinition(this.classroot.o, this.classroot.objectType), this.classroot.day, true);
+							this.classroot.o.updateChildObjects();
+						}
+						this.classroot.dayObject.getProperty(this.classroot.dayObject.objectDefinition.idProperty).setVariable("value", this.classroot.day);
+					}
+					else if (!this.value && this.classroot.dayObject != null) {
+						this.classroot.dayObject.deleteObject();
+						this.classroot.dayObject = null;
+					}
+				}
+				]]>
+			</handler>
+		</BaseCheckbox>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></FocusableComponent>
+	 
+	<!--- 
+		@keywords final
+		A day selector for use within an object properties panel.  This day selector is selected if an object type "Weekday" 
+		is created with an object id with the specified day value associated with this selector.  Below is an example
+		of how to declare a day selector for day Monday.
+		
+		@START_CODE
+			<DaySelect package="cmc/promotion" day="Monday" objectType="WeekDay" selectedPropertyName="isEveryDayOfTheWeek" selectedPropertyValue="true" promptText="Monday"/>
+		@END_CODE
+		
+		@deprecated Use {@link cmc/foundation/PropertyChildObjectCheckbox} for a more generic implementation of a checkbox widget that
+			manages an object.
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/promotion/DaySelect" focusable="false">
+		<dependency localName="BaseDaySelect" moduleName="cmc/promotion/BaseDaySelect"/>
+		<!---
+			The objectType associated with this instance of proDaySelect.
+		-->
+		<variable name="objectType" type="string" value=""/>
+		<!---
+			The day associated with this instance of proDaySelect.  This will correspond to the object Id of the child of
+			objectType.
+		-->
+		<variable name="day" type="string" value=""/>
+		<!---
+			The property name when set to a property value that is equivalent to a selection of this day object.
+		-->
+		<variable name="selectedPropertyName" type="string" value=""/>
+		<!---
+			The property value when set for the property name that is equivalent to a selection of this day object.
+		-->
+		<variable name="selectedPropertyValue" type="string" value=""/>
+		
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new BaseDaySelect.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				o: parentComponent.o,
+				enabled: parentComponent.enabled,
+				objectType: this.objectType,
+				day: this.day,
+				selectedPropertyName: this.selectedPropertyName,
+				selectedPropertyValue: this.selectedPropertyValue
+			});
+			]]>
+		</method>
+
+	</PropertiesComponent>
+
+</Definitions>

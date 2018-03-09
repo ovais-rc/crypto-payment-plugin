@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		An instance of this class allows users to pick both date and time from a {@link cmc/foundation/DatePicker}, and a 
+		{@link cmc/foundation/TimePicker}, respectively.  
+	 -->
+	<Component classDefinition="true" definitionName="cmc/foundation/BaseDateTimePicker">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!--- 
+			@keywords private
+			Indicates that a valid date has been entered into the date component
+			of the date time picker. This is used to enable/disable the time
+			component.
+		 -->
+		<variable name="hasDate" type="boolean" value="false"/>
+		
+		<!--- 
+			true if this date time picker is enabled. False otherwise. 
+		 -->
+		<variable name="enabled" type="boolean" value="true"/>
+		<!---
+			When true, the time of day will default to 23:59:59:999 when the time picker is first enabled.  
+			Otherwise start of day is used 00:00:00:001. 
+		-->
+		<variable name="endOfDay" type="boolean" value="false"/>
+		
+		<!---
+			Display the preferred time zone next to the time picker. The default value is <code>true<code>.
+		-->
+		<variable name="showTimeZone" type="boolean" value="true"/>
+		<!--- @keywords private -->
+		<variable name="useCompactPadding" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="showReverseImage" type="boolean" value="false"/>
+		
+		<Component name="dpview">
+			<DatePicker enabled="${this.classroot.enabled}" name="datepicker" useCompactPadding="${this.classroot.useCompactPadding}" showReverseImage="${this.classroot.showReverseImage}">
+				<method name="storeValue">
+					<![CDATA[
+					this.inherited(arguments);
+					this.classroot.setVariable("hasDate", this.getDate() != null);
+					this.classroot.storeValue();
+					]]>
+				</method>
+				
+			</DatePicker>
+		</Component>
+		<Component name="tpview" x="${this.classroot.dpview.width + 8}">
+			<TimePicker enabled="${this.classroot.enabled &amp;&amp; this.classroot.hasDate}" name="timepicker" showTimeZone="${this.classroot.showTimeZone}" useCompactPadding="${this.classroot.useCompactPadding}" showReverseImage="${this.classroot.showReverseImage}">
+				<method name="storeValue">
+					<![CDATA[
+					this.inherited(arguments);
+					this.classroot.storeValue();
+					]]>
+				</method>
+								
+				<handler eventSource="this.classroot" name="onhasDate">
+					<![CDATA[
+					if (!this.classroot.hasDate) {
+						this.setTime(null);
+					}
+					else if (this.getTimeString() == "") {
+						this.setTime(this.classroot.getDateTime());
+					}
+					]]>
+				</handler>
+			</TimePicker>
+		</Component>
+		
+		<!--- 
+			@keywords private
+			Sets the selected datetime value with a given new value
+			@param cmc/foundation/DateTime Date the new value to set to the selected datetime value
+		 -->
+		<method args="newDateTime" name="setDateTime">
+			<![CDATA[
+			this.dpview.datepicker.setDate(newDateTime);
+			this.tpview.timepicker.setTime(newDateTime);
+			this.setVariable("hasDate", this.dpview.datepicker.getDate() != null);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			@return the selected datetime value
+		 -->
+		<method name="getDateTime">
+			<![CDATA[
+			var dateTime = null;
+			var date = this.dpview.datepicker.getDate();
+			var time = this.tpview.timepicker.getTime();
+			if (date != null && time != null) {
+				dateTime = new Date(date);
+				dateTime.setHours(time.getHours());
+				dateTime.setMinutes(time.getMinutes());
+				dateTime.setSeconds(time.getSeconds());
+				dateTime.setMilliseconds(time.getMilliseconds());
+			}
+			else if (this.tpview.timepicker.getTimeString() == "") {
+				dateTime = date;
+				if (this.endOfDay && dateTime != null) {
+					dateTime = new Date(date);
+					dateTime.setHours(23);
+					dateTime.setMinutes(59);
+					dateTime.setSeconds(59);
+					dateTime.setMilliseconds(999);
+				}
+			}
+			return dateTime;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Store the new value.
+		 -->
+		<method name="storeValue">
+			<![CDATA[
+			EventUtil.trigger(this, "ondateTime", this.getDateTime());
+			]]>
+		</method>
+
+	</Component>
+	
+	<!---
+		@keywords private
+		Simular to {@link cmc/foundation/BaseDateTimePicker} but is used with properties.  The selected date and time will be combined into a datetime value and 
+		get stored in the bound property. The following is an example of using this class: 
+		
+		@START_CODE
+			<DateTimePicker property="${yourPropertyReference}"/>
+		@END_CODE
+	 -->
+	<BaseDateTimePicker classDefinition="true" definitionName="cmc/foundation/DateTimePicker">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!--- Reference to cmc/foundation/ModelProperty object that is being edited. -->
+		<variable name="property" value="${null}"/>
+
+		<!--- 
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+		 -->
+		<handler name="oninit">
+			<![CDATA[
+			if (this.property) {
+				this.updateValue();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Sets a new property object.
+			@param cmc/foundation/ModelProperty the new property to be set to the bound property in this datetime picker. 
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else if (this.isinited) {
+					this.dpview.datepicker.setDateString("");
+					this.tpview.timepicker.setTimeString("");
+					this.setVariable("hasDate", false);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Updates the widget with a new property value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this._updateValueLock = true;
+			if (this.isinited) {
+				var value = this.property.value;
+				var newDateTime = DateUtil.Singleton.parse(value, DateUtil.Singleton.DATE_TIME_FORMAT);
+				if (newDateTime != null) {
+					this.setDateTime(newDateTime);
+				}
+				else {
+					var newDate = null;
+					var dateString = "";
+					var timeString = "";
+					if (value != null && value != "") {
+						var delimitPos = value.indexOf(" ");
+						dateString = value;
+						if (delimitPos != -1) {
+							dateString = value.substring(0, delimitPos);
+							newDate = DateUtil.Singleton.parse(dateString, DateUtil.Singleton.getDatePreferenceFormat());
+							if (newDate != null) {
+								timeString = value.substring(delimitPos + 1);
+							}
+							else {
+								dateString = value;
+							}
+						}
+					}
+					this.dpview.datepicker.setDateString(dateString);
+					this.tpview.timepicker.setTimeString(timeString);
+					this.setVariable("hasDate", newDate != null);
+				}
+				this._updateValueLock = false;
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Stores the property value with the selected datetime value
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this.property && !this._updateValueLock) {
+				var currentDateTime = DateUtil.Singleton.parse(this.property.value, DateUtil.Singleton.DATE_TIME_FORMAT);
+				var newDateTime = this.getDateTime();
+				if (newDateTime != null) {
+					if (DateUtil.Singleton.normalizeToMilliseconds(newDateTime) != DateUtil.Singleton.normalizeToMilliseconds(currentDateTime)) {
+						var newValue = DateUtil.Singleton.format(newDateTime, DateUtil.Singleton.DATE_TIME_FORMAT);
+						this.property.change(newValue);
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/DateTimePicker", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.property.o.logString());
+						}
+					}
+				}
+				else {
+					var newValue = this.dpview.datepicker.getDateString();
+					var timeString = this.tpview.timepicker.getTimeString();
+					if (timeString != "") {
+						newValue += " " + timeString;
+					}
+					this.property.change(newValue);
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/DateTimePicker", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.property.o.logString());
+					}
+				}
+			}
+			]]>
+		</method>
+		<!--- @keywords private  -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</BaseDateTimePicker>
+	
+</Definitions>

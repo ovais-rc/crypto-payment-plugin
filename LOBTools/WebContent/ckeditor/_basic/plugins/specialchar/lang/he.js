@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","he",{options:"אפשרויות תווים מיוחדים",title:"תו מיוחד",toolbar:"הוספת תו מיוחד"});

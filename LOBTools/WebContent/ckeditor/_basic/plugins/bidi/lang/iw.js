@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("bidi","iw",{ltr:"כיוון תמליל משמאל לימין",rtl:"כיוון תמליל מימין לשמאל"});

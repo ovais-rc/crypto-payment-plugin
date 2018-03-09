@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","pt",{clear:"Limpar",highlight:"Realçar",options:"Opções de cor",selected:"Cor seleccionada",title:"Seleccionar cor",ibm:{currentColor:"Cor actual"}});

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		This class represents an element and is instantiated by {@link cmc/foundation/PaletteGroup}. It simply provides
+		a 32x32 pixel icon which is loaded from the {@link cmc/foundation/FlowElementObjectDefinition#paletteIcon object definition}
+		of the provided {@link cmc/foundation/PaletteElement#objectType}.
+		
+		@keywords private
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/PaletteElement">
+		<variable name="elementXML" type="expression" value="null"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<!--- @keywords private -->
+		<variable name="objectType" type="string" value=""/>
+		<!--- @keywords private -->
+		<variable name="icon" type="string" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="displayName" type="string" value=""/>
+		<!--- @keywords private -->
+		<variable name="helpLink" type="string" value=""/>
+
+		<!---
+			@keywords private
+		-->
+		<variable name="oView" value="${ModelUtil.Singleton.findObjectView(this)}"/>
+		
+		<handler name="oninit">
+			<![CDATA[
+			this.objectType = this.elementXML.getAttribute("objectType");
+			this.palettecontent.completeInstantiation();
+			this.updateObjectDel = new EventHandler.Class(this, "updateObject");
+			this.updateObject();
+			]]>
+		</handler>
+
+		<handler name="ondestroy">
+			<![CDATA[
+			if (this.updateObjectDel) {
+				this.updateObjectDel.disconnectAll();
+				delete this.updateObjectDel;
+			}
+			]]>
+		</handler>
+
+		<method args="e" name="updateObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateObjectDel.disconnectAll();
+			this.updateObjectDel.connect(this.oView, "ono");
+			if (this.oView.o != null) {
+				var pathObject = this.oView.o.getObject("path", false, null, this.updateObjectDel);
+				if (pathObject != null) {
+					var objectDefinition = pathObject.objectDefinition.getChildDefinition(this.objectType);
+					if (objectDefinition != null) {
+						var newIcon = objectDefinition.paletteIcon;
+						var newDisplayName = objectDefinition.displayName;
+						var newHelpLink = objectDefinition.helpLink;
+						var newVisibility = objectDefinition.isCreatable(pathObject, null, this.updateObjectDel);
+						if (newIcon != this.icon) {
+							this.setVariable("icon", newIcon);
+						}
+						if (newDisplayName != this.displayName) {
+							this.setVariable("displayName", newDisplayName);
+						}
+						if (newHelpLink != this.helpLink) {
+							this.setVariable("helpLink", newHelpLink);
+						}
+						if (newVisibility != this.visible) {
+							this.setVariable("visible", newVisibility);
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<Component initstage="defer" name="palettecontent">
+			<variable name="dndclip" type="boolean" value="false"/>
+			<AxisLayout axis="x" spacing="0"/>
+			<Component height="32" imageSet="${this.classroot.icon}" name="iconview" width="32"/>
+		</Component>
+		<Tooltip linkURL="${this.classroot.helpLink}" name="tooltip" text="${this.classroot.displayName}"/>
+	</Component>
+
+</Definitions>

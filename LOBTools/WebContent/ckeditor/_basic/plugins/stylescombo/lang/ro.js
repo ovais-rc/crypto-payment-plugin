@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","ro",{label:"Stiluri",panelTitle:"Stiluri",panelTitle1:"Stiluri bloc",panelTitle2:"Stiluri inline",panelTitle3:"Stiluri obiect"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","zh-tw",{error:"目前不支援貼上影像。請使用「插入影像」工具列選項代替。"});

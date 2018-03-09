@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class provides the dialog for selecting external assets.
+	-->
+	<Dialog definitionName="cmc/foundation/ExternalAssetsPickerDialog" classDefinition="true"
+		contentPaddingLeftSize="0"
+		contentPaddingRightSize="0"
+		contentPaddingTopSize="0"
+		contentPaddingBottomSize="0"
+		footerPaddingBottomSize="0"
+		title="${foundationResources.Singleton.externalAssetPickerDialogTitle.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>	
+		<dependency localName="request" moduleName="dojo/request"/>
+		<!---
+			@keywords private
+			The property name of the property associated with this Dialog.
+		-->
+		<variable name="propertyName" type="string" value=""/>
+		
+		<!---
+			@keywords private
+			The host and port number of externalAssetPicker host.
+		-->
+		<variable name="externalAssetHost" type="string" value=""/>
+		<!---
+			@keywords private
+			The url of the external asset picker.
+		-->
+		<variable name="externalAssetPickerUrl" type="string" value=""/>		
+		
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var self = this;
+			window.addEventListener("message", function(e){
+				self.receiveMessage(e);
+			});
+			
+			]]>
+		</method>
+
+		<!---
+			Close the dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("propertyName", "");
+			this.setVariable("externalAssetHost", "");
+			this.setVariable("externalAssetPickerUrl", "");
+			]]>
+		</method>
+		
+		<!---
+			Open the dialog.
+		-->
+		<method args="propertyName, externalAssetHost, externalAssetPickerUrl,externalAssetTenantId, externalAssetUserName,externalAssetPassword" name="openDialog">
+			<![CDATA[		
+				if (cmcConfig.ibmIdEnabled == 'true'){
+					this.openWindow();
+					this.setVariable("propertyName", propertyName);
+					this.setVariable("externalAssetHost", externalAssetHost);
+					this.setVariable("externalAssetPickerUrl", externalAssetHost + externalAssetPickerUrl);
+				}else{
+					this.wchlogin(externalAssetHost, externalAssetTenantId, externalAssetUserName,externalAssetPassword , function(obj){
+						obj.openWindow();
+						obj.setVariable("propertyName", propertyName);
+						obj.setVariable("externalAssetHost", externalAssetHost);
+						obj.setVariable("externalAssetPickerUrl", externalAssetHost + externalAssetPickerUrl);
+					});
+					
+				}	
+			]]>
+		</method>
+
+		<!-- 
+			Log in Watson Content Hub
+		 -->
+		   <method args="externalAssetHost, externalAssetTenantId, externalAssetUserName,externalAssetPassword,callback " name="wchlogin">
+			<![CDATA[
+				
+				var wchLoginURL = externalAssetHost+"/api/"+externalAssetTenantId+"/login/v1/basicauth";
+                var username = externalAssetUserName;
+                var password = externalAssetPassword;
+                var obj = this;
+	            request(wchLoginURL,
+					{
+					headers: {
+				     "Authorization": "Basic " + btoa(username + ":" + password),
+										"Content-Type":"application/x-www-form-urlencoded",
+										"X-Requested-With":null
+				     },
+					withCredentials:true
+				}).then(function(data) {
+					console.log(data);
+					if(callback != null){
+						callback(obj);
+					}
+				}, function(err) {
+					console.log(err);
+				});
+					
+    
+			]]>
+		</method> 
+		 
+		<!---
+			Receive message event.
+		-->
+		<method args="event" name="receiveMessage">
+			<![CDATA[
+				var origin = event.origin;
+				if (this.propertyName !="" && origin == this.externalAssetHost || (origin + ":443") == this.externalAssetHost)  {
+					//must be equal if origin has port number
+					var data = JSON.parse(event.data);
+					var returnValue = this.processMessage(data);
+					RootComponent.Singleton.setCallbackValue(returnValue, returnValue == "");
+				}
+				this.closeWindow();
+			]]>
+		</method>
+		
+		<!---
+			Process message. Override this method when necessary.
+		-->
+		<method args="message" name="processMessage">
+			<![CDATA[
+				return message;
+			]]>
+		</method>
+		
+		<BaseIFrameComponent name="AssetsPicker" src="${this.parent.externalAssetPickerUrl}" height="450" width="620">
+		</BaseIFrameComponent>
+	</Dialog>
+	
+	<!---
+		This class provides the dialog for Watson Content Hub external assets picker.
+	-->
+	<ExternalAssetsPickerDialog definitionName="cmc/foundation/WCHAssetsPickerDialog" singletonDefinition="true" >
+	
+		<!---
+			Process message.
+		-->
+		<method args="message" name="processMessage">
+			<![CDATA[
+				var value = "";
+				if (message.path){
+					value =message.path;
+				}
+				var returnValue = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><object>" 
+									+ "<" + this.propertyName + " dirty=\"true\"><!" + "[CDATA[" 
+									+ value 
+									+ "]]" + ">"
+									+ "</" + this.propertyName + ">"
+									+ "</object>";
+				return returnValue;
+			]]>
+		</method>
+	
+	
+	</ExternalAssetsPickerDialog>
+
+	<PunchOutEditService classDefinition="true" definitionName="cmc/foundation/ExternalAssetsPunchOutEditService">
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+
+		<!---
+			@keywords private
+			The Dialog class associated with the punch-out call. e.g <code>cmc/foundation/WCHAssetsPickerDialog</code>
+		-->
+		<variable name="dialogClass" type="string" value=""/>
+		<!---
+			@keywords private
+			Parse the specified data element and invoke the punch-out. Two required elements
+			in the <object> element must be named <externalAssetHost> and <externalAssetPickerUrl>, and will be used as the 
+			externalAsset URL.
+			@param cmc/foundation/ModelObject requestParent: the model object
+			@param XML dataElement: "object" data element
+			@param number reqIdentifier: the request identifier associated with the dataset that returned this data
+		-->
+		<method args="requestParent, dataElement, reqIdentifier" name="parseObject">
+			<![CDATA[
+				
+				var externalAssetConfig = null;
+				var nodes = dataElement.childNodes;
+				for (var i = 0; i < nodes.length; i++) {
+					var node = nodes[i];
+					var name = node.nodeName;
+					if (name == "externalAssetHost" || name == "externalAssetPickerUrl"){
+						var value = XMLUtil.getNodeValue(node);
+						if (externalAssetConfig == null) externalAssetConfig = {};
+						externalAssetConfig[name] = value;
+					}
+				}
+				
+				var storeConfig = ContextUtil.Singleton.findStoreConfig(requestParent);
+				if (storeConfig != null){
+					var wchConfig = storeConfig.wchConfig;
+					if (wchConfig != null){
+						externalAssetConfig["externalAssetUserName"] = wchConfig.WCHUserName;
+						externalAssetConfig["externalAssetPassword"] = wchConfig.WCHPassword;
+						externalAssetConfig["externalAssetTenantId"] = wchConfig.WCHTenantId;
+					}
+				}
+				
+				if (externalAssetConfig != null) {
+					this.launchExternalAssetsPickerDialog(requestParent, this.parent.propertyName, externalAssetConfig.externalAssetHost, externalAssetConfig.externalAssetPickerUrl,externalAssetConfig.externalAssetTenantId,externalAssetConfig.externalAssetUserName, externalAssetConfig.externalAssetPassword);
+				}
+				else {
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ExternalAssetsPunchOutEditService", "parseObject", "The punch out edit service did not return punchOut configurations. url: " + this.url);
+				}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method launches the punch-out dialog with the embedded iFrame asset picker.
+			
+			@param cmc/foundation/ModelObject o: the model object
+			@param string propertyName the name of the property
+			@param string externalAssetHost the external asset picker host
+			@param string externalAssetPickerUrl: the external asset picker path URL
+		-->
+		<method args="o, propertyName, externalAssetHost, externalAssetPickerUrl, externalAssetTenantId, externalAssetUserName, externalAssetPassword" name="launchExternalAssetsPickerDialog">
+			<![CDATA[
+			this.o = o;
+			this.o.incrementReferenceCount();
+			
+			if (!this.punchOutCompleteDel) {
+				this.punchOutCompleteDel = new EventHandler.Class(this, "punchOutComplete");
+			}
+			this.punchOutCompleteDel.connect(RootComponent.Singleton, "oncallbackvalue");
+			if (this.dialogClass && this.dialogClass != ""){ 
+				require([this.dialogClass], function(ExternalAssetsPickerDialog) {
+					ExternalAssetsPickerDialog.Singleton.openDialog(propertyName, externalAssetHost, externalAssetPickerUrl, externalAssetTenantId ,externalAssetUserName,externalAssetPassword);
+				});
+			}
+			else {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "SEVERE", "cmc/foundation/ExternalAssetsPunchOutEditService", "launchExternalAssetsPickerDialog", "The punch out edit service did not have valid punchOut configurations. dialogClass: " + this.dialogClass);
+			}
+			]]>
+		</method>
+	</PunchOutEditService>
+</Definitions>

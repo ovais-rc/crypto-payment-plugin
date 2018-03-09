@@ -1,0 +1,734 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%-- 
+  *****
+  * This JSP file initializes the Layout info popup
+  *****
+--%>
+<!-- BEGIN LayoutInfoPopupDisplay.jspf-->
+<c:set var="catalogEntrySearchProfile" value="IBM_Admin_findProductByIds"/>
+<c:set var="catalogGroupSearchProfile" value="IBM_Admin_findCategoryByIds"/>
+
+<c:if test="${empty layoutSpotArrowId}">
+	<c:set var="layoutSpotArrowId" value="0" scope="request"/>
+	<c:set var="activityArrowId" value="0" scope="request"/>
+	<script type="text/Javascript">
+		function toggleTable(name, index) {
+			var arrowElement = document.getElementById(name + "ArrowId" + index);
+			var rowElement = document.getElementById(name + "TableId" + index);
+			if(arrowElement.className == "expand_arrow") {
+				arrowElement.className = "contract_arrow";
+				rowElement.style.display = "none";
+			}
+			else {
+				arrowElement.className = "expand_arrow";
+				rowElement.style.display = "block";
+			}
+		}
+		function resetStackOrder(topItem, bottomItem){			
+			var topItemWindow = document.getElementById(topItem);
+			var bottomItemWindow = document.getElementById(bottomItem);
+			if (topItemWindow != null && bottomItemWindow != null){	
+				bottomItemWindow.style.zIndex = 1000; 	
+				topItemWindow.style.zIndex = 1001;				
+			}
+		}
+		
+	</script>
+</c:if>	
+	
+<c:set var="haveMultipleSpots" value="false" />
+<c:set var="currentTargetEvaluated" value="" />
+<c:set var="currentDeviceClass" value="" />
+<c:set var="foundFirstActivity" value="false" />
+<c:set var="LayoutLayoutSamePriorityNotAppliedResult" value="false"/>
+
+<jsp:useBean id="bottomMessagesMap" class="java.util.LinkedHashMap" />
+		
+<div id="LayoutInfo_popup_Layout" class="espot_dialog_popup" dojoType="dijit.Dialog" maxRatio="1" role="dialog" style="display: none" title="Layout" onClick="resetStackOrder('LayoutInfo_popup_Layout','generateURL')">
+
+<c:if test="${empty previewText}">
+        <fmt:setBundle basename="com.ibm.commerce.stores.preview.properties.StorePreviewer" var="previewText"  scope="request"/>
+</c:if>
+	<div class="pageinfo_header_top">
+		<div class="header">
+				<a id="close_layout_info" href="javascript:hideESpotInfoPopup('LayoutInfo_popup_Layout');">
+					<img onmouseover="this.src='${staticIBMAssetAliasRoot}/images/preview/storepreview_window_close_icon_hover.png'" onmouseout="this.src='${staticIBMAssetAliasRoot}/images/preview/storepreview_window_close_icon.png'" onmousedown="this.src='${staticIBMAssetAliasRoot}/images/preview/storepreview_window_close_icon_press.png'" src="${staticIBMAssetAliasRoot}/images/preview/storepreview_window_close_icon.png" alt="">
+				</a>
+				<c:choose>
+					<c:when test="${layoutPreviewPageGroup == 'Search'}">
+						<img aria-describedby="layoutInfoDialogSearchTooltipAdditionalInfo" class="tooltip" id="layoutInfoDialogSearchTooltipId" tabindex="0" src="<c:out value="${jspStoreImgDir}" />images/cmc/extended_help.png" alt="<fmt:message key="storePreviewExtendedHelp" bundle='${previewText}' />"/>
+						<span id="layoutInfoDialogSearchTooltipAdditionalInfo" class="spanacce"><fmt:message key="storePreviewShowExtendedHelp" bundle='${previewText}' /></span>
+						<script type="text/javascript">
+							require(["dojo/ready", "dijit/Tooltip", "dojo/on"], function(ready, Tooltip, on){
+								var layoutInfoDialogSearchTooltip = new Tooltip({
+									connectId: ["layoutInfoDialogSearchTooltipId"],
+									label: "<fmt:message key="layoutInfoDialogSearchTooltip" bundle='${previewText}' />"
+								});
+								
+								// remove event to show tooltip when focus and add event to show tooltip when press enter
+								layoutInfoDialogSearchTooltip._connections[0][1].remove();
+								on(dojo.byId("layoutInfoDialogSearchTooltipId"), "keydown", function(event) {if (event.keyCode == 13) {layoutInfoDialogSearchTooltip.open(dojo.byId("layoutInfoDialogSearchTooltipId"));}});
+							});
+						</script>
+						<div class="header_title"><fmt:message key="layoutInfoDialogSearchTitle" bundle='${previewText}' /></div>
+					</c:when>
+					<c:otherwise>
+						<img aria-describedby="layoutInfoDialogPageTooltipAdditionalInfo" class="tooltip" id="layoutInfoDialogPageTooltipId" tabindex="0" src="<c:out value="${jspStoreImgDir}" />images/cmc/extended_help.png" alt="<fmt:message key="storePreviewExtendedHelp" bundle='${previewText}' />"/>
+						<span id="layoutInfoDialogPageTooltipAdditionalInfo" class="spanacce"><fmt:message key="storePreviewShowExtendedHelp" bundle='${previewText}' /></span>
+						<script type="text/javascript">
+							require(["dojo/ready", "dijit/Tooltip", "dojo/on"], function(ready, Tooltip, on){
+								var layoutInfoDialogPageTooltip = new Tooltip({
+									connectId: ["layoutInfoDialogPageTooltipId"],
+									label: "<fmt:message key="layoutInfoDialogPageTooltip" bundle='${previewText}' />"
+								});
+								
+								// remove event to show tooltip when focus and add event to show tooltip when press enter
+								layoutInfoDialogPageTooltip._connections[0][1].remove();
+								on(dojo.byId("layoutInfoDialogPageTooltipId"), "keydown", function(event) {if (event.keyCode == 13) {layoutInfoDialogPageTooltip.open(dojo.byId("layoutInfoDialogPageTooltipId"));}});
+
+							});
+						</script>
+						<div class="header_title"><fmt:message key="layoutInfoDialogPageTitle" bundle='${previewText}' /></div>
+					</c:otherwise>
+				</c:choose>
+		</div>
+		<div class="whitespace_background">
+			<div class="content_container">
+
+				<div class="sub_header">	
+					<div class="icon${layoutPreviewPageGroup}"></div>
+					<c:choose>
+						<c:when test="${layoutPreviewPageGroup == 'Search'}">
+							<div class="title_container">
+								<div class="title">
+								  <fmt:message key="layoutInfoDialogPageTypeSearch" bundle='${previewText}'>
+											<fmt:param><c:out value="${layoutPreviewPageName}"/></fmt:param>		
+									</fmt:message>	
+								</div>											
+							</div>							
+						</c:when>
+						<c:otherwise>	
+							<div class="title_container">
+								<div class="title">
+								  <fmt:message key="layoutInfoDialogPageName" bundle='${previewText}'>
+											<fmt:param><c:out value="${layoutPreviewPageName}"/></fmt:param>		
+									</fmt:message>									
+								</div>
+								<div class="clear_float"></div>
+								<div class="sub_title"><fmt:message key="layoutInfoDialogPageType${layoutPreviewPageGroup}" bundle='${previewText}' /></div>
+							</div>
+
+							<c:choose>
+								<c:when test="${layoutPreviewPageGroup == 'Category'}">
+									<c:set var="pageClick2EditSearchType" value="FindCategoryBrowsingPages"/>
+								</c:when>
+								<c:when test="${layoutPreviewPageGroup == 'Product' || layoutPreviewPageGroup == 'Item' 
+												|| layoutPreviewPageGroup == 'Bundle' || layoutPreviewPageGroup == 'Kit'
+												|| layoutPreviewPageGroup == 'DynamicKit' || layoutPreviewPageGroup == 'PredDynaKit'}">
+									<c:set var="pageClick2EditSearchType" value="FindCatalogEntryBrowsingPages"/>
+								</c:when>
+								<c:otherwise>
+									<c:set var="pageClick2EditSearchType" value="FindContentPages"/>
+								</c:otherwise>		
+							</c:choose>																						
+
+							<c:if test="${!empty layoutPreviewPageName}">
+								<c:url var="clickToEditURL" value="/cmc/EditBusinessObject" context="/">
+									<c:param name="toolId" value="pageComposer"/>
+									<c:param name="storeId" value="${storeId}"/>
+									<c:param name="languageId" value="${langId}"/>
+									<c:param name="storeSelection" value="eSite"/>
+									<c:param name="searchType" value="${pageClick2EditSearchType}"/>
+									<c:param name="searchOption.searchText" value="${layoutPreviewPageName}"/>
+									<c:param name="searchOption.searchUniqueId" value="${layoutPreviewPageId}"/>
+								</c:url>
+								<div class="edit">
+									<a id="click2edit_Page" href="javascript:void(0)" title="<fmt:message key="Click2Edit_Page" bundle='${previewText}'/>" class="click2edit_button" onclick="window.parent.callManagementCenter('<wcf:out escapeFormat="js" value="${clickToEditURL}"/>');">
+										<fmt:message key="Click2Edit_Edit" bundle='${previewText}'/>
+									</a>
+								</div>
+							</c:if>
+
+							<div class="clear_float"></div>
+						</c:otherwise>	
+					</c:choose>
+				</div> <!-- end sub_header -->
+				
+				<div class="activities_container">
+
+					<div class="title_container">
+						<div class="title"><fmt:message key="LayoutTitle" bundle='${previewText}' /></div>
+						<c:url var="clickToCreateURL" value="/cmc/CreateBusinessObject" context="/">
+							<c:param name="toolId" value="pageComposer"/>
+							<c:param name="storeId" value="${storeId}"/>
+							<c:param name="languageId" value="${langId}"/>
+							<c:param name="storeSelection" value="prompt"/>
+							<c:param name="objectType" value="PageLayout"/>
+							<c:param name="newObjectOption.layoutPreviewPageGroup" value="${layoutPreviewPageGroup}"/>
+							<c:param name="newObjectOption.layoutPreviewPageId" value="${layoutPreviewPageId}"/>
+						</c:url>
+						<div class="create">
+							<a id="click2create_Layout" href="javascript:void(0)" title="<fmt:message key="Click2Create_Layout" bundle='${previewText}'/>" class="click2create_button" onclick="window.parent.callManagementCenter('<wcf:out escapeFormat="js" value="${clickToCreateURL}"/>');">
+								<fmt:message key="Click2Edit_Create" bundle='${previewText}'/>
+							</a>
+						</div>
+					</div>
+					
+					<c:choose>
+					 <c:when test="${layoutPreviewLayoutDefault == 'false'}" >
+					 	<div class="layout_regular_text" id="display_activity_layout"><fmt:message key="LayoutLayoutApplied" bundle='${previewText}' /></div>
+					  <div class="clear_float"></div>
+					  <div class="expand_title">
+							<div class="title"><c:out value="${layoutPreviewLayoutName}" /></div>
+							<c:url var="clickToEditURL" value="/cmc/EditBusinessObject" context="/">
+								<c:param name="toolId" value="pageComposer"/>
+								<c:param name="storeId" value="${storeId}"/>
+								<c:param name="languageId" value="${langId}"/>
+								<c:param name="storeSelection" value="eSite"/>
+								<c:param name="searchType" value="FindStorePageLayouts"/>
+								<c:param name="searchOption.searchText" value="${layoutPreviewLayoutName}"/>
+								<c:param name="searchOption.searchUniqueId" value="${layoutPreviewLayoutId}"/>
+							</c:url>
+							<div class="edit" id="click2edit_LayoutSection">
+								<a id="click2edit_Layout" href="javascript:void(0)" title="<fmt:message key="Click2Edit_Layout" bundle='${previewText}'/>" class="click2edit_button" onclick="window.parent.callManagementCenter('<wcf:out escapeFormat="js" value="${clickToEditURL}"/>');">
+									<fmt:message key="Click2Edit_Edit" bundle='${previewText}'/>
+								</a>
+							</div>					
+						</div>
+						<div class="clear_float"></div>
+					 </c:when>
+					 <c:otherwise>
+						<div class="layout_regular_text" id="display_use_default_layout">
+							<fmt:message key="Layout${layoutPreviewPageGroup}UseDefaultLayout" bundle='${previewText}' />				
+						</div>
+						<div class="clear_float"></div>
+					</c:otherwise>
+				</c:choose>							
+
+				</div>
+
+				<div class="activities_container">
+
+					<div class="title_container">
+						<div class="title"><fmt:message key="LayoutEvaluationDetailsTitle" bundle='${previewText}' /></div>
+					</div>
+					
+					<c:forEach var="pr" items="${layoutPreviewReport}" varStatus="prCounter">
+						<c:forTokens items="${pr}" delims="|" var="token" begin="0" end="0">
+							<c:set var="tokenKey" value="${token}" />
+						</c:forTokens>
+						
+						<c:choose>
+						
+							<c:when test="${tokenKey == 'SpotOriginalEvaluationOrder'}">
+								<c:set var="haveMultipleSpots" value="true" />
+								<c:set var="tokens" value="${fn:split(pr, '|')}"/>
+								
+								<div class="expand_title">
+									<div id="catalogHierarchyArrowId0" class="expand_arrow" onclick="toggleTable('catalogHierarchy', '0'); return false;"></div>
+									<div class="catalog_title" onclick="toggleTable('catalogHierarchy', '0'); return false;">
+										<fmt:message key="Layout${layoutPreviewPageGroup}HierarchyEvaluated" bundle='${previewText}' />
+									</div>							
+									<div class="clear_float"></div>
+	          			<div id="catalogHierarchyTableId0" >
+
+									
+										<div class="category_container">	
+											<ol>
+												<c:forTokens items="${tokens[1]}" delims="," var="spot">
+													<c:set var="spotName" value="${fn:split(fn:trim(spot), '_')}"/>
+
+													<c:choose>
+														<c:when test="${spotName[0] == 'Category'}">
+															<c:remove var="cgObject" scope="page"/>
+															<c:catch var="searchServerException">
+																<wcf:rest var="cgObject" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/byId/${spotName[1]}" >	
+																	<wcf:param name="langId" value="${langId}"/>
+																	<wcf:param name="currency" value="${env_currencyCode}"/>
+																	<wcf:param name="responseFormat" value="json"/>		
+																	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+																	<wcf:param name="profileName" value="${catalogGroupSearchProfile}" />
+																</wcf:rest>
+																
+																<li><c:out value="${cgObject.catalogGroupView[0].name}"/></li>
+															</c:catch>
+														</c:when>													
+														<c:when test="${spotName[0] == 'Product' || spotName[0] == 'Item' 
+																	|| spotName[0] == 'Bundle' || spotName[0] == 'Kit'
+																	|| spotName[0] == 'DynamicKit' || spotName[0] == 'PredDynaKit'}">
+															<c:remove var="ceObject" scope="page"/>	
+															<c:catch var="searchServerException">
+																<wcf:rest var="ceObject" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${spotName[1]}" >
+																	<wcf:param name="langId" value="${langId}" />
+																	<wcf:param name="currency" value="${env_currencyCode}" />
+																	<wcf:param name="responseFormat" value="json" />
+																	<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+																	<wcf:param name="profileName" value="${catalogEntrySearchProfile}" />
+																</wcf:rest>
+																															
+																<li><c:out value="${ceObject.catalogEntryView[0].name} (${ceObject.catalogEntryView[0].partNumber})" /></li>
+															</c:catch>
+														</c:when>	
+														<c:when test="${spotName[0] == 'Search'}">
+															<li><c:out value="${spotName[1]}"/></li>
+														</c:when>				
+													</c:choose>
+												</c:forTokens>
+											</ol>
+										</div>
+									</div>	
+								</div> <!-- end expand_title -->	
+													
+								<c:remove var="tokens" />
+							</c:when>		
+													
+							<c:when test="${tokenKey == 'SpotFound'}">
+								
+								<c:choose>
+								  <c:when test="${layoutPreviewReport[prCounter.index + 1] == 'NoScheduledActivities'}">
+								     <!-- ignore the SpotFound -->
+								  </c:when>
+								  <c:otherwise>
+										<c:set var="isEvaluatingSpot" value="true" />
+										<c:if test="${foundFirstActivity == 'false'}">
+								  		<c:set var="foundFirstActivity" value="true"/>
+											<div class="layout_regular_text"><fmt:message key="LayoutEvaluationDetailsInfo" bundle='${previewText}' /></div>
+											<div class="clear_float"></div>	
+										</c:if>
+								
+										<c:if test="${layoutPreviewPageGroup != 'Content'}">
+										  <c:set var="tokens" value="${fn:split(pr, '|')}"/>
+								
+										  <div class="expand_title">
+
+											  <div id="layoutSpotArrowId${layoutSpotArrowId}" class="expand_arrow" 
+												  onclick="toggleTable('layoutSpot', '<c:out value='${layoutSpotArrowId}'/>'); return false;">
+											  </div>
+											  <div class="title" onclick="toggleTable('layoutSpot', '<c:out value='${layoutSpotArrowId}'/>'); return false;">
+									  
+													<c:set var="spotName" value="${fn:split(fn:trim(tokens[4]), '_')}"/>
+
+													<c:choose>
+														<c:when test="${spotName[0] == 'Category'}">
+															<c:remove var="cgObject" scope="page"/>
+															<c:catch var="searchServerException">
+																<wcf:rest var="cgObject" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/byId/${spotName[1]}" >	
+																	<wcf:param name="langId" value="${langId}"/>
+																	<wcf:param name="currency" value="${env_currencyCode}"/>
+																	<wcf:param name="responseFormat" value="json"/>		
+																	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+																	<wcf:param name="profileName" value="${catalogGroupSearchProfile}" />
+																</wcf:rest>
+															</c:catch>
+															<c:set var="categoryActivityTitle" value="PageLayoutsAssignedToParentCategory" />
+															<c:if test="${layoutPreviewPageId == spotName[1]}">
+																<c:set var="categoryActivityTitle" value="PageLayoutsAssignedToCategory" />
+															</c:if>
+															<fmt:message key="${categoryActivityTitle}" bundle='${previewText}'>
+																<fmt:param><c:out value="${cgObject.catalogGroupView[0].name}"/></fmt:param>														
+															</fmt:message>															
+														</c:when>													
+														<c:when test="${spotName[0] == 'Product' || spotName[0] == 'Item' 
+														 || spotName[0] == 'Bundle' || spotName[0] == 'Kit'
+														 || spotName[0] == 'DynamicKit' || spotName[0] == 'PredDynaKit'}">
+															<c:remove var="ceObject" scope="page"/>
+															<c:catch var="searchServerException">
+																<wcf:rest var="ceObject" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byId/${spotName[1]}" >
+																	<wcf:param name="langId" value="${langId}" />
+																	<wcf:param name="currency" value="${env_currencyCode}" />
+																	<wcf:param name="responseFormat" value="json" />
+																	<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+																	<wcf:param name="profileName" value="${catalogEntrySearchProfile}" />
+																</wcf:rest>
+															</c:catch>
+															<fmt:message key="PageLayoutsAssignedTo${spotName[0]}" bundle='${previewText}'>
+																<fmt:param><c:out value="${ceObject.catalogEntryView[0].name}"/></fmt:param>														
+															</fmt:message>																
+														</c:when>			
+														<c:when test="${spotName[0] == 'Search' || spotName[0] == ' Search'}">
+															<fmt:message key="PageLayoutsAssignedToSearch" bundle='${previewText}'>
+																<fmt:param><c:out value="${spotName[1]}"/></fmt:param>														
+															</fmt:message>																
+														</c:when>																			
+													</c:choose>		
+																				  
+											  </div>							
+											  <div class="clear_float"></div>
+								  		</div>
+								  		<div id="layoutSpotTableId${layoutSpotArrowId}" class="activities">
+
+									  		<div class="data_table">
+									
+								  		<c:set var="layoutSpotArrowId" value="${layoutSpotArrowId + 1}" scope="request"/>
+								  		<c:remove var="tokens" />
+										</c:if>
+								
+									</c:otherwise>
+								</c:choose>
+								
+							</c:when>		
+											
+							<c:when test="${tokenKey == 'EvaluateSpotEnd'}">
+								<c:if test="${layoutPreviewPageGroup != 'Content'}">
+							    <c:if test="${!empty isEvaluatingSpot && isEvaluatingSpot}">
+								    </div> <!-- end data_table created in SpotFound -->	
+								  </div> <!-- end activities created in SpotFound -->	
+								  <div class="clear_float"></div>
+								  </c:if>
+								</c:if>
+								<c:set var="isEvaluatingSpot" value="false" />
+							</c:when>
+							<c:when test="${tokenKey == 'EvaluateActivitiesEnd' && haveMultipleSpots == 'false'}">
+								<c:if test="${layoutPreviewPageGroup != 'Content'}">
+							    <c:if test="${!empty isEvaluatingSpot && isEvaluatingSpot}">
+								    </div> <!-- end data_table created in SpotFound -->	
+								  </div> <!-- end activities created in SpotFound -->	
+								  <div class="clear_float"></div>
+								  </c:if>
+								</c:if>
+								<c:set var="isEvaluatingSpot" value="false" />
+							</c:when>								
+
+							<c:when test="${tokenKey == 'EvaluateActivity'}">
+								<!-- Format: EvaluateActivity|activityId|storeId|priority|startDate|endDate|activityName -->
+								<c:set var="tokens" value="${fn:split(pr, '|')}"/>
+								<c:set var="isEvaluatingActivity" value="true" />
+								<c:set var="evaluatingActivityId" value="${tokens[1]}" />
+								
+								<c:if test="${foundFirstActivity == 'false'}">
+								  <c:set var="foundFirstActivity" value="true"/>
+									<div class="layout_regular_text"><fmt:message key="LayoutEvaluationDetailsInfo" bundle='${previewText}' /></div>
+									<div class="clear_float"></div>	
+								</c:if>
+																
+								<c:remove var="param1" scope="page"/>
+								<c:remove var="param2" scope="page"/>
+								<c:remove var="param3" scope="page"/>
+								<c:remove var="param4" scope="page"/>
+								<c:remove var="param5" scope="page"/>
+
+								<c:forTokens items="${pr}" delims="|" var="token" begin="1" varStatus="status">
+									<c:choose>
+										<c:when test="${status.count == 1}">
+											<wcf:rest var="getPageDesignResponse" url="store/{storeId}/page_design">
+												<wcf:var name="storeId" value="${storeId}" encode="true"/>
+												<wcf:param name="catalogId" value="${catalogId}"/>
+												<wcf:param name="langId" value="${langId}"/>
+												<wcf:param name="q" value="byLayoutActivityId"/>
+												<wcf:param name="layoutActivityId" value="${token}"/>
+											</wcf:rest>
+											<c:set var="pgDesign" value="${getPageDesignResponse.resultList[0]}"/>
+											<c:set var="param1" value="${pgDesign.layoutName}"/>
+											<c:set var="layoutId" value="${pgDesign.layoutId}"/>
+										</c:when>
+										<c:when test="${status.count == 2}">
+											<c:set var="param2" value="${token}"/>
+										</c:when>
+										<c:when test="${status.count == 3}">
+											<c:set var="param3" value="${token}"/>
+										</c:when>
+										<c:when test="${status.count == 4 || status.count == 5}">
+											<c:remove var="activityDate" scope="page"/>
+											<c:set var="finalDate" value="${token}"/>
+											<c:catch>
+												<fmt:parseDate parseLocale="${dateLocale}" var="activityDate" value="${token}" pattern="yyyy-MM-dd HH:mm:ss.SSS" />
+											</c:catch>
+											<c:if test="${empty activityDate}">
+												<c:catch>
+													<fmt:parseDate parseLocale="${dateLocale}" var="activityDate" value="${token}" pattern="yyyy-MM-dd HH:mm:ss" />
+												</c:catch>
+											</c:if>
+											<c:if test="${!empty activityDate}">
+												<c:if test="${!empty cookie.WC_TOOLLOCALE.value}">
+													<fmt:setLocale value="${cookie.WC_TOOLLOCALE.value}" />
+												</c:if>
+												<fmt:formatDate var="finalDate" value="${activityDate}" type="both" dateStyle="long" timeStyle="short" />
+												<c:if test="${!empty cookie.WC_TOOLLOCALE.value}">
+													<fmt:setLocale value="${CommandContext.locale}" />
+												</c:if>
+											</c:if>
+											<c:if test="${status.count == 4}">
+												<c:choose>
+													<c:when test="${finalDate == ' '}" >
+														<fmt:message key="DateNotSet" var="param4" bundle='${previewText}'/>
+													</c:when>
+													<c:otherwise>
+														<c:set var="param4" value="${finalDate}"/>
+													</c:otherwise>
+												</c:choose>	
+											</c:if>
+											<c:if test="${status.count == 5}">
+												<c:choose>
+													<c:when test="${finalDate == ' '}" >
+														<fmt:message key="DateNotSet" var="param5" bundle='${previewText}'/>
+													</c:when>
+													<c:otherwise>
+														<c:set var="param5" value="${finalDate}"/>
+													</c:otherwise>
+												</c:choose>	
+											</c:if>
+										</c:when>
+										<c:when test="${status.count == 6}">
+											<c:set var="param6" value="${token}"/>
+										</c:when>
+									</c:choose>
+								</c:forTokens>
+								<div class="expand_title">
+									<div id="activityArrowId${activityArrowId}" class="expand_arrow" 
+										onclick="toggleTable('activity', <c:out value='${activityArrowId}'/>); return false;">
+									</div>
+									<div class="title" onclick="toggleTable('activity', <c:out value='${activityArrowId}'/>); return false;">${param1}</div>
+
+									<c:if test="${layoutId != layoutPreviewLayoutId}">
+										<c:url var="clickToEditURL" value="/cmc/EditBusinessObject" context="/">
+											<c:param name="toolId" value="pageComposer"/>
+											<c:param name="storeId" value="${storeId}"/>
+											<c:param name="languageId" value="${langId}"/>
+											<c:param name="storeSelection" value="eSite"/>
+											<c:param name="searchType" value="FindStorePageLayouts"/>
+											<c:param name="searchOption.searchText" value="${param1}"/>
+											<c:param name="searchOption.searchUniqueId" value="${layoutId}"/>
+										</c:url>
+										<div class="edit">
+											<a id="click2edit_Layout_${param1}" href="javascript:void(0)" title="<fmt:message key="Click2Edit_Layout" bundle='${previewText}'/>" class="click2edit_button" onclick="window.parent.callManagementCenter('<wcf:out escapeFormat="js" value="${clickToEditURL}"/>');">
+												<fmt:message key="Click2Edit_Edit" bundle='${previewText}' />
+											</a>
+										</div>
+									</c:if>
+
+								</div>
+								<div class="clear_float"></div>
+								<div id="activityTableId${activityArrowId}" class="activities">
+									<div class="clear_float"></div>
+									
+									<div class="data_table">
+										<div class="priority"><fmt:message key="PreviewReportPriority" bundle='${previewText}'/>:</div><div class="priority_data">${param3}</div>
+										<div class="start_date"><fmt:message key="PreviewReportStartDate" bundle='${previewText}'/>:</div><div class="start_date_data">${param4}</div>
+										<div class="end_date"><fmt:message key="PreviewReportEndData" bundle='${previewText}'/>:</div><div class="end_date_data">${param5}</div>
+										<div class="clear_float"></div>
+										
+								<c:set var="activityArrowId" value="${activityArrowId + 1}" scope="request"/>
+							</c:when>
+							
+							<c:when test="${tokenKey == 'EvaluateActivityEnd'}">
+									</div> <!-- end data_table created in EvaluateActivity -->	
+								</div> <!-- end activities created in EvaluateActivity -->	
+								<div class="clear_float"></div>
+								<c:set var="isEvaluatingActivity" value="false" />
+								
+							</c:when>
+							<c:when test="${tokenKey == 'PathEnd'}">
+								<c:set var="indent" value="${indent-5}"/>
+							</c:when>
+							
+							<c:when test="${tokenKey == 'Action'}">
+								<div>
+								  <c:choose>
+								  	<c:when test="${LayoutLayoutSamePriorityNotAppliedResult == 'true'}">
+											<fmt:message key="LayoutLayoutSamePriorityNotAppliedResult" bundle='${previewText}'/>
+										</c:when>
+										<c:otherwise>
+											<fmt:message key="LayoutLayoutAppliedResult" bundle='${previewText}'/>
+										</c:otherwise>
+									</c:choose
+								</div>
+							</c:when>						 
+
+							<c:when test="${tokenKey == 'deviceClassList'}">
+									<c:if test="${indent > 0}">
+										<c:forEach var="z" begin="0" end="${indent}">&nbsp;</c:forEach>
+									</c:if>
+									<c:set var="tokens" value="${fn:split(pr, '|')}"/>
+									<div>
+										<fmt:message key="${tokenKey}_${tokens[1]}" bundle='${previewText}'/>
+									</div>
+							</c:when>	
+							
+							<c:when test="${tokenKey == 'DataReturnedFromElement' || tokenKey == 'TargetTrue'}">
+								
+									<c:if test="${indent > 0}">
+										<c:forEach var="z" begin="0" end="${indent}">&nbsp;</c:forEach>
+									</c:if>
+	
+							</c:when>
+							<c:when test="${tokenKey == 'TargetUserBehavior'}">
+								<%-- Ignore --%>
+							</c:when>
+							<c:when test="${tokenKey == 'UseDefaultLayout'}">
+								<%-- Ignore --%>
+							</c:when>		
+							<c:when test="${tokenKey == 'DM_DeviceClass'}">
+								<c:set var="tokens" value="${fn:split(pr, '|')}"/>
+								<c:set var="currentDeviceClass" value="${tokens[1]}" />
+								<c:remove var="tokens" />							
+							</c:when>							
+							<c:when test="${tokenKey == 'Target'}">
+								<c:set var="tokens" value="${fn:split(pr, '|')}"/>
+								<c:set var="currentTargetEvaluated" value="${tokens[1]}" />
+								<c:remove var="tokens" />
+							</c:when>		
+							<c:when test="${tokenKey == 'TargetFalse'}">
+							  <fmt:message key="LayoutLayoutNotAppliedResult" bundle='${previewText}'/>
+								<c:choose>
+								  <c:when test="${currentTargetEvaluated == 'deviceClass'}">
+								  	<fmt:message key="DM_DeviceClass_${currentDeviceClass}" bundle='${previewText}'/>
+									</c:when>
+									<c:when test="${currentTargetEvaluated == 'currentCustomerBehaviorCategoryBrowsingAnyCommand'}">
+								  	<fmt:message key="LayoutCategoryLayoutNotAppliedResult" bundle='${previewText}'>
+												<fmt:param><c:out value="${layoutPreviewPageName}"/></fmt:param>
+								  	</fmt:message>
+									</c:when>
+								</c:choose>
+							</c:when>									
+							
+							<c:when test="${tokenKey == 'ActivityDatesNotApplicable'}">
+								<div class="evaluation_data">
+										<c:forTokens items="${pr}" delims="|" var="token" begin="1" varStatus="status">
+												<c:if test="${status.count == 1}">
+													<wcf:rest var="getPageDesignResponse" url="store/{storeId}/page_design">
+														<wcf:var name="storeId" value="${storeId}" encode="true"/>
+														<wcf:param name="catalogId" value="${catalogId}"/>
+														<wcf:param name="langId" value="${langId}"/>
+														<wcf:param name="q" value="byLayoutActivityId"/>
+														<wcf:param name="layoutActivityId" value="${token}"/>
+													</wcf:rest>
+													<c:set var="pgDesign" value="${getPageDesignResponse.resultList[0]}"/>
+													<fmt:message key="Layout${tokenKey}" bundle='${previewText}'>
+														<fmt:param><c:out value="${pgDesign.layoutName}"/></fmt:param>
+													</fmt:message>
+												</c:if>
+										</c:forTokens>
+								</div>
+							</c:when>
+														
+							<c:otherwise>
+								<c:choose>
+									<c:when test="${!empty isEvaluatingActivity && isEvaluatingActivity}">
+										<div class="evaluation_data">
+											<c:if test="${indent > 0}">
+												<c:forEach var="z" begin="0" end="${indent}">&nbsp;</c:forEach>
+											</c:if>
+											<c:set var="messageKey" value="${tokenKey}" />
+											<c:if test="${tokenKey == 'EnoughContent' || tokenKey == 'NotEnoughContent' ||
+															tokenKey == 'SameActivityPriority' || tokenKey == 'ActiveActivityNotEvaluated'    ||
+															tokenKey == 'ActivityDatesNotApplicable' || tokenKey == 'NextScheduledActivityTransition'    ||
+															tokenKey == 'StaticMarketingSpotBehavior' || tokenKey == 'DynamicMarketingSpotBehavior'}" >
+												<c:set var="messageKey" value="Layout${tokenKey}"/>
+											</c:if>
+											<c:if test="${tokenKey == 'SameActivityPriority'}" >
+												<c:set var="LayoutLayoutSamePriorityNotAppliedResult" value="true"/>
+											</c:if>											
+
+											<fmt:message key="${messageKey}" bundle='${previewText}'>
+												<c:forTokens items="${pr}" delims="|" var="token" begin="1" varStatus="status">
+														<fmt:param><c:out value="${token}"/></fmt:param>
+												</c:forTokens>
+											</fmt:message>								
+			
+											<c:if test="${tokenKey == 'PathBegin'}">
+												<c:set var="indent" value="${indent + 5}"/>
+											</c:if>
+										</div>
+									</c:when> 
+									<c:otherwise>
+									
+										<c:if test="${(tokenKey == 'StaticMarketingSpotBehavior' || tokenKey == 'DynamicMarketingSpotBehavior') &&
+										               layoutPreviewPageGroup != 'Content' && !empty isEvaluatingSpot && isEvaluatingSpot}" >
+										    <%-- probably spot with activities only in the future --%>
+								        </div> <!-- end data_table created in SpotFound -->	
+								      </div> <!-- end activities created in SpotFound -->	
+								      <div class="clear_float"></div>
+								      <c:set var="isEvaluatingSpot" value="false" />
+										</c:if>
+																			
+										<% pageContext.setAttribute("aBottomMessageDataMap", new java.util.HashMap()); %>
+										<c:set target="${bottomMessagesMap}" property="${pr}" value="${aBottomMessageDataMap}" />
+										<c:set target="${aBottomMessageDataMap}" property="messageName" value="${tokenKey}" />
+										<c:set target="${aBottomMessageDataMap}" property="message">
+											<c:if test="${indent > 0}">
+												<c:forEach var="z" begin="0" end="${indent}">&nbsp;</c:forEach>
+											</c:if>
+											
+											<fmt:message key="Layout${tokenKey}" bundle='${previewText}'>
+												<c:forTokens items="${pr}" delims="|" var="token" begin="1" varStatus="status">
+													<fmt:param><c:out value="${token}"/></fmt:param>
+												</c:forTokens>
+											</fmt:message>
+			
+											<c:if test="${tokenKey == 'PathBegin'}">
+												<c:set var="indent" value="${indent + 5}"/>
+											</c:if>
+										</c:set>
+									</c:otherwise>
+
+								</c:choose>
+									
+							</c:otherwise> 
+
+						</c:choose>
+					</c:forEach>
+					
+					<c:if test="${foundFirstActivity == 'false'}">
+						<div class="layout_regular_text"><fmt:message key="LayoutUseDefaultLayout" bundle='${previewText}' /></div>
+						<div class="clear_float"></div>	
+					</c:if>
+							
+				</div> <!-- end activities_container -->				
+						
+				<c:forEach items="${bottomMessagesMap}" var="aBottomMessage" varStatus="status">
+					<c:set var="aBottomMessageDataMap" value="${aBottomMessage.value}" />
+						
+					<%-- For now, we only display tooltip for dynamic e-spot behavior --%>
+					<c:if test="${aBottomMessageDataMap.messageName == 'DynamicMarketingSpotBehavior'}">
+						<div class="bottom_messages_container">
+							<img aria-describedby="LayoutBehaviorTooltipAdditionalInfo_${status.count}" class="bottom_message_tooltip" id="LayoutBehaviorTooltipId_${status.count}" tabindex="0" src="<c:out value="${jspStoreImgDir}" />images/cmc/extended_help.png" alt="<fmt:message key="storePreviewExtendedHelp" bundle='${previewText}' />"/>
+							<span id="LayoutBehaviorTooltipAdditionalInfo_${status.count}" class="spanacce"><fmt:message key="storePreviewShowExtendedHelp" bundle='${previewText}' /></span>
+							<script type="text/javascript">
+								require(["dojo/ready", "dijit/Tooltip", "dojo/on"], function(ready, Tooltip, on){
+									var LayoutBehaviorTooltip_${status.count} = new Tooltip({
+										connectId: ["LayoutBehaviorTooltipId_${status.count}"],
+										label: "<fmt:message key="LayoutBehaviorTooltip" bundle='${previewText}' />"
+									});
+									
+									// remove event to show tooltip when focus and add event to show tooltip when press enter
+									LayoutBehaviorTooltip_${status.count}._connections[0][1].remove();
+									on(dojo.byId("LayoutBehaviorTooltipId_${status.count}"), "keydown", function(event) {if (event.keyCode == 13) {LayoutBehaviorTooltip_${status.count}.open(dojo.byId("LayoutBehaviorTooltipId_${status.count}"));}});
+								});
+							</script>
+					   	<div class="bottom_message">${aBottomMessageDataMap.message}</div>
+							<div class="clear_float"></div>
+						</div> <!-- end bottom_messages_container -->		
+					</c:if>
+				</c:forEach> 
+				<c:remove var="bottomMessagesMap" />				
+													
+			</div> <!-- end content_container -->
+			<div class="pagination_container"></div>
+			<div class="clear_float"></div>
+		</div> <!-- end whitespace_background -->
+		<div class="clear_float"></div>
+	</div> <!-- end pageinfo_header_top --> 
+</div> <!-- end espot_dialog_popup -->
+	
+<script type="text/javascript" id="script_Layout">
+	dojo.addOnLoad(function(){
+		parseWidget("LayoutInfo_popup_Layout");		
+	});
+								
+</script>
+
+
+
+<!-- END LayoutInfoPopupDisplay.jspf-->

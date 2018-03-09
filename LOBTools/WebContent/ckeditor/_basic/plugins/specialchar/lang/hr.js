@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","hr",{options:"Opcije posebnog znaka",title:"Poseban znak",toolbar:"Umetni poseban znak"});

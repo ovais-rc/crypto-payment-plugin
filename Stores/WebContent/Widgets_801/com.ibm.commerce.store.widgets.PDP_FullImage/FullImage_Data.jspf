@@ -1,0 +1,209 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%-- Display SKU context-sensitive data when product ID is a SKU --%>
+<c:if test="${displaySKUContextData eq 'true'}">
+	<c:if test="${!empty itemId}">
+		<c:set var="productId" value="${itemId}" />
+	</c:if>
+	<c:set var="parentCatEntryId" value="${productId}"/>
+</c:if>
+
+<%@ include file="/Widgets_801/Common/PDP_CatalogEntryData.jspf" %>
+
+<c:set var="catalogEntryID" value="${catalogEntryDetails.uniqueID}" />
+<c:set var="shortDescription" value="${catalogEntryDetails.shortDescription}" />
+<c:set var="entitledItems" value="${catalogEntryDetails.sKUs}"/>
+<c:set var="numberOfSKUs" value="${catalogEntryDetails.numberOfSKUs}"/>
+<c:if test="${numberOfSKUs eq 1}">
+	<c:set var="firstItemID" value="${entitledItems[0].uniqueID}"/>
+</c:if>
+<c:set var="attachments" value="${catalogEntryDetails.attachments}" />
+
+<c:set var="type" value="product" />
+
+<c:if test="${!empty catalogEntryDetails.thumbnail}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(catalogEntryDetails.thumbnail, 'http://') || fn:startsWith(catalogEntryDetails.thumbnail, 'https://'))}">
+				<wcst:resolveContentURL var="thumbNail" url="${catalogEntryDetails.thumbnail}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(catalogEntryDetails.thumbnail, '/store/0/storeAsset')}">
+				<c:set var="thumbNail" value="${storeContextPath}${catalogEntryDetails.thumbnail}" />
+			</c:when>
+			<c:otherwise>
+				<c:set var="thumbNail" value="${catalogEntryDetails.thumbnail}" />
+			</c:otherwise>
+		</c:choose>
+	</c:if>			
+	<c:if test="${!empty catalogEntryDetails.fullImage}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(catalogEntryDetails.fullImage, 'http://') || fn:startsWith(catalogEntryDetails.fullImage, 'https://'))}">
+				<wcst:resolveContentURL var="fullImage" url="${catalogEntryDetails.fullImage}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(catalogEntryDetails.fullImage, '/store/0/storeAsset')}">
+				<c:set var="fullImage" value="${storeContextPath}${catalogEntryDetails.fullImage}" />
+			</c:when>
+			<c:otherwise>
+				<c:set var="fullImage" value="${catalogEntryDetails.fullImage}" />
+			</c:otherwise>
+		</c:choose>
+</c:if>
+
+
+<%--
+Variable for Flex Flow options
+--%>
+<c:set var="miniShopCartEnabled" value="false"/>
+<flow:ifEnabled feature="miniShopCart">
+	<c:set var="miniShopCartEnabled" value="true"/>
+</flow:ifEnabled>
+
+<c:set var="compareEnabled" value="false"/>
+<flow:ifEnabled feature="ProductCompare">
+	<c:set var="compareEnabled" value="true"/>
+</flow:ifEnabled>
+
+<%--
+End
+--%>
+
+<c:set var="patternName" value="ProductURLWithParentCategory"/>
+<c:if test="${WCParam.categoryId != WCParam.top_category}">
+	<c:set var="patternName" value="ProductURLWithParentAndTopCategory"/>
+</c:if>
+<wcf:url var="productDisplayUrl" patternName="${patternName}" value="Product2">
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="storeId" value="${WCParam.storeId}"/>
+	<wcf:param name="productId" value="${catalogEntryID}"/>
+	<wcf:param name="langId" value="${WCParam.langId}"/>
+	<wcf:param name="parent_category_rn" value="${WCParam.categoryId}"/>
+	<wcf:param name="categoryId" value="${WCParam.categoryId}"/>
+	<wcf:param name="top_category" value="${WCParam.top_category}"/>
+	<wcf:param name="urlLangId" value="${urlLangId}" />
+</wcf:url>
+
+<c:choose>
+	<c:when test="${!empty fullImage}">
+		<c:set var="productFullImage" value="${fullImage}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="productFullImage" value="${hostPath}${jspStoreImgDir}images/NoImageIcon.jpg"/>
+	</c:otherwise>
+</c:choose>
+
+<c:if test="${!empty catalogEntryID}">
+	<c:choose>
+		<c:when test="${numberOfSKUs > 1}">
+			<c:set var="dragType" value="product"/>
+			<c:set var="dnd_catalogEntryID" value="${catalogEntryID}"/>
+		</c:when>
+		<c:otherwise>
+			<c:set var="dragType" value="item"/>
+			<c:set var="dnd_catalogEntryID" value="${firstItemID}"/>
+		</c:otherwise>
+	</c:choose>
+</c:if>
+
+<jsp:useBean id="angleThumbnailAttachmentMap" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="angleThumbnailAttachmentShortDescMap" class="java.util.HashMap" type="java.util.Map"/>	
+<jsp:useBean id="angleFullImageAttachmentMap" class="java.util.HashMap" type="java.util.Map"/>		
+
+<c:set var="thumbnailCount" value="1" />
+<c:set var="fullImageCount" value="1" />
+<c:forEach  var="attachment" items="${attachments}">
+	<c:if test="${'IMAGE_SIZE_40' eq attachment.usage}">
+		<c:set var="image40Attachment" value="${attachment}" />
+	</c:if>
+	<c:if test="${'ANGLEIMAGES_THUMBNAIL' eq attachment.usage}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(attachment.attachmentAssetPath, 'http://') || fn:startsWith(attachment.attachmentAssetPath, 'https://'))}">
+				<wcst:resolveContentURL var="resolvedPath" url="${attachment.attachmentAssetPath}"/>
+				<c:set target="${angleThumbnailAttachmentMap}" property="${thumbnailCount}" value="${resolvedPath}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '/store/0/storeAsset')}">
+				<c:set target="${angleThumbnailAttachmentMap}" property="${thumbnailCount}" value="${storeContextPath}${attachment.attachmentAssetPath}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '[extContentURI]') && env_inPreview}">
+				<c:set var="assetPathTemp" value="${fn:substringAfter(attachment.attachmentAssetPath, '/StoreImageServlet')}"/>
+				<c:set target="${angleThumbnailAttachmentMap}" property="${thumbnailCount}" value="${staticAssetContextRoot}/StoreImageServlet${assetPathTemp}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '[extContentURI]')}">
+				<c:set target="${angleThumbnailAttachmentMap}" property="${thumbnailCount}" value="${fn:replace(attachment.attachmentAssetPath, '[extContentURI]', '')}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set target="${angleThumbnailAttachmentMap}" property="${thumbnailCount}" value="${staticAssetContextRoot}/${attachment.attachmentAssetPath}"/>
+			</c:otherwise>
+		</c:choose>
+		<c:set target="${angleThumbnailAttachmentShortDescMap}" property="${thumbnailCount}" value="${attachment.shortdesc}"/>
+		<c:set var="thumbnailCount" value="${thumbnailCount + 1}" />
+	</c:if>
+	<c:if test="${'ANGLEIMAGES_FULLIMAGE' eq attachment.usage}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(attachment.attachmentAssetPath, 'http://') || fn:startsWith(attachment.attachmentAssetPath, 'https://'))}">
+				<wcst:resolveContentURL var="resolvedPath" url="${attachment.attachmentAssetPath}"/>
+				<c:set target="${angleFullImageAttachmentMap}" property="${fullImageCount}" value="${resolvedPath}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '/store/0/storeAsset')}">
+				<c:set target="${angleFullImageAttachmentMap}" property="${fullImageCount}" value="${storeContextPath}${attachment.attachmentAssetPath}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '[extContentURI]') && env_inPreview}">
+				<c:set var="assetPathTemp" value="${fn:substringAfter(attachment.attachmentAssetPath, '/StoreImageServlet')}"/>
+				<c:set target="${angleFullImageAttachmentMap}" property="${fullImageCount}" value="${staticAssetContextRoot}/StoreImageServlet${assetPathTemp}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(attachment.attachmentAssetPath, '[extContentURI]')}">
+				<c:set target="${angleFullImageAttachmentMap}" property="${fullImageCount}" value="${fn:replace(attachment.attachmentAssetPath, '[extContentURI]', '')}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set target="${angleFullImageAttachmentMap}" property="${fullImageCount}" value="${staticAssetContextRoot}/${attachment.attachmentAssetPath}"/>
+			</c:otherwise>
+		</c:choose>
+		<c:set var="fullImageCount" value="${fullImageCount + 1}" />
+	</c:if>
+</c:forEach>
+
+<c:choose>
+	<c:when test="${!empty image40Attachment}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(image40Attachment.attachmentAssetPath, 'http://') || fn:startsWith(image40Attachment.attachmentAssetPath, 'https://'))}">
+				<wcst:resolveContentURL var="productCompareImagePath" url="${image40Attachment.attachmentAssetPath}"/>
+			</c:when>
+			<c:when test="${fn:startsWith(image40Attachment.attachmentAssetPath, '/store/0/storeAsset')}">
+				<c:set var="productCompareImagePath" value="${storeContextPath}${image40Attachment.attachmentAssetPath}" />
+			</c:when>
+			<c:when test="${fn:startsWith(image40Attachment.attachmentAssetPath, '[extContentURI]') && env_inPreview}">
+				<c:set var="assetPathTemp" value="${fn:substringAfter(image40Attachment.attachmentAssetPath, '/StoreImageServlet')}"/>
+				<c:set var="productCompareImagePath" value="${env_customImageContextPath}/StoreImageServlet${assetPathTemp}" />
+			</c:when>
+			<c:when test="${fn:startsWith(image40Attachment.attachmentAssetPath, '[extContentURI]')}">
+				<c:set var="productCompareImagePath" value="${fn:replace(image40Attachment.attachmentAssetPath, '[extContentURI]', '')}" />
+			</c:when>
+			<c:otherwise>
+				<c:set var="productCompareImagePath" value="${env_customImageContextPath}/${image40Attachment.attachmentAssetPath}" />
+			</c:otherwise>
+		</c:choose>
+	</c:when>
+	<c:when test="${!empty thumbNail}">
+		<c:set var="productCompareImagePath" value="${thumbNail}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="productCompareImagePath" value="${jspStoreImgDir}images/NoImageIcon_sm.jpg" />
+	</c:otherwise>
+</c:choose>
+
+<c:set var="compareImageDescription" value="${fn:replace(shortDescription, search, replaceCmprStr)}"/>
+<c:set var="compareImageDescription" value="${fn:replace(compareImageDescription, search01, replaceCmprStr)}"/>
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>

@@ -1,0 +1,2598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		The class cmc/foundation/BaseCheckbox applies WeSphere Commerce own visual design including the image resource 
+		as well as the label color. Use cmc/foundation/BaseCheckbox when implementing a basic check box
+		that has the WeSphere Commerce look and feel. 
+		
+		The example below shows a check box that will enable help for the user.
+		@START_CODE		
+			<BaseCheckbox name="helpEnabledCheckbox" text="${resourceBundle.helpEnabled}" />
+		@END_CODE
+	-->
+	<BaseValueComponent classDefinition="true" definitionName="cmc/foundation/BaseCheckbox">
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<variable name="focusable" value="true"/>
+		<variable name="enabled" type="boolean" value="true"/>
+		<variable name="value" value="${false}"/>
+		<variable name="text_x" type="number" value="24"/>
+		<!--- Flags whether to use radio button. The default value is checkbox. -->
+		<variable name="useRadioButton" type="boolean" value="false"/>
+		<!--- The y position of the text label. -->
+		<variable name="text_y" type="number" value="0"/>
+		<method args="value" name="set_value">
+			<![CDATA[
+			if (value == "true") {
+				value = true;
+			}
+			else if (value == "false") {
+				value = false;
+			}
+			else {
+				value = !!value;
+			}
+			this.value = value;
+			EventUtil.trigger(this, "onvalue", value);
+			]]>
+		</method>
+		<method name="_showEnabled">
+			<![CDATA[
+			this._applystyle(this.style); 
+			]]>
+		</method>
+		<handler name="onclick">
+			<![CDATA[
+			if (this._enabled) {
+				this.setVariable("value", !this.value);
+			}
+			]]>
+		</handler>
+		<method name="doSpaceUp">
+			<![CDATA[
+			if (this._enabled) {
+				this.setVariable("value", !this.value);
+			}
+			]]>
+		</method>
+		<TextComponent name="_title" resize="true" text="${this.parent.text}" x="${this.classroot.text_x}" visible="${this.parent.text != null &amp;&amp; this.parent.text != ''}"/>
+     	<StateButton maxstate="1" name="cb" reference="${this.parent}" statelength="2" downImage="1" disabledImage="2" statenum="${this.parent.value ? 1 : 0}"/>
+		<!---
+			@keywords private
+			Updates the check box image to use depending on whether the check box is enabled or disable.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.useRadioButton) {
+				this.cb.setVariable("imageSet", "radioButton");
+			}
+			else {
+				this.cb.setVariable("imageSet", "checkboxButton");
+			}
+			]]>
+		</method>
+
+        <!---
+			@keywords private
+			Updates the check box label color to use for both enabled and disabled states.
+		-->
+        <method args="s" name="_applystyle">
+			<![CDATA[
+			if (this._enabled) {
+				this._title.setVariable('fgcolor', null);
+			}
+			else {
+				this._title.setVariable('fgcolor', "#b1b1b1");
+			}
+			]]>
+		</method>
+        
+        <!---
+			@keywords private
+			Handle onfocus event. 
+		-->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this.cb,
+					offset: -1
+				});
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+		-->
+		<handler name="onuseRadioButton">
+			<![CDATA[
+			if (this.cb) {
+				if (this.useRadioButton) {
+					this.cb.setVariable("imageSet", "radioButton");
+				}
+				else {
+					this.cb.setVariable("imageSet", "checkboxButton");
+				}
+				this.cb.setStateNum(this.value ? 1 : 0);
+			}
+			]]>
+		</handler>
+	</BaseValueComponent>
+	
+	<!---
+		@keywords private
+		
+		This check box implementation is for internal use by both {@link cmc/foundation/PropertyCheckbox} and {@link cmc/foundation/GridCheckbox}
+		to bind a {@link cmc/foundation/ModelProperty} with the check box.
+		The relationship is bi-directional.  This means that the check box state will be refreshed to represent the value
+		of the property and the new property value will be stored when a user changes the check box state.
+	-->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/foundation/Checkbox">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!--- Reference to cmc/foundation/ModelProperty object that is being edited. -->
+		<variable name="property" value="${null}"/>
+		
+		<!--- Optional value to return when checked. Default is "true" -->
+		<variable name="trueValue" type="string" value="true"/>
+		
+		<!--- Optional value to return when not checked. Default is "false" -->
+		<variable name="falseValue" type="string" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.property) {
+				this.updateValue();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this check box. Listeners are created to
+			watch the property value. If the property changes at anytime, the value of this checkbox will be
+			refreshed.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this check box.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					this.__updateValueLock = true;
+					this.setVariable("value", false);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update and refresh the cmc/foundation/Checkbox value with a new cmc/foundation/ModelProperty value.
+			@event onvalue the event that indicates the value of this checkbox is changed
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete) {
+				var newValue = (this.property.value == this.trueValue);
+				if (newValue != this.value) {
+					this.__updateValueLock = true;
+					this.setVariable("value", newValue);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the cmc/foundation/ModelProperty to represent the cmc/foundation/Checkbox value. This method is called when the check box
+			value is changed.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (this.property && (this.property != null)) {
+					var newValue = this.value ? this.trueValue : this.falseValue;
+					this.property.change(newValue);
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/Checkbox", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.property.o.logString());
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			When the value of the check box is changed by the business user, the associated property will be updated
+			with the new checkbox value.
+		-->		
+		<handler name="onvalue">
+			<![CDATA[
+			if (!this.__updateValueLock) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+		<!---
+			@keywords private
+		-->
+	 	<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</BaseCheckbox>
+	
+	<!---
+		@keywords final
+		cmc/foundation/PropertyCheckbox is a property editor and is used to create a check box that binds to a property
+		value {@link cmc/foundation/ModelProperty}.  Use cmc/foundation/PropertyCheckbox when implementing a check box inside a
+		{@link cmc/foundation/PropertyPane} or {@link cmc/foundation/PropertyGroup}.  The class cmc/foundation/PropertyCheckbox is final, to create
+		a new properties widget extend {@link cmc/foundation/PropertyEditor}.
+		
+		The example	below would create a check box inside a properties view that would indicate the state of a help enabled
+		property. In this case, '1' would be used instead of 'true' while the help enabled check box is checked and '0'
+		instead of 'false' while the help enabled check box is unchecked.
+
+		@START_CODE
+			<PropertyCheckbox
+				trueValue="1"
+				falseValue="0"
+				propertyName="helpEnabled"
+				promptText="${resourceBundles.helpEnabled}"/>
+		@END_CODE
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyCheckbox">
+		<dependency localName="Checkbox" moduleName="cmc/foundation/Checkbox"/>
+		<dependency localName="PropertyCheckboxClone" moduleName="cmc/foundation/PropertyCheckboxClone"/>
+		<!--- Optional value to return when checked. Default is "true" -->
+		<variable name="trueValue" type="string" value="true"/>
+		<!--- Optional value to return when not checked. Default is "false" -->
+		<variable name="falseValue" type="string" value="false"/>
+		<!--- Optional text information displayed on the right hand side of the checkbox -->
+		<variable name="text" type="string" value=""/>
+		
+		<!--- @keywords private -->
+		<handler name="ontext">
+			<![CDATA[
+			if (this.editor) {
+				this.editor.setVariable("text", this.text);
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			This method creates a {@link cmc/foundation/PropertyCheckboxClone} for the given {@link cmc/foundation/StoreLanguage}.
+			
+			@param cloneLanguage The cmc/foundation/StoreLanguage for the new instance of cmc/foundation/PropertyEditorClone.
+		-->
+		<method args="cloneLanguage" name="createLanguageClone">
+			<![CDATA[
+			return new PropertyCheckboxClone.Class(this.parent, {
+				originalPropertyEditor: this,
+				language: cloneLanguage
+			});
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create the check box editor for the given property component. This method overrides the createEditor method in
+			the cmc/foundation/PropertiesComponent class.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new Checkbox.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				y: 1,
+				property: parentComponent.property,
+				trueValue: this.trueValue,
+				falseValue: this.falseValue,
+				text: this.text
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords private
+		A cloned cmc/foundation/PropertyCheckbox for MLS support
+	-->
+	<PropertyEditorClone classDefinition="true" definitionName="cmc/foundation/PropertyCheckboxClone">
+		<!--- @keywords private -->
+		<variable name="text" type="string" value="${this.originalPropertyEditor.text}"/>
+		<!--- @keywords private -->
+		<handler name="ontext">
+			<![CDATA[
+			if (this.editor) {
+				this.editor.setVariable("text", this.text);
+			}
+			]]>
+		</handler>
+	</PropertyEditorClone>
+	
+	<!---
+		@keywords final
+		A wrapper around {@link cmc/foundation/Checkbox} for use with the {@link cmc/foundation/ObjectGrid}.
+		Unlike the other grid wrappers,
+		this will not show text as the viewer class, but the actual check box widget.
+		cmc/foundation/GridCheckbox works similar to {@link cmc/foundation/PropertyCheckbox} except it will display a column of
+		check boxes inside of {@link cmc/foundation/ObjectGrid}.
+		
+		The below example goes inside {@link cmc/foundation/ObjectGrid} tag. It would create a {@link cmc/foundation/Checkbox} column
+		that would associate a check box to the object_desc_published property for each object displayed in the grid.
+		In this case, '1' would be used instead of 'true' while the publish enabled check box is checked and '0'
+		instead of 'false' while the publish enabled check box is unchecked.
+		
+		@START_CODE
+		<GridCheckbox
+			trueValue="1"
+			falseValue="0"
+        	name="published"
+            objectPath="ObjectGroup/ObjectGroupDescription"
+            propertyName="object_desc_published"
+            text="${resourceBundle.displayToCustomers}"
+            visible="true"
+            width="140"
+            alignment="center"/>
+		@END_CODE
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridCheckbox">
+		<dependency localName="GridCheckboxViewer" moduleName="cmc/foundation/GridCheckboxViewer"/>
+		<dependency localName="ColumnCheckboxEditor" moduleName="cmc/foundation/ColumnCheckboxEditor"/>
+		<dependency localName="GridCheckboxEditor" moduleName="cmc/foundation/GridCheckboxEditor"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridCheckboxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridCheckboxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridCheckboxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridCheckboxEditor}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/ColumnCheckboxEditor" to create Column Editor editor.
+		-->
+		<variable name="columnEditorClass" value="${ColumnCheckboxEditor}"/>
+		<!--- Optional value to return when checked. Default is "true". -->
+		<variable name="trueValue" type="string" value="true"/>
+		<!--- Optional value to return when checked. Default is "false". -->
+		<variable name="falseValue" type="string" value="false"/>
+
+		<!--- Indicates that the grid cell is to be displayed as a radio button instead of a checkbox. Default is "false". -->
+		<variable name="useRadioButton" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				trueValue: this.trueValue
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				trueValue: this.trueValue,
+				falseValue: this.falseValue,
+				align: this.alignment,
+				useRadioButton: this.useRadioButton
+			};
+			]]>
+		</method>
+	</GridColumn>
+	
+	<!---
+		@keywords final
+		Use this class to display a check box in a grid cell. Use this class instead of
+		cmc/foundation/GridCheckbox if you need to display a checkbox for some rows and something else
+		for other rows.
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/foundation/GridCheckboxCellDescriptor">
+		<dependency localName="GridCheckboxViewer" moduleName="cmc/foundation/GridCheckboxViewer"/>
+		<dependency localName="GridCheckboxEditor" moduleName="cmc/foundation/GridCheckboxEditor"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridCheckboxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridCheckboxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridCheckboxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridCheckboxEditor}"/>
+		<!--- Optional value to return when checked. Default is "true". -->
+		<variable name="trueValue" type="string" value="true"/>
+		<!--- Optional value to return when checked. Default is "false". -->
+		<variable name="falseValue" type="string" value="false"/>
+		
+		<!--- Indicates that the grid cell is to be displayed as a radio button instead of a checkbox. Default is "false". -->
+		<variable name="useRadioButton" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				trueValue: this.trueValue
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				trueValue: this.trueValue,
+				falseValue: this.falseValue,
+				align: this.alignment,
+				useRadioButton: this.useRadioButton
+			};
+			]]>
+		</method>
+	</GridCellDescriptor>
+	
+	<!---
+		@keywords private
+		
+		Check box viewer class for internal use by {@link cmc/foundation/GridCheckbox} to display a property status and will be
+		displayed while the grid is in view mode.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/GridCheckboxViewer">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- cmc/foundation/ModelProperty instance associated with this viewer. -->
+		<variable name="property" value="${null}"/>
+		<!--- The true value for this check box -->
+		<variable name="trueValue"/>
+		
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this check box. Listeners are created to
+			watch the property value. If the property changes at anytime, the updateValue method will be called.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this check box
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+			}
+			]]>
+		</method>
+	
+		<!---
+			Update and refresh cmc/foundation/GridCheckboxViewer value with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property) {
+				var visible = false;
+				if (this.property.value == this.trueValue) {
+					visible = true;
+				}
+				if (this.display) {
+					this.display.setVariable("visible", visible);
+				}
+			}
+			]]>
+		</method>
+		
+		<handler name="onselected" eventSource="this.parent.row">
+			<![CDATA[
+			if (this.display) {
+				this.display.setVariable("currentImage", this.parent.row.selected ? 2 : 1);
+			}
+			]]>
+		</handler>
+		
+		<Component imageSet="checkmarkIcon" name="display">
+			<!--- @keywords private -->
+			<handler name="oninit">
+				<![CDATA[
+				this.classroot.updateValue();
+				]]>
+			</handler>
+		</Component>
+		<!--- @keywords private -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords private
+		
+		Check box editor class for internal use by cmc/foundation/GridCheckbox to bind a property to the grid check box and will be
+		displayed while the grid is in edit mode. Extends {@link cmc/foundation/Checkbox} to handle transition from edit mode to view
+		mode with mouse and key navigation.
+	-->
+	<Checkbox classDefinition="true" definitionName="cmc/foundation/GridCheckboxEditor">
+	</Checkbox>
+
+	<!---
+		@keywords final
+		
+		Use this widget in grid when you want to allow the business user to select one or more languages from
+		the list of languages supported by the current store.
+		
+		When you create an instance of this widget in your grid, your grid will be populated by one column
+		per language in the current store. So if your store supports English, French, and Hindi, you will
+		get three columns - one with a column header for English...one with French...and one with Hindi.
+		For each row, the cell correpsonding to those three columns will have a checkbox.
+		
+		The checkboxes thus created for each row share a single model property. The name of the model property
+		is specified in its {@link cmc/foundation/GridColumn#propertyName propertyName} attribute. The model property contains
+		a comma separated list of language ids. When a checkbox is checked, the language id of its corresponding
+		column is added to the model property, and when it is unchecked, the language id is removed from the model
+		property.
+		
+		For example, let the current store support <code>English, French and Hindi</code> and let <code>-1, -2 and -3</code>
+		be the language	ids respectively. Let <code>languageIds</code> be the model property. When you check all
+		the three checkboxes in the row, the value of <code>languageIds</code> will become <code>"-1,-2,-3"</code>.
+		Similarly if you uncheck <code>French</code>, the value of <code>languageIds</code> will become <code>"-1,-3"</code>.
+
+		Following is an example of using this class:
+				
+		@START_CODE
+		<GridLanguages
+        	name="language"
+            objectPath="ObjectGroup/Attachment"
+            propertyName="languageIds"
+            text="Language"
+            visible="true"
+            width="150"
+            alignment="center"/>
+		@END_CODE
+		
+		@see cmc/foundation/GridCheckbox
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridLanguages">
+		<dependency localName="GridLanguagesEditor" moduleName="cmc/foundation/GridLanguagesEditor"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="GridColumnClone" moduleName="cmc/foundation/GridColumnClone"/>
+		<dependency localName="GridLanguagesViewer" moduleName="cmc/foundation/GridLanguagesViewer"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridLanguagesViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridLanguagesViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridLanguagesEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridLanguagesEditor}"/>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateColumnsDel = new EventHandler.Class(this, "updateColumns");
+			this.updateColumns();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateColumnsDel.disconnectAll();
+			delete this.updateColumnsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				align: this.alignment
+			};
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the columns when switch to a new store.
+		-->
+		<method args="e" name="updateColumns">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateColumnsDel.disconnectAll();
+			if (typeof (this.oView) == "undefined") {
+				this.oView = ModelUtil.Singleton.findObjectView(this);
+			}
+			var o = null;
+			if (this.oView) {
+				this.updateColumnsDel.connect(this.oView, "ono");
+				o = this.oView.o;
+			}
+			var storeConfig = null;
+			if (o != null) {
+				storeConfig = ContextUtil.Singleton.findStoreConfig(o, this.updateColumnsDel);
+			}
+			if (storeConfig != null && storeConfig.defaultLanguage != null) {
+				var refreshRequired = false;
+				while (this.languageColumns.length > 0) {
+					var languageColumn = this.languageColumns.shift();
+					languageColumn.setVariable("language", null);
+					this.parent.releaseColumn(languageColumn);
+					this.languageColumnsPool.push(languageColumn);
+					refreshRequired = true;
+				}
+				var defaultLanguage = storeConfig.defaultLanguage;
+				if (!this.language || this.language.languageId != defaultLanguage.languageId) {
+					this.setVariable("language", defaultLanguage);
+				}
+				var languages = storeConfig.supportedLanguages;
+				var columnPos = this.parent.columns.indexOf(this) + 1;
+				for (var i = 0; i < languages.length; i++) {
+					var language = languages[i];
+					if (language.languageId != defaultLanguage.languageId) {
+						var languageColumn = null;
+						if (this.languageColumnsPool.length > 0) {
+							languageColumn = this.languageColumnsPool.pop();
+							languageColumn.setVariable("language", language);
+							languageColumn.setVariable('width', this.width);
+							this.parent.addColumn(languageColumn, this.visible);
+						}
+						else {
+							languageColumn = new GridColumnClone.Class(this.parent, {
+								originalColumn: this,
+								language: language,
+								width: this.width,
+								visible: this.visible
+							});
+						}
+						this.languageColumns.push(languageColumn);
+						this.parent.setColumnPosition(languageColumn, columnPos + i, true);
+						refreshRequired = true;
+					}
+				}
+				if (refreshRequired) {
+					this.parent.updateColumnOrder();
+					this.parent.refresh();
+				}
+			}
+			]]>
+		</method>					
+	</GridColumn>
+
+	<!---
+		@keywords private
+		Check box viewer class for internal use by {@link cmc/foundation/GridLanguages} to display a property status and will be
+		displayed while the grid is in view mode.
+	-->
+	<GridCheckboxViewer classDefinition="true" definitionName="cmc/foundation/GridLanguagesViewer">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			Update and refresh cmc/foundation/GridLanguagesViewer value with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property) {
+				var selectedlanguageIds = StringUtil.Singleton.splitAndTrim(this.property.value, ",");
+				var visible = selectedlanguageIds.indexOf(this.parent.column.language.languageId) != -1;
+				if (this.display) {
+					this.display.setVariable("visible", visible);
+				}
+			}
+			]]>
+		</method>
+	</GridCheckboxViewer>
+
+	<!---
+		@keywords private
+		Check box editor class for internal use by {@link cmc/foundation/GridLanguages} to bind a property to the grid check box
+		and will be	displayed while the grid is in edit mode.
+	-->
+	<GridCheckboxEditor classDefinition="true" definitionName="cmc/foundation/GridLanguagesEditor">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			@keywords private
+			Update and refresh the cmc/foundation/GridLanguagesEditor value with a new cmc/foundation/ModelProperty value.
+			@event onvalue the event that indicates the value of this checkbox is changed
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete) {
+				var selectedlanguageIds = StringUtil.Singleton.splitAndTrim(this.property.value, ",");
+				var newValue = selectedlanguageIds.indexOf(this.parent.column.language.languageId) != -1;
+				if (newValue != this.value) {
+					this.setVariable("value", newValue);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the cmc/foundation/ModelProperty to represent the cmc/foundation/GridLanguagesEditor value. This method is called when the check box
+			value is changed.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (this.property && (this.property != null)) {
+					var selectedLanguageIds = StringUtil.Singleton.splitAndTrim(this.property.value, ",");
+					var index = selectedLanguageIds.indexOf(this.parent.column.language.languageId);
+					if (this.value) {
+						if (index == -1) {
+							selectedLanguageIds.push(this.parent.column.language.languageId);
+						}
+					}
+					else {
+						if (index != -1) {
+							selectedLanguageIds.splice(index, 1);
+						}
+					}
+					this.property.change(selectedLanguageIds.join());
+				}
+			}
+			]]>
+		</method>
+	</GridCheckboxEditor>
+
+	<!---
+		@keywords private
+		
+		This check box implementation is for internal use by {@link cmc/foundation/SaveDetectedUnsavedObjectsDialog}
+		to bind a {@link cmc/foundation/ModelObject} with the check box.
+		Both the icon and the display name of the object will be displayed beside the checkbox.
+	-->
+	<BaseValueComponent classDefinition="true" definitionName="cmc/foundation/ObjectCheckbox" width="${this.immediateParent.width}" focusable="false">
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			A reference to the instance of the {@link cmc/foundation/ModelObject} whose icon is being displayed.
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Object icon.
+		-->
+		<variable name="icon" type="string" value="treeFolderResource"/>
+		<!---
+			Object display name.
+		-->
+		<variable name="objectDisplayName" value="${null}"/>
+		<!---
+			Indicates that this object has an error.
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		<!---
+			cmc/foundation/ObjectSelectionList instance.
+		-->
+		<variable name="objectSelectionList" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="enabled" type="boolean" value="true"/>
+		
+		<!---
+			@keywords private
+			Set the {@link cmc/foundation/ModelObject} to be associated with this check box.
+			@param cmc/foundation/ModelObject newObject New object associated with this check box.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.o = newObject;
+				if (this.o == null) {
+					this.setVariable("icon", null);
+					this.setVariable("objectDisplayName", "");
+					this.setVariable("hasError", false);
+				}
+				else {
+					if (this.o.getIcon() != null) {
+						this.setVariable("icon", this.o.getIcon());
+					}
+					if (this.o.objectDisplayName != null) {
+						this.setVariable("objectDisplayName", this.o.objectDisplayName);
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "FINER", "cmc/foundation/ObjectCheckbox", "setModelObject(newObject)", "objectDisplayName: " + this.objectDisplayName);
+						}
+					}
+					var newHasError = this.o.openGroupObject != null && this.o.openGroupObject.errorInOpenGroup;
+					if (newHasError != this.hasError) {
+						this.setVariable("hasError", newHasError);
+					}
+				}
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			]]>
+		</method>
+		
+       <!---
+			@keywords private
+			Updates the check box label color to use for both enabled and disabled states.
+		-->
+        <method args="s" name="_applystyle">
+			<![CDATA[
+			if (this._enabled) {
+				this.setVariable('fgcolor', null);
+			}
+			else {
+				this.setVariable('fgcolor', "#b1b1b1");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="_showEnabled">
+			<![CDATA[
+			this._applystyle(this.style); 
+			]]>
+		</method>
+		
+		<!---
+			Handle onclick event.
+		-->
+		<handler name="onclick">
+			<![CDATA[
+			if (this.objectSelectionList != null) {
+				this.objectSelectionList.setCurrentCheckbox(this);
+				FocusUtil.setFocus(this.objectSelectionList);
+			}
+			if (this._enabled) {
+				this.setVariable("value", !this.value);
+			}
+			]]>
+		</handler>
+		
+		<handler name="onmouseover">
+			<![CDATA[
+			if (this.objectSelectionList != null) {
+				this.objectSelectionList.setCurrentCheckbox(this);
+			}
+			]]>
+        </handler>
+
+		<handler name="onmouseout">
+			<![CDATA[
+			if (this.objectSelectionList != null) {
+				this.objectSelectionList.setCurrentCheckbox(null);
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+		
+		<Component name="content" height="28">
+			<Component name="checkbox" imageSet="checkboxButton" currentImage="${this.classroot._enabled ? (this.classroot.value ? 3 : 1) : (this.classroot.value ? 4 : 2)}" x="8" valign="middle"/>
+			<Component imageSet="${this.classroot.icon}" name="_icon" x="${this.parent.checkbox.x + this.parent.checkbox.width + 7}" valign="middle"/>
+			<Component imageSet="treeErrorResource" name="_errorIcon" visible="${this.classroot.hasError}" x="${this.parent._icon.x + this.parent._icon.width - this.width - 1}" y="${this.parent._icon.y + this.parent._icon.height - this.height}"/>
+			<TextComponent name="_displayName" resize="true" text="${this.escapeText(this.classroot.objectDisplayName)}" x="${this.parent._icon.x + this.parent._icon.width + 7}" valign="middle"/>
+		</Component>
+	</BaseValueComponent>
+	
+	<!---
+		@keywords private
+		List of selectable objects.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/ObjectSelectionList">
+		<dependency localName="ObjectCheckbox" moduleName="cmc/foundation/ObjectCheckbox"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<!---
+			Array of check boxes.
+		-->
+		<variable name="objectCheckboxes" value="${[]}"/>
+		<!---
+			The index of the current checkbox.
+		-->
+		<variable name="currentCheckboxIndex" type="number" value="${-1}"/>
+		
+		<!---
+			Set the array of objects.
+			@param [cmc/foundation/ModelObject] newObjects: array of model objects
+		-->
+		<method args="newObjects" name="setObjects">
+			<![CDATA[
+			var newWidth = 0;
+			for (var i = 0; i < this.objectCheckboxes.length; i++) {
+				this.objectCheckboxes[i].setVariable("o", null);
+				this.objectCheckboxes[i].setVariable("value", false);
+				this.objectCheckboxes[i].setVariable("visible", false);
+			}
+			var boxIndex = 0;
+			for (var i = 0; i < newObjects.length; i++) {
+				var o = newObjects[i];
+				if (boxIndex < this.objectCheckboxes.length) {
+					this.objectCheckboxes[boxIndex].setVariable("o", o);
+					this.objectCheckboxes[boxIndex].setVariable("value", true);
+					this.objectCheckboxes[boxIndex].setVariable("visible", true);
+				}
+				else {
+					this.objectCheckboxes.push(new ObjectCheckbox.Class(this.borderedView.clippedContent.content, {
+						objectSelectionList: this,
+						o: o,
+						value: true
+					}));
+				}
+				if (this.objectCheckboxes[boxIndex].content.width > newWidth) {
+					newWidth = this.objectCheckboxes[boxIndex].content.width;
+				}
+				boxIndex++;
+			}
+			var visibleWidth = this.borderedView.clippedContent.width;
+			if (newWidth < visibleWidth) {
+				newWidth = visibleWidth;
+			}
+			this.borderedView.clippedContent.content.setVariable("width", newWidth);
+			this.currentCheckboxIndex = -1;
+			this.updateHilite();
+			this.updateScroll();
+			]]>
+		</method>
+		
+		<!---
+			Get the selection status of the specified model object
+			@param cmc/foundation/ModelObject o: the object to check
+		-->
+		<method args="o" name="isSelected">
+			<![CDATA[
+			var selected = false;
+			for (var i = 0; i < this.objectCheckboxes.length; i++) {
+				var cb = this.objectCheckboxes[i];
+				if (cb.visible && cb.o == o) {
+					selected = cb.value;
+				}
+			}
+			return selected;
+			]]>
+		</method>
+		
+		<!---
+			Handle onfocus event.
+		-->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					offset: 1
+				});
+			}
+			if (this.currentCheckboxIndex == -1) {
+				if (this.getCheckbox(0) != null) {
+					this.currentCheckboxIndex = 0;
+				}
+			}
+			this.updateHilite();
+			this.updateScroll();
+			]]>
+		</handler>
+		
+		<!---
+			Handle onblur event.
+		-->
+		<handler name="onblur">
+			<![CDATA[
+			this.currentCheckboxIndex = -1;
+			this.updateHilite();
+			]]>
+		</handler>
+		
+		<!---
+			Update the background color of the highlighted checkbox.
+		-->
+		<method name="updateHilite">
+			<![CDATA[
+			for (var i = 0; i < this.objectCheckboxes.length; i++) {
+				var c = this.bgcolor;
+				if (this.currentCheckboxIndex == i) {
+					c = this.style.hilitecolor;
+				}
+				this.objectCheckboxes[i].setVariable("bgcolor", c);
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the scroll to ensure that the highlighted checkbox is visible.
+		-->
+		<method name="updateScroll">
+			<![CDATA[
+			var cb = this.getCheckbox(this.currentCheckboxIndex);
+			if (cb != null) {
+				var clipView = this.borderedView.clippedContent;
+				var cbTop = cb.getVariableRelative("y", clipView);
+				var cbBottom = cbTop + cb.height;
+				if (cbTop < 0) {
+					this.borderedView.vScroll.step(Math.floor(cbTop / this.borderedView.vScroll.stepsize));
+				}
+				else if (cbBottom > clipView.height) {
+					this.borderedView.vScroll.step(Math.ceil((cbBottom - clipView.height) / this.borderedView.vScroll.stepsize));
+				}
+			}
+			else {
+				this.borderedView.clippedContent.content.setVariable("y", 0);
+			}
+			]]>
+		</method>
+
+		<!---
+			Returns the checkbox at the specified index. If no such checkbox exists, then this method returns
+			null.
+			@param integer index: the checkbox index
+		-->
+		<method args="index" name="getCheckbox">
+			<![CDATA[
+			var cb = null;
+			if (index >= 0 && index < this.objectCheckboxes.length && this.objectCheckboxes[index].visible) {
+				cb = this.objectCheckboxes[index];
+			}
+			return cb;
+			]]>
+		</method>
+
+		<!---
+			Sets the current checkbox.
+			@param cmc/foundation/ObjectCheckbox cb: the checkbox
+		-->
+		<method args="cb" name="setCurrentCheckbox">
+			<![CDATA[
+			if (cb && cb.visible) {
+				for (var i = 0; i < this.objectCheckboxes.length; i++) {
+					if (this.objectCheckboxes[i] == cb) {
+						this.currentCheckboxIndex = i;
+						this.updateHilite();
+						break;
+					}
+				}
+			}
+			else {
+				this.currentCheckboxIndex = -1;
+				this.updateHilite();
+			}
+			]]>
+		</method>
+
+		<!---
+			Handle key down event.
+		-->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 38) {
+				var cb = this.getCheckbox(this.currentCheckboxIndex - 1);
+				if (cb != null) {
+					this.currentCheckboxIndex--;
+					this.updateHilite();
+					this.updateScroll();
+				}
+			}
+			else if (k == 40) {
+				var cb = this.getCheckbox(this.currentCheckboxIndex + 1);
+				if (cb != null) {
+					this.currentCheckboxIndex++;
+					this.updateHilite();
+					this.updateScroll();
+				}
+			}
+			else if (k == 37) {
+				this.borderedView.hScroll.step(-1);
+			}
+			else if (k == 39) {
+				this.borderedView.hScroll.step(1);
+			}
+			else if (k == 32) {
+				var cb = this.getCheckbox(this.currentCheckboxIndex);
+				if (cb != null && cb.enabled) {
+					cb.setVariable("value", !cb.value);
+					this.updateScroll();
+				}
+			}
+			else if (k == 35) {
+				for (var i = this.objectCheckboxes.length - 1; i >= 0; i--) {
+					if (this.objectCheckboxes[i].visible) {
+						this.currentCheckboxIndex = i;
+						this.updateHilite();
+						break;
+					}
+				}
+			}
+			else if (k == 36) {
+				var cb = this.getCheckbox(0);
+				if (cb != null) {
+					this.currentCheckboxIndex = 0;
+					this.updateHilite();
+					this.updateScroll();
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Select all of the objects.
+		-->
+		<method name="selectAll">
+			<![CDATA[
+			for (var i = 0; i < this.objectCheckboxes.length; i++) {
+				var cb = this.objectCheckboxes[i];
+				if (cb.visible) {
+					cb.setVariable("value", true);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Deselect all of the objects.
+		-->
+		<method name="deselectAll">
+			<![CDATA[
+			for (var i = 0; i < this.objectCheckboxes.length; i++) {
+				var cb = this.objectCheckboxes[i];
+				if (cb.visible) {
+					cb.setVariable("value", false);
+				}
+			}
+			]]>
+		</method>
+		
+		<BorderedView borderColor="#959595" borderSize="1" height="${this.parent.height}" name="borderedView" width="${this.parent.width}">
+			<variable name="hScrollHeight" type="number" value="${(this.hScroll.visible ? this.hScroll.height : 0)}"/>
+			<variable name="vScrollWidth" type="number" value="${(this.vScroll.visible ? this.vScroll.width : 0)}"/>
+
+			<Component clip="true" height="${this.parent.height - this.parent.hScrollHeight - 2}" name="clippedContent" width="${this.parent.width - this.parent.vScrollWidth - 2}">
+				<Component name="content">
+					<AxisLayout axis="y"/>
+				</Component>
+			</Component>
+			<HorizontalScrollbar name="hScroll" scrolltarget="${this.parent.clippedContent.content}" visible="${this.scrollable}" y="${this.parent.clippedContent.height}" width="${this.parent.clippedContent.width}"/>
+			<VerticalScrollbar name="vScroll" scrolltarget="${this.parent.clippedContent.content}" visible="${this.scrollable}" x="${this.parent.clippedContent.width}" height="${this.parent.clippedContent.height}"/>
+			<Component bgcolor="#f0f0f0" height="${this.parent.hScrollHeight}" name="vScrollBottom" visible="${this.parent.vScroll.visible &amp;&amp; this.parent.hScroll.visible}" width="${this.parent.vScrollWidth}" x="${this.parent.clippedContent.width}" y="${this.parent.clippedContent.height}"/>
+		</BorderedView>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		This checkbox editor is used  by the Column Editor dialog to edit {@link cmc/foundation/GridCheckbox} column
+	 -->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/foundation/ColumnCheckboxEditor">
+		<!--- 
+			@keywords private
+			The column {@link cmc/foundation/GridCheckbox} being edited by {@link cmc/foundation/ColumnCheckboxEditor}
+		 -->
+		<variable name="column" value="${null}"/>
+		
+		<!--- Selected objects {@link cmc/foundation/ModelObject} in grid -->
+		<variable name="selectedObjects" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="getValue">
+			<![CDATA[
+			return this.inherited(arguments) ? this.column.trueValue : this.column.falseValue;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="initialValue" name="resetValue">
+			<![CDATA[
+			this.setValue(initialValue == this.column.trueValue);
+			]]>
+		</method>
+	</BaseCheckbox>
+	
+	<!---
+		@keywords private
+		
+		This check box implementation is for internal use by {@link cmc/foundation/PropertyChildObjectCheckbox}. This 
+		check box will manage the creation and deletion of the specified child object. When the
+		check box is selected, the child object will be created. When the check box is deselected,
+		the child object will be deleted. 
+	-->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/foundation/ChildObjectCheckbox">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- Reference to cmc/foundation/ModelObject that is the parent of the object being created and deleted. -->
+		<variable name="o" value="${null}"/>
+		
+		<!--- The object type of the object to be created.  -->
+		<variable name="objectType" type="string" value=""/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.o) {
+				this.updateValue();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Set the parent {@link cmc/foundation/ModelObject}.
+			@param cmc/foundation/ModelObject newObject: New parent object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (typeof (this.o) == "undefined" || newObject != this.o) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.o = newObject;
+				if (this.o) {
+					this.updateValueDel.connect(this, "onobjectType");
+					this.updateValueDel.connect(this.o, "onchildObjects");
+					this.updateValue();
+				}
+				else {
+					this.__updateValueLock = true;
+					this.setVariable("value", false);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update and refresh the cmc/foundation/Checkbox value with a new cmc/foundation/ModelProperty value.
+			@event onvalue the event that indicates the value of this checkbox is changed
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete) {
+				var newValue = this.o.getObject(this.objectType) != null;
+				if (newValue != this.value) {
+					this.__updateValueLock = true;
+					this.setVariable("value", newValue);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Creates or deletes the child model object based on the current value of the checkbox.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (this.o) {
+					if (this.value) {
+						var childObject = this.o.getObject(this.objectType, true);
+						if (childObject.implicitNewObject) {
+							childObject.setVariable("implicitNewObject", false);
+							childObject.openGroupObject.checkUnsavedChanges();
+						}
+					}
+					else {
+						var childObject = this.o.getObject(this.objectType);
+						if (childObject != null) {
+							childObject.deleteObject();
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			When the value of the check box is changed by the business user, the specified child object
+			will be created or deleted.
+		-->		
+		<handler name="onvalue">
+			<![CDATA[
+			if (!this.__updateValueLock) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+		<!--- @keywords private -->
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</BaseCheckbox>
+	 
+	<!---
+		<p>This class defines the child object check box for use within a properties view. 
+		
+		<p>When a business user selects the check box, the child object check box widget creates an instance of the specified child object. 
+		When a business user clears the check box, the specified child object is deleted.</p>
+		
+		<p>The following example demonstrates the declaration of a check box that will create
+		and delete a child object with object type "Element". The child object will have a property named
+		"value" and the value will be set to "M".
+		
+		@START_CODE
+			<PropertyChildObjectCheckbox
+					objectType="Element[value=M]"/>
+		@END_CODE
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/foundation/PropertyChildObjectCheckbox">
+		<dependency localName="PropertiesComponentClone" moduleName="cmc/foundation/PropertiesComponentClone"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ChildObjectCheckbox" moduleName="cmc/foundation/ChildObjectCheckbox"/>
+		<!---
+			The {@link cmc/foundation/ObjectDefinition#objectType object type} of the child object that will be created and deleted.
+			This attribute is required.
+		-->
+		<variable name="objectType" type="string"/>
+		<!---
+			The name of the property that will be used to automatically create check boxes. The property
+			must have a {@link cmc/foundation/PropertyDefinition property definition} declared as part of the object definition identified by
+			<code>objectType</code>. The property definition must include one or more {@link cmc/foundation/PropertyValue property values}.
+			This attribute is optional. Do not specify this attribute if you are explicitly declaring a list of check boxes.
+		-->
+		<variable name="propertyName" type="string" value="${null}"/>
+		<!---
+			@keywords private
+			This attribute holds the list of clones created for this checkbox.
+		-->
+		<variable name="clones" value="${[]}"/>
+	
+		<!---
+			@keywords private
+			This method creates an instance of {@link cmc/foundation/ChildObjectCheckbox}.
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component.
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var refEditor = new ChildObjectCheckbox.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				y: 1,
+				o: parentComponent.o,
+				objectType: parentComponent.objectType,
+				text: ""
+			});
+			if (parentComponent == this && this.propertyName != null) {
+				this.updateClones();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method updates the clone checkboxes to match the values found in the property definition.
+		-->
+		<method args="e" name="updateClones">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateClonesDel) {
+				this.updateClonesDel.disconnectAll();
+			}
+			else {
+				this.updateClonesDel = new EventHandler.Class(this, "updateClones");
+			}
+			this.updateClonesDel.connect(this, "ono");
+			var propertyValues = [];
+			if (this.o != null) {
+				var childDefinition = this.o.model.getObjectDefinition(this.o, this.objectType, true);
+				if (childDefinition != null) {
+					var propertyDefinition = childDefinition.getPropertyDefinition(this.o, this.propertyName);
+					if (propertyDefinition) {
+						propertyValues = propertyDefinition.getPropertyValues(this.o, this.updateClonesDel);
+					}
+				}
+			}
+			var activeCloneCount = 0;
+			for (var i = 0; i < propertyValues.length; i++) {
+				var propertyValue = propertyValues[i];
+				var objectType = this.objectType + "[" + this.propertyName + "=" + propertyValue.value + "]";
+				if (i == 0) {
+					if (this.promptText != propertyValue.displayName) {
+						this.setVariable("promptText", propertyValue.displayName);
+					}
+					if (this.editor.objectType != objectType) {
+						this.editor.setVariable("objectType", objectType);
+					}
+				}
+				else if (this.clones.length > (i - 1)) {
+					var clone = this.clones[i - 1];
+					if (clone.promptText != propertyValue.displayName) {
+						clone.setVariable("promptText", propertyValue.displayName);
+					}
+					if (clone.objectType != objectType) {
+						clone.setVariable("objectType", objectType);
+					}
+					if (clone.editor && clone.editor.objectType != objectType) {
+						clone.editor.setVariable("objectType", objectType);
+					}
+					if (!clone.visible) {
+						clone.setVariable("visible", true);
+					}
+					if (clone.o == null) {
+						clone.updateModelObject();
+					}
+					activeCloneCount++;
+				}
+				else {
+					var clone = new PropertiesComponentClone.Class(this.parent, {
+						originalPropertiesComponent: this,
+						objectType: objectType,
+						promptText: propertyValue.displayName
+					});
+					var prevView = this;
+					if (this.clones.length > 0) {
+						prevView = this.clones[this.clones.length - 1];
+					}
+					var oldPos = this.immediateParent.childComponents.indexOf(clone);
+					var newPos = this.immediateParent.childComponents.indexOf(prevView) + 1;
+					if (oldPos != newPos) {
+						this.immediateParent.childComponents.splice(oldPos, 1);
+						this.immediateParent.childComponents.splice(newPos, 0, clone);
+						this.immediateParent.layout.setLayoutOrder(prevView, clone);
+						var nextSubView = this.immediateParent.childComponents[newPos + 1];
+						if (typeof (nextSubView) != "undefined") {
+							this.immediateParent.layout.setLayoutOrder(clone, nextSubView);
+						}
+					}
+					this.clones.push(clone);
+					activeCloneCount++;
+				}
+				this.updateClonesDel.connect(propertyValue, "ondisplayName");
+			}
+			for (var i = activeCloneCount; i < this.clones.length; i++) {
+				var clone = this.clones[i];
+				clone.updateModelObjectDel.disconnectAll();
+				clone.setVariable("visible", false);
+				clone.setVariable("o", null);
+			}
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords final
+		<p>This class defines the child object check box list for use within a properties view. 
+		
+		<p>If the object associated with the cell is editable, then the user can select the edit icon which
+		will launch a dialog with a list of check boxes.
+		When a business user selects the check box, the widget creates an
+		instance of the specified child object. When a business user clears the check box,
+		the specified child object is deleted. When OK is selected and the dialog is dismissed,
+		the selected child objects will be displayed in the grid cell as a comma separated list.</p>
+		
+		<p>The following example demonstrates the declaration of a grid column that will create
+		and delete a child objects with object type "Element". The list of check boxes will
+		be derived from a property named "type".
+		
+		@START_CODE
+			<GridChildObjectCheckbox
+				childObjectType="Element"
+				childPropertyName="type"
+				text="${resourceBundle.displayToCustomers}"
+				visible="true"
+				width="140"/>
+		@END_CODE
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridChildObjectCheckbox" propertyName="">
+		<dependency localName="GridChildObjectCheckboxEditor" moduleName="cmc/foundation/GridChildObjectCheckboxEditor"/>
+		<dependency localName="GridChildObjectCheckboxViewer" moduleName="cmc/foundation/GridChildObjectCheckboxViewer"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridChildObjectCheckboxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridChildObjectCheckboxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridChildObjectCheckboxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridChildObjectCheckboxEditor}"/>
+		<!---
+			The {@link cmc/foundation/ObjectDefinition#objectType object type} of the child object that will be created and deleted.
+			This attribute is required.
+		-->
+		<variable name="childObjectType" type="string"/>
+		<!---
+			The name of the property that will be used to automatically create check boxes. The property
+			must have a {@link cmc/foundation/PropertyDefinition property definition} declared as part of the object definition identified by
+			<code>childObjectType</code>. The property definition must include one or more {@link cmc/foundation/PropertyValue property values}.
+			This attribute is required.
+		-->
+		<variable name="childPropertyName" type="string"/>
+
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				childObjectType: this.childObjectType,
+				childPropertyName: this.childPropertyName
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				childObjectType: this.childObjectType,
+				childPropertyName: this.childPropertyName
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the column filter display value.
+			@param cmc/foundation/ModelObject o: the model object instance
+		-->
+		<method args="o" name="getColumnFilterDisplayValue">
+			<![CDATA[
+			var value = null;
+			if (o != null) {
+				if (this.objectPath != null) {
+					o = o.getObject(this.objectPath);
+				}
+				if (o != null) {
+					var propertyValues = [];
+					var childDefinition = o.model.getObjectDefinition(o, this.childObjectType, true);
+					if (childDefinition != null) {
+						var propertyDefinition = childDefinition.getPropertyDefinition(o, this.childPropertyName);
+						if (propertyDefinition) {
+							propertyValues = propertyDefinition.getPropertyValues(o);
+						}
+					}
+					for (var i = 0; i < propertyValues.length; i++) {
+						var propertyValue = propertyValues[i];
+						var objectType = this.childObjectType + "[" + this.childPropertyName + "=" + propertyValue.value + "]";
+						if (o.getObject(objectType, false, null) != null) {
+							if (value == null) {
+								value = propertyValue.displayName;
+							}
+							else {
+								value += ", " + propertyValue.displayName;
+							}
+						}
+					}
+				}
+			}
+			return value;
+			]]>
+		</method>
+	</GridColumn>
+	
+	<!---
+		@keywords final
+		Use this class to show a child object checkbox list editor in a grid cell. Use this class instead of cmc/foundation/GridChildObjectCheckbox if you
+		need to display text for some rows and something else for other rows.
+	-->
+	<GridCellDescriptor classDefinition="true" definitionName="cmc/foundation/GridChildObjectCheckboxCellDescriptor" propertyName="">
+		<dependency localName="GridChildObjectCheckboxEditor" moduleName="cmc/foundation/GridChildObjectCheckboxEditor"/>
+		<dependency localName="GridChildObjectCheckboxViewer" moduleName="cmc/foundation/GridChildObjectCheckboxViewer"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridChildObjectCheckboxViewer" to create cell viewer instances.
+		-->
+		<variable name="cellViewerClass" value="${GridChildObjectCheckboxViewer}"/>
+		<!---
+			@keywords private
+			Use "cmc/foundation/GridChildObjectCheckboxEditor" to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${GridChildObjectCheckboxEditor}"/>
+		<!---
+			The {@link cmc/foundation/ObjectDefinition#objectType object type} of the child object that will be created and deleted.
+			This attribute is required.
+		-->
+		<variable name="childObjectType" type="string"/>
+		<!---
+			The name of the property that will be used to automatically create check boxes. The property
+			must have a {@link cmc/foundation/PropertyDefinition property definition} declared as part of the object definition identified by
+			<code>childObjectType</code>. The property definition must include one or more {@link cmc/foundation/PropertyValue property values}.
+			This attribute is required.
+		-->
+		<variable name="childPropertyName" type="string"/>
+
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				childObjectType: this.childObjectType,
+				childPropertyName: this.childPropertyName
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				childObjectType: this.childObjectType,
+				childPropertyName: this.childPropertyName
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the column filter display value.
+			@param cmc/foundation/ModelObject o: the model object instance
+		-->
+		<method args="o" name="getColumnFilterDisplayValue">
+			<![CDATA[
+			var value = null;
+			if (o != null) {
+				if (this.objectPath != null) {
+					o = o.getObject(this.objectPath);
+				}
+				if (o != null) {
+					var propertyValues = [];
+					var childDefinition = o.model.getObjectDefinition(o, this.childObjectType, true);
+					if (childDefinition != null) {
+						var propertyDefinition = childDefinition.getPropertyDefinition(o, this.childPropertyName);
+						if (propertyDefinition) {
+							propertyValues = propertyDefinition.getPropertyValues(o);
+						}
+					}
+					for (var i = 0; i < propertyValues.length; i++) {
+						var propertyValue = propertyValues[i];
+						var objectType = this.childObjectType + "[" + this.childPropertyName + "=" + propertyValue.value + "]";
+						if (o.getObject(objectType, false, null) != null) {
+							if (value == null) {
+								value = propertyValue.displayName;
+							}
+							else {
+								value += ", " + propertyValue.displayName;
+							}
+						}
+					}
+				}
+			}
+			return value;
+			]]>
+		</method>
+	</GridCellDescriptor>
+	
+	<!---
+		@keywords private
+		
+		Child object checkbox viewer.
+	-->
+	<GridTextViewer classDefinition="true" definitionName="cmc/foundation/GridChildObjectCheckboxViewer">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- {@link cmc/foundation/ModelObject} instance associated with this viewer. -->
+		<variable name="o" value="${null}"/>
+		<!---
+			The {@link cmc/foundation/ObjectDefinition#objectType object type} of the child object that will be created and deleted.
+			This attribute is required.
+		-->
+		<variable name="childObjectType" type="string"/>
+		<!---
+			The name of the property that will be used to automatically create check boxes. The property
+			must have a {@link cmc/foundation/PropertyDefinition property definition} declared as part of the object definition identified by
+			<code>childObjectType</code>. The property definition must include one or more {@link cmc/foundation/PropertyValue property values}.
+			This attribute is required.
+		-->
+		<variable name="childPropertyName" type="string"/>
+
+		<!--- @keywords private -->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateValue();
+			]]>
+		</method>
+
+		<!---
+			Update and refresh cmc/foundation/GridTextViewer value with a new {@link cmc/foundation/ModelProperty} value.			
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.updateValueDel) == "undefined") {
+				this.updateValueDel = new EventHandler.Class(this, "updateValue");
+			}
+			this.updateValueDel.disconnectAll();
+			this.updateValueDel.connect(this, "ono");
+			var newText = "";
+			var propertyValues = this.getPropertyValues(this.updateValueDel);
+			for (var i = 0; i < propertyValues.length; i++) {
+				var propertyValue = propertyValues[i];
+				var objectType = this.childObjectType + "[" + this.childPropertyName + "=" + propertyValue.value + "]";
+				if (this.o.getObject(objectType, false, null, this.updateValueDel) != null) {
+					if (newText != "") {
+						newText += ", ";
+					}
+					newText += propertyValue.displayName;
+				}
+			}
+			if (this.text != newText) {
+				this.setVariable("text", newText);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the list of property values.
+			@keywords private		
+		-->
+		<method args="del" name="getPropertyValues">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var propertyValues = [];
+			if (this.o != null) {
+				var childDefinition = this.o.model.getObjectDefinition(this.o, this.childObjectType, true);
+				if (childDefinition != null) {
+					var propertyDefinition = childDefinition.getPropertyDefinition(this.o, this.childPropertyName);
+					if (propertyDefinition) {
+						propertyValues = propertyDefinition.getPropertyValues(this.o, del);
+					}
+				}
+			}
+			return propertyValues;
+			]]>
+		</method>
+
+	</GridTextViewer>
+	
+	<!---
+		@keywords private
+		
+		Child object check box editor class for internal use by {@link cmc/foundation/GridChildObjectCheckbox}.
+		
+		In edit mode, a dialog {@link cmc/foundation/Dialog} named cmc/foundation/ChildObjectCheckboxDialog is opened that contains a
+		list of check boxes that allow the business user to select the desired child objects.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/GridChildObjectCheckboxEditor" focusable="false" width="${this.immediateParent.availableWidth}">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<!---
+			The {@link cmc/foundation/ObjectDefinition#objectType object type} of the child object that will be created and deleted.
+			This attribute is required.
+		-->
+		<variable name="childObjectType" type="string"/>
+		<!---
+			The name of the property that will be used to automatically create check boxes. The property
+			must have a {@link cmc/foundation/PropertyDefinition property definition} declared as part of the object definition identified by
+			<code>childObjectType</code>. The property definition must include one or more {@link cmc/foundation/PropertyValue property values}.
+			This attribute is required.
+		-->
+		<variable name="childPropertyName" type="string"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateValue();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Update and refresh cmc/foundation/GridTextEditor value with a new {@link cmc/foundation/ModelProperty} value.
+			@keywords private			
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.updateValueDel) == "undefined") {
+				this.updateValueDel = new EventHandler.Class(this, "updateValue");
+			}
+			this.updateValueDel.disconnectAll();
+			this.updateValueDel.connect(this, "ono");
+			var newText = "";
+			var propertyValues = this.getPropertyValues(this.updateValueDel);
+			for (var i = 0; i < propertyValues.length; i++) {
+				var propertyValue = propertyValues[i];
+				var objectType = this.childObjectType + "[" + this.childPropertyName + "=" + propertyValue.value + "]";
+				if (this.o.getObject(objectType, false, null, this.updateValueDel) != null) {
+					if (newText != "") {
+						newText += ", ";
+					}
+					newText += propertyValue.displayName;
+				}
+			}
+			if (this.textView.text != newText) {
+				this.textView.setVariable("text", newText);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Get the list of property values.
+			@keywords private		
+		-->
+		<method args="del" name="getPropertyValues">
+			<![CDATA[
+			if (typeof(del) == "undefined") del = null;
+			var propertyValues = [];
+			if (this.o != null) {
+				var childDefinition = this.o.model.getObjectDefinition(this.o, this.childObjectType, true);
+				if (childDefinition != null) {
+					var propertyDefinition = childDefinition.getPropertyDefinition(this.o, this.childPropertyName);
+					if (propertyDefinition) {
+						propertyValues = propertyDefinition.getPropertyValues(this.o, del);
+					}
+				}
+			}
+			return propertyValues;
+			]]>
+		</method>
+		
+		<handler name="onselected" eventSource="this.parent.row">
+			<![CDATA[
+			if (this.openDialogButton) {
+				if (this.openDialogButton.indicator) {
+					this.openDialogButton.indicator.setVariable("focusIndicatorColor", this.parent.row.selected ? "#ffffff" : "#000000");
+				}
+				var image = this.parent.row.selected ? 3 : 1;
+				this.openDialogButton.downImage = image;
+				this.openDialogButton.overImage = image;
+				this.openDialogButton.setVariable("normalImage", image);
+			}
+			]]>
+		</handler>
+		
+		<AxisLayout axis="x" spacing="0"/>
+		
+		<TextComponent multiline="true" name="textView" width="${this.parent.width - this.parent.openDialogButton.width}"/>	
+
+		<BaseButton enabled="${this.classroot.enabled}" focusable="true" imageSet="rteGridIcon" name="openDialogButton">
+			<!--
+				@keyword private
+				onclick is fired not only on mouse click but also when a business user hits the enter key. 
+			-->
+			<handler name="onclick">
+				<![CDATA[
+				var caller = this;
+				require(["cmc/foundation/ChildObjectCheckboxDialog"], function(ChildObjectCheckboxDialog) {
+					ChildObjectCheckboxDialog.Singleton.openChildObjectCheckboxDialog(caller.classroot);
+				});
+				]]>
+			</handler>
+			
+			<!---
+				@keywords private
+				Handle focus.
+			-->
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this
+					});
+				}
+				]]>
+			</handler>
+		</BaseButton>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		
+		Child Object Checkbox Dialog.
+	-->
+	<Dialog contentPaddingBottomSize="0" contentPaddingLeftSize="0" contentPaddingRightSize="0" contentPaddingTopSize="0" definitionName="cmc/foundation/ChildObjectCheckboxDialog" minWidth="100" singletonDefinition="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="BaseCheckbox" moduleName="cmc/foundation/BaseCheckbox"/>
+		<!---
+			Reference to grid editor from which this dialog was launched.
+		-->
+		<variable name="gridEditor"/>
+		<!---
+			Array of check boxes.
+		-->
+		<variable name="checkboxes" value="${[]}"/>
+		<!---
+			Array of property values.
+		-->
+		<variable name="propertyValues" value="${null}"/>
+
+		<!---
+			Handle OK. 
+		-->
+		<method name="onOk">
+			<![CDATA[
+			for (var i = 0; i < this.propertyValues.length; i++) {
+				var objectType = this.gridEditor.childObjectType + "[" + this.gridEditor.childPropertyName + "=" + this.propertyValues[i].value + "]";
+				if (this.checkboxes[i].value) {
+					var childObject = this.gridEditor.o.getObject(objectType, true);
+					if (childObject.implicitNewObject) {
+						childObject.setVariable("implicitNewObject", false);
+						childObject.openGroupObject.checkUnsavedChanges();
+					}
+				}
+				else {
+					var childObject = this.gridEditor.o.getObject(objectType);
+					if (childObject != null) {
+						childObject.deleteObject();
+					}
+				}
+			}
+			this.closeWindow();
+			]]>
+		</method>
+
+		<!---
+			Handle Cancel. 
+		-->
+		<method name="onCancel">
+			<![CDATA[
+			this.closeWindow();
+			]]>
+		</method>
+
+		<!---
+			Open the child object checkbox dialog.
+			@param cmc/foundation/GridChildObjectCheckboxEditor gridEditor grid cell editor
+		 -->
+		<method args="gridEditor" name="openChildObjectCheckboxDialog">
+			<![CDATA[
+			this.openWindow();
+			this.gridEditor = gridEditor;
+			var childDefinition = gridEditor.o.model.getObjectDefinition(gridEditor.o, gridEditor.childObjectType, true);
+			if (childDefinition != null) {
+				this.propertyValues = gridEditor.getPropertyValues();
+				var boxIndex = 0;
+				for (var i = 0; i < this.propertyValues.length; i++) {
+					var propertyValue = this.propertyValues[i];
+					var objectType = gridEditor.childObjectType + "[" + gridEditor.childPropertyName + "=" + propertyValue.value + "]";
+					var value = gridEditor.o.getObject(objectType) != null;
+					if (boxIndex < this.checkboxes.length) {
+						this.checkboxes[boxIndex].setVariable("text", propertyValue.displayName);
+						this.checkboxes[boxIndex].setVariable("value", value);
+						this.checkboxes[boxIndex].setVariable("visible", true);
+					}
+					else {
+						this.checkboxes.push(new BaseCheckbox.Class(this.borderedView.clippedContent.content, {
+							text: propertyValue.displayName,
+							value: value,
+							focusable: false
+						}));
+					}
+					boxIndex++;
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Close the dialog.
+		 -->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.propertyValues = null;
+			for (var i = 0; i < this.checkboxes.length; i++) {
+				this.checkboxes[i].setVariable("visible", false);
+			}
+			]]>
+		</method>
+
+		<BorderedView borderColor="${this.parent.style.bordercolumnlistcolor}" borderSize="1" height="150" name="borderedView" width="180">
+			<variable name="hScrollRequired" type="boolean" value="${this.clippedContent.content.width &gt; this.clippedContent.width}"/>
+			<variable name="vScrollRequired" type="boolean" value="${this.clippedContent.content.height &gt; this.clippedContent.height}"/>
+			<variable name="hScrollHeight" type="number" value="${(this.hScrollRequired ? this.hScroll.height : 0)}"/>
+			<variable name="vScrollWidth" type="number" value="${(this.vScrollRequired ? this.vScroll.width : 0)}"/>
+			<Component clip="true" height="${this.parent.height - this.parent.hScrollHeight - 6}" name="clippedContent" width="${this.parent.width - this.parent.vScrollWidth - 6}" x="3" y="3">
+				<Component name="content" x="3" y="3">
+					<AxisLayout axis="y"/>
+				</Component>
+			</Component>
+			<HorizontalScrollbar name="hScroll" scrolltarget="${this.parent.clippedContent.content}" visible="${this.parent.hScrollRequired}" width="${this.parent.width - this.parent.vScrollWidth}" x="${-1}" y="${this.parent.clippedContent.y + this.parent.clippedContent.height + 2}"/>
+			
+			<VerticalScrollbar height="${this.parent.height - this.parent.hScrollHeight}" name="vScroll" scrolltarget="${this.parent.clippedContent.content}" visible="${this.parent.vScrollRequired}" x="${this.parent.clippedContent.x + this.parent.clippedContent.width + 2}" y="${-1}"/>
+		</BorderedView>
+		
+		<Component name="buttonSection" placement="footer">
+			<Button name="cancelButton" text="${foundationResources.Singleton.simpleDialogCancel.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.onCancel();
+					]]>
+				</handler>
+			</Button>
+			<Button isdefault="true" name="okButton" text="${foundationResources.Singleton.simpleDialogOK.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.onOk();
+					]]>
+				</handler>
+			</Button>
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+	</Dialog>
+		
+	<!---
+		Use this widget in a grid when you need to allow the business user to select one or more currencies from
+		the list of currencies supported by the current store.
+		
+		When you add an instance of this widget in your grid, your grid will be populated by one column
+		per currency in the current store. If your store supports US Dollars, Chinese Yuan and Japanese Yen, you will
+		get three columns - one with a column header for USD, one with CNY and one with JPY.
+		For each row, the cell corresponding to those three columns will have a check box.
+		
+		The check boxes for each row share a single model property. The name of the model property
+		is specified with the {@link cmc/foundation/GridColumn#propertyName propertyName} attribute. The model property contains
+		a comma separated list of currency codes. When a check box is checked, the currency code of its corresponding
+		column is added to the model property, and when it is unchecked, the currency code is removed from the model
+		property.
+		
+		For example, if the current store supports <code>USD, CNY and JPY</code> and <code>currencyCodes</code> is the model property,
+		then when you check all three check boxes in a row, the value of <code>currencyCodes</code> will become <code>"USD,CNY,JPY"</code>.
+		Similarly if you uncheck <code>CNY</code>, the value of <code>currencyCodes</code> will become <code>"USD,JPY"</code>.
+
+		The following is an example of using this class:
+				
+		@START_CODE
+		<GridCurrencyCheckbox
+			name="currencyCodes"
+			propertyName="currencyCodes"
+			visible="true"
+			width="150"
+			alignment="center"/>
+		@END_CODE
+	-->
+	<GridColumn classDefinition="true" definitionName="cmc/foundation/GridCurrencyCheckbox">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="GridColumnClone" moduleName="cmc/foundation/GridColumnClone"/>
+		<dependency localName="GridCurrencyCheckboxEditor" moduleName="cmc/foundation/GridCurrencyCheckboxEditor"/>
+		<dependency localName="GridCurrencyCheckboxViewer" moduleName="cmc/foundation/GridCurrencyCheckboxViewer"/>
+		<!--- @keywords private -->
+		<variable name="currencyColumns" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="currencyColumnsPool" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="cellViewerClass" value="${GridCurrencyCheckboxViewer}"/>
+		<!--- @keywords private -->
+		<variable name="cellEditorClass" value="${GridCurrencyCheckboxEditor}"/>
+		
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateColumnsDel = new EventHandler.Class(this, "updateColumns");
+			this.updateColumns();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateColumnsDel.disconnectAll();
+			delete this.updateColumnsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				align: this.alignment
+			};
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Update the columns when switch to a new store.
+		-->
+		<method args="e" name="updateColumns">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateColumnsDel.disconnectAll();
+			if (typeof (this.oView) == "undefined") {
+				this.oView = ModelUtil.Singleton.findObjectView(this);
+			}
+			var o = null;
+			if (this.oView) {
+				this.updateColumnsDel.connect(this.oView, "ono");
+				o = this.oView.o;
+			}
+			var storeConfig = null;
+			if (o != null) {
+				storeConfig = ContextUtil.Singleton.findStoreConfig(o, this.updateColumnsDel);
+			}
+			if (storeConfig != null && storeConfig.defaultCurrency != null) {
+				var refreshRequired = false;
+				while (this.currencyColumns.length > 0) {
+					var currencyColumn = this.currencyColumns.shift();
+					currencyColumn.setVariable("text", null);
+					this.parent.releaseColumn(currencyColumn);
+					this.currencyColumnsPool.push(currencyColumn);
+					refreshRequired = true;
+				}
+				var defaultCode = storeConfig.defaultCurrency.currencyCode;
+				if (this.currencyCode != defaultCode) {
+					this.setVariable("text", defaultCode);
+					this.setVariable("currencyCode", defaultCode);
+				}
+				var currencies = storeConfig.supportedCurrencies;
+				var columnPos = this.parent.columns.indexOf(this) + 1;
+				for (var i = 0; i < currencies.length; i++) {
+					var currency = currencies[i];
+					var currencyCode = currency.currencyCode;
+					if (currencyCode != defaultCode) {
+						var currencyColumn = null;
+						if (this.currencyColumnsPool.length > 0) {
+							currencyColumn = this.currencyColumnsPool.pop();
+							currencyColumn.setVariable("currencyCode", currencyCode);
+							currencyColumn.setVariable("text", currencyCode);
+							currencyColumn.setVariable('width', this.width);
+							this.parent.addColumn(currencyColumn, this.visible);
+						}
+						else {
+							currencyColumn = new GridColumnClone.Class(this.parent, {
+								originalColumn: this,
+								currencyCode: currencyCode,
+								text: currencyCode,
+								width: this.width,
+								visible: this.visible
+							});
+						}
+						this.currencyColumns.push(currencyColumn);
+						this.parent.setColumnPosition(currencyColumn, columnPos + i, false);
+						refreshRequired = true;
+					}
+				}
+				if (refreshRequired) {
+					this.parent.updateColumnOrder();
+					this.parent.refresh();
+				}
+			}
+			]]>
+		</method>					
+	</GridColumn>
+
+	<!---
+		@keywords private
+		Check box viewer class for internal use by {@link cmc/foundation/GridCurrencyCheckbox} to display a property status and will be
+		displayed while the grid is in view mode.
+	-->
+	<GridCheckboxViewer classDefinition="true" definitionName="cmc/foundation/GridCurrencyCheckboxViewer">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			Update and refresh cmc/foundation/GridCurrencyCheckboxViewer value with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.property) {
+				var selectedCurrencyCodes = StringUtil.Singleton.splitAndTrim(this.property.value, ",");
+				var visible = selectedCurrencyCodes.indexOf(this.parent.column.currencyCode) != -1;
+				if (this.display) {
+					this.display.setVariable("visible", visible);
+				}
+			}
+			]]>
+		</method>
+	</GridCheckboxViewer>
+
+	<!---
+		@keywords private
+		Check box editor class for internal use by {@link cmc/foundation/GridCurrencyCheckbox} to bind a property to the grid check box
+		and will be	displayed while the grid is in edit mode.
+	-->
+	<GridCheckboxEditor classDefinition="true" definitionName="cmc/foundation/GridCurrencyCheckboxEditor">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<!---
+			@keywords private
+			Update and refresh the cmc/foundation/GridCurrencyCheckboxEditor value with a new cmc/foundation/ModelProperty value.
+			@event onvalue the event that indicates the value of this checkbox is changed
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete) {
+				var selectedCurrencyCodes = StringUtil.Singleton.splitAndTrim(this.property.value, ",");
+				var newValue = selectedCurrencyCodes.indexOf(this.parent.column.currencyCode) != -1;
+				if (newValue != this.value) {
+					this.__updateValueLock = true;
+					this.setVariable("value", newValue);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the cmc/foundation/ModelProperty to represent the cmc/foundation/GridCurrencyCheckboxEditor value. This method is called when the check box
+			value is changed.
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (this.property && (this.property != null)) {
+					var selectedCurrencyCodes = StringUtil.Singleton.splitAndTrim(this.property.value, ",");
+					var index = selectedCurrencyCodes.indexOf(this.parent.column.currencyCode);
+					if (this.value) {
+						if (index == -1) {
+							selectedCurrencyCodes.push(this.parent.column.currencyCode);
+						}
+					}
+					else {
+						if (index != -1) {
+							selectedCurrencyCodes.splice(index, 1);
+						}
+					}
+					this.property.change(selectedCurrencyCodes.join());
+				}
+			}
+			]]>
+		</method>
+	</GridCheckboxEditor>
+	
+	<!--- 
+		@keywords private 
+		This check box implementation is for internal use by {@link cmc/foundation/ListCheckbox}. 
+	-->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/foundation/ListItemCheckbox" enabled="${this.parent.enabled}">
+		
+		<!---
+			@keywords private
+			The property value associated with this checkbox.
+		-->
+		<variable name="propertyValue" value="${null}"/>
+		
+		<!---
+			@keywords private
+			Handle onvalue event. 
+		-->		
+		<handler name="onvalue">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (!this.parent._initializingCheckboxes) {
+					this.parent.storeValue();
+				}
+			}
+			]]>
+		</handler>
+			
+	</BaseCheckbox>
+	
+	<!--- 
+		@keywords private 
+		
+		This check box list implementation is for internal use by {@link cmc/foundation/PropertyListCheckbox}.
+		Given a cmc/foundation/PropertyDefinition as an input, this class generates check boxes for each of the defined property values.
+		Check box values are stored in the property as a comma-separated list of values.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/ListCheckbox">
+		<dependency localName="ListItemCheckbox" moduleName="cmc/foundation/ListItemCheckbox"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		
+		<!---
+			@keywords private
+		-->
+		<variable name="enabled" type="boolean" value="true"/>
+		
+		<!--- 
+			@keywords private 
+			Reference to cmc/foundation/ModelProperty object that is being edited. 
+		-->
+		<variable name="property" value="${null}"/>
+		
+		<!--- 
+			@keywords private
+			Array of check boxes
+		-->
+		<variable name="checkboxItems"/>
+		
+		<!--- @keywords private -->
+		<variable name="delimiter" type="string" value=","/>
+		
+		<AxisLayout axis="y" spacing="4"/>
+		
+		<!---
+			@keywords private
+			Set the property to be associated with the check boxes.
+			Listeners are created to watch the property value. If the property changes at anytime, the value of the checkboxes will be
+			refreshed.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with the check boxes.
+		-->		
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.createCheckboxes();
+					this.updateValueDel.connect(this.property, "onvalue");
+				}
+			}
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			Update and refresh the check box values with a new {@link cmc/foundation/ModelProperty} value.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this._initializingCheckboxes = true;
+			if (this.property && this.checkboxItems) {
+				var values = StringUtil.Singleton.splitAndTrim(this.property.value, this.delimiter);
+				for (var i = 0; i < this.checkboxItems.length; i++) {
+					var checkbox = this.checkboxItems[i];
+					if (checkbox.propertyValue != null) {
+						checkbox.setVariable("value", values.indexOf(checkbox.propertyValue.value) != -1);
+					}
+				}
+			}
+			this._initializingCheckboxes = false;
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private	
+			Create and updates the check boxes to match the values found in the property definition.
+		-->
+		<method args="e" name="createCheckboxes">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var checkboxCount = 0;
+			this._initializingCheckboxes = true;
+			if (!this.propValueDel) {
+				this.propValueDel = new EventHandler.Class(this, "createCheckboxes");
+			}
+			else {
+				this.propValueDel.disconnectAll();
+			}
+			if (this.property && this.property.propertyDefinition != null) {
+				var propDef = this.property.propertyDefinition;
+				var propertyValues = this.property.propertyDefinition.getPropertyValues(this.property.o, this.propValueDel);
+				if (this.checkboxItems == null) {
+					this.checkboxItems = [];
+				}
+				checkboxCount = propertyValues.length;
+				for (var i = 0; i < propertyValues.length; i++) {
+					var propertyValue = propertyValues[i];
+					if (this.checkboxItems.length > i) {
+						var checkboxItem = this.checkboxItems[i];
+						checkboxItem.setVariable("propertyValue", propertyValue);
+						checkboxItem.setVariable("text", propertyValue.displayName);
+						if (!checkboxItem.visible) {
+							checkboxItem.setVariable("visible", true);
+						}
+					}
+					else {
+						this.checkboxItems.push(new ListItemCheckbox.Class(this, {
+							propertyValue: propertyValue,
+							focusable: false,
+							text: propertyValue.displayName
+						}));
+					}
+					this.propValueDel.connect(propertyValue, "ondisplayName");
+				}
+			}
+			for (var i = checkboxCount; i < this.checkboxItems.length; i++) {
+				var checkboxItem = this.checkboxItems[i];
+				checkboxItem.setVariable("visible", false);
+				checkboxItem.setVariable("propertyValue", null);
+				checkboxItem.setVariable("value", false);
+			}
+			this.updateValue();
+			this._initializingCheckboxes = false;
+			]]>
+		</method>	
+		
+		<!--- 
+			@keywords private
+			Update the list check box widget with a new property value. 
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this.property) {
+				var newText = "";
+				for (var i = 0; i < this.checkboxItems.length; i++) {
+					var checkboxItem = this.checkboxItems[i];
+					if (checkboxItem.value) {
+						if (newText != "") {
+							newText += this.delimiter;
+						}
+						newText += checkboxItem.propertyValue.value;
+					}
+				}
+				this.property.change(newText);
+			}
+			]]>
+		</method>		
+	
+		<!--- 
+			@keywords private
+			Cleanup delegates when destroyed  
+		-->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			if (this.propValueDel) {
+				this.propValueDel.disconnectAll();
+				delete this.propValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords final 
+		This class defines a widget that displays multiple check boxes for the user to select from. The cmc/foundation/PropertyListCheckbox
+		widget is for use in a properties view. 
+		
+		The name of the property specified by the {@link cmc/foundation/PropertyEditor#propertyName propertyName} attribute is resolved to 
+		the associated {@link cmc/foundation/PropertyDefinition}. A check box is then created for each {@link cmc/foundation/PropertyValue possible value}
+		of the associated {@link cmc/foundation/PropertyDefinition}.
+		
+		The cmc/foundation/PropertyListCheckbox widget allows multiple check box value to bind to a {@link cmc/foundation/ModelProperty} 
+		as a comma-separated list of values.
+		
+		The code snippet below demonstrates how this class is used:
+
+		@START_CODE
+			...
+			<PropertyDefinition propertyName="currencies">
+				<PropertyValue displayName="US Dollar" value="USD"/>
+				<PropertyValue displayName="Canadian Dollar" value="CAD"/>
+				<PropertyValue displayName="Chinese Yen" value="CNY"/>
+			</PropertyDefinition>
+			...
+			<PropertyGroup>
+				<PropertyListCheckbox propertyName="currencies" promptText="Select the Currencies you want to use" />
+			</PropertyGroup>
+		@END_CODE
+		
+		The code above creates 3 check boxes with three possible values. These three check box items will correspond to the three 
+		{@link cmc/foundation/PropertyValue property values} defined for <CODE>currencies</CODE>.
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyListCheckbox">
+		<dependency localName="ListCheckbox" moduleName="cmc/foundation/ListCheckbox"/>
+		
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new ListCheckbox.Class(parentComponent, {
+				name: "editor",
+				property: parentComponent.property,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				enabled: parentComponent.enabled
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	</Definitions>

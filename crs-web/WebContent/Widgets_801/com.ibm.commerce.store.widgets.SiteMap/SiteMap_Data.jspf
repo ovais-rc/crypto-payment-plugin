@@ -1,0 +1,177 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+	
+	<c:set var="depthAndLimit" value="-1,-1,-1,-1"/>
+	<c:catch var="searchServerException">
+		<wcf:rest var="categoryHierarchy" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/categoryview/@top" >
+			<c:if test="${!empty WCParam.langId}">
+			<wcf:param name="langId" value="${WCParam.langId}"/>
+			</c:if>
+			<c:if test="${empty WCParam.langId}">
+			<wcf:param name="langId" value="${langId}"/>
+			</c:if>
+
+			<wcf:param name="responseFormat" value="json"/>		
+			<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+			<wcf:param name="depthAndLimit" value="${depthAndLimit}"/>
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+	</c:catch>
+	
+	<%-- Set the number of sub-categories to be displayed per column in the menu --%>
+	<c:set var="numSubCatPerColumn" value="9"/>
+	<c:set var="maxColumn" value="3"/>
+	<c:set var="numOfTopCategoryToDisplay" value="15"/>
+	 
+	 <%-- This list will contain all the data to be displayed in the department widger
+	      The List contains the Top category name, Top Category URL,
+		  List of sub-categories and their corresponding URL
+	 --%>
+	 <wcf:useBean var="fullCategoryList" classname="java.util.ArrayList" />
+
+	 <c:forEach var="topCategory" items="${categoryHierarchy.catalogGroupView}" varStatus="status">
+
+			 <wcf:useBean var="categoryMappingList" classname="java.util.ArrayList"/>
+			 <wcf:useBean var="subCategoryNameList" classname="java.util.ArrayList"/>
+			 <wcf:useBean var="subCategoryURLList" classname="java.util.ArrayList"/>
+			
+			<wcf:url var="CategoryDisplayURL" patternName="CanonicalCategoryURL" value="Category3">
+				<wcf:param name="langId" value="${param.langId}" />
+				<wcf:param name="storeId" value="${param.storeId}" />
+				<wcf:param name="catalogId" value="${param.catalogId}" />				
+				<wcf:param name="categoryId" value="${topCategory.uniqueID}" />
+				<wcf:param name="pageView" value="${env_defaultPageView}" />
+				<wcf:param name="beginIndex" value="0" />
+				<wcf:param name="urlLangId" value="${param.urlLangId}" />
+			</wcf:url>
+			
+			 <%-- Get the list of all sub categories and build their corresponding URL --%>
+			<c:set var="subTopCategoryList" value="${topCategory.catalogGroupView}" />
+			
+			<wcf:useBean var="fullNextLevelCategoryList" classname="java.util.ArrayList"/>
+			
+			<c:forEach var="subTopCategory" items="${subTopCategoryList}" varStatus="status2">
+			
+				<wcf:useBean var="nextLevelCategoryMappingList" classname="java.util.ArrayList"/>
+				<wcf:useBean var="nextLevelCategoryNameList" classname="java.util.ArrayList"/>
+				<wcf:useBean var="nextLevelCategoryURLList" classname="java.util.ArrayList"/>
+				
+				<wcf:set target="${subCategoryNameList}" value="${subTopCategory.name}"/>
+				<wcf:url var="subTopCategoryDisplayUrl" patternName="CategoryURL" value="Category3">
+					<wcf:param name="langId" value="${param.langId}"/>
+					<wcf:param name="storeId" value="${param.storeId}"/>
+					<wcf:param name="catalogId" value="${param.catalogId}"/>
+					<wcf:param name="pageView" value="${env_defaultPageView}"/>
+					<wcf:param name="beginIndex" value="0"/>
+					<wcf:param name="sType" value="SimpleSearch"/>
+					<wcf:param name="categoryId" value="${subTopCategory.uniqueID}"/>
+					<wcf:param name="resultCatEntryType" value="${WCParam.resultCatEntryType}"/>
+					<wcf:param name="showResultsPage" value="true"/>
+					<wcf:param name="urlLangId" value="${param.urlLangId}" />
+					<wcf:param name="top_category" value="${topCategory.uniqueID}" />
+				</wcf:url>
+				<wcf:set target="${subCategoryURLList}" value="${subTopCategoryDisplayUrl}"/>
+								
+				
+					<c:set var="nextLevelCategoryList" value="${subTopCategory.catalogGroupView}" />
+						
+					<c:forEach var="nextLevelCategory" items="${nextLevelCategoryList}" varStatus="status3">
+					
+					
+						<wcf:set target="${nextLevelCategoryNameList}" value="${nextLevelCategory.name}"/>
+						<wcf:url var="nextLevelCategoryDisplayUrl" patternName="CategoryURLWithParentCategory" value="Category3">
+							<wcf:param name="langId" value="${param.langId}"/>
+							<wcf:param name="storeId" value="${param.storeId}"/>
+							<wcf:param name="catalogId" value="${param.catalogId}"/>
+							<wcf:param name="pageView" value="${env_defaultPageView}"/>
+							<wcf:param name="beginIndex" value="0"/>
+							<wcf:param name="categoryId" value="${nextLevelCategory.uniqueID}"/>
+							<wcf:param name="parent_category_rn" value="${subTopCategory.uniqueID}" />
+							<wcf:param name="top_category" value="${topCategory.uniqueID}" />
+							<wcf:param name="urlLangId" value="${param.urlLangId}" />
+						</wcf:url>
+						<wcf:set target="${nextLevelCategoryURLList}" value="${nextLevelCategoryDisplayUrl}"/>
+					</c:forEach>
+					
+				<wcf:set target="${nextLevelCategoryMappingList}" value="${subTopCategory.name}" />
+				<wcf:set target="${nextLevelCategoryMappingList}" value="${subTopCategoryDisplayUrl}" />
+				<wcf:set target="${nextLevelCategoryMappingList}" value="${nextLevelCategoryNameList}" />
+				<wcf:set target="${nextLevelCategoryMappingList}" value="${nextLevelCategoryURLList}" />
+				
+				<wcf:set target="${fullNextLevelCategoryList}" value="${nextLevelCategoryMappingList}" />		
+			
+				<c:remove var="nextLevelCategoryNameList"/>
+				<c:remove var="nextLevelCategoryURLList"/>
+				<c:remove var="nextLevelCategoryMappingList"/>
+				
+				
+			</c:forEach>
+			
+			
+			<wcf:set target="${categoryMappingList}" value="${topCategory.name}" />
+			<wcf:set target="${categoryMappingList}" value="${CategoryDisplayURL}" />
+			<wcf:set target="${categoryMappingList}" value="${subCategoryNameList}" />
+			<wcf:set target="${categoryMappingList}" value="${subCategoryURLList}" />
+			<wcf:set target="${categoryMappingList}" value="${fullNextLevelCategoryList}" />
+			<wcf:set target="${categoryMappingList}" value="${topCategory.uniqueID}" />
+			
+			<wcf:set target="${fullCategoryList}" value="${categoryMappingList}" />		
+			
+			<c:remove var="fullNextLevelCategoryList"/>
+			<c:remove var="subCategoryNameList"/>
+			<c:remove var="subCategoryURLList"/>
+			<c:remove var="categoryMappingList"/>
+
+	 </c:forEach>
+	 
+	 
+	 <!-- Number of top categories to show in first column -->
+<c:set var="numOfTopCategoriesShowInFirstColumn" value="0" />
+
+<%-- Calculate the number of top categories to show in first column... --%>
+<%-- First get the total count of topCategories + subCategories that we are going to display here --%>
+<c:forEach var="topCategory" items="${fullCategoryList}" varStatus="status10">
+	<c:set var="subCategoryList" value="${topCategory[4]}" />
+	<%-- total count = totalCount + 1 for top category + count of subcategoires --%>
+	<c:set var = "totalCount" value = "${totalCount + fn:length(subCategoryList) + 1}"/>
+	<%-- to this count add the sub-subCategory list count --%>
+	<c:forEach var="subCategory" items="${subCategoryList}" varStatus="status11">
+		<c:set var = "subSubCategoryList" value="${subCategory[2]}" />
+		<c:set var = "totalCount" value = "${totalCount + fn:length(subSubCategoryList)}"/>
+	</c:forEach>
+</c:forEach>
+
+<%-- Lets divide the total count equally between first and second column --%>
+<c:set var ="countInFirstColumn" value = "${totalCount/2}"/>
+<c:set var="widgetSuffix" value="" />
+
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+
+<%-- Now get the index of top category which will be displayed in first column --%>
+<c:forEach var = "topCategory" items="${fullCategoryList}" varStatus="status09">
+	<c:set var="subCategoryList" value="${topCategory[4]}" />
+	<c:set var = "currentCount" value = "${currentCount + fn:length(subCategoryList) + 1}"/>
+	<c:forEach var="subCategory" items="${subCategoryList}" varStatus="status1">
+		<c:set var="subSubCategoryList" value="${subCategory[2]}" />
+		<c:set var = "currentCount" value = "${currentCount + fn:length(subSubCategoryList)}"/>
+	</c:forEach>
+	<c:if test = "${currentCount < countInFirstColumn}">
+		<%-- We still have space to display another category in first column. Update the numOfTopCategoriesShowInFirstColumn --%>
+		<c:set var="numOfTopCategoriesShowInFirstColumn" value = "${numOfTopCategoriesShowInFirstColumn + 1}"/>
+	</c:if>
+</c:forEach>

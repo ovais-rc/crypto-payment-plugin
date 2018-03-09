@@ -1,0 +1,1 @@
+Place customized JAR files containing store-related logic in this directory.

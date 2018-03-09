@@ -1,0 +1,1057 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		Business object editor panel.
+	-->
+	<FocusableComponent classDefinition="true" clip="true" definitionName="cmc/foundation/Panel" focusable="false" showhandcursor="false" bgcolor="#ffffff">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="BaseButton" moduleName="cmc/foundation/BaseButton"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="BaseList" moduleName="cmc/foundation/BaseList"/>
+		<dependency localName="DndManager" moduleName="cmc/foundation/DndManager"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="InputTextComponent" moduleName="cmc/foundation/InputTextComponent"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			Minimum width. 
+		-->
+		<variable name="minWidth" type="number" value="60"/>
+		<!---
+			Minimum height.
+		-->
+		<variable name="minHeight" type="number" value="50"/>
+		<!---
+			Indicates that this panel can be minimized. The default is "false".
+		-->
+		<variable name="minimizable" type="boolean" value="false"/>
+		<!---
+			Indicates that this panel can be maximized. The default is "true".
+		-->
+		<variable name="maximizable" type="boolean" value="true"/>
+		<!---
+			Indicates that this panel can be closed. The default is "true".
+		-->
+		<variable name="closable" type="boolean" value="true"/>
+		<!---
+			Panel title.
+		-->
+		<variable name="title" type="string" value=""/>
+		<!---
+			Panel title message.
+		-->
+		<variable name="titleMessage" type="string" value=""/>
+		<!---
+			Panel error message.
+		-->
+		<variable name="errorMessage" type="string" value=""/>
+		<!---
+			Panel status message that display behind the title.
+		-->	
+		<variable name="titleQualifier" type="string" value=""/>
+		<!---
+		 	Default placement for views created as children of the panel.
+		-->
+		<variable name="defaultplacement" type="string" value="content"/>
+		<!---
+			Content width.
+		-->
+		<variable name="contentWidth" value="${this.width}"/>
+		<!---
+			Indicates that the horizontal scroll bar is required.
+		-->
+		<variable name="hScrollRequired" type="boolean" value="false"/>
+		<!---
+			Indicates that the vertical scroll bar is required.
+		-->
+		<variable name="vScrollRequired" type="boolean" value="false"/>
+		<!---
+			Horizontal scroll bar height.
+		-->
+		<variable name="hScrollHeight" type="number" value="${(this.hScrollRequired ? this.hScroll.height : 0)}"/>
+		<!---
+			Vertical scroll bar height.
+		-->
+		<variable name="vScrollWidth" type="number" value="${(this.vScrollRequired ? this.vScroll.width : 0)}"/>
+		<!---
+			Child Views that have vertical scroll bars.
+		-->
+		<variable name="scrollableDescendants" value="${[]}"/>
+		
+		<!---
+			Indicates that this panel is currently closed.
+		-->
+		<variable name="closed" type="boolean" value="false"/>
+		<!---
+			Indicates that this panel is currently minimized.
+		-->
+		<variable name="minimized" type="boolean" value="false"/>
+		<!---
+			Indicates that this panel is currently maximized.
+		-->
+		<variable name="maximized" type="boolean" value="false"/>
+		<!---
+			Indicates that this panel is splittable.
+		-->
+		<variable name="splittable" type="boolean" value="true"/>
+		<!---
+			The current header icon resource.
+		-->
+		<variable name="headerIconResource" type="string" value="${null}"/>
+		<!---
+			Clip view.
+		-->
+		<variable name="clipView" value="${this.clippedContent.content}"/>
+		<!---
+			Indicates whether or not to add right padding to the content view
+		-->
+		<variable name="addRightSpacing" type="boolean" value="true"/>
+		<!---
+			Right spacing.
+		-->
+		<variable name="rightSpacing" type="number" value="25"/>
+		<!---
+			Indicates that this is the active panel.
+		-->
+		<variable name="active" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			Closest invisible ancestor view.
+		-->
+		<variable name="visibilityView" value="${null}"/>
+		<!---
+			@keywords private
+			Read-only attribute that indicates that this panel currently has registered shortcut keys.
+		-->
+		<variable name="keysRegistered" type="boolean" value="false"/>
+		<!---
+			Indicates that this panel has an error.
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		
+	
+		<!---
+			@keywords private
+			text color
+		-->
+		<variable name="textColor" type="string" value="#464646"/>
+
+		<!---
+			@keywords private
+			text style
+		-->
+		<variable name="textStyle" type="string" value="plain"/>
+
+		<!---
+			Define the background color for @{link cmc/foundation/Panel#titleBackground}" view.
+		-->
+		<variable name="titleColor" type="string" value="${null}"/>
+		
+		<!---
+			The current show view. The panel will scroll the clipped content view as
+			necessary to ensure that this view remains visible. This view is set
+			by calling the "show" method.
+		-->
+		<variable name="currentShowView" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="useCompactPadding" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.pageUpDel = new EventHandler.Class(this, "pageUp");
+			this.pageDownDel = new EventHandler.Class(this, "pageDown");
+			this.checkVisibilityDel = new EventHandler.Class(this, "checkVisibility");
+			this.checkFocusDel = new EventHandler.Class(this, "checkFocus");
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			this.checkShowViewDel = new EventHandler.Class(this, "checkShowView");
+			this.checkVisibility();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.pageUpDel.disconnectAll();
+			delete this.pageUpDel;
+			this.pageDownDel.disconnectAll();
+			delete this.pageDownDel;
+			this.checkVisibilityDel.disconnectAll();
+			delete this.checkVisibilityDel;
+			this.checkFocusDel.disconnectAll();
+			delete this.checkFocusDel;
+			this.checkMouseDel.disconnectAll();
+			delete this.checkMouseDel;
+			this.checkShowViewDel.disconnectAll();
+			delete this.checkShowViewDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Check if drop is enabled.
+			@param array sources: array of drag sources
+		-->
+		<method args="sources" name="isDropEnabled">
+			<![CDATA[
+			return false;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Perform drop action.
+			@param array sources: array of drag sources
+		-->
+		<method args="sources" name="droppedInTarget">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!---
+			Show the view in clipped content
+			@param cmc/foundation/Component v: the view that needs to be display
+		-->
+		<method args="v" name="show">
+			<![CDATA[
+			var focusedView = FocusUtil.getFocus();
+			var showFocusView = ViewUtil.Singleton.containsView(v, focusedView);
+			var pad = 10;
+			if (!ViewUtil.Singleton.mouseDown) {
+				//y axis
+				for (var i = 0; i < this.scrollableDescendants.length; i++) {
+					var scrollableDescendant = this.scrollableDescendants[i];
+					if (scrollableDescendant.show && ViewUtil.Singleton.containsView(scrollableDescendant, v)) {
+						scrollableDescendant.show(v);
+					}
+				}
+				var clipPos = -this.clippedContent.content.y;
+				var clipSize = this.clippedContent.height;
+				var targetPos = v.getVariableRelative("y", this.clippedContent.content) - this.clippedContent.content.y;
+				var targetSize = v.height;
+				if (targetPos - pad > clipPos || targetPos + targetSize + pad < clipPos + clipSize) {
+					if (targetPos - pad < clipPos || targetSize + 2 * pad > clipSize) {
+						clipPos = targetPos - pad;
+					}
+					else if (targetPos + targetSize + pad > clipPos + clipSize) {
+						clipPos = targetPos + targetSize + pad - clipSize;
+					}
+				}
+				if (showFocusView) {
+					targetPos = focusedView.getVariableRelative("y", this.clippedContent.content) - this.clippedContent.content.y;
+					targetSize = focusedView.height;
+					if (targetPos - pad > clipPos || targetPos + targetSize + pad < clipPos + clipSize) {
+						if (targetPos - pad < clipPos || targetSize + 2 * pad > clipSize) {
+							clipPos = targetPos - pad;
+						}
+						else if (targetPos + targetSize + pad > clipPos + clipSize) {
+							clipPos = targetPos + targetSize + pad - clipSize;
+						}
+					}
+				}
+				if (clipPos < 0 || this.clippedContent.content.height <= clipSize) {
+					clipPos = 0;
+				}
+				else if (clipPos > this.clippedContent.content.height - clipSize) {
+					clipPos = this.clippedContent.content.height - clipSize;
+				}
+				if (clipPos != -this.clippedContent.content.y) {
+					this.clippedContent.content.setVariable("y", -clipPos);
+				}
+				//x axis
+				var clipPos = -this.clippedContent.content.x;
+				var clipSize = this.clippedContent.width;
+				var targetPos = v.getVariableRelative("x", this.clippedContent.content) - this.clippedContent.content.x;
+				var targetSize = v.width;
+				if (targetPos - pad > clipPos || targetPos + targetSize + pad < clipPos + clipSize) {
+					if (targetPos - pad < clipPos || targetSize + 2 * pad > clipSize) {
+						clipPos = targetPos - pad;
+					}
+					else if (targetPos + targetSize + pad > clipPos + clipSize) {
+						clipPos = targetPos + targetSize + pad - clipSize;
+					}
+				}
+				if (showFocusView) {
+					targetPos = focusedView.getVariableRelative("x", this.clippedContent.content) - this.clippedContent.content.x;
+					targetSize = focusedView.width;
+					if (targetPos - pad > clipPos || targetPos + targetSize + pad < clipPos + clipSize) {
+						if (targetPos - pad < clipPos || targetSize + 2 * pad > clipSize) {
+							clipPos = targetPos - pad;
+						}
+						else if (targetPos + targetSize + pad > clipPos + clipSize) {
+							clipPos = targetPos + targetSize + pad - clipSize;
+						}
+					}
+				}
+				if (targetSize + pad > clipSize){
+					clipPos = (targetSize >= clipSize) ? targetPos : targetPos - targetSize + clipSize;
+				}
+				if (clipPos < 0 || this.clippedContent.content.width <= clipSize) {
+					clipPos = 0;
+				}
+				else if (clipPos > this.clippedContent.content.width - clipSize) {
+					clipPos = this.clippedContent.content.width - clipSize;
+				}
+				if (clipPos != -this.clippedContent.content.x) {
+					this.clippedContent.content.setVariable("x", -clipPos);
+				}
+			}
+			this.currentShowView = v;
+			this.checkShowViewDel.disconnectAll();
+			this.checkShowViewDel.connect(v, "onheight");
+			]]>
+		</method>
+		
+		<!---
+			Check the clipped content scroll to ensure that the current show view
+			is visible.
+		-->		
+		<method args="e" name="checkShowView">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.currentShowView != null) {
+				this.show(this.currentShowView);
+			}
+			]]>
+		</method>
+		<!---
+			Check panel visibility.
+		-->
+		<method args="e" name="checkVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var isVisible = false;
+			this.checkVisibilityDel.disconnectAll();
+			this.checkFocusDel.disconnectAll();
+			this.visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+			if (this.visibilityView != null) {
+				this.checkVisibilityDel.connect(this.visibilityView, "onvisible");
+			}
+			else if (!this.visible) {
+				this.checkVisibilityDel.connect(this, "onvisible");
+			}
+			else {
+				isVisible = true;
+				ViewUtil.Singleton.registerVisibilityDelegate(this, this.checkVisibilityDel);
+			}
+			if (isVisible) {
+				this.checkFocusDel.connect(FocusUtil, "onfocus");
+				this.checkMouseDel.connect(MouseUtil, "onmousedown");
+				this.checkFocus();
+			}
+			else if (PanelManager.Singleton.activePanel == this) {
+				PanelManager.Singleton.setVariable("activePanel", null);
+			}
+			if (!isVisible && ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				ModelUtil.Singleton.findModelForView(this).oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check focus.
+		-->
+		<method args="e" name="checkFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var containsFocus = ViewUtil.Singleton.containsView(this, FocusUtil.getFocus());
+			if (containsFocus) {
+				PanelManager.Singleton.setVariable("activePanel", this);
+				var model = ModelUtil.Singleton.findModelForView(this);
+				if (!ViewUtil.Singleton.containsView(model.activeSelectionView, FocusUtil.getFocus())) {
+					model.setActiveSelectionView(null);
+				}
+			}
+			else if (PanelManager.Singleton.activePanel == this) {
+				PanelManager.Singleton.setVariable("activePanel", null);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Check mouse down.
+			@param cmc/foundation/Component v: the mouse down view
+		-->
+		<method args="v" name="checkMouse">
+			<![CDATA[
+			var active = false;
+			if (v != null) {
+				active = ViewUtil.Singleton.containsView(this, v);
+			}
+			if (active) {
+				PanelManager.Singleton.setVariable("activePanel", this);
+			}
+			else if (PanelManager.Singleton.activePanel == this) {
+				PanelManager.Singleton.setVariable("activePanel", null);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			Update the active panel.
+		-->
+		<handler name="onactive">
+			<![CDATA[
+			if (this.active) {
+				this.registerShortcutKeys();
+			}
+			else {
+				this.unregisterShortcutKeys();
+			}
+			]]>
+		</handler>
+		
+		<!--- 
+			Registers the shortcut keys.
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (!this.keysRegistered) {
+				this.keysRegistered = true;
+				KeyUtil.callOnKeyCombo(this.pageDownDel, ["Pagedown"]);
+				KeyUtil.callOnKeyCombo(this.pageUpDel, ["Pageup"]);
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			Unregisters the shortcut keys.
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			if (this.keysRegistered) {
+				this.keysRegistered = false;
+				KeyUtil.removeKeyComboCall(this.pageDownDel, ["Pagedown"]);
+				KeyUtil.removeKeyComboCall(this.pageUpDel, ["Pageup"]);
+			}
+			]]>
+		</method>
+
+		<!---
+			Open this panel.
+		-->
+		<method name="open">
+			<![CDATA[
+			this.setVariable("closed", false);
+			]]>
+		</method>
+				
+		<!--- 
+			Closes the panel.
+		-->
+		<method name="close">
+			<![CDATA[
+			if (this.closable) {
+				this.setVariable("closed", true);
+				this.setVariable("minimized", false);
+				this.setVariable("maximized", false);
+			}
+			]]>
+		</method>
+
+		<!--- 
+			Maximizes the panel.
+		-->
+		<method name="maximize">
+			<![CDATA[
+			if (this.maximizable && !this.maximized) {
+				this.setVariable("maximized", true);
+				this.setVariable("minimized", false);
+				if (FocusUtil.getFocus() == this.buttons.maximizeButton) {
+					FocusUtil.setFocus(this.buttons.restoreButton);
+				}
+			}
+			]]>
+		</method>
+
+		<!--- 
+			Minimize the panel.
+		-->
+		<method name="minimize">
+			<![CDATA[
+			if (this.minimizable && !this.minimized) {
+				this.setVariable("minimized", true);
+				this.setVariable("maximized", false);
+				if (FocusUtil.getFocus() == this.buttons.minimizeButton) {
+					FocusUtil.setFocus(this.buttons.restoreButton);
+				}
+			}
+			]]>
+		</method>
+
+				
+		<!--- 
+			Restores the panel.
+		-->
+		<method name="restore">
+			<![CDATA[
+			if (this.maximizable || this.minimizable) {
+				if (this.maximized) {
+					this.setVariable("maximized", !this.maximized);
+					this.setVariable("minimized", false);
+					if (FocusUtil.getFocus() == this.buttons.restoreButton) {
+						FocusUtil.setFocus(this.buttons.maximizeButton);
+					}
+				}
+				else if (this.minimized) {
+					this.setVariable("minimized", !this.minimized);
+					this.setVariable("maximized", false);
+					if (FocusUtil.getFocus() == this.buttons.restoreButton) {
+						FocusUtil.setFocus(this.buttons.minimizeButton);
+					}
+				}
+			}
+			]]>
+		</method>
+				
+		<!-- We want the panel to be part of the dnd tracking so that its registered on top -->		
+		<TrackingDropTarget dragAndDropManager="${DndManager.Singleton}"/>
+		
+		<method name="lockAvailableCalcs">
+			<![CDATA[
+			this.clipView.updateAvailableSpace(true);
+			]]>
+		</method>
+		
+		<method name="unlockAvailableCalcs">
+			<![CDATA[
+			this.clipView.updateAvailableSpace(false);
+			]]>
+		</method>
+		
+		<!---
+			Determine the placement for a new view.
+		-->
+		<method args="v, p, a" name="determinePlacement">
+			<![CDATA[
+			if (p == "content") {
+				return this.clippedContent.content;
+			}
+			else if (p == "title") {
+				return this.titleArea.title;
+			}
+			else if (p == "nonclippedContent") {
+				return this.nonclippedContent;
+			}
+			return this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Scroll the panel to the bottom.
+		-->
+		<method name="scrollToBottom">
+			<![CDATA[
+			this.vScroll.step(this.vScroll.scrollmax);
+			]]>
+		</method>
+		
+		<!---
+			Scroll the panel to the top.
+		-->
+		<method name="scrollToTop">
+			<![CDATA[
+			this.vScroll.step(0 - (this.vScroll.scrollmax / this.vScroll.stepsize));
+			]]>
+		</method>
+
+		<!---
+			Scroll up a page.
+		-->
+		<method args="e" name="pageUp">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this) && !this.hasActiveScrollableDescendant()) this.vScroll.step(0 - this.vScroll.stepsize);
+			]]>
+		</method>
+
+		<!---
+			Scroll down a page.
+		-->
+		<method args="e" name="pageDown">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this) && !this.hasActiveScrollableDescendant()) this.vScroll.step(this.vScroll.stepsize);
+			]]>
+		</method>
+		
+		<method name="hasActiveScrollableDescendant">
+			<![CDATA[
+			var activeChild = false;
+			for (var i = 0; i < this.scrollableDescendants.length; i++) {
+				if (this.scrollableDescendants[i].activated) {
+					activeChild = true;
+					break;
+				}
+			}
+			return activeChild;
+			]]>
+		</method>
+		
+		<Component name="infoArea" height="${this.parent.height}" width="${this.parent.width}"/>
+		
+		<!--  This view serves as background of the title area -->
+		<Component bgcolor="${this.parent.titleColor}" height="${this.parent.activeView == null ? this.parent.height : this.parent.titleArea.y + this.parent.titleArea.height}" name="titleBackground" width="${this.immediateParent.width}">
+			<DropTarget dragAndDropManager="${DndManager.Singleton}" targetKey="${'element'}">
+				<handler args="sources" name="ondroppedintarget">
+					<![CDATA[
+					this.classroot.droppedInTarget(sources);
+					]]>
+				</handler>
+				<method args="currentDragSource" name="isEnabled">
+					<![CDATA[
+					return this.classroot.isDropEnabled(currentDragSource);
+					]]>
+				</method>
+			</DropTarget>
+		</Component>
+			
+		<Component clip="true" name="titleArea" width="${this.parent.contentWidth}">
+			<Component imageSet="${this.classroot.headerIconResource}" x="${this.classroot.useCompactPadding ? 19 : 25}" y="${this.classroot.useCompactPadding ? 13 : 20}" name="headerIcon" visible="${this.classroot.headerIconResource != null}"/>	
+			<Component imageSet="panelErrorResource" visible="${this.classroot.hasError}" x="${this.parent.headerIcon.x + this.parent.headerIcon.width - this.width}" y="${this.parent.title.y + this.parent.title.headerMsg.y - 2}"/>
+			<Component name="title" width="${Math.max(this.parent.parent.actions.x, 200)}" y="${this.parent.headerIcon.y + Math.max((this.parent.headerIcon.height - this.headerText.height) / 2, 0)}">
+				<variable name="textX" type="number" value="${this.parent.headerIcon.x + (this.parent.headerIcon.visible ? this.parent.headerIcon.width + (this.classroot.useCompactPadding ? 8 : 10) : 0)}"/>
+				<AxisLayout axis="y"/>
+				<TextComponent x="${this.parent.textX}" fgcolor="${this.classroot.textColor}" fontsize="${this.classroot.useCompactPadding ? 16 : 20}" fontstyle="${this.classroot.textStyle}" multiline="true" name="headerText" visible="${this.text != ''}" width="${this.parent.width - this.x}">
+					<!--- @keywords private -->
+					<handler eventSource="this.classroot" name="ontitleQualifier">
+						<![CDATA[
+						this.updateTitle();
+						]]>
+					</handler>
+					
+					<!--- @keywords private -->
+					<handler eventSource="this.classroot" name="ontitle">
+						<![CDATA[
+						this.updateTitle();
+						]]>
+					</handler>
+					
+					<!--- 
+						@keywords private 
+						Update text and append titleQualifier behind the title
+					-->
+					<method name="updateTitle">
+						<![CDATA[
+						this.setVariable('text', this.classroot.title + " <span style=\"color: #464646; font-size: 13px;\">" + this.classroot.titleQualifier + "</span>");
+						]]>
+					</method>
+					
+				</TextComponent>
+				<TextComponent x="${this.parent.textX}" multiline="true" name="headerMsg" visible="${this.text != ''}" width="${this.parent.width - this.x}">
+				
+					<!--- @keywords private -->
+					<handler eventSource="this.classroot" name="ontitleMessage">
+						<![CDATA[
+						this.updateMessage();
+						]]>
+					</handler>
+					
+					<!--- @keywords private -->
+					<handler eventSource="this.classroot" name="onerrorMessage">
+						<![CDATA[
+						this.updateMessage();
+						]]>
+					</handler>	
+					
+					<!--- 
+						@keywords private 
+						Check if there are errorMessage or titleMessage and update the text
+					-->
+					<method name="updateMessage">
+						<![CDATA[
+						var newMessage = "";
+						if (this.classroot.errorMessage != "") {
+							this.setVariable('fgcolor', "#e71d32");
+							newMessage = this.classroot.errorMessage;
+						}
+						else {
+							this.setVariable('fgcolor', "#464646");
+							newMessage = this.classroot.titleMessage;
+						}
+						if (this.getText() != newMessage) {
+							this.setVariable('text', newMessage);
+						}
+						]]>
+					</method>
+				</TextComponent>
+			</Component>
+			<handler name="ondblclick">
+				<![CDATA[
+				if (this.classroot.maximizable) {
+					this.classroot.setVariable("maximized", !this.classroot.maximized);
+					this.classroot.setVariable("minimized", false);
+				}
+				]]>
+			</handler>
+		</Component>
+		
+		<!--
+			This view contains action widgets. Action widgets are added to the header.
+			For example, a button that closes a object properties view can be an action widget.
+		 -->
+		<Component name="actions" y="${this.classroot.useCompactPadding ? 13 : 20}" x="${this.parent.buttons.x - 10 - this.width}"> 
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+		
+		<Component name="buttons" x="${this.classroot.width - this.width - (this.classroot.useCompactPadding ? 0 : 25)}" y="${this.classroot.useCompactPadding ? 0 : 25}">
+			<AxisLayout axis="x" spacing="2"/>				
+			<BaseButton focusable="true" imageSet="minimizeButtonResource" name="minimizeButton" visible="${this.classroot.minimizable &amp;&amp; !this.classroot.minimized}">
+				<Tooltip text="${foundationResources.Singleton.panelMinTip.string}"/>					
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.minimize();
+					]]>
+				</handler>
+			</BaseButton>
+						
+			<BaseButton focusable="true" imageSet="maximizeButtonResource" name="maximizeButton" visible="${this.classroot.maximizable &amp;&amp; !this.classroot.maximized}">
+				<Tooltip text="${foundationResources.Singleton.panelMaxTip.string}"/>
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.maximize();
+					]]>
+				</handler>
+			</BaseButton>
+						
+			<BaseButton focusable="true" imageSet="restoreButtonResource" name="restoreButton" visible="${this.classroot.maximized || this.classroot.minimized}">
+				<Tooltip text="${foundationResources.Singleton.panelRestoreTip.string}"/>
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.restore();
+					]]>
+				</handler>
+			</BaseButton>
+				
+			<BaseButton focusable="true" imageSet="closeButtonResource" visible="${this.classroot.closable}">
+				<Tooltip text="${foundationResources.Singleton.panelCloseTip.string}"/>
+				<handler name="onfocus">
+					<![CDATA[
+					if (!this.indicator) {
+						new FocusIndicator.Class(this, {
+							name: "indicator",
+							focusableView: this,
+							indicatorView: this
+						});
+					}
+					]]>
+				</handler>
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.close();
+					]]>
+				</handler>
+			</BaseButton>			
+		</Component>
+
+		<Component name="tabArea">
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				this.updateYDel = new EventHandler.Class(this, "updateY");
+				this.updateY();
+				]]>
+			</method>
+
+			<method name="destroy">
+				<![CDATA[
+				this.updateYDel.disconnectAll();
+				delete this.updateYDel;
+				this.inherited(arguments);
+				]]>
+			</method>
+
+			<method name="updateY">
+				<![CDATA[
+				this.updateYDel.disconnectAll();
+				var newY = this.classroot.titleArea.y + this.classroot.titleArea.height;
+				var padding = 0;
+				if (this.classroot.useCompactPadding) {
+					if (this.height > 0) {
+						if (this.classroot.titleArea.height <= 57) {
+							padding = 13;
+						}
+						else {
+							padding = Math.max(0, 13 - (this.classroot.titleArea.height - 57));
+						}
+					}
+				}
+				else {
+					if (this.classroot.titleArea.height <= 64) {
+						padding = 25;
+					}
+					else {
+						padding = Math.max(0, 25 - (this.classroot.titleArea.height - 64));
+					}
+				}
+				newY += padding;
+				if (newY != this.y) {
+					this.setVariable("y", newY);
+				}
+				this.updateYDel.connect(this.classroot.titleArea, "ony");
+				this.updateYDel.connect(this.classroot.titleArea, "onheight");
+				this.updateYDel.connect(this.classroot, "onuseCompactPadding");
+				]]>
+			</method>
+		</Component>
+
+		<Component height="${this.parent.height - this.y + 1 - 5}" name="nonclippedContent" visible="${!this.classroot.minimized}" width="${this.parent.contentWidth - 10}" x="5" y="${this.parent.tabArea.y + this.parent.tabArea.height}">
+		</Component>
+		
+		<Component clip="true" height="${this.parent.height - this.y - this.classroot.hScrollHeight}" name="clippedContent" visible="${!this.classroot.minimized}" width="${this.parent.contentWidth - this.parent.vScrollWidth}" y="${this.parent.tabArea.y + this.parent.tabArea.height}"> 
+			<Component name="content">
+				<variable name="availableWidth" type="number" value="0"/>
+				<variable name="availableHeight" type="number" value="0"/>
+				
+				<method name="init">
+					<![CDATA[
+					this.updateAvailableWidthDel = new EventHandler.Class(this, "updateAvailableWidth");
+					this.updateAvailableHeightDel = new EventHandler.Class(this, "updateAvailableHeight");
+					this.updateAvailableSpaceDel = new EventHandler.Class(this, "updateAvailableSpace");
+					this.registerResizers(this.classroot);
+					this.updateAvailableSpace(false);
+					this.inherited(arguments);
+					]]>
+				</method>
+				
+				<method args="v" name="registerResizers">
+					<![CDATA[
+					if (v.splitViewLayout) {
+						this.updateAvailableSpaceDel.connect(v.splitViewLayout.resizer, "ondragging");
+					}
+					if (v.parent != RootComponent.Singleton) {
+						this.registerResizers(v.parent);
+					}
+					]]>
+				</method>
+			
+				<method name="destroy">
+					<![CDATA[
+					if (this.updateAvailableSpaceDel) {
+						this.updateAvailableSpaceDel.disconnectAll();
+						delete this.updateAvailableSpaceDel;
+					}
+					if (this.updateAvailableWidthDel) {
+						this.updateAvailableWidthDel.disconnectAll();
+						delete this.updateAvailableWidthDel;
+					}
+					if (this.updateAvailableHeightDel) {
+						this.updateAvailableHeightDel.disconnectAll();
+						delete this.updateAvailableHeightDel;
+					}
+					this.inherited(arguments);
+					]]>
+				</method>
+				
+				<method args="dragging" name="updateAvailableSpace">
+					<![CDATA[
+					if (typeof(dragging) == "undefined") dragging = false;
+					if (dragging) {
+						this.updateAvailableWidthDel.disconnectAll();
+						this.updateAvailableHeightDel.disconnectAll();
+					}
+					else {
+						this.updateAvailableWidthDel.connect(this.classroot.clippedContent, "onwidth");
+						this.updateAvailableWidthDel.connect(this, "onwidth");
+						this.updateAvailableHeightDel.connect(this.classroot.clippedContent, "onheight");
+						this.updateAvailableHeightDel.connect(this, "onheight");
+						this.updateAvailableWidth();
+						this.updateAvailableHeight();
+					}
+					]]>
+				</method>
+				
+				<method args="e" name="updateAvailableWidth">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					var newAvailableWidth = (this.classroot.addRightSpacing) ? this.classroot.clippedContent.width - this.classroot.rightSpacing : this.classroot.clippedContent.width;
+					if (newAvailableWidth != this.availableWidth) {
+						this.setVariable("availableWidth", newAvailableWidth);
+					}
+					var scrollRequired = this.classroot.clippedContent.width < this.width;
+					if (scrollRequired != this.classroot.hScrollRequired) {
+						this.classroot.setVariable("hScrollRequired", scrollRequired);
+						newAvailableWidth = (this.classroot.addRightSpacing) ? this.classroot.clippedContent.width - this.classroot.rightSpacing : this.classroot.clippedContent.width;
+						if (newAvailableWidth != this.availableWidth) {
+							this.setVariable("availableWidth", newAvailableWidth);
+						}
+					}
+					this.classroot.tabArea.setVariable("width", this.classroot.contentWidth);
+					]]>
+				</method>
+				
+				<method args="e" name="updateAvailableHeight">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					var newAvailableHeight = this.classroot.clippedContent.height;
+					if (newAvailableHeight != this.availableHeight) {
+						this.setVariable("availableHeight", newAvailableHeight);
+					}
+					var scrollRequired = this.classroot.clippedContent.height < this.height;
+					if (scrollRequired != this.classroot.vScrollRequired) {
+						this.classroot.setVariable("vScrollRequired", scrollRequired);
+						newAvailableHeight = this.classroot.clippedContent.height;
+						if (newAvailableHeight != this.availableHeight) {
+							this.setVariable("availableHeight", newAvailableHeight);
+						}
+					}
+					]]>
+				</method>
+			</Component>
+		</Component>
+
+		<Component bgcolor="#efefef" height="${this.classroot.hScroll.height}" name="vScrollBottom" visible="${this.classroot.vScroll.visible &amp;&amp; this.classroot.hScroll.visible}" width="${this.classroot.vScroll.width}" x="${this.classroot.vScroll.x}" y="${this.classroot.vScroll.y + this.classroot.vScroll.height}">
+		</Component>	
+				
+		<HorizontalScrollbar name="hScroll" scrolltarget="${this.classroot.clippedContent.content}" visible="${this.classroot.hScrollRequired &amp;&amp; !this.classroot.minimized}" width="${this.classroot.clippedContent.width}" x="${this.classroot.clippedContent.x}" y="${this.classroot.clippedContent.y + this.classroot.clippedContent.height}"/>
+		
+		<VerticalScrollbar height="${this.classroot.clippedContent.height}" name="vScroll" scrolltarget="${this.classroot.clippedContent.content}" visible="${this.classroot.vScrollRequired &amp;&amp; !this.classroot.minimized}" x="${this.classroot.clippedContent.x + this.classroot.clippedContent.width}" y="${this.classroot.clippedContent.y}">
+				
+			<method args="k" name="scrollOnMouseWheel">
+				<![CDATA[
+				if (this.visible) {
+					var v = this.scrolltarget.immediateParent;
+					if (ViewUtil.Singleton.isMouseOver(v) && ViewUtil.Singleton.containedInModalView(v)) {
+						var childrenMouseOver = false;
+						for (var i = 0; i < this.classroot.scrollableDescendants.length; i++) {
+							if (ViewUtil.Singleton.isMouseOver(this.classroot.scrollableDescendants[i])) {
+								childrenMouseOver = true;
+							}
+						}
+						if (!childrenMouseOver) {
+							page(-this.wheelstepsize * k);
+						}
+					}
+				}
+				]]>
+			</method>
+		</VerticalScrollbar>
+
+		<method args="scrollableView" name="registerScrollableDescendant">
+			<![CDATA[
+			if (this.scrollableDescendants.indexOf(scrollableView) == -1) this.scrollableDescendants.push(scrollableView);
+			]]>
+		</method>
+		
+		<method args="scrollableView" name="unregisterScrollableDescendant">
+			<![CDATA[
+			var index = this.scrollableDescendants.indexOf(scrollableView);
+			if (index != -1) {
+				this.scrollableDescendants.splice(index, 1);
+			}
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		Singleton that keeps track of the active panel.
+	-->
+	<Node definitionName="cmc/foundation/PanelManager" singletonDefinition="true">
+		<dependency localName="Panel" moduleName="cmc/foundation/Panel"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			The active panel.
+		-->
+		<variable name="activePanel" value="${null}"/>
+		
+		<!---
+			Set the active panel.
+			@param cmc/foundation/Component panel: panel
+		-->
+		<method args="panel" name="setActivePanel">
+			<![CDATA[
+			if (typeof (this.activePanel == "undefined") || this.activePanel != panel) {
+				if (this.activePanel != null) {
+					this.activePanel.setVariable("active", false);
+				}
+				this.activePanel = panel;
+				EventUtil.trigger(this, "onactivePanel", panel);
+				if (panel != null) {
+					panel.setVariable("active", true);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Find the ancestor panel for the specified view.
+		-->
+		<method args="v" name="findPanel">
+			<![CDATA[
+			var panel = null;
+			while (v != null && v != RootComponent.Singleton) {
+				v = v.immediateParent;
+				if (v instanceof Panel.Class) {
+					panel = v;
+					break;
+				}
+			}
+			return panel;
+			]]>
+		</method>
+
+		<method args="activePanel" name="set_activePanel">
+			<![CDATA[
+			this.setActivePanel(activePanel);
+			]]>
+		</method>
+	</Node>
+</Definitions>

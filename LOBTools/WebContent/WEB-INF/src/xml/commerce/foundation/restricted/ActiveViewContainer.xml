@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		A container for displaying an active view. Many views may be created with
+		this view as the parent view, but only the current active child view will be visible
+		at any one time.
+	-->
+	<Panel classDefinition="true" definitionName="cmc/foundation/ActiveViewContainer">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			Reference to the view that is currently active.
+		-->
+		<variable name="activeView" value="${null}"/>
+		<!---
+			Indicates that this view can be split into master/details panels.
+		-->
+		<variable name="splittable" type="boolean" value="false"/>
+		<!---
+			The title used when no active view is set
+		-->
+		<variable name="defaultTitle" type="string" value=""/>
+		<!---
+			The title message used when no active view is set
+		-->
+		<variable name="defaultTitleMessage" type="string" value=""/>
+		
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateHeaderDel = new EventHandler.Class(this, "updateHeader");
+			this.updateHeader();
+			this.updateDisplayNameStyleDel = new EventHandler.Class(this, "updateDisplayNameStyle");
+			this.updateDisplayNameStyle();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateHeaderDel.disconnectAll();
+			delete this.updateHeaderDel;
+			this.updateDisplayNameStyleDel.disconnectAll();
+			delete this.updateDisplayNameStyleDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Set the active view.
+			@param cmc/foundation/Component v: the active view
+			@param boolean immediate: if true set the active view call back immediately
+		-->
+		<method args="v, immediate" name="setActiveView">
+			<![CDATA[
+			if (typeof(immediate) == "undefined") immediate = false;
+			if (!immediate) {
+				if (!this.setActiveViewCallBackDel) {
+					this.setActiveViewCallBackDel = new EventHandler.Class(this, "setActiveViewCallBack");
+				}
+				CallbackUtil.Singleton.addDeferredCallback(this.setActiveViewCallBackDel, {
+					v: v
+				}, CallbackUtil.Singleton.PRIORITY_IMMEDIATE);
+			}
+			else {
+				this.setActiveViewCallBack({
+					v: v
+				});
+			}
+			]]>
+		</method>
+
+		
+		<!---
+			@keywords private
+			
+			Set the active view. This will be called by the Callback utility.
+			@param object args: object parameter that contains the active view.
+		-->
+		<method args="args" name="setActiveViewCallBack">
+			<![CDATA[
+			if (this.activeView) {
+				this.activeView.setVariable("visible", false);
+				var containsFocusedView = false;
+				if (ViewUtil.Singleton.containsView(this.activeView, FocusUtil.getFocus())) {
+					containsFocusedView = true;
+				}
+				if (this.activeView.actions) {
+					if (!containsFocusedView && ViewUtil.Singleton.containsView(this.actions, FocusUtil.getFocus())) {
+						containsFocusedView = true;
+					}
+					for (var i = 0; i < this.activeView.actions.length; i++) {
+						this.activeView.actions[i].releaseActionWidget();
+					}
+				}
+				if (containsFocusedView) {
+					ModelUtil.Singleton.findModelForView(this).oEditor.restoreFocus();
+				}
+			}
+			var v = args.v;
+			this.activeView = v;
+			var clippedContentVisible = true;
+			if (v) {
+				if (v.immediateParent == this.nonclippedContent) {
+					clippedContentVisible = false;
+				}
+				v.setVariable("visible", true);
+				if (v.splittable) {
+					this.setVariable("splittable", v.splittable);
+				}
+				else {
+					this.setVariable("splittable", false);
+				}
+				if (v.actions) {
+					for (var i = 0; i < v.actions.length; i++) {
+						v.actions[i].createActionWidget(this.actions);
+					}
+				}
+				var newAddRightSpacing = false;
+				if (v.addRightSpacing != undefined) {
+					newAddRightSpacing = v.addRightSpacing;
+				}
+				if (newAddRightSpacing != this.addRightSpacing) {
+					this.setVariable("addRightSpacing", newAddRightSpacing);
+					if (this.clipView.updateAvailableSpace) {
+						this.clipView.updateAvailableSpace();
+					}
+				}
+			}
+			else {
+				this.setVariable("splittable", false);
+			}
+			this.updateHeader();
+			this.updateDisplayNameStyle();
+			if (this.clippedContent.visible != clippedContentVisible) {
+				this.clippedContent.setVariable("visible", clippedContentVisible);
+			}
+			EventUtil.trigger(this, "onactiveView");
+			]]>
+		</method>
+		
+		<!---
+			Update the panel header style.
+		-->
+		<method args="e" name="updateDisplayNameStyle">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newTextColor = "#464646";
+			var newTextStyle = "plain";
+			this.updateDisplayNameStyleDel.disconnectAll();
+			if (this.activeView != null && typeof (this.activeView.displayNameStyle) != "undefined") {
+				var style = this.activeView.displayNameStyle;
+				this.updateDisplayNameStyleDel.connect(this.activeView, "ondisplayNameStyle");
+				if (style != null) {
+					newTextColor = style.color;
+					if (style.bold && style.italic) {
+						newTextStyle = "bolditalic";
+					}
+					else if (style.bold) {
+						newTextStyle = "bold";
+					}
+					else if (style.italic) {
+						newTextStyle = "italic";
+					}
+				}
+			}
+			if (this.textColor != newTextColor) {
+				this.setVariable("textColor", newTextColor);
+			}
+			if (this.textStyle != newTextStyle) {
+				this.setVariable("textStyle", newTextStyle);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the panel header.
+		-->
+		<method args="e" name="updateHeader">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateHeaderDel.disconnectAll();
+			var newTitle = "";
+			var newTitleMessage = "";
+			var newErrorMessage = "";
+			var newHeaderIconResource = null;
+			var newHasError = false;
+			var newTitleQualifier = "";
+			if (this.activeView != null) {
+				var v = this.activeView;
+				if (typeof (v.title) != "undefined") {
+					this.updateHeaderDel.connect(v, "ontitle");
+					newTitle = v.title;
+				}
+				if (typeof (v.titleMessage) != "undefined") {
+					this.updateHeaderDel.connect(v, "ontitleMessage");
+					newTitleMessage = v.titleMessage;
+				}
+				if (typeof (v.errorMessage) != "undefined") {
+					this.updateHeaderDel.connect(v, "onerrorMessage");
+					newErrorMessage = v.errorMessage;
+				}
+				if (typeof (v.titleQualifier) != "undefined") {
+					this.updateHeaderDel.connect(v, "ontitleQualifier");
+					newTitleQualifier = v.titleQualifier;
+				}
+				if (typeof (v.headerIconResource) != "undefined") {
+					this.updateHeaderDel.connect(v, "onheaderIconResource");
+					newHeaderIconResource = v.headerIconResource;
+				}
+				if (typeof (v.hasError) != "undefined") {
+					this.updateHeaderDel.connect(v, "onhasError");
+					newHasError = v.hasError;
+				}
+			}
+			else {
+				newTitle = this.defaultTitle;
+				this.updateHeaderDel.connect(this, "ondefaultTitle");
+				newTitleMessage = this.defaultTitleMessage;
+				this.updateHeaderDel.connect(this, "ondefaultTitleMessage");
+			}
+			if (newTitle != this.title) {
+				this.setVariable("title", newTitle);
+			}
+			if (newTitleMessage != this.titleMessage) {
+				this.setVariable("titleMessage", newTitleMessage);
+			}
+			if (newErrorMessage != this.errorMessage) {
+				this.setVariable("errorMessage", newErrorMessage);
+			}
+			if (newTitleQualifier != this.titleQualifier) {
+				this.setVariable("titleQualifier", newTitleQualifier);
+			}
+			if (newHeaderIconResource != this.headerIconResource) {
+				this.setVariable("headerIconResource", newHeaderIconResource);
+			}
+			if (newHasError != this.hasError) {
+				this.setVariable("hasError", newHasError);
+			}
+			]]>
+		</method>
+	</Panel>
+</Definitions>

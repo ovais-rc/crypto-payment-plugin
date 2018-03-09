@@ -1,0 +1,173 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN UserMemberGroupManagement_Data.jspf -->
+
+<c:set var="fromPage" value="${param.fromPage}"/>
+<c:set var="widgetName" value="UserMemberGroupManagement"/>
+<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}"/>
+<c:set var="memberId" value="" />
+<c:set var="memberGroupFormId" value="WC_${widgetName}_memberGroupForm" />
+<c:set var="includeGrpDropdownId" value="WC_UserMemberGroupManagement_includeMbrGrpDropdown" />
+<c:set var="excludeGrpDropdownId" value="WC_UserMemberGroupManagement_excludeMbrGrpDropdown" />
+
+<c:if test="${fromPage == 'editUser'}" >
+
+	<c:if test="${not empty WCParam.memberId }" >
+		<c:set var="memberId"><c:out value="${WCParam.memberId}" /></c:set>
+	</c:if>
+	<c:if test="${not empty param.memberId }" >
+		<c:set var="memberId"><c:out value="${param.memberId}" /></c:set>
+	</c:if>
+	<c:if test="${not empty memberId}" >
+	
+		<wcf:rest var="manageableGroups" url="store/{storeId}/member_group" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="q" value="manageable" />
+		</wcf:rest>
+		<wcf:rest var="incGroups" url="store/{storeId}/member_group" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="q" value="explicitlyIncludedOrExcluded" />
+			<wcf:param name="exclude" value="0" />
+			<wcf:param name="userId" value="${memberId}"/>
+		</wcf:rest>
+		<wcf:rest var="excGroups" url="store/{storeId}/member_group" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="q" value="explicitlyIncludedOrExcluded" />
+			<wcf:param name="exclude" value="1" />
+			<wcf:param name="userId" value="${memberId}"/>
+		</wcf:rest>
+		<wcf:rest var="CustomerGroups" url="store/{storeId}/member_group" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="q" value="manageable" />
+			<wcf:param name="typeName" value="CustomerTerritoryGroup" />
+			<wcf:param name="typeName" value="CustomerPriceGroup" />
+		</wcf:rest>
+		<wcf:rest var="RegisteredCustomersGroup" url="store/{storeId}/member_group" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:param name="q" value="manageable" />
+			<wcf:param name="typeName" value="RegisteredCustomersGroup" />
+		</wcf:rest>
+		<wcf:rest var="memberRoles" url="store/{storeId}/person/{memberId}" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:var name="memberId" value="${memberId}" encode="true"/>
+			<wcf:param name="profileName" value="IBM_Roles_Of_User_In_Orgs_I_Can_Admin"/>
+		</wcf:rest>
+		<c:set var="selectedUserIsRegCust" value="false" />
+		<c:set var="selectedUserIsCSR" value="false" />
+		<c:forEach var="orgIdRole" items="${memberRoles.orgIdRoleDataBeans}">
+		<c:set var="roles" value="${orgIdRole.value}"/>
+			<c:forEach var="role" items="${roles}">
+			
+			<c:choose>
+				<c:when test="${role.name == 'Registered Customer' }" >
+					<c:set var="selectedUserIsRegCust" value="true" />
+				</c:when>
+				<c:when test="${(role.name == 'Customer Service Representative') || (role.name == 'Seller') ||(role.name == 'Customer Service Supervisor')}" >
+					<c:set var="selectedUserIsCSR" value="true" />
+				</c:when>
+			</c:choose>
+			</c:forEach>
+		</c:forEach>
+	</c:if>
+</c:if>
+
+<wcf:useBean var="availableGroupsMap" classname="java.util.LinkedHashMap"/>
+<c:set var="includeGroupString" value="" />
+<c:set var="excludeGroupString" value="" />
+
+<c:if test="${ not empty manageableGroups && manageableGroups.recordSetTotal > 0}" >
+	<c:forEach var="grp" items="${manageableGroups.resultList}" varStatus="status">
+		<wcf:rest var="org" url="store/{storeId}/organization/{organizationId}">
+				<wcf:var name="storeId" value="${storeId}" encode="true"/>
+				<wcf:var name="organizationId" value="${grp.ownerId}" encode="true"/>
+				<wcf:param name="responseFormat" value="json" />
+				<wcf:param name="profileName" value="IBM_Organization_Short_Summary"/>
+			</wcf:rest>
+		<wcst:message var="displayName" bundle="${widgetText}" key="${widgetNameCaps}_DISPLAY_PATTERN">
+			<wcst:param value="${org.displayName}"/>
+			<wcst:param value="${grp.name}"/>
+		</wcst:message>
+		<c:remove var="org" />
+		<c:set var="isAvailableGrp" value="true" />
+		<c:set var="hiddenInc" value="true"/>
+		<c:set var="hiddenExc" value="true"/>
+		<c:forEach var="unavailableGrp" items="${RegisteredCustomersGroup.resultList}" >
+			<c:if test="${unavailableGrp.memberGroupId == grp.memberGroupId }" >
+				<c:set var="isAvailableGrp" value="false" />
+			</c:if>
+		</c:forEach>
+		<c:if test="${isAvailableGrp == 'true' && selectedUserIsRegCust == 'true' }" >
+			<c:forEach var="unavailableGrp" items="${CustomerGroups.resultList}" >
+				<c:if test="${unavailableGrp.memberGroupId eq grp.memberGroupId }" >
+					<c:set var="isAvailableGrp" value="false" />
+				</c:if>
+			</c:forEach>
+		</c:if>
+		<c:if test="${not empty excGroups && excGroups.recordSetTotal > 0 && (isAvailableGrp == 'true' || status.first )}">
+			<c:forEach var="excGrp" items="${excGroups.resultList}" >
+				<c:if test="${grp.memberGroupId == excGrp.memberGroupId }" >
+					<c:set var="hiddenExc" value="false"/>
+				</c:if>
+				<c:if test="${status.first}">
+					<c:choose>
+						<c:when test="${empty excludeGroupString}">
+							<c:set var="excludeGroupString" value="${excGrp.memberGroupId}" />
+						</c:when>
+						<c:otherwise>
+							<c:set var="excludeGroupString" value="${excludeGroupString},${excGrp.memberGroupId}" />
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+		</c:if>
+		<c:if test="${not empty incGroups && incGroups.recordSetTotal > 0 && (isAvailableGrp == 'true' || status.first )}">
+			<c:forEach var="incGrp" items="${incGroups.resultList}" >
+				<c:if test="${grp.memberGroupId == incGrp.memberGroupId }" >
+					<c:set var="hiddenInc" value="false"/>
+				</c:if>
+				<c:if test="${status.first}">
+					<c:choose>
+						<c:when test="${empty includeGroupString}">
+							<c:set var="includeGroupString" value="${incGrp.memberGroupId}" />
+						</c:when>
+						<c:otherwise>
+							<c:set var="includeGroupString" value="${includeGroupString},${incGrp.memberGroupId}" />
+						</c:otherwise>
+					</c:choose>
+				</c:if>
+			</c:forEach>
+		</c:if>
+		
+		<c:if test="${isAvailableGrp == 'true'}" >
+			<wcf:useBean var="values" classname="java.util.HashMap"/>
+			<wcf:set target="${values}" key="displayName" value="${displayName}"/>
+			<wcf:set target="${values}" key="hiddenExc" value="${hiddenExc}"/>
+			<wcf:set target="${values}" key="hiddenInc" value="${hiddenInc}"/>
+			<wcf:set target="${availableGroupsMap}" key="${grp.memberGroupId}" value="${values}"/>
+			<c:remove var="values" />
+		</c:if>
+	</c:forEach>
+</c:if>
+
+<wcf:url var="UserMemberGroupManagementView" value="UserMemberGroupManagementView" type="Ajax">
+	<wcf:param name="storeId"   value="${WCParam.storeId}"  />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="langId" value="${langId}"/>
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+	<wcf:param name="fromPage" value="${fromPage}"/>
+	<wcf:param name="memberId" value="${memberId}"/>
+</wcf:url>
+
+<!-- END UserMemberGroupManagement_Data.jspf -->

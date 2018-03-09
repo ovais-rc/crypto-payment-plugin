@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This summary view provides brief information about the {@link cmc/marketing/DisplayCoremetricsRecommendationElementObject} flow element.
+		It is shown beneath the element on the Activity Builder flow diagram and to generate the text, it looks at the
+		following property names of the {@link cmc/marketing/DisplayCoremetricsRecommendationElementObject} object:
+		<ul>
+			<li>delivery</li>
+			<li>zoneIdList</li>
+			<li>associationTypeList</li>
+			<li>location</li>
+			<li>ChildCatentry/CatalogEntry/CatalogEntryDescription[name]</li>
+			<li>daysOperator</li>
+			<li>days</li>
+			<li>date1</li>
+			<li>date2</li>
+			<li>beforeDate</li>
+			<li>beforeAfterOnDate</li>			
+		</ul>
+	-->
+	<FlowElementSummary classDefinition="true" definitionName="cmc/marketing/DisplayCoremetricsRecommendationSummary">
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<FlowSummaryParam name="delivery" propertyName="delivery"/>
+		<FlowSummaryParam name="location" propertyName="location"/>
+		<FlowSummaryParam name="catalogEntryIdList" objectPath="ChildCatentry/CatalogEntry/CatalogEntryDescription" propertyName="name"/>
+		<FlowSummaryParam name="zoneIdList" objectPath="zoneId" propertyName="zoneId"/>
+		<FlowSummaryParam name="associationTypeList" propertyName="associationTypeList"/>
+		<FlowSummaryParam name="daysOperator" propertyName="daysOperator"/>
+		<FlowSummaryParam name="days" propertyName="days"/>
+		<FlowSummaryParam name="date1" propertyName="date1"/>
+		<FlowSummaryParam name="date2" propertyName="date2"/>
+		<FlowSummaryParam name="beforeDate" propertyName="beforeDate"/>
+		<FlowSummaryParam name="beforeAfterOnDate" propertyName="beforeAfterOnDate"/>		
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryIntelligentOfferRecommendationDynamic, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryIntelligentOfferRecommendationZoneID, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryIntelligentOfferRecommendationOfferName, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryShoppingCartCatalogEntryExternalRecommend, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryPurchaseHistoryCatalogEntryExternalRecommend, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryCurrentPageCatalogEntryExternalRecommend, "onstring");
+			this.updateSummaryDel.connect(marketingResources.Singleton.summaryCatalogEntryExternalRecommend, "onstring");
+			]]>
+		</handler>
+		
+		<!---
+			Sets the summary text for the {@link cmc/marketing/DisplayCoremetricsRecommendationElementObject} flow element. Classes overriding
+			this method must call <code>setSummaryText</code> with the desired summary text.
+		-->
+		<method args="e" name="updateSummary">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var summary = "";
+			if ((this.resolvedParams.delivery != "")) {
+				var delivery = this.resolvedParams.delivery;
+				if (delivery == "siteZone") {
+					summary = marketingResources.Singleton.summaryIntelligentOfferRecommendationDynamic.string;
+					var valueText = this.getValuesList("zoneIdList");
+					if ((valueText != null) && (valueText != "")) {
+						summary += "\n" + marketingResources.Singleton.replaceValues("summaryIntelligentOfferRecommendationZoneID", [valueText]);
+					}
+				}
+				else if (delivery == "flatFile") {
+					if ((this.resolvedParams.location != "")) {
+						var location = this.resolvedParams.location;
+						if (location == "shoppingCart") {
+							summary = marketingResources.Singleton.summaryShoppingCartCatalogEntryExternalRecommend.string;
+						}
+						else if (location == "purchaseHistory") {
+							summary = marketingResources.Singleton.summaryPurchaseHistoryCatalogEntryExternalRecommend.string;
+							var dateText = this.getDateSummary();
+							if (dateText != "") {
+								summary += "\n" + dateText;
+							}
+						}
+						else if (location == "currentPage") {
+							summary = marketingResources.Singleton.summaryCurrentPageCatalogEntryExternalRecommend.string;
+						}
+						else if (location == "templateArgumentIdList") {
+							var products = this.getValuesList("catalogEntryIdList");
+							if (products != "") {
+								summary = marketingResources.Singleton.replaceValues("summaryCatalogEntryExternalRecommend", [products]);
+							}
+						}
+						var offerName = this.resolvedParams.associationTypeList;
+						if ((offerName != null) && (offerName != "") && (summary != "")) {
+							summary += "\n" + marketingResources.Singleton.replaceValues("summaryIntelligentOfferRecommendationOfferName", [offerName]);
+						}
+					}
+				}
+			}
+			this.setSummaryText(summary);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="usage" name="getDateSummary">
+			<![CDATA[
+			if (typeof(usage) == "undefined") usage = null;
+			usage = "Orders";
+			var summary = "";
+			if (this.resolvedParams.daysOperator == "<=") {
+				if (this.resolvedParams.days != "") {
+					var days = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.days);
+					summary = marketingResources.Singleton.replaceValues("summaryWithinLastXDays" + usage, [days]);
+				}
+			}
+			else if (this.resolvedParams.daysOperator == ">") {
+				if (this.resolvedParams.days != "") {
+					var days = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.days);
+					summary = marketingResources.Singleton.replaceValues("summaryAtLeastXDaysAgo" + usage, [days]);
+				}
+			}
+			else if (this.resolvedParams.daysOperator == "previousOrders") {
+				if (this.resolvedParams.days != "") {
+					var days = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.resolvedParams.days);
+					summary = marketingResources.Singleton.replaceValues("summaryPreviousXOrdersOrders", [days]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == "<") {
+				if (this.resolvedParams.date1 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryBeforeXDate" + usage, [date1]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == ">") {
+				if (this.resolvedParams.date1 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryAfterXDate" + usage, [date1]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == ">=" && this.resolvedParams.beforeDate == "<=") {
+				if (this.resolvedParams.date1 != "" && this.resolvedParams.date2 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					var date2 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date2, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_TIME_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryBetweenXandYDates" + usage, [date1, date2]);
+				}
+			}
+			else if (this.resolvedParams.beforeAfterOnDate == "=") {
+				if (this.resolvedParams.date1 != "") {
+					var date1 = DateUtil.Singleton.formatUI(DateUtil.Singleton.parse(this.resolvedParams.date1, DateUtil.Singleton.DATE_TIME_FORMAT), DateUtil.Singleton.UI_DATE_FORMAT);
+					summary = marketingResources.Singleton.replaceValues("summaryOnXDate" + usage, [date1]);
+				}
+			}
+			return summary;
+			]]>
+		</method>
+				
+	</FlowElementSummary>
+		
+</Definitions>

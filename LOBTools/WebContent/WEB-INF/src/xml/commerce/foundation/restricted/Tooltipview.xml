@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<Image name="tooltipArrowUp" src="/images/shell/tooltip_arrow_up.png"/>
+	<Image name="tooltipArrowDown" src="/images/shell/tooltip_arrow_down.png"/>
+	<Image name="tooltipArrowLeft" src="/images/shell/tooltip_arrow_left.png"/>
+	<Image name="tooltipArrowRight" src="/images/shell/tooltip_arrow_right.png"/>
+
+	<!---
+		@keywords private
+		
+		This single instance of {@link cmc/foundation/BorderedView} is reused to display the tooltip for
+		all objects in the Management Center. The look and feel of a {@link cmc/foundation/Tooltip} is defined in this instance. 
+		Before displaying a tooltip the view must be associated with an instance of {@link cmc/foundation/Tooltip} which
+		describes the tooltip content.
+	-->
+	<Component defaultplacement="tipcontent" definitionName="cmc/foundation/TooltipView" singletonDefinition="true" visible="false" opacity="0.9">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			Array of registered cmc/foundation/Tooltip instances. This array is checked to determine the active tooltip.
+		-->
+		<variable name="registeredSources" value="${[]}"/>
+		<!---
+			The cmc/foundation/Tooltip instance currently associated with the tool tip view.
+		-->
+		<variable name="tooltipSource" value="${null}"/>
+		<!---
+			The time that the tooltip was displayed. The tooltip will be closed after 16 seconds.
+		-->
+		<variable name="showTime" type="number" value="${null}"/>
+		<!---
+			The time that the mouse moved out of the tooltip source.
+		-->
+		<variable name="mouseOutTime" type="number" value="${null}"/>
+		<!---
+			(Optional) The relative URL of the link which refers to the Information Center page. The absolute URL is constructed
+			by prepending the help server address, port, jsp page, locale and "topic=/com.ibm.commerce.management-center.doc/" 
+			to this relative URL.
+		-->
+		<variable name="linkURL" type="string" value=""/>
+		
+		<!---
+			Flag which indicates whether the mouse pointer is over the tooltip view.
+		-->
+		<variable name="mouseInTip" type="boolean" value="false"/>
+		<!---
+			@keywords private 
+			Maximum width of the tooltip view.
+		-->
+		<variable name="MAX_WIDTH" value="200" type="number"/>
+		<!---
+			@keywords private 
+			The padding to the left and right of the text shown in the tooltip.
+		-->
+		<variable name="WIDTH_PADDING" value="20" type="number"/>
+		
+		<AxisLayout axis="y"/>
+		
+		<Component name="tooltipArrowUp" imageSet="tooltipArrowUp" visible="false"/>
+
+		<!---
+			The view where the tooltip contents are displayed.
+		-->
+		<Component bgcolor="#323232" name="tipcontent">
+			<AxisLayout axis="y"/>
+			<Component height="10"/>
+			<!---
+				Placeholder for the text in the tooltip.
+			-->
+			<TextComponent fgcolor="#ffffff" fontsize="12" multiline="true" name="t" x="10"/>
+			<!---
+				The padding to the bottom of the text shown in the tooltip.
+			-->
+			<Component height="8" name="padTextView"/>
+			<!---
+				Placeholder for the link in the tooltip.
+			-->
+			<TextComponent fgcolor="#7cc7ff" fontsize="12" multiline="true" name="linkTextView" x="10">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.launchLink();
+					]]>
+				</handler>
+			</TextComponent>
+			<!---
+				The padding to the bottom of the link in the tooltip.
+			-->
+			<Component height="10" name="padLinkTextView" visible="${this.parent.linkTextView.visible}"/>
+			
+			<!---
+				Placeholder for the image in the tooltip.
+			-->
+			<Component name="imageView" stretches="both">
+			
+				<handler name="onload">
+					<![CDATA[
+					this.parent.parent.setVariable('height', null);
+					this.scaleImage();
+					this.parent.parent.setTipLocation();
+					]]>
+				</handler>
+				<!---
+					@keywords private
+					This method will scale the image down if required, and otherwise resets the image to its fullsize.
+				-->
+				<method name="scaleImage">
+					<![CDATA[
+					var maxWidth = RootComponent.Singleton.width - 10;
+					if (this.imageNaturalWidth > maxWidth) {
+						var scale = this.imageNaturalWidth / maxWidth;
+						this.setVariable('width', maxWidth);
+						this.setVariable('height', this.imageNaturalHeight / scale);
+					}
+					else {
+						this.setVariable('height', this.imageNaturalHeight);
+						this.setVariable('width', this.imageNaturalWidth);
+					}
+					]]>
+				</method>
+			</Component>			
+		</Component>
+
+		<Component name="tooltipArrowDown" imageSet="tooltipArrowDown" visible="false"/>
+		<!---
+			@keywords private 
+			
+			Initialization method for this class.
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkTooltipDel = new EventHandler.Class(this, "checkTooltip");
+			this.launchLinkDel = new EventHandler.Class(this, "launchLink");
+			KeyUtil.callOnKeyCombo(this.launchLinkDel, ['Control', 'Shift', 'd']);
+			KeyUtil.callOnKeyCombo(this.launchLinkDel, ['Control', 'Shift', '3']);
+			this.setModalDel = new EventHandler.Class(this, "setModal");
+			this.setModalDel.connect(this, "onmouseInTip");
+			this.setModalDel.connect(this, "onvisible");
+			this.hideTipDel = new EventHandler.Class(this, "hideTip");
+			this.checkTooltip();
+			]]>
+		</method>
+
+		<!---
+			keywords private 
+			Destroy method for this class.
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.checkTooltipDel.disconnectAll();
+			delete this.checkTooltipDel;
+			this.launchLinkDel.disconnectAll();
+			KeyUtil.removeKeyComboCall(this.launchLinkDel, ['Control', 'Shift', 'd']);
+			KeyUtil.removeKeyComboCall(this.launchLinkDel, ['Control', 'Shift', '3']);
+			delete this.launchLinkDel;
+			this.mouseInTipDel.unregisterAll();
+			delete this.mouseInTipDel;
+			this.hideTipDel.disconnectAll();
+			delete this.hideTipDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Register the specified tooltip source.
+			@param cmc/foundation/Tooltip source: the tooltip source
+		-->
+		<method args="source" name="registerTooltipSource">
+			<![CDATA[
+			this.registeredSources.push(source);
+			]]>
+		</method>
+		
+		<!---
+			Unregister the specified tooltip source.
+			@param cmc/foundation/Tooltip source: the tooltip source
+		-->
+		<method args="source" name="unregisterTooltipSource">
+			<![CDATA[
+			for (var i = 0; i < this.registeredSources.length; i++) {
+				if (source == this.registeredSources[i]) {
+					this.registeredSources.splice(i, 1);
+					break;
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private 
+			Checks whether the tooltip should be displayed. The tooltip will be displayed if
+			more than 750 milliseconds have passed since a tooltip parent recieved keyboard
+			focus or if the mouse has been left over a tooltip parent for more than 750
+			milliseconds.
+		-->
+		<method args="e" name="checkTooltip">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var focusIdle = ViewUtil.Singleton.getLastKeyStroke();
+			var mouseIdle = ViewUtil.Singleton.getLastMouseMove();
+			if (this.tooltipSource != null) {
+				if (this.visible && this.linkURL != "" && mouseIdle < focusIdle) {
+					var newMouseInTip = false;
+					var mouseX = RootComponent.Singleton.getMouse("x");
+					var mouseY = RootComponent.Singleton.getMouse("y");
+					if (mouseX >= this.x && mouseX <= (this.x + this.width) && mouseY >= this.y && mouseY <= (this.y + this.height)) {
+						newMouseInTip = true;
+					}
+					else {
+						newMouseInTip = false;
+					}
+					if (newMouseInTip != this.mouseInTip) {
+						this.setVariable("mouseInTip", newMouseInTip);
+					}
+				}
+				var currentTime = (new Date).getTime();
+				if (!this.mouseInTip && this.showTime != null && currentTime - this.showTime > 16000) {
+					this.hideTip();
+				}
+				if (mouseIdle < focusIdle) {
+					if (this.mouseOutTime == null) {
+						var mouseX = RootComponent.Singleton.getMouse("x");
+						var mouseY = RootComponent.Singleton.getMouse("y");
+						var sourceX = this.tooltipSource.parent.getVariableRelative("x", RootComponent.Singleton);
+						var sourceY = this.tooltipSource.parent.getVariableRelative("y", RootComponent.Singleton);
+						var sourceWidth = this.tooltipSource.parent.width;
+						var sourceHeight = this.tooltipSource.parent.height;
+						if (mouseX < sourceX || mouseX > (sourceX + sourceWidth) || mouseY < sourceY || mouseY > (sourceY + sourceHeight)) {
+							this.mouseOutTime = currentTime;
+						}
+					}
+					if (!this.mouseInTip && this.mouseOutTime != null && (this.linkURL == "" || currentTime - this.mouseOutTime > 1000)) {
+						this.setTooltipSource(null);
+					}
+				}
+				else if (!ViewUtil.Singleton.containsView(FocusUtil.getFocus(), this.tooltipSource.parent)) {
+					this.setTooltipSource(null);
+				}
+			}
+			else {
+				if (focusIdle <= mouseIdle && focusIdle >= 750) {
+					for (var i = 0; i < this.registeredSources.length; i++) {
+						var source = this.registeredSources[i];
+						if (source.parentVisible && source.enabled && (ViewUtil.Singleton.containsView(FocusUtil.getFocus(), source.parent) || ViewUtil.Singleton.containsView(source.parent, FocusUtil.getFocus()))) {
+							this.setTooltipSource(source);
+							this.hideTipDel.connect(source.parent, "onclick");
+							this.hideTipDel.connect(source.parent, "onmousedown");
+							break;
+						}
+					}
+				}
+				else if (mouseIdle < focusIdle && mouseIdle >= 750) {
+					var mouseX = RootComponent.Singleton.getMouse("x");
+					var mouseY = RootComponent.Singleton.getMouse("y");
+					for (var i = 0; i < this.registeredSources.length; i++) {
+						var source = this.registeredSources[i];
+						if (source.parentVisible && source.enabled) {
+							var sourceX = source.parent.getVariableRelative("x", RootComponent.Singleton);
+							var sourceY = source.parent.getVariableRelative("y", RootComponent.Singleton);
+							var sourceWidth = source.parent.width;
+							var sourceHeight = source.parent.height;
+							if (mouseX >= sourceX && mouseX <= (sourceX + sourceWidth) && mouseY >= sourceY && mouseY <= (sourceY + sourceHeight)) {
+								if ((ViewUtil.Singleton.checkDescendant(source.parent, ViewUtil.Singleton.mouseOverView) || ViewUtil.Singleton.checkDescendant(ViewUtil.Singleton.mouseOverView, source.parent)) && ViewUtil.Singleton.containedInModalView(source.parent)) {
+									this.setTooltipSource(source);
+									this.hideTipDel.connect(source.parent, "onclick");
+									this.hideTipDel.connect(source.parent, "onmousedown");
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+			Timer.resetTimer(this.checkTooltipDel, 250);
+			]]>
+		</method>
+
+		<!---
+			Set the current tooltip.
+		-->
+		<method args="tooltip" name="setTooltipSource">
+			<![CDATA[
+			if (this.hideTipDel) {
+				this.hideTipDel.disconnectAll();
+			}
+			this.tooltipSource = tooltip;
+			if (tooltip != null) {
+				this.showTip();
+			}
+			else {
+				this.hideTip();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Show the tooltip. Do not call this method directly. It is called by setTooltipSource.
+		-->
+		<method name="showTip">
+			<![CDATA[
+			var source = this.tooltipSource;
+			var newText = "";
+			var newLinkText = "";
+			var newLinkURL = "";
+			var newImageURL = source.imageURL;
+			if (PreferenceManager.Singleton.getPreference("CMCEnableExtendedHelp") == "true") {
+				if (source.extendedText != null && source.extendedText != "") {
+					newText = source.extendedText;
+				}
+				else if (source.text != null && source.text != "") {
+					newText = source.text;
+				}
+				if (source.linkURL != null && source.linkURL != "") {
+					newLinkURL = source.linkURL;
+					if (source.linkText != null && source.linkText != "") {
+						newLinkText = source.linkText;
+					}
+					else {
+						newLinkText = foundationResources.Singleton.helpDefaultLinkText.string;
+					}
+				}
+			}
+			else if (source.text != null && source.text != "") {
+				newText = source.text;
+			}
+			this.tipcontent.t.setVariable('text', newText);
+			this.tipcontent.linkTextView.setVariable('text', newLinkText);
+			this.setVariable("linkURL", newLinkURL);
+			if (newText != "" || newLinkText != "") {
+				if (this.tipcontent.imageView.visible) {
+					this.tipcontent.imageView.setVariable('visible', false);
+				}
+				if (!this.tipcontent.t.visible) {
+					this.tipcontent.t.setVariable('visible', true);
+				}
+				if (newLinkText != "") {
+					if (!this.tipcontent.linkTextView.visible) {
+						this.tipcontent.linkTextView.setVariable('visible', true);
+					}
+					if ((this.tipcontent.t.getTextWidth() + this.WIDTH_PADDING > this.MAX_WIDTH) || (this.tipcontent.linkTextView.getTextWidth() + this.WIDTH_PADDING > this.MAX_WIDTH)) {
+						this.tipcontent.t.setVariable('width', this.MAX_WIDTH - this.WIDTH_PADDING);
+						this.tipcontent.linkTextView.setVariable('width', this.MAX_WIDTH - this.WIDTH_PADDING);
+						this.tipcontent.setVariable('width', this.MAX_WIDTH);
+					}
+					else {
+						this.tipcontent.t.setVariable('width', this.tipcontent.t.getTextWidth() + this.WIDTH_PADDING);
+						this.tipcontent.linkTextView.setVariable('width', this.tipcontent.linkTextView.getTextWidth() + this.WIDTH_PADDING);
+						this.tipcontent.setVariable('width', Math.max(this.tipcontent.t.width, this.tipcontent.linkTextView.width));
+					}
+				}
+				else {
+					if (this.tipcontent.linkTextView.visible) {
+						this.tipcontent.linkTextView.setVariable('visible', false);
+					}
+					if (this.tipcontent.t.getTextWidth() + this.WIDTH_PADDING > this.MAX_WIDTH) {
+						this.tipcontent.t.setVariable('width', this.MAX_WIDTH - this.WIDTH_PADDING);
+						this.tipcontent.setVariable('width', this.MAX_WIDTH);
+					}
+					else {
+						this.tipcontent.t.setVariable('width', this.tipcontent.t.getTextWidth() + this.WIDTH_PADDING);
+						this.tipcontent.setVariable('width', this.tipcontent.t.width);
+					}
+				}
+				this.setTipLocation();
+			}
+			else if (newImageURL != null && newImageURL != "") {
+				if (!this.tipcontent.imageView.visible) {
+					this.tipcontent.imageView.setVariable('visible', true);
+				}
+				if (this.tipcontent.linkTextView.visible) {
+					this.tipcontent.linkTextView.setVariable('visible', false);
+				}
+				if (this.tipcontent.t.visible) {
+					this.tipcontent.t.setVariable('visible', false);
+				}
+				if (this.tipcontent.padTextView.visible) {
+					this.tipcontent.padTextView.setVariable('visible', false);
+				}
+				this.tipcontent.imageView.setVariable("imageSource", newImageURL);
+				this.setTipLocation();
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private 
+			Hides the tooltip view.
+		-->
+	    <method args="e" name="hideTip">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.visible) {
+				this.showTime = null;
+				this.setVariable("visible", false);
+				if (this.mouseInTip) {
+					this.setVariable("mouseInTip", false);
+				}
+			}
+			]]>
+		</method>
+	  	
+	  	<method name="setTipLocation">
+			<![CDATA[
+			var source = this.tooltipSource;
+			var tipx;
+			var tipy;
+			if (ViewUtil.Singleton.containsView(FocusUtil.getFocus(), source.parent)) {
+				tipx = source.parent.getVariableRelative("x", RootComponent.Singleton) + source.parent.width / 2;
+				tipy = source.parent.getVariableRelative("y", RootComponent.Singleton) + source.parent.height / 2;
+			}
+			else {
+				tipx = RootComponent.Singleton.getMouse("x");
+				tipy = RootComponent.Singleton.getMouse("y");
+			}
+			this.tooltipArrowUp.setVariable("visible", true);
+			this.tooltipArrowDown.setVariable("visible", false);
+			this.tooltipArrowUp.setVariable('x', (this.width / 2) - (this.tooltipArrowUp.width / 2));
+			
+			tipy += 25;
+			var bottomOfTooltip = this.tipcontent.height + tipy;
+			var bottomOfCanvas = RootComponent.Singleton.getBounds().height;
+			if (bottomOfCanvas < bottomOfTooltip) {
+				tipy = tipy - 65 - this.tipcontent.height;
+				this.tooltipArrowUp.setVariable("visible", false);
+				this.tooltipArrowDown.setVariable("visible", true);
+				this.tooltipArrowDown.setVariable('x', (this.width / 2) - (this.tooltipArrowDown.width / 2));
+			}
+			tipx -= this.width / 2;
+			if (tipx + this.width + 10 > RootComponent.Singleton.width) {
+				tipx = RootComponent.Singleton.width - this.width - 10;
+			}
+			if (tipx < 0) {
+				tipx = 0;
+			}
+			this.setVariable('x', tipx);
+			this.setVariable('y', tipy);
+			this.bringToFront();
+			this.setVariable("visible", true);
+			this.showTime = (new Date).getTime();
+			this.mouseOutTime = null;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Makes the tooltip view modal depending upon the value of mouseInTip.
+		-->
+		<method args="e" name="setModal">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.mouseInTip && this.visible) {
+				ModalUtil.makeModal(this);
+			}
+			else {
+				ModalUtil.release(this);
+			}
+			]]>
+		</method>
+
+		<!---
+			This method launches the Information Center page referred by the link.
+		-->
+		<method args="e" name="launchLink">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.visible && this.linkURL != "") {
+				var caller = this;
+				require(["cmc/shell/HelpManager"], function(HelpManager) {
+					HelpManager.Singleton.openHelpLink(caller.linkURL);
+				});
+				this.hideTip();
+			}
+			]]>
+		</method>
+		<!--- @keywords private -->
+		<method args="tooltipSource" name="set_tooltipSource">
+			<![CDATA[
+			this.setTooltipSource(tooltipSource);
+			]]>
+		</method>
+	</Component>
+
+</Definitions>

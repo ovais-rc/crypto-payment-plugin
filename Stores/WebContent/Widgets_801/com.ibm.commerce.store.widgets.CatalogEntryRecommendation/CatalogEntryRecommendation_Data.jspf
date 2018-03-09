@@ -1,0 +1,359 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%
+   /* Get the e-Marketing Spot name from the request parameters, and decode it in case it has been encoded. */
+   String emsName = request.getParameter("emsName");
+   if (emsName != null) {
+	  request.setAttribute("emsName", emsName);
+   }
+
+   Object DM_marketingSpotBehavior = request.getAttribute("DM_emsBehavior-" + emsName);
+    if (DM_marketingSpotBehavior != null) {
+   	request.setAttribute("DM_marketingSpotBehavior", DM_marketingSpotBehavior.toString());
+   }
+
+   /* Set the name of the command that has called this page. */
+   String pathInfo = (String)request.getAttribute("javax.servlet.forward.path_info");
+   if (pathInfo != null && pathInfo.startsWith ("/")) {
+      pathInfo = pathInfo.substring (1);
+   }
+   request.setAttribute("requestURI", pathInfo);
+
+%>
+
+<%--
+  *
+  * Set up the variables required by the snippet.
+  *
+--%>
+<c:set var="requestURI"                value="${requestScope.requestURI}"/>
+<c:set var="commandName" value="${WCParam.commandName}"/>
+<c:if test="${empty commandName}" >
+	<c:set var="commandName" value="${param.commandName}"/>
+</c:if>
+<c:if test="${!empty commandName}">
+	<c:set var="requestURI" value="${commandName}"/>
+</c:if>
+<c:set var="emsName"                   value="${requestScope.emsName}"/>
+
+<%-- Set widget align style in "vertical", "horizontal" or "scroll". --%>
+<c:if test="${!empty param.align}">
+	<c:set var="align" value="${param.align}"/>
+</c:if>
+
+<%-- Set whether widget header title is displayable --%>
+<c:set var="displayHeader" value="true"/>
+<c:if test="${!empty param.displayHeader && param.displayHeader != 'true'}">
+	<c:set var="displayHeader" value="false"/>
+</c:if>
+
+<c:set var="espotName" value="${fn:replace(emsName,' ','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\\\\','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\"','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\\\'','')}"/>	
+
+<%--
+  *
+  * Specify if a fully qualified URL or relative paths should be used for
+  * image tags. A fully qualified URL is required for e-mail activity functionality.
+  *
+--%>
+<c:set var="prependFullURL">
+    <c:out value="${param.useFullURL}" default="false" />
+</c:set>
+
+<%--
+  *
+  * Set the ClickInfo command URL if the optional clickInfoURL parameter is provided; otherwise, use the
+  * default value of the URL.
+  *
+--%>
+<c:set value="ClickInfo" var="clickInfoCommand" />
+<c:set value="" var="clickOpenBrowser" />
+<c:if test="${!empty param.clickInfoURL}">
+    <c:set value="${param.clickInfoURL}" var="clickInfoCommand" />
+    <c:set value='target="_blank"' var="clickOpenBrowser" />
+</c:if>
+
+<%--
+  *
+  * Specify the host name of the URL that is used to point to the shared image directory.  
+  * Use this variable to reference images.
+  *
+--%>
+<c:set var="hostPath" value="" />
+<c:if test="${prependFullURL}">
+    <c:set value="${pageContext.request.scheme}://${pageContext.request.serverName}${portUsed}" var="hostPath" />
+</c:if>
+<%--
+  *
+  * Specify the dynamic properties
+  *
+--%>
+<c:if test="${!empty param.pagingControl}">
+	<c:set var="pagingControl" value="${param.pagingControl}"/>
+</c:if>
+<c:if test="${!empty param.maxProductsToDisplay}">
+	<c:set var="maxProductsToDisplay" value="${param.maxProductsToDisplay}"/>
+</c:if>
+
+<%--
+  *
+  * Create the e-Marketing Spot.
+  *
+--%>
+
+<%-- 
+	Try to get data from the map if this jspf is imported by EMarketingSpot 
+	If data exists, then the Store preview also handled by EMartketingSpot widget, set var ignorePreview
+--%>
+<c:if test="${(importedESpotWidgetDatas != null) && (! empty importedESpotWidgetDatas[emsName])}">
+	<c:set var="eSpotDatas" value="${importedESpotWidgetDatas[emsName] }" />
+	<c:set var="ignorePreview" value="ignorePreview" />
+</c:if>
+
+<c:if test="${empty eSpotDatas }" >
+		<%-- Call the REST service to get the data to display in the e-Marketing Spot --%>
+		<wcf:rest var="eSpotDatasRoot" url="/store/{storeId}/espot/{name}" format="json" >
+			<wcf:var name="storeId" value="${storeId}" encode="true"/>
+			<wcf:var name="name" value="${emsName}" encode="true"/>
+		
+			<%-- the name of the e-Marketing Spot --%>
+			<wcf:param name="DM_EmsName" value="${emsName}" />
+	
+			<%-- 
+			  * 
+			  * Used for JSP caching of espot, Behavior:
+			  * - if the espot is being JSP cached, then it is not necessary to command cache the information being loaded by the engine
+			  * - if the espot is not being JSP cached, then the engine should command cache the information being loaded by the engine
+			  *
+			--%>
+			<wcf:param name="DM_marketingSpotBehavior" value="${requestScope.DM_marketingSpotBehavior}"/>
+
+		    <%-- do not retrieve the catalog entry SDO but obtain the catalog entry Id only --%>
+		    <wcf:param name="DM_ReturnCatalogEntryId" value="true" />
+	
+			<%-- pass along product ID for the promotion --%>
+			<%-- Give preference to the requestparamter first and then to request attribute --%>
+		<c:if test="${empty WCParamValues.productId}">
+			<c:if test="${!empty param.productId}">
+				<c:set var="productId" value="${param.productId}"/>
+			</c:if>
+			<c:if test="${!empty productId}">
+				<wcf:param name="productId" value="${productId}" />
+			</c:if>
+		</c:if>		
+			<c:if test="${maxProductsToDisplay != null}">
+			    <wcf:param name="DM_DisplayProducts"   value="${maxProductsToDisplay}" />
+			</c:if>
+		
+			                                         
+			<%-- URL command name --%>
+			<wcf:param name="DM_ReqCmd" value="${requestURI}" />
+			
+			<%-- URL name value pair parameters --%>  
+			<c:catch>                  
+				<c:forEach var="aParam" items="${WCParamValues}">
+				    <c:forEach var="aValue" items="${aParam.value}">
+						<c:if test="${aParam.key !='logonPassword' && aParam.key !='logonPasswordVerify' && aParam.key !='URL' && aParam.key !='logonPasswordOld' && aParam.key !='logonPasswordOldVerify' && aParam.key !='account' && aParam.key !='cc_cvc' && aParam.key !='check_routing_number' && aParam.key !='plainString' && aParam.key !='xcred_logonPassword'}">
+							<c:choose>
+								<c:when test="${fn:startsWith(aParam.key, 'facet_')}">
+									<wcf:param name="facet" value="${aValue}"/>
+								</c:when>
+								<c:when test="${fn:startsWith(aParam.key, 'facetLimit_')}">
+									<wcf:param name="facetLimit" value="${aValue}"/>
+								</c:when>
+								<c:otherwise>
+									<wcf:param name="${aParam.key}" value="${aValue}"/>
+								</c:otherwise>
+							</c:choose>
+						</c:if>
+					</c:forEach>
+				</c:forEach>
+			</c:catch>
+			
+			<%-- Example of specifying the customer is viewing a particular product.
+			     The marketing activity could then display merchandising associations
+			     of this product.
+			      
+			    <wcf:param name="productId" value="12345" />
+			--%>
+			<%-- Example of specifying the customer is viewing a set of product.
+			     The marketing activity could then display merchandising associations
+			     of these products.
+			         
+			     <wcf:param name="productId" value="12345,67890,54321" />
+			--%>
+			                                    
+			<%-- Example of including a value from a specific cookie
+			     <wcf:param name="MYCOOKIE" value="${cookie.MYCOOKIE.value}" />
+			--%>
+			    
+			<%-- Example of including all cookies 
+			     <c:forEach var="cookieEntry" items="${cookie}">
+			         <wcf:param name="${cookieEntry.key}" value="${cookieEntry.value.value}" />                    
+			     </c:forEach>
+			--%>
+			    
+			<c:if test="${!empty param.previewReport}">
+			    <wcf:param name="DM_PreviewReport" value="${param.previewReport}"/>
+			</c:if>
+		</wcf:rest>
+		<c:if test="${!empty eSpotDatasRoot.MarketingSpotData[0]}" >
+			<c:set  var="eSpotDatas" value="${eSpotDatasRoot.MarketingSpotData[0]}"/>
+		</c:if>
+		
+</c:if>
+
+<wcf:eMarketingSpotCache marketingSpotDataJSON="${eSpotDatas}" catalogEntryDependencyName="productId" />
+
+<c:set var="espotTitle" value="" />
+<c:if test="${!empty param.espotTitle}">
+	<c:set var="espotTitle" value="${param.espotTitle}"/>
+</c:if>
+<%@ include file="../Common/ESpot/ESpotTitle_Data.jspf"%>
+
+<%--
+  *
+  * Start: Catalog Entries
+  * The following block is used to display the catalog entries associated with this e-Marketing Spot. The
+  * product display page that shows the selected catalog entry will be referenced
+  * through the submission of the HTML form in the calling .jsp file.
+  *
+--%>  
+
+<c:set var="currentProductCount" value="0" />
+<c:set var="catentryIdList" value=""/>
+<c:set var="emsId" value="${eSpotDatas.marketingSpotIdentifier}"/>
+
+<c:forEach var="eSpotData" items="${eSpotDatas.baseMarketingSpotActivityData}">
+	<c:if test='${eSpotData.baseMarketingSpotDataType eq "CatalogEntryId" && !empty eSpotData.baseMarketingSpotActivityID}'>
+        <c:choose>
+        	<c:when test="${empty catentryIdQueryList}">
+        		<c:set var="catentryIdQueryList" value="${eSpotData.baseMarketingSpotActivityID}"/>
+        	</c:when>
+        	<c:otherwise>
+        		<c:set var="catentryIdQueryList" value="${catentryIdQueryList},${eSpotData.baseMarketingSpotActivityID}"/>
+        	</c:otherwise>
+        </c:choose>
+	</c:if>
+</c:forEach>
+
+<c:remove var="eSpotCatalogIdResults"/>
+<c:if test='${!empty catentryIdQueryList}'>
+	<c:catch var="searchServerException">
+		<wcf:rest var="catalogNavigationView1" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byIds" >
+			<c:forEach var="id" items="${catentryIdQueryList}">
+				<wcf:param name="id" value="${id}"/>
+			</c:forEach>
+			<wcf:param name="langId" value="${langId}" />
+			<wcf:param name="currency" value="${env_currencyCode}" />
+			<wcf:param name="responseFormat" value="json" />
+			<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+			<wcf:param name="profileName" value="IBM_findProductByIds_Summary" />
+			<c:forEach var="contractId" items="${env_activeContractIds}">
+				<wcf:param name="contractId" value="${contractId}"/>
+			</c:forEach>
+		</wcf:rest>
+		<c:set var="eSpotCatalogIdResults" value="${catalogNavigationView1.catalogEntryView}"/>
+	</c:catch>
+
+	<c:forEach var="id" items="${catentryIdQueryList}">
+		<c:forEach var="catEntryDetails" items="${eSpotCatalogIdResults}">
+			<c:if test="${id == catEntryDetails.uniqueID}">
+				<c:set var="catEntryType" value="${fn:toLowerCase(catEntryDetails.catalogEntryView[0].catalogEntryTypeCode)}" />		
+				<c:set var="catEntryType" value="${fn:replace(catEntryType,'bean','')}" />		
+				<c:choose>
+					<c:when test="${(catEntryType eq 'dynamickit' && showDynamicKit) || !(catEntryType eq 'dynamickit')}">  
+						<c:set var="currentProductCount" value="${currentProductCount+1}" />
+						<c:choose>
+							<c:when test="${empty catentryIdList}">
+								<c:set var="catentryIdList" value="${id}"/>
+							</c:when>
+							<c:otherwise>
+								<c:set var="catentryIdList" value="${catentryIdList},${id}"/>
+							</c:otherwise>							
+						</c:choose> 									      																										        
+					</c:when>
+				</c:choose>
+			</c:if>
+		</c:forEach>
+	</c:forEach>
+</c:if>
+
+<c:set var="prefix" value="eSpot"/>            
+<c:set var="useClickInfoURL" value="true"/>
+
+<c:set var="numEntries" value="${currentProductCount}"/>
+
+<c:set var="pageSize" value="${param.pageSize}" />
+<c:if test="${empty pageSize}">
+	<c:set var="pageSize" value="2" />
+</c:if>
+
+<c:set var="currentPage" value="${param.currentPage}" />
+<c:if test="${empty currentPage}">
+	<c:set var="currentPage" value="0" />
+</c:if>
+
+<c:if test="${currentPage < 0}">
+	<c:set var="currentPage" value="0"/>
+</c:if>
+<c:if test="${currentPage >= (totalPages)}">
+	<c:set var="currentPage" value="${totalPages-1}"/>
+</c:if>
+
+<fmt:formatNumber var="totalPages" value="${(numEntries/pageSize)+1}"/>
+<c:if test="${numEntries%pageSize == 0}">
+	<fmt:formatNumber var="totalPages" value="${numEntries/pageSize}"/>
+	<c:if test="${totalPages == 0 && numEntries!=0}">
+		<fmt:formatNumber var="totalPages" value="1"/>
+	</c:if>
+</c:if>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+
+<c:if test="${env_inPreview && !env_storePreviewLink}">
+
+	<wcst:message key="ES_PRODUCT_RECOMMENDATION" var="espotTypeInfo" bundle="${widgetPreviewText}"/>	
+</c:if>
+
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+
+<c:choose>
+	<c:when test="${param.displayPreference == '1' }" >
+		<c:set var="background" value="false"/>
+		<c:set var="border" value="false"/>
+	</c:when>
+	<c:when test="${param.displayPreference == '3' }" >
+		<c:set var="background" value="true"/>
+		<c:set var="border" value="true"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="background" value="true"/>
+		<c:set var="border" value="false"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="columnCountByWidth" value="${!empty param.columnCountByWidth ? param.columnCountByWidth : '{\"0\":1,\"201\":2,\"451\":3,\"651\":4,\"801\":5,\"1001\":6}'}"/>
+
+<%--
+  *
+  * End: CatalogEntries
+  *
+--%>   
+

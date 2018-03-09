@@ -1,0 +1,843 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		cmc/foundation/NumericEditor is a specialized input field for handling numeric input.
+		
+		Extending from {@link cmc/foundation/TextEditor}, this widget auto-formats the input string to the format specified by the number format preference
+		when displayed to the user. Unlike {@link cmc/foundation/TextEditor}, the values stored internally is different than the formatted
+		value that is displayed - the value is stored in the format xxxx.yyy.
+		
+		This text field is for internal use by both the properties and grid implementations provided by {@link cmc/foundation/PropertyNumericText}
+		and {@link cmc/foundation/GridNumeric}. It should not be initialized directly.
+	-->
+	<TextEditor classDefinition="true" definitionName="cmc/foundation/NumericEditor" pattern="[\-0-9,. ]*" visible="true">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>				
+		<!---
+			numDecimalPlaces is the number of decimal places to pad. If not specified, the default is 0 meaning no padding.
+			There is no truncation.
+		-->
+		<variable name="numDecimalPlaces" type="number" value="${null}"/>		
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateValue(true);
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onnumDecimalPlaces">
+			<![CDATA[
+			this.updateValue(true);
+			]]>
+		</handler>		
+						
+		<!---
+			The method sets a new property object.
+			
+			@param cmc/foundation/Property newProperty The new property object to set for this widget.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				else {
+					this.updateValueDel.disconnectAll();
+				}
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(FocusUtil, "onfocus");
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue(true);
+				}
+				else {
+					this.setText("");
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			This method updates the widget with a new property value. The method is careful to update only if the focus isn't on the widget,
+			or if it is being called from {@link cmc/foundation/NumericEditor#setProperty()} as otherwise the typing will behave incorrectly.
+			
+			@param boolean force When this value is true the value will update even if the widget is currently in focus.
+		-->
+		<method args="force" name="updateValue">
+			<![CDATA[
+			if (!this.storeValueLock && this.property) {
+				if ((FocusUtil.lastFocus == this.inputText) || ((typeof (force) == "boolean") && (force == true)) || (force == null) || (typeof (force) == "string")) {
+					var value = this.property.value;
+					var localeValue = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(value, this.numDecimalPlaces, this.updateValueDel);
+					if (localeValue != this.getText()) {
+						this.skipStoringValue = true;
+						this.setText(localeValue);
+						this.skipStoringValue = false;
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- This method stores the property value. -->
+		<method args="e" name="storeValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.storeValuePending) {
+				this.storeValueDel.disconnectAll();
+				Timer.removeTimer(this.storeValueDel);
+			}
+			this.storeValuePending = false;
+			this.storeValueLock = true;
+			if (this.property) {
+				var newDisplayValue = this.getText();
+				var currentDisplayValue = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.property.value, this.numDecimalPlaces);
+				if (newDisplayValue != currentDisplayValue) {
+					var newValue = GlobalizationUtil.Singleton.formatNumberToDataFormat(newDisplayValue);
+					this.property.change(newValue);
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/NumericEditor", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.property.o.logString());
+					}
+				}
+			}
+			this.storeValueLock = false;
+			]]>
+		</method>
+				
+	</TextEditor>
+
+
+	<!---
+		@keywords final
+		This class defines a monetary value editor widget to be used in properties views.
+		This widget automatically formats the input string to the number format. The number format is selected in the user preference panel.
+		The widget determines the correct number of decimal places required for the specified currency.
+		If the number has less than the required number of decimal places, it will pad using zeros.
+		If the number has more than the required number of decimal places, it will display all of decimal places.
+
+		The currency is resolved as using the following method:
+		<ul>
+			<li>when the currencyPropertyName attribute is set, the currency is the value from this property. If this property contains an invalid currency,
+				then no padding will apply to the monetary value.</li>
+			<li>when the currencyPropertyName attribute is not set, the default currency of the store is used</li>
+		</ul>
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyCurrencyValueEditor">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<dependency localName="NumericEditor" moduleName="cmc/foundation/NumericEditor"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!---
+			The name of the property that will be used as the currency code.
+			If this value is not provided, the default currency code from the current store will be used.
+		-->
+		<variable name="currencyPropertyName" type="string"/>
+		<!---
+			The object path to the object containing <code>currencyPropertyName</code>
+			If the object path resolves to more than one object, the first object will be used. If no object
+			path is specified, the current object will be used.
+		-->
+		<variable name="currencyObjectPath" type="string" value=""/>
+		<!---
+			Indicates that the object path specified in <code>currencyObjectPath</code>
+			should be resolved using the parent primary object, rather than the current object
+		-->
+		<variable name="resolvePrimaryParent" type="boolean" value="false"/>
+		<!---
+			Indicates that the currency code will be appended to the prompt text. The default value is "true".
+		-->
+		<variable name="appendCurrencyCodeToPrompt" type="boolean" value="true"/>
+
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.updateNumDecimalPlacesDel = new EventHandler.Class(this, "updateNumDecimalPlaces");
+			this.inherited(arguments);
+			this.updateNumDecimalPlaces();
+			]]>
+		</method>
+
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.updateNumDecimalPlacesDel;
+			this.updateNumDecimalPlacesDel.disconnectAll();
+			this.inherited(arguments);
+			]]>
+		</method>
+
+
+		<!---
+			@keywords private
+			This method updates {@link cmc/foundation/PropertiesComponent#newPrompt}.
+		-->
+		<method args="e" name="updateNewPromptText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.inherited(arguments);
+			if (this.appendCurrencyCodeToPrompt) {
+				var currencyCode = "";
+				if (this.o) {
+					if (this.currencyPropertyName) {
+						var currencyO = this.o;
+						if (this.currencyObjectPath && this.currencyObjectPath != "") {
+							if (this.resolvePrimaryParent) {
+								var topO = this.o.getParentPrimaryObject();
+								if (topO) {
+									currencyO = topO.getObject(this.currencyObjectPath);
+								}
+							}
+							else {
+								currencyO = this.o.getObject(this.currencyObjectPath);
+							}
+						}
+						var modelPropertyCurrency = currencyO.getProperty(this.currencyPropertyName);
+						this.updateNewPromptTextDel.connect(modelPropertyCurrency, "onvalue");
+						currencyCode = modelPropertyCurrency.value;
+					}
+					else {
+						var storeConfig = ContextUtil.Singleton.findStoreConfig(this.o, this.updateNewPromptTextDel);
+						if (storeConfig != null && storeConfig.defaultCurrency != null) {
+							currencyCode = storeConfig.defaultCurrency.currencyCode;
+						}
+					}
+				}
+				if (currencyCode != "") {
+					this.setVariable("newPrompt", this.newPrompt + " (" + currencyCode + ")");
+				}
+			}
+			]]>
+		</method>
+
+
+		<!--- @keywords private -->
+		<method args="e" name="updateNumDecimalPlaces">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var num = 0;
+			this.updateNumDecimalPlacesDel.disconnectAll();
+			if (this.editor && this.o) {
+				var currencyCode = null;
+				if (this.currencyPropertyName) {
+					var currencyO = this.o;
+					if (this.currencyObjectPath && this.currencyObjectPath != "") {
+						if (this.resolvePrimaryParent) {
+							var topO = this.o.getParentPrimaryObject();
+							if (topO) {
+								currencyO = topO.getObject(this.currencyObjectPath);
+							}
+						}
+						else {
+							currencyO = this.o.getObject(this.currencyObjectPath);
+						}
+					}
+					var modelPropertyCurrency = currencyO.getProperty(this.currencyPropertyName);
+					this.updateNumDecimalPlacesDel.connect(modelPropertyCurrency, "onvalue");
+					currencyCode = modelPropertyCurrency.value;
+				}
+				else {
+					var storeConfig = ContextUtil.Singleton.findStoreConfig(this.o, this.updateNewPromptTextDel);
+					if ((storeConfig != null) && (storeConfig.defaultCurrency != null)) {
+						currencyCode = storeConfig.defaultCurrency.currencyCode;
+					}
+				}
+				if (currencyCode != null) {
+					num = GlobalizationUtil.Singleton.getCurrencyDecimalPlaces(currencyCode);
+				}
+				this.editor.setVariable("numDecimalPlaces", num);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new NumericEditor.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				width: 87
+			});
+			this.updateNumDecimalPlaces();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/PropertyCurrencyValueEditor", "setModelObject(newObject)", [newObject]);
+			}
+			this.inherited(arguments);
+			this.updateNumDecimalPlaces();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/PropertyCurrencyValueEditor", "setModelObject");
+			}
+			]]>
+		</method>
+	</PropertyEditor>
+
+	<!---
+		@keywords final
+		This class defines a widget to be used in properties views.
+		This widget auto-formats the input string to the format specified by the number format preference
+		when displayed to the user. The values stored internally is different than the formatted
+		value that is displayed - the value is stored in the format xxxx.yyy.
+			
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/foundation/PropertyNumericText">
+		<dependency localName="NumericEditor" moduleName="cmc/foundation/NumericEditor"/>
+		<!---
+			numDecimalPlaces is the number of decimal places to pad. If not specified, the default is 0 meaning no padding.
+			There is no truncation.
+		-->
+		<variable name="numDecimalPlaces" type="number" value="${null}"/>				
+
+		<!---
+			@keywords private
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new NumericEditor.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				property: parentComponent.property,
+				enabled: parentComponent.enabled,
+				width: 87,
+				numDecimalPlaces: this.numDecimalPlaces
+			});
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		@keywords final
+		This class defines a widget to be used as a column in a  {@link cmc/foundation/ObjectGrid}.
+		This column auto-formats the input string to the format specified by the number format preference
+		when displayed to the user. The values stored internally is different than the formatted
+		value that is displayed - the value is stored in the format xxxx.yyy.
+	-->
+	<GridColumn alignment="right" classDefinition="true" datatype="number" definitionName="cmc/foundation/GridNumeric">
+		<dependency localName="GridNumericViewer" moduleName="cmc/foundation/GridNumericViewer"/>
+		<dependency localName="GridNumericEditor" moduleName="cmc/foundation/GridNumericEditor"/>
+		<dependency localName="ColumnNumericEditor" moduleName="cmc/foundation/ColumnNumericEditor"/>
+		<!--- @keywords private -->
+		<variable name="cellViewerClass" value="${GridNumericViewer}"/>
+
+		<!--- @keywords private -->
+		<variable name="cellEditorClass" value="${GridNumericEditor}"/>
+		
+		<!---
+			@keywords private
+			Use "cmc/foundation/ColumnNumericEditor" to create Column Editor editor.
+		-->
+		<variable name="columnEditorClass" value="${ColumnNumericEditor}"/>
+		
+		<!---
+			numDecimalPlaces is the number of decimal places to pad. If not specified, the default is 0 meaning no padding.
+			There is no truncation.
+		-->
+		<variable name="numDecimalPlaces" type="number" value="${null}"/>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				numDecimalPlaces: this.numDecimalPlaces
+			};
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->					
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				numDecimalPlaces: this.numDecimalPlaces
+			};
+			]]>
+		</method>
+	</GridColumn>
+	
+	<!---
+		@keywords final
+		Use this class to display a numeric value in a grid cell. Use this class instead of cmc/foundation/GridNumeric if you
+		need to display a numeric value for some rows and something else for other rows.
+	-->
+	<GridCellDescriptor alignment="right" classDefinition="true" datatype="number" definitionName="cmc/foundation/GridNumericCellDescriptor">
+		<dependency localName="GridNumericViewer" moduleName="cmc/foundation/GridNumericViewer"/>
+		<dependency localName="GridNumericEditor" moduleName="cmc/foundation/GridNumericEditor"/>
+		<!--- @keywords private -->
+		<variable name="cellViewerClass" value="${GridNumericViewer}"/>
+
+		<!--- @keywords private -->
+		<variable name="cellEditorClass" value="${GridNumericEditor}"/>
+		<!---
+			numDecimalPlaces is the number of decimal places to pad. If not specified, the default is 0 meaning no padding.
+			There is no truncation.
+		-->
+		<variable name="numDecimalPlaces" type="number" value="${null}"/>
+		
+		<!---
+			@keywords private
+			This method returns the editor initialization arguments.
+		-->					
+		<method name="getEditorInitArgs">
+			<![CDATA[
+			return {
+				numDecimalPlaces: this.numDecimalPlaces
+			};
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->					
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				numDecimalPlaces: this.numDecimalPlaces
+			};
+			]]>
+		</method>		
+		
+	</GridCellDescriptor>
+	
+	<!--- 
+		@keywords private
+		This editor is used to edit {@link cmc/foundation/GridNumeric} column
+	 -->
+	<InputText classDefinition="true" definitionName="cmc/foundation/ColumnNumericEditor" pattern="[-0-9,. ]*">
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		
+		<!--- 
+			@keywords private
+			The column being edited by {@link cmc/foundation/ColumnNumericEditor} 
+		 -->
+		<variable name="column" value="${null}"/>
+		
+		<!--- Selected objects {@link cmc/foundation/ModelObject} in grid -->
+		<variable name="selectedObjects" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="getValue">
+			<![CDATA[
+			return GlobalizationUtil.Singleton.formatNumberToDataFormat(this.getText());
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="initialValue" name="resetValue">
+			<![CDATA[
+			this.setText(GlobalizationUtil.Singleton.formatNumberToDisplayFormat(initialValue, this.column.numDecimalPlaces));
+			]]>
+		</method>
+	</InputText>
+	
+	<!---
+		@keywords private
+		
+		Numeric editor class for internal use by {@link cmc/foundation/GridNumeric} to bind a property to the grid input box and will be
+		displayed while the grid is in edit mode. Extends {@link cmc/foundation/NumericEditor} to handle formatting.
+	-->
+	<NumericEditor classDefinition="true" definitionName="cmc/foundation/GridNumericEditor" width="${this.immediateParent.availableWidth}" inputTextPadding="5" height="26"/>
+	
+	<!---
+		@keywords private
+		
+		This is a numeric viewer class for internal use by {@link cmc/foundation/GridNumeric} to bind a property to the grid input box
+		and will be used to display the number in the grid. It extends {@link cmc/foundation/GridTextViewer}.
+	-->
+	<GridTextViewer classDefinition="true" definitionName="cmc/foundation/GridNumericViewer">
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>		
+		<!---
+			numDecimalPlaces is the number of decimal places to pad. If not specified, the default is 0 meaning no padding.
+			There is no truncation.
+		-->
+		<variable name="numDecimalPlaces" type="number" value="${null}"/>								
+		<!---
+			This method updates the value displayed in the viewer.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var displayValue = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(this.property.value, this.numDecimalPlaces, this.updateValueDel);
+			if (this.text != displayValue) {
+				this.setVariable("text", displayValue);
+			}
+			]]>
+		</method>
+	</GridTextViewer>
+	
+	<!---
+		This class defines a grid column for managing monetary values with different currencies.	
+		It does not require a property name to be specified and instead	uses the currency properties of the object to
+		which it is bound. These currency properties are instances of {@link cmc/foundation/DefaultCurrencyPropertyDefinition}
+		and {@link cmc/foundation/AlternativeCurrencyPropertyDefinition}.
+		
+		This widget creates one column for each currency property, using the currency code as the header and property name.
+		It will create a column for the default currency of the current store, and clones itself for each of the supported
+		non-default currencies.
+		
+		@see cmc/foundation/DefaultCurrencyPropertyDefinition
+		@see cmc/foundation/AlternativeCurrencyPropertyDefinition
+	 -->
+	<GridNumeric classDefinition="true" definitionName="cmc/foundation/GridCurrency">
+		<dependency localName="GridNumeric" moduleName="cmc/foundation/GridNumeric"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ModelUtil" moduleName="cmc/foundation/ModelUtil"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>
+		<!---
+			Whether or not this column needs to clone itself for each of the non-default columns.
+		-->
+		<variable name="cloneEnabled" type="boolean" value="true"/>
+		<!---
+			Whether or not the cloned columns for non-default currencies are required. "True" means user can
+			not hide these columns.
+		-->
+		<variable name="cloneColumnsRequired" type="boolean" value="false"/>
+
+		<!---
+			@keywords private
+			Array of currency columns created as clones of this column.
+		-->
+		<variable name="currencyColumns" value="${[]}"/>
+		<!---
+			@keywords private
+			Array of currency columns created as clones of this column that are pooled.
+		-->
+		<variable name="currencyColumnsPool" value="${[]}"/>
+		<!---
+			@keywords private
+			Indicates that the default currency code should be used for the column header text.
+		-->
+		<variable name="setHeaderToDefaultCurrency" type="boolean" value="false"/>
+		<!---
+			Indicates whether or not the currency code should be appended to the column header text.
+		-->
+		<variable name="appendCurrencyCodeToHeader" type="boolean" value="false"/>
+		<!---
+			Indicates whether or not the property name should be set to the currency code.
+		-->
+		<variable name="setPropertyNameToCurrencyCode" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<method name="postCreateDefinitionChildren">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.text == "" && !this.appendCurrencyCodeToHeader) {
+				this.setHeaderToDefaultCurrency = true;
+			}
+			this.updateColumnsDel = new EventHandler.Class(this, "updateColumns");
+			this.updateColumns();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateColumnsDel.disconnectAll();
+			delete this.updateColumnsDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Update the columns when switch to a new store.
+		-->
+		<method args="e" name="updateColumns">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateColumnsDel.disconnectAll();
+			if (typeof (this.oView) == "undefined") {
+				this.oView = ModelUtil.Singleton.findObjectView(this);
+			}
+			var storeConfig = null;
+			if (this.oView) {
+				this.updateColumnsDel.connect(this.oView, "ono");
+				var o = this.oView.o;
+				if (o != null) {
+					storeConfig = ContextUtil.Singleton.findStoreConfig(o, this.updateColumnsDel);
+				}
+			}
+			else {
+				storeConfig = ContextUtil.Singleton.findStoreConfig(this.parent.model.oEditor, this.updateColumnsDel);
+			}
+			if ((storeConfig != null) && (storeConfig.defaultCurrency != null)) {
+				var refreshRequired = false;
+				while (this.currencyColumns.length > 0) {
+					var currencyColumn = this.currencyColumns.shift();
+					currencyColumn.setVariable("text", null);
+					this.parent.releaseColumn(currencyColumn);
+					this.currencyColumnsPool.push(currencyColumn);
+					refreshRequired = true;
+				}
+				var defaultCode = storeConfig.defaultCurrency.currencyCode;
+				var decimalPlaces = GlobalizationUtil.Singleton.CURRENCY_DECIMALS_MAP[defaultCode];
+				this.setVariable("numDecimalPlaces", decimalPlaces);
+				if (this.setHeaderToDefaultCurrency) {
+					this.setVariable("text", defaultCode);
+				}
+				if (this.setPropertyNameToCurrencyCode) {
+					this.setVariable("propertyName", defaultCode);
+				}
+				if (!this.setHeaderToDefaultCurrency && this.appendCurrencyCodeToHeader) {
+					this.updateDisplayText();
+				}
+				if (this.cloneEnabled) {
+					var currencies = storeConfig.supportedCurrencies;
+					var columnPos = this.parent.columns.indexOf(this) + 1;
+					for (var i = 0; i < currencies.length; i++) {
+						var currencyCode = currencies[i].currencyCode;
+						decimalPlaces = GlobalizationUtil.Singleton.CURRENCY_DECIMALS_MAP[currencyCode];
+						if (defaultCode != currencyCode) {
+							var currencyColumn = null;
+							if (this.currencyColumnsPool.length > 0) {
+								currencyColumn = this.currencyColumnsPool.pop();
+								currencyColumn.setVariable("text", currencyCode);
+								currencyColumn.setVariable("propertyName", currencyCode);
+								currencyColumn.setVariable("numDecimalPlaces", decimalPlaces);
+								this.parent.addColumn(currencyColumn, this.visible);
+							}
+							else {
+								currencyColumn = new GridNumeric.Class(this.parent, {
+									text: currencyCode,
+									propertyName: currencyCode,
+									objectPath: this.objectPath,
+									required: this.cloneColumnsRequired,
+									width: this.width,
+									numDecimalPlaces: decimalPlaces,
+									visible: this.visible
+								});
+							}
+							this.currencyColumns.push(currencyColumn);
+							this.parent.setColumnPosition(currencyColumn, columnPos + i, false);
+							refreshRequired = true;
+						}
+					}
+				}
+				if (refreshRequired) {
+					this.parent.updateColumnOrder();
+					this.parent.refresh();
+				}
+			}
+			]]>
+		</method>		
+		<!---
+			@keywords private
+			This method update the column's header display text.
+		-->
+		<method args="e" name="updateDisplayText">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.setHeaderToDefaultCurrency && this.appendCurrencyCodeToHeader) {
+				if (typeof (this.oView) == "undefined") {
+					this.oView = ModelUtil.Singleton.findObjectView(this);
+				}
+				var storeConfig = null;
+				if (this.oView) {
+					this.updateColumnsDel.connect(this.oView, "ono");
+					var o = this.oView.o;
+					if (o != null) {
+						storeConfig = ContextUtil.Singleton.findStoreConfig(o);
+					}
+				}
+				else {
+					storeConfig = ContextUtil.Singleton.findStoreConfig(this.parent.model.oEditor);
+				}
+				if (storeConfig != null && storeConfig.defaultCurrency != null) {
+					this.setVariable("displayText", this.text + " (" + storeConfig.defaultCurrency.currencyCode + ")");
+				}
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>				
+	</GridNumeric>
+
+	<!---
+		@keywords private
+		
+		This is a monetary value viewer class for internal use by {@link cmc/foundation/GridSingleCurrency} used to display a numeric value.
+		The value is formatted based on the currency defined in {@link cmc/foundation/GridSingleCurrencyViewer#currencyPropertyName}
+		and may be truncated as defined in {@link cmc/foundation/GridSingleCurrencyViewer#truncateDecimals}.
+	-->
+	<GridTextViewer classDefinition="true" definitionName="cmc/foundation/GridSingleCurrencyViewer">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="GlobalizationUtil" moduleName="cmc/foundation/GlobalizationUtil"/>		
+		<!---
+			@keywords private
+			The number of decimal places to truncate the value to. This is automatically updated based on the
+			currency value and should not be changed.
+		-->
+		<variable name="numDecimalPlaces" type="number" value="2"/>
+		<!---
+			The name of the property that contains the currency code to use for this viewer. It is assumed
+			that the currency property exists on the same object as this viewer's {@link cmc/foundation/GridTextViewer#property}.
+		-->
+		<variable name="currencyPropertyName" type="string" value="${null}"/>
+		<!---
+			Whether or not to truncate the display value to the number of decimals places as defined by the currency.
+		-->
+		<variable name="truncateDecimals" type="boolean" value="true"/>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.numDecimalPlacesDel) {
+				this.numDecimalPlacesDel.disconnectAll();
+				delete this.numDecimalPlacesDel;
+			}
+			if (this.updateDecimalsDel) {
+				this.updateDecimalsDel.disconnectAll();
+				delete this.updateDecimalsDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			This method updates the value displayed in the viewer. This method is called whenever the property value
+			or {@link cmc/foundation/GridSingleCurrencyViewer#numDecimalPlaces} changes.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.numDecimalPlacesDel) {
+				this.numDecimalPlacesDel = new EventHandler.Class(this, "updateValue");
+				this.numDecimalPlacesDel.connect(this, "onnumDecimalPlaces");
+			}
+			this.updateDecimals();
+			var displayValue = this.property.value;
+			if (this.truncateDecimals) {
+				displayValue = GlobalizationUtil.Singleton.truncateDecimals(displayValue, this.numDecimalPlaces);
+			}
+			displayValue = GlobalizationUtil.Singleton.formatNumberToDisplayFormat(displayValue, this.numDecimalPlaces, this.updateValueDel);
+			if (this.text != displayValue) {
+				this.setVariable("text", displayValue);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method looks up the currency formatting defined in {@link cmc/foundation/GridSingleCurrencyViewer#currencyPropertyName} and
+			updates {@link cmc/foundation/GridSingleCurrencyViewer#numDecimalPlaces} as required.
+		-->
+		<method args="e" name="updateDecimals">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateDecimalsDel) {
+				this.updateDecimalsDel.disconnectAll();
+			}
+			else {
+				this.updateDecimalsDel = new EventHandler.Class(this, "updateDecimals");
+			}
+			if (this.currencyPropertyName && this.property) {
+				var currencyProp = this.property.o.getProperty(this.currencyPropertyName);
+				this.updateDecimalsDel.connect(currencyProp, "onvalue");
+				var currencyCode = currencyProp.value;
+				var currencyDecimals = GlobalizationUtil.Singleton.getCurrencyDecimalPlaces(currencyCode);
+				currencyDecimals = (currencyDecimals == null) ? 2 : currencyDecimals;
+				if (this.numDecimalPlaces != currencyDecimals) {
+					this.setVariable("numDecimalPlaces", currencyDecimals);
+				}
+			}
+			]]>
+		</method>
+	</GridTextViewer>
+	
+	<!---
+		@keywords final
+
+		<p>Similar to {@link cmc/foundation/GridCurrency}, this class defines a column for managing monetary values based on currency.
+		However, this column does not replicate or clone itself based on currency property definitions. Instead, this grid
+		column requires a <code>currencyPropertyName</code> to be specified.</p>
+		
+		<p>No {@link cmc/foundation/GridColumn#cellEditorClass} is defined for this grid column, and {@link cmc/foundation/GridColumn#editable} is
+		set to <code>false</code>, so this column should be used for read-only data only.</p>
+	-->
+	<GridColumn alignment="right" classDefinition="true" datatype="number" definitionName="cmc/foundation/GridSingleCurrency" editable="false">
+		<dependency localName="GridSingleCurrencyViewer" moduleName="cmc/foundation/GridSingleCurrencyViewer"/>
+		<!--- @keywords private -->
+		<variable name="cellViewerClass" value="${GridSingleCurrencyViewer}"/>
+		<!---
+			The name of the property that contains the currency code to use for this viewer. It is assumed
+			that the currency property exists on {@link cmc/foundation/GridColumn#objectPath}.
+		-->
+		<variable name="currencyPropertyName" type="string" value="${null}"/>
+
+		<!---
+			Whether or not to truncate the display value to the number of decimals places as defined by the currency.
+		-->
+		<variable name="truncateDecimals" type="boolean" value="true"/>
+
+		<!---
+			@keywords private
+			This method returns the viewer initialization arguments.
+		-->
+		<method name="getViewerInitArgs">
+			<![CDATA[
+			return {
+				currencyPropertyName: this.currencyPropertyName,
+				truncateDecimals: this.truncateDecimals
+			};
+			]]>
+		</method>
+	</GridColumn>
+</Definitions>

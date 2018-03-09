@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","da",{error:"Indsættelse af billeder understøttes ikke i øjeblikket. Brug værktøjslinjefunktionen 'Indsæt billede' i stedet."});

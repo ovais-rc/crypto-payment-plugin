@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This class defines a property group for page layout slot widget assignment within a Page Layout properties view.
+	-->
+	<PropertyGroup classDefinition="true" collapsable="false" definitionName="cmc/pagelayout/PageLayoutWidgetAssignmentPropertyGroup" showHeader="false">
+		
+		<!---
+			Comma separated list of widget object types to be displayed in this childWidgets {@link cmc/foundation/PropertyChildListEditor}.
+			This is a required attribute.
+		-->
+		<variable name="widgetObjectTypes" type="string"/>
+		<!---
+			The definition name for the this <code>childWidgets</code>. This must be a definition that extends {@link cmc/foundation/ObjectGrid}.
+			@type string
+		-->
+		<variable name="listDefinition" type="module" value="${null}"/>
+		<!---
+			This attribute holds a string to use as the prompt text for this <code>childWidgets</code>. 
+			The default value of this attribute is null.
+		-->
+		<variable name="listEditorPromptText" type="string" value="${null}"/>
+		<!---
+			This attribute holds a string to use as the extended help text for this <code>childWidgets</code>. 
+			The default value of this attribute is an empty string.
+		-->
+		<variable name="listEditorExtendedHelpText" type="string" value=""/>
+		<!---
+			This attribute holds a string to use as the Tooltip text of the new button of this <code>childWidgets</code>. 
+			Specify this attribute if the default text needs to be overridden.
+		-->
+		<variable name="listEditornewButtonHelpText" type="string" value="${null}"/>
+		<!---
+			This attribute holds a string to use as the prompt text for this <code>layoutview</code>. 
+			The default value of this attribute is null.
+		-->
+		<variable name="layoutViewPromptText" type="string" value="${null}"/>
+		<!--- 
+			The class name for the dialog used for this <code>childWidgets</code>.
+			@type string
+		-->
+		<variable name="listEditorNewActionDialogClass" type="module" value="${null}"/>
+		
+		<PropertyPageLayoutViewer childWidgetsListEditor="${this.parent.childWidgets}" name="layoutview" package="cmc/pagelayout" promptText="${this.parent.layoutViewPromptText}"/>
+		
+		<PropertyChildListEditor extendedHelpText="${this.parent.listEditorExtendedHelpText}" fractionOfAvailableHeight="5" hideEditColumnAction="true" listDefinition="${this.parent.listDefinition}" name="childWidgets" newActionDialogClass="${this.parent.listEditorNewActionDialogClass}" newButtonHelpText="${this.parent.listEditornewButtonHelpText}" objectTypes="${this.parent.widgetObjectTypes}" promptText="${this.parent.listEditorPromptText}"/>
+	</PropertyGroup>
+	
+	<!---
+		This class defines a page layout viewer for use within a properties view.
+	-->
+	<PropertiesComponent classDefinition="true" definitionName="cmc/pagelayout/PropertyPageLayoutViewer">
+		<dependency localName="PageLayoutViewer" moduleName="cmc/pagelayout/PageLayoutViewer"/>
+	
+		<!---  
+			@keywords private
+			A reference to {@link PropertyChildListEditor}, which displays all the widgets being populated within the layout 
+		-->
+		<variable name="childWidgetsListEditor" value="${null}"/>
+		<!---
+			@keywords private
+			This method creates the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			new PageLayoutViewer.Class(parentComponent, {
+				name: "editor",
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				width: 149,
+				o: parentComponent.o,
+				childWidgetsListEditor: parentComponent.childWidgetsListEditor,
+				showText: true,
+				showPopulatedSlots: true
+			});
+			]]>
+		</method>
+	</PropertiesComponent>
+	
+	<!---
+		@keywords private
+		The page layout viewer class used by cmc/pagelayout/PropertyPageLayoutViewer to display a layout in the property view.
+	-->
+	<BasePageLayoutViewer classDefinition="true" definitionName="cmc/pagelayout/PageLayoutViewer" package="cmc/pagelayout" slotTooltipText="${pageLayoutResources.Singleton.layoutSlotTooltip.string}">
+		<dependency localName="pageLayoutResources" moduleName="cmc/pagelayout/PageLayoutResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		
+		<!--- 
+			@keywords private
+			A reference to  {@link cmc/foundation/PropertyChildListEditor}, which displays all the widgets being populated within the layout 
+		-->
+		<variable name="childWidgetsListEditor" value="${null}"/>
+		<!---
+			@keywords private
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.removeSelectionDel = new EventHandler.Class(this, "removeSelection");
+			this.updateAllowSelectionDel = new EventHandler.Class(this, "updateAllowSelection");
+			this.updateAllowSelection();
+			]]>
+		</method>
+		
+		<method args="e" name="updateAllowSelection">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateAllowSelectionDel.disconnectAll();
+			if (this.childWidgetsListEditor == null) {
+				this.updateAllowSelectionDel.connect(this, "onchildWidgetsListEditor");
+			}
+			else if (this.childWidgetsListEditor.editor == null) {
+				this.updateAllowSelectionDel.connect(this.childWidgetsListEditor, "oneditor");
+			}
+			else {
+				this.updateAllowSelectionDel.connect(this.childWidgetsListEditor.editor, "onaddEnabled");
+				this.setVariable("allowSelection", this.childWidgetsListEditor.editor.addEnabled);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="destroy">
+			<![CDATA[
+			this.removeSelectionDel.disconnectAll();
+			this.updateAllowSelectionDel.disconnectAll();
+			delete this.updateAllowSelectionDel;
+			delete this.removeSelectionDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+				
+		<!---
+			@keywords private
+			Remove selection of the slot.
+		-->
+		<method args="e" name="removeSelection">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("selectedSlotObject", null);
+			]]>
+		</method>		
+		
+		<!---
+			Handle the selection of a slot.
+		-->
+		<method args="slotObject" name="slotSelected">
+			<![CDATA[
+			this.setVariable("hoverSlotObject", null);
+			this.setVariable("selectedSlotObject", slotObject);
+			var editor = this.childWidgetsListEditor.editor;
+			if (!editor._newDialog) {
+				if (editor.newActionDialogClass.Class) {
+					editor._newDialog = new editor.newActionDialogClass.Class(RootComponent.Singleton);
+				}
+				else {
+					editor._newDialog = DefinitionUtil.createDefinitionInstance(editor.newActionDialogClass, RootComponent.Singleton);
+				}
+			}
+			editor._newDialog.openNewActionDialog(this.o, editor, {
+				callBackDel: this.removeSelectionDel,
+				selectedSlotObject: slotObject,
+				hidePageLayoutView: true
+			});
+			]]>
+		</method>
+	
+	</BasePageLayoutViewer>
+
+</Definitions>

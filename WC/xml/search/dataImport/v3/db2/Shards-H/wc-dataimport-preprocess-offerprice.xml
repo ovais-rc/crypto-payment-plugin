@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<_config:DIHPreProcessConfig xmlns:_config="http://www.ibm.com/xmlns/prod/commerce/foundation/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.ibm.com/xmlns/prod/commerce/foundation/config ../../xsd/wc-dataimport-preprocess.xsd ">         
+  <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticAttributeDataPreProcessor" batchSize="500">
+    <_config:table definition="CREATE TABLE TI_OFFER_#INDEX_SCOPE_TAG# (OFFER_ID BIGINT NOT NULL, CATENTRY_ID BIGINT NOT NULL, PRIMARY KEY (OFFER_ID))" name="TI_OFFER_#INDEX_SCOPE_TAG#"/>
+    <_config:query sql="SELECT O.OFFER_ID,
+                               O.CATENTRY_ID
+                        FROM   OFFER O,
+                               (SELECT MAX(O.PRECEDENCE) MAX_PRECEDENCE,
+                                       O.TRADEPOSCN_ID,
+                                       O.CATENTRY_ID
+                                FROM   OFFER O, 
+                                       TRADEPOSCN T, 
+                                       CATGRPTPC C, 
+                                       STORECENT S,
+                                       TI_CATENTRY_#INDEX_SCOPE_TAG# CE
+                                WHERE T.TRADEPOSCN_ID = C.TRADEPOSCN_ID 
+                                AND   C.STORE_ID = S.STOREENT_ID 
+                                AND   O.TRADEPOSCN_ID = T.TRADEPOSCN_ID 
+                                AND   O.CATENTRY_ID = S.CATENTRY_ID 
+                                AND   O.CATENTRY_ID = CE.CATENTRY_ID
+                                AND   (O.STARTDATE IS NULL OR CURRENT_TIMESTAMP &gt; O.STARTDATE)
+                                AND   (O.ENDDATE IS NULL OR O.ENDDATE &gt; CURRENT_TIMESTAMP)
+                                AND   O.PUBLISHED = 1 
+                                AND   (O.MINIMUMQUANTITY IN (1, 0) OR O.MINIMUMQUANTITY IS NULL)
+                                GROUP BY O.TRADEPOSCN_ID,
+                                         O.CATENTRY_ID
+                               ) FILTER
+                        WHERE  O.TRADEPOSCN_ID = FILTER.TRADEPOSCN_ID
+                        AND    O.CATENTRY_ID = FILTER.CATENTRY_ID
+                        AND    O.PRECEDENCE = FILTER.MAX_PRECEDENCE
+                        AND   (O.STARTDATE IS NULL OR CURRENT_TIMESTAMP &gt; O.STARTDATE)
+                        AND   (O.ENDDATE IS NULL OR O.ENDDATE &gt; CURRENT_TIMESTAMP)
+                        AND    O.PUBLISHED = 1                                                
+											UNION (
+ 												SELECT O.OFFER_ID,
+                               O.CATENTRY_ID
+                        FROM   OFFER O,
+                               (SELECT MAX(O.PRECEDENCE) MAX_PRECEDENCE,
+                                       O.TRADEPOSCN_ID,
+                                       O.CATENTRY_ID
+                                FROM   OFFER O, 
+                                       TRADEPOSCN T, 
+                                       CATGRPTPC C, 
+                                       STORECENT S,
+                                       TI_CEPCHILD_#INDEX_SCOPE_TAG# CE
+                                WHERE T.TRADEPOSCN_ID = C.TRADEPOSCN_ID 
+                                AND   C.STORE_ID = S.STOREENT_ID 
+                                AND   O.TRADEPOSCN_ID = T.TRADEPOSCN_ID 
+                                AND   O.CATENTRY_ID = S.CATENTRY_ID 
+                                AND   O.CATENTRY_ID = CE.CATENTRY_ID
+                                AND   (O.STARTDATE IS NULL OR CURRENT_TIMESTAMP &gt; O.STARTDATE)
+                                AND   (O.ENDDATE IS NULL OR O.ENDDATE &gt; CURRENT_TIMESTAMP)
+                                AND   O.PUBLISHED = 1 
+                                AND   (O.MINIMUMQUANTITY IN (1, 0) OR O.MINIMUMQUANTITY IS NULL)
+                                GROUP BY O.TRADEPOSCN_ID,
+                                         O.CATENTRY_ID
+                               ) FILTER
+                        WHERE  O.TRADEPOSCN_ID = FILTER.TRADEPOSCN_ID
+                        AND    O.CATENTRY_ID = FILTER.CATENTRY_ID
+                        AND    O.PRECEDENCE = FILTER.MAX_PRECEDENCE
+                        AND   (O.STARTDATE IS NULL OR CURRENT_TIMESTAMP &gt; O.STARTDATE)
+                        AND   (O.ENDDATE IS NULL OR O.ENDDATE &gt; CURRENT_TIMESTAMP)
+                        AND    O.PUBLISHED = 1                                                                                                
+                     )                                    
+                        ORDER BY OFFER_ID"/>
+    <_config:mapping>
+      <_config:key queryColumn="OFFER_ID" tableColumn="OFFER_ID"/>
+      <_config:column-mapping>
+      	<_config:column-column-mapping>
+        	<_config:column-column queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID" />
+        </_config:column-column-mapping>
+      </_config:column-mapping>
+    </_config:mapping>
+  </_config:data-processing-config>
+  	
+  <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.PriceDataPreProcessor" batchSize="500">
+     <!-- 
+    	To add a new currency, add a new column in the create statement, the column name has to PRICE_XXX, XXX is the three letter
+    	currency code from the ISO 4217.
+    -->
+    <_config:table definition="CREATE TABLE TI_OFFERPRICE_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, PRICE_USD DECIMAL(20,5) , PRICE_EUR DECIMAL(20,5) , 
+    							PRICE_CAD DECIMAL(20,5) , PRICE_CNY DECIMAL(20,5) , PRICE_JPY DECIMAL(20,5) , PRICE_KRW DECIMAL(20,5) , PRICE_BRL DECIMAL(20,5) ,
+    							PRICE_TWD DECIMAL(20,5) , PRICE_PLN DECIMAL(20,5) , PRICE_RON DECIMAL(20,5) , PRICE_RUB DECIMAL(20,5) , PRICE_EGP DECIMAL(20,5) ,
+    							PRICE_GBP DECIMAL(20,5) , PRICE_TRY DECIMAL(20,5), PRICE_ILS DECIMAL(20,5), PRIMARY KEY (CATENTRY_ID))" name="TI_OFFERPRICE_#INDEX_SCOPE_TAG#"/>
+    <_config:query sql="select o.catentry_id catentry_id, p.currency currency, p.price price from offerprice p, TI_OFFER_#INDEX_SCOPE_TAG# o, TI_CATENTRY_#INDEX_SCOPE_TAG# CE 
+ 				where p.offer_id = o.offer_id AND p.currency in (?currencyCode?) AND CE.CATENTTYPE_ID &lt;&gt; 'BundleBean' 
+ 				AND CE.CATENTRY_ID=o.catentry_id  
+		UNION (
+				select o.catentry_id catentry_id, p.currency currency, p.price price from offerprice p, TI_OFFER_#INDEX_SCOPE_TAG# o, TI_CEPCHILD_#INDEX_SCOPE_TAG# CE 
+ 				where p.offer_id = o.offer_id AND p.currency in (?currencyCode?)  
+ 				AND CE.CATENTRY_ID=o.catentry_id
+		)
+		order by catentry_id, price desc, currency"/>
+    <_config:mapping>
+      <_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+      <_config:column-mapping>
+      	<_config:column-column-mapping>
+      		<!-- do not change this part -->
+        	<_config:column-column queryColumn="PRICE" tableColumn="PRICE" />
+        </_config:column-column-mapping>
+      </_config:column-mapping>
+    </_config:mapping>
+    <_config:property name="currencyCode" value="USD, EUR, CAD, CNY, JPY, KRW, BRL, TWD, PLN, RON, RUB, EGP, GBP, TRY, ILS"/>
+  </_config:data-processing-config>
+  <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticDecimalDataPreProcessor" batchSize="500">
+  	 <!-- 
+    	For the newly added currency in the above table. Add the name column name in the create statememnt. and add a SUM(PRICE_XXX) in the select
+    	statment part. the PRICE_XXX is the new column added the table above.
+    -->
+  	<_config:table definition="CREATE TABLE TI_BUNDLEPRICE_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, PRICE_USD DECIMAL(20,5) , PRICE_EUR DECIMAL(20,5) , 
+    							PRICE_CAD DECIMAL(20,5) , PRICE_CNY DECIMAL(20,5) , PRICE_JPY DECIMAL(20,5) , PRICE_KRW DECIMAL(20,5) , PRICE_BRL DECIMAL(20,5) ,
+    							PRICE_TWD DECIMAL(20,5) , PRICE_PLN DECIMAL(20,5) , PRICE_RON DECIMAL(20,5) , PRICE_RUB DECIMAL(20,5) , PRICE_EGP DECIMAL(20,5) , 
+    							PRICE_GBP DECIMAL(20,5) , PRICE_TRY DECIMAL(20,5), PRICE_ILS DECIMAL(20,5), PRIMARY KEY (CATENTRY_ID))" name="TI_BUNDLEPRICE_#INDEX_SCOPE_TAG#"/>
+    <_config:query sql="SELECT CATENTREL.CATENTRY_ID_PARENT, SUM(OP.PRICE_USD) PRICE_USD, SUM(OP.PRICE_EUR) PRICE_EUR, 
+    										SUM(OP.PRICE_CAD) PRICE_CAD, SUM(OP.PRICE_CNY) PRICE_CNY, SUM(OP.PRICE_JPY) PRICE_JPY,
+    										SUM(OP.PRICE_KRW) PRICE_KRW, SUM(OP.PRICE_BRL) PRICE_BRL, SUM(OP.PRICE_TWD) PRICE_TWD,
+    										SUM(OP.PRICE_PLN) PRICE_PLN, SUM(OP.PRICE_RON) PRICE_RON, SUM(OP.PRICE_RUB) PRICE_RUB,
+    										SUM(OP.PRICE_EGP) PRICE_EGP, SUM(OP.PRICE_GBP) PRICE_GBP, SUM(OP.PRICE_TRY) PRICE_TRY, SUM(OP.PRICE_ILS) PRICE_ILS
+    										FROM TI_CEPCHILD_#INDEX_SCOPE_TAG# ITEM, CATENTREL, TI_OFFERPRICE_#INDEX_SCOPE_TAG# OP 
+												WHERE CATENTREL.CATENTRY_ID_CHILD=ITEM.CATENTRY_ID AND ITEM.CATENTRY_ID=OP.CATENTRY_ID AND
+ 												CATENTREL.CATRELTYPE_ID='BUNDLE_COMPONENT' AND			
+												EXISTS(SELECT * FROM TI_CATENTRY_#INDEX_SCOPE_TAG# BUNDLE WHERE BUNDLE.CATENTRY_ID=CATENTREL.CATENTRY_ID_PARENT) 
+												GROUP BY CATENTREL.CATENTRY_ID_PARENT
+												ORDER BY CATENTREL.CATENTRY_ID_PARENT"/>
+    <_config:mapping>
+      <_config:key queryColumn="CATENTRY_ID_PARENT" tableColumn="CATENTRY_ID"/>
+      <_config:column-mapping>
+      	<_config:column-column-mapping>
+      		<!-- To add a new currency, need to add the column mapping to the newly added currency column in the section.-->
+        	<_config:column-column queryColumn="PRICE_USD" tableColumn="PRICE_USD" />
+        	<_config:column-column queryColumn="PRICE_EUR" tableColumn="PRICE_EUR" />
+        	<_config:column-column queryColumn="PRICE_CAD" tableColumn="PRICE_CAD" />
+        	<_config:column-column queryColumn="PRICE_CNY" tableColumn="PRICE_CNY" />
+        	<_config:column-column queryColumn="PRICE_JPY" tableColumn="PRICE_JPY" />
+        	<_config:column-column queryColumn="PRICE_KRW" tableColumn="PRICE_KRW" />
+        	<_config:column-column queryColumn="PRICE_BRL" tableColumn="PRICE_BRL" />
+        	<_config:column-column queryColumn="PRICE_TWD" tableColumn="PRICE_TWD" />
+        	<_config:column-column queryColumn="PRICE_PLN" tableColumn="PRICE_PLN" />
+        	<_config:column-column queryColumn="PRICE_RON" tableColumn="PRICE_RON" />
+			<_config:column-column queryColumn="PRICE_RUB" tableColumn="PRICE_RUB" />
+			<_config:column-column queryColumn="PRICE_EGP" tableColumn="PRICE_EGP" />
+			<_config:column-column queryColumn="PRICE_GBP" tableColumn="PRICE_GBP" />
+			<_config:column-column queryColumn="PRICE_TRY" tableColumn="PRICE_TRY" />
+			<_config:column-column queryColumn="PRICE_ILS" tableColumn="PRICE_ILS" />
+        </_config:column-column-mapping>
+      </_config:column-mapping>
+    </_config:mapping>
+  </_config:data-processing-config>
+  <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.StaticDecimalDataPreProcessor" batchSize="500">
+  	 <!-- 
+    	For the newly added currency in the above table. Add the name column name in the create statememnt. and add a SUM(PRICE_XXX) in the select
+    	statment part. the PRICE_XXX is the new column added the table above.
+    -->
+  	<_config:table definition="CREATE TABLE TI_DKITPRICE_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, PRICE_USD DECIMAL(20,5) , PRICE_EUR DECIMAL(20,5) , 
+    							PRICE_CAD DECIMAL(20,5) , PRICE_CNY DECIMAL(20,5) , PRICE_JPY DECIMAL(20,5) , PRICE_KRW DECIMAL(20,5) , PRICE_BRL DECIMAL(20,5) ,
+    							PRICE_TWD DECIMAL(20,5) , PRICE_PLN DECIMAL(20,5) , PRICE_RON DECIMAL(20,5) , PRICE_RUB DECIMAL(20,5) , PRICE_EGP DECIMAL(20,5) , 
+    							PRICE_GBP DECIMAL(20,5) , PRICE_TRY DECIMAL(20,5), PRICE_ILS DECIMAL(20,5), PRIMARY KEY (CATENTRY_ID))" name="TI_DKITPRICE_#INDEX_SCOPE_TAG#"/>
+    <_config:query sql="(SELECT DKPDCCATENTREL.CATENTRY_ID CATENTRY_ID_PARENT, SUM(OP.PRICE_USD) PRICE_USD, SUM(OP.PRICE_EUR) PRICE_EUR, 
+    										SUM(OP.PRICE_CAD) PRICE_CAD, SUM(OP.PRICE_CNY) PRICE_CNY, SUM(OP.PRICE_JPY) PRICE_JPY,
+    										SUM(OP.PRICE_KRW) PRICE_KRW, SUM(OP.PRICE_BRL) PRICE_BRL, SUM(OP.PRICE_TWD) PRICE_TWD,
+    										SUM(OP.PRICE_PLN) PRICE_PLN, SUM(OP.PRICE_RON) PRICE_RON, SUM(OP.PRICE_RUB) PRICE_RUB,
+    										SUM(OP.PRICE_EGP) PRICE_EGP, SUM(OP.PRICE_GBP) PRICE_GBP, SUM(OP.PRICE_TRY) PRICE_TRY, SUM(OP.PRICE_ILS) PRICE_ILS
+    										FROM TI_CEPCHILD_#INDEX_SCOPE_TAG#  CHILD, DKPDCCATENTREL, DKPDCCOMPLIST, TI_OFFERPRICE_#INDEX_SCOPE_TAG#  OP 
+												WHERE CHILD.CATENTRY_ID=DKPDCCOMPLIST.CATENTRY_ID
+												AND DKPDCCOMPLIST.DKPREDEFCONF_ID=DKPDCCATENTREL.DKPREDEFCONF_ID 
+												AND OP.CATENTRY_ID=CHILD.CATENTRY_ID
+												AND DKPDCCATENTREL.SEQUENCE=0
+												AND EXISTS(SELECT * FROM TI_CATENTRY_#INDEX_SCOPE_TAG# DYNAMICKIT WHERE 
+												DYNAMICKIT.CATENTRY_ID=DKPDCCATENTREL.CATENTRY_ID 
+												AND DYNAMICKIT.CATENTTYPE_ID='DynamicKitBean' )
+												GROUP BY DKPDCCATENTREL.CATENTRY_ID)
+					UNION
+					    (SELECT CATENTREL.CATENTRY_ID_PARENT CATENTRY_ID_PARENT, SUM(OP.PRICE_USD) PRICE_USD, SUM(OP.PRICE_EUR) PRICE_EUR, 
+    										SUM(OP.PRICE_CAD) PRICE_CAD, SUM(OP.PRICE_CNY) PRICE_CNY, SUM(OP.PRICE_JPY) PRICE_JPY,
+    										SUM(OP.PRICE_KRW) PRICE_KRW, SUM(OP.PRICE_BRL) PRICE_BRL, SUM(OP.PRICE_TWD) PRICE_TWD,
+    										SUM(OP.PRICE_PLN) PRICE_PLN, SUM(OP.PRICE_RON) PRICE_RON, SUM(OP.PRICE_RUB) PRICE_RUB,
+    										SUM(OP.PRICE_EGP) PRICE_EGP, SUM(OP.PRICE_GBP) PRICE_GBP, SUM(OP.PRICE_TRY) PRICE_TRY, SUM(OP.PRICE_ILS) PRICE_ILS 
+    										FROM TI_CEPCHILD_#INDEX_SCOPE_TAG# PDC, CATENTREL, TI_OFFERPRICE_#INDEX_SCOPE_TAG# OP
+												WHERE CATENTREL.CATENTRY_ID_PARENT=PDC.CATENTRY_ID AND
+												CATENTREL.CATENTRY_ID_CHILD=OP.CATENTRY_ID AND
+ 												CATENTREL.CATRELTYPE_ID='PDK_COMPONENT'			
+												GROUP BY CATENTREL.CATENTRY_ID_PARENT)
+												ORDER BY CATENTRY_ID_PARENT"/>
+    <_config:mapping>
+      <_config:key queryColumn="CATENTRY_ID_PARENT" tableColumn="CATENTRY_ID"/>
+      <_config:column-mapping>
+      	<_config:column-column-mapping>
+      		<!-- To add a new currency, need to add the column mapping to the newly added currency column in the section.-->
+        	<_config:column-column queryColumn="PRICE_USD" tableColumn="PRICE_USD" />
+        	<_config:column-column queryColumn="PRICE_EUR" tableColumn="PRICE_EUR" />
+        	<_config:column-column queryColumn="PRICE_CAD" tableColumn="PRICE_CAD" />
+        	<_config:column-column queryColumn="PRICE_CNY" tableColumn="PRICE_CNY" />
+        	<_config:column-column queryColumn="PRICE_JPY" tableColumn="PRICE_JPY" />
+        	<_config:column-column queryColumn="PRICE_KRW" tableColumn="PRICE_KRW" />
+        	<_config:column-column queryColumn="PRICE_BRL" tableColumn="PRICE_BRL" />
+        	<_config:column-column queryColumn="PRICE_TWD" tableColumn="PRICE_TWD" />
+        	<_config:column-column queryColumn="PRICE_PLN" tableColumn="PRICE_PLN" />
+        	<_config:column-column queryColumn="PRICE_RON" tableColumn="PRICE_RON" />
+			<_config:column-column queryColumn="PRICE_RUB" tableColumn="PRICE_RUB" />
+			<_config:column-column queryColumn="PRICE_EGP" tableColumn="PRICE_EGP" />
+			<_config:column-column queryColumn="PRICE_GBP" tableColumn="PRICE_GBP" />
+			<_config:column-column queryColumn="PRICE_TRY" tableColumn="PRICE_TRY" />
+			<_config:column-column queryColumn="PRICE_ILS" tableColumn="PRICE_ILS" />
+        </_config:column-column-mapping>
+      </_config:column-mapping>
+    </_config:mapping>
+  </_config:data-processing-config>
+  
+   <!-- 
+    TI_CNTRPRICE_#INDEX_SCOPE_TAG# is needed when use contracted price index.
+    -->
+ <_config:data-processing-config processor="com.ibm.commerce.foundation.dataimport.preprocess.EmptyTableNoDropPreProcessor"  batchSize="500">
+  <_config:table definition="CREATE TABLE TI_CNTRPRICE_#INDEX_SCOPE_TAG# (CATENTRY_ID BIGINT NOT NULL, PRICE CLOB, PRIMARY KEY (CATENTRY_ID))" name="TI_CNTRPRICE_#INDEX_SCOPE_TAG#"/>
+    <_config:query sql="SELECT 1 CATENTRY_ID FROM TI_CNTRPRICE_#INDEX_SCOPE_TAG# WHERE 1=-1"/>
+    <_config:mapping>
+      <_config:key queryColumn="CATENTRY_ID" tableColumn="CATENTRY_ID"/>
+      <_config:column-mapping>
+        <_config:column-column-mapping>
+        	<_config:column-column queryColumn="PRICE" tableColumn="PRICE" />
+        </_config:column-column-mapping>
+        </_config:column-mapping>
+    </_config:mapping>
+  </_config:data-processing-config>
+</_config:DIHPreProcessConfig>

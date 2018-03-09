@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","pt-br",{label:"Estilos",panelTitle:"Estilos",panelTitle1:"Estilos de Bloco",panelTitle2:"Estilos Sequenciais",panelTitle3:"Estilos de Objeto"});

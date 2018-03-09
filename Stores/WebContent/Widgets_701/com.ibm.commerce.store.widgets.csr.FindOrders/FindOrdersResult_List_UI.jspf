@@ -1,0 +1,250 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:if test="${param.requesttype ne 'ajax'}"> <%-- Refresh Area is not needed when refreshing the results list via Ajax Call --%>
+	<wcst:message var="ariaMessage" bundle="${widgetText}" key="ACCE_STATUS_FINDORDERS_SEARCH_RESULTS_UPDATED"/>
+	<span id="findOrdersResults_Label" class="spanacce" aria-hidden="true"><wcst:message bundle="${widgetText}" key="ACCE_ORG_FINDORDERS_RESULTS_CONTENT"/></span>
+	<div id="findOrdersRefreshArea" dojoType='wc.widget.RefreshArea' widgetId='findOrdersResultsSection' controllerId='findOrdersController' ariaMessage='${ariaMessage}' ariaLiveId='${ariaMessageNode}' role='region'  aria-labelledby="findOrdersResults_Label">
+</c:if>
+	 
+
+<c:choose>
+	<c:when test = "${!empty errorMessage}">
+		<input type="hidden" value="<c:out value="${errorMessage}"/>" id="errorMessageFindOrders"/>
+	</c:when>
+	
+
+	<c:when test="${empty errorMessage && fn:length(ordersList.resultList) > 0}">
+	
+	<div style="margin-top:10px;" id="findOrdesResultList_table" class="productDetailTable productDetailTable_csr">
+		<div tabindex="0" id="findOrdersResultList_table_content" class="special fullView">
+			<div role="row" class="row tableHeader"  tabindex="0">
+				<div class="col1 name orgUsersHeader"><div class="cell" role="columnheader"></div></div>
+				<div class="col2 name orgUsersHeader"><div class="cell" role="columnheader"><wcst:message key="ORDER_NUMBER_CSR" bundle="${widgetText}"/></div></div>
+				<div class="col2 logonId orgUsersHeader"><div class="cell" role="columnheader"><wcst:message key="ORDER_DATE_CSR" bundle="${widgetText}"/></div></div>
+				<div class="col2 roles orgUsersHeader"><div class="cell" role="columnheader"><wcst:message key="SHIP_TO_CSR" bundle="${widgetText}"/></div></div>
+				<div class="col2 roles orgUsersHeader"><div class="cell" role="columnheader"><wcst:message key="HOME_PHONE_CSR" bundle="${widgetText}"/></div></div>
+				<div class="col2  orgUsersHeader"><div class="cell" role="columnheader"><wcst:message key="EMAIL_CSR" bundle="${widgetText}"/></div></div>
+				<div class="col1 actions "><div class="cell" role="columnheader"><wcst:message key="ACTIONS_CSR" bundle="${widgetText}"/></div></div>
+			</div>
+			<div id="findOrdersSearchResults">
+				<c:forEach items="${ordersList.resultList}" var="order">
+					<c:set var="orderDetail" value="${orderDetailsMap[order.orderId]}"/>
+					<c:set var="addressDetail" value="${orderAddressDataBeanMap[order.orderId]}"/>
+					<c:set var="orderAddressDetail" value="${orderAddressDetailsMap[order.orderId]}"/>
+					<c:set var="memberDetail" value="${memberDetailsMap[order.memberId]}"/>
+					<div role="row" class="specialEntry row tableHeader" id="findOrdersSearchResults_${order.orderId}" 
+			 			onclick="javascript:findbyCSRJS.closeActionButtons('actionDropdown','findOrdersSearchResults', 'active');findbyCSRJS.resetActionButtonStyle('actionButton','findOrdersSearchResults','actionDropdownAnchorHide','actionDropdownAnchorDisplay');
+					return false;" >
+						
+						<div class="col1" role="gridcell">
+							<div class="cell">
+								<a onclick="javascript:findOrdersJS.toggleOrderSummarySection('${order.orderId}');return true;" tabindex="0" role="button" class="dropDownButton expanded" href="#">
+									<div class="dropDownArrow" id="dropDownArrow_${order.orderId}"><wcst:message key="ORDERDETAILS_DROP_DOWN" bundle="${widgetText}"/></div>
+								</a>
+							</div>
+						</div>
+	
+						<div role="gridcell" class="col2 name orgUsersColumn"> 
+							
+							<wcf:url value="OrderDetail" var="OrderDetailUrl1">
+									<wcf:param name="orderId" value="${order.orderId}"/>
+									<wcf:param name="storeId" value="${WCParam.storeId}"/>
+									<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+									<wcf:param name="langId" value="${WCParam.langId}"/>
+							</wcf:url>
+							<c:if test="${memberDetail.registerType eq 'G' }" >
+								<wcf:url value="GuestOrderDetail" var="OrderDetailUrl1">
+										<wcf:param name="orderId" value="${order.orderId}"/>
+										<wcf:param name="storeId" value="${WCParam.storeId}"/>
+										<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+										<wcf:param name="langId" value="${WCParam.langId}"/>
+								</wcf:url>
+							</c:if>
+							<c:set var="selectedOrder" value="${order.orderId} &nbsp; ${order.orderId}"/>
+							<c:choose>
+								<c:when test="${locale == 'ja_JP' || locale == 'ko_KR' || locale == 'zh_CN' || locale == 'zh_TW'}">
+									<c:set var="selectedUser" value="${fn:escapeXml(memberDetail.address.lastName)} ${fn:escapeXml(memberDetail.address.firstName)}"/>
+								</c:when>
+								<c:otherwise>
+									<c:set var="selectedUser" value="${fn:escapeXml(memberDetail.address.firstName)} ${fn:escapeXml(memberDetail.address.lastName)}"/>
+								</c:otherwise>
+							</c:choose>
+							<c:set var="selectedUser" value="${fn:trim(selectedUser)}"/>
+							<c:if test="${empty selectedUser && memberDetail.registerType eq 'G'}">
+								<%-- CSR is accessing guest order. And order doesnt yet contain the address details. So set userName as GUEST --%>
+								<wcst:message key="GUEST" bundle="${widgetText}" var="selectedUser"/>
+							</c:if>
+							<div class="cell">
+								<c:set var="displayLock" value="false"/>
+								<c:set var="lockDisplayAttribute">class="nodisplay"</c:set>
+								<c:if test="${order.checkLock == 'true' || order.isLocked == 'true'}">
+										<c:set var="displayLock" value="true"/>
+									 	<c:set var="lockDisplayAttribute" value=""/>
+								</c:if>
+								<img id="minishopcart_lock_${order.orderId}" ${lockDisplayAttribute} src="${staticIBMAssetAliasRoot}/Widgets_701/images/icon_lock_shopping_cart.png" alt=""/>
+								<a href="#"  onclick="javascript:findbyCSRJS.cancelEvent(event);findOrdersJS.accessOrderDetails('${order.memberId}', '${selectedUser}', '${OrderDetailUrl1}'); return false;" class="myaccount_link" id="OrderDetailsLink_${order.orderId}"><c:out value="${order.orderId}"/></a>
+							</div>
+							
+						</div>
+					
+						<div role="gridcell" class="col2 logonId orgUsersColumn">
+							<div class="cell"><c:out value="${order.orderTime}"/></div> 
+						</div>
+					
+						<div role="gridcell" class="col2 roles orgUsersColumn">
+							<div class="cell">
+								<c:forEach var="addressField" items="${orderAddressDetail}">
+										<c:out value="${addressField}"/><br>
+								</c:forEach>
+							</div>
+						</div>
+					
+						<div role="gridcell" class="col2 roles orgUsersColumn">
+							
+							<div class="cell"><c:out value="${addressDetail.phone1}"/></div>
+						</div>
+						<div role="gridcell" class="col2 orgUsersColumn">
+							<div class="cell"><c:out value="${addressDetail.email1}"/></div>
+						</div>
+					
+						<%-- 
+							Displays access customer account / enable disable customer account / lock - unlock order action links.
+						--%>
+						<div role="gridcell" class="col1 actions " id="actionDiv_${order.orderId}">
+							<div class="cell" aria-label='<wcst:message key="ACCE_ACTION_POPUP_CUSTOMER_LIST" bundle="${widgetText}"/>' role="gridcell">
+									<a onclick="javascript:findOrdersJS.handleActionDropDown(event, ${order.orderId});return false;"
+													id="actionButton7_${order.orderId}" class="button_secondary actionButton" aria-haspopup="true" tabindex="0" href="#">
+											<div class="button_text">
+												<span><img src="${staticIBMAssetAliasRoot}/Widgets_701/images/action_icon.png" alt='<wcst:message key="ACCE_ORDERS_SEARCH_LIST_ACTIONS"
+												 bundle="${widgetText}"/>' ></span>
+											</div>
+									</a>
+															
+									<div class="actionDropdown actionDropdown_csr" id='actionDropdown_${order.orderId}' aria-label='<wcst:message key="ACCE_ACTION_MENU_ORDERS_LIST"
+									 bundle="${widgetText}"/>' role="menu">
+											<c:if test="${memberDetail.registerType ne 'G' }" >
+													<%-- 
+														Display access customer account / enable(disable) customer account links for registered customers.
+													--%>
+													<div class="actionItem">
+															<div class="actionTitle" onclick="javascript:findbyCSRJS.cancelEvent(event);findbyCSRJS.setUserInSession('${order.memberId}', '${selectedUser}', '${landingURL_RegisteredUser}'); return false;"
+															tabindex="0" role="menuitem" 
+																onkeypress = "if(event.keyCode == 0 || event.keyCode == 13){
+																	javascript:findbyCSRJS.cancelEvent(event);
+																	findbyCSRJS.setUserInSession('${order.memberId}', '${selectedUser}', '${landingURL_RegisteredUser}');
+																	return false;}"
+																> 
+																<span><wcst:message key="ACCESS_CUSTOMER_ACCOUNT_CSR" bundle="${widgetText}"/></span>
+															</div>
+													</div>
+													<div class="actionItem">
+														<wcst:message key="DISABLE_CUSTOMER_ACCOUNT_CSR" bundle="${widgetText}" var="enableDisableLabel"/>
+														<c:set var="newStatus" value="0"/>
+														<c:if test = "${memberDetail.userRegistry.status eq '0'}">
+															<wcst:message key="ENABLE_CUSTOMER_ACCOUNT_CSR" bundle="${widgetText}" var = "enableDisableLabel"/>
+															<c:set var="newStatus" value="1"/>
+														</c:if>
+														<div  class="actionTitle" id= "userStatus_${order.memberId}" data-toggle-userStatus ="userStatus_${order.memberId}" onclick="javascript:findbyCSRJS.cancelEvent(event);findbyCSRJS.enableDisableUserAccount('${order.memberId}', '${newStatus}','${memberDetail.logonId}'); return false;"
+																tabindex="0" role="menuitem"
+																onkeypress = "if(event.keyCode == 0 || event.keyCode == 13){
+																	javascript:findbyCSRJS.cancelEvent(event);
+																	findbyCSRJS.enableDisableUserAccount('${order.memberId}', '${newStatus}','${memberDetail.logonId}'); 
+																	return false;}">
+																${enableDisableLabel}
+														</div>
+													</div>
+											</c:if>
+											<c:if test = "${order.status == 'P'}">
+													<%-- CSR is allowed to work with only Pending Orders. CSR cannot edit submitted orders.--%>
+													<div class="actionItem" >
+														<wcst:message key="LOCK_CUSTOMER_ORDER_CSR" bundle="${widgetText}" var="lockUnlockOrderLabel"/>
+														<c:set var="isLocked" value="false"/>
+														<c:set var="takeOverLock" value="false"/>
+														<c:choose>
+															<c:when test="${order.checkLock == 'true'}">
+																	<wcst:message key="UNLOCK_CUSTOMER_ORDER_CSR" bundle="${widgetText}" var="lockUnlockOrderLabel"/>
+																	<c:set var="isLocked" value="true"/>
+															</c:when>
+															<c:when test = "${order.isLocked == 'true'}">
+																		<wcst:message key="TAKEOVER_CUSTOMER_ORDER_CSR" bundle="${widgetText}" var = "lockUnlockOrderLabel"/>
+																		<c:set var="takeOverLock" value="true"/>
+															</c:when>
+														</c:choose>
+														<div class="actionTitle" id= "orderLocked_${order.orderId}" onclick="javascript:findbyCSRJS.cancelEvent(event);findOrdersJS.lockUnlockOrder('${order.orderId}', '${isLocked}', '${takeOverLock}'); return false;"
+																tabindex="0" role="menuitem"
+																onkeypress = "if(event.keyCode == 0 || event.keyCode == 13){
+																javascript:findbyCSRJS.cancelEvent(event);
+																findOrdersJS.lockUnlockOrder('${order.orderId}', '${isLocked}', '${takeOverLock}');
+																return false;}">
+															${lockUnlockOrderLabel}
+														</div>
+													</div>
+											</c:if>
+											<%-- CSR can view order summary page of any order for any type of customers. --%>
+											<div class="actionItem">
+												<div  class="actionTitle" id= "orderDetails_${order.orderId}"	onclick="javascript:findbyCSRJS.cancelEvent(event);findOrdersJS.displayCSROrderSummaryPage('${order.orderId}'); return false;" tabindex="0" role="menuitem" onkeypress = "if(event.keyCode == 0 || event.keyCode == 13){
+															javascript:findbyCSRJS.cancelEvent(event);
+															findOrdersJS.displayCSROrderSummaryPage('${order.orderId}'); 
+															return false;}">
+													<wcst:message key="VIEW_ORDER_SUMMARY_PAGE" bundle="${widgetText}"/>
+												</div>
+											</div>
+								</div>
+							</div>
+						</div>
+
+						<div id="orderDetailsExpandedContent_${order.orderId}" class="row expandedContent collapsed">
+							
+							<div class="Threadsize expandedCol" role="gridcell">
+								<div class="entry"><div id="" class="leftCol"><wcst:message key="LOGON_ID_CSR" bundle="${widgetText}"/></div><div id="" class="rightCol"><c:out value="${memberDetail.logonId}"/></div></div>
+							</div>
+							<div class="Threadsize expandedCol" role="gridcell">
+								<div class="entry"><div id="" class="leftCol"><wcst:message key="EMAIL_CSR" bundle="${widgetText}"/></div><div id="" class="rightCol"><c:out value="${memberDetail.address.email1}"/></div></div>
+							</div>
+					
+							<div class="Threadsize expandedCol" role="gridcell">
+								<div class="entry"><div id="" class="leftCol"><wcst:message key="MOBILE_PHONE_CSR" bundle="${widgetText}"/></div><div id="" class="rightCol"><c:out value="${memberDetail.address.phone1}"/></div></div>
+							</div>
+							<c:forEach var="dbLanguage" items="${sdb.supportedLanguages}">
+								<c:if test="${memberDetail.preferredLanguage == dbLanguage.languageId}">
+									<c:set var="currentLanguageString" value="${dbLanguage.nativeDescriptionString}"/>
+								</c:if>
+							</c:forEach>
+							<div class="Threadsize expandedCol" role="gridcell">
+								<div class="entry"><div id="" class="leftCol"><wcst:message key="PREFFERED_LANG_CSR" bundle="${widgetText}"/></div><div id="" class="rightCol"><c:out value="${currentLanguageString}"/></div></div>
+							</div>
+							<div class="Threadsize expandedCol" role="gridcell">
+								<div class="entry"><div id="" class="leftCol"><wcst:message key="CURRENCY_CSR" bundle="${widgetText}"/></div><div id="" class="rightCol"><c:out value="${memberDetail.preferredCurrency}"/></div></div>
+							</div>
+							<div class="Threadsize expandedCol" role="gridcell">
+								<div class="entry"><div id="" class="leftCol"><wcst:message key="BIRTHDAY_CSR" bundle="${widgetText}"/></div><div id="" class="rightCol"><c:out value="${memberDetail.demographics.dateOfBirth}"/></div></div>
+							</div>
+						</div>
+					
+					
+					</div>
+				</c:forEach>
+			</div>
+		</div>
+	</div>
+	</c:when>
+</c:choose>
+	
+
+
+<c:if test="${param.requesttype ne 'ajax'}"> <%-- Refresh Area is not needed when refreshing the results list via Ajax Call --%>
+	</div>
+</c:if>
+

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		A floating pane is a shadowed panel that connects to other component. 
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/FloatingPane" visible="false" x="${-1000}" y="${-1000}">
+		<dependency localName="FocusableComponent" moduleName="cmc/foundation/FocusableComponent"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<variable name="shadowOffset" type="number" value="1"/>
+		<variable name="defaultplacement" value="content"/>
+		<variable name="attachTarget" value="${null}"/>
+		
+		<Component height="${this.parent.content.height - this.parent.shadowOffset}" imageSet="leftShadow" name="leftShadow" stretches="height" x="0" y="${this.parent.shadowOffset}"/>
+		<Component imageSet="bottomLeftCornerShadow" name="bottomLeftCornerShadow" x="0" y="${this.parent.leftShadow.y + this.parent.leftShadow.height}"/>
+		<Component imageSet="bottomShadow" name="bottomShadow" stretches="width" width="${this.parent.content.width - this.parent.shadowOffset}" x="${this.parent.bottomLeftCornerShadow.x + this.parent.bottomLeftCornerShadow.width}" y="${this.parent.content.y + this.parent.content.height}"/>
+		
+		<BorderedView bgcolor="white" borderColor="${this.classroot.style.floatingpanelbordercolor}" borderSize="1" name="content" x="${this.parent.leftShadow.x + this.parent.leftShadow.width}" y="0"/>
+		
+       <method args="target" name="setAttachTarget">
+			<![CDATA[
+			this.attachTarget = target;
+			if (this.visible) {
+				this.updateLocation();
+			}
+			]]>
+		</method>
+        
+        <handler name="onvisible">
+			<![CDATA[
+			this.updateLocation();
+			]]>
+		</handler>
+        <!--- @keywords private -->
+        <method args="parent, args" name="constructor">
+			<![CDATA[
+			this.owner = parent;
+			if (typeof (args.name) != 'undefined') {
+				var flname = args.name;
+				args.name = null;
+				this.wouldbename = flname;
+				this.owner[flname] = this;
+			}
+			var p = this.owner;
+			while (p != RootComponent.Singleton) {
+				if (p instanceof FocusableComponent.Class) {
+					this._parentcomponent = p;
+					break;
+				}
+				p = p.immediateParent;
+			}
+			new EventHandler.Class(this, 'destroyDelegateMethod', parent, 'ondestroy');
+			]]>
+		</method>
+        
+        <method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.attachTarget == null) {
+				this.setAttachTarget(this.owner);
+			}
+			]]>
+		</method>
+        
+		<method name="updateLocation">
+			<![CDATA[
+			if (this.visible && this.attachTarget != null && this.attachTarget != RootComponent.Singleton) {
+				this.setVariable('x', this.attachTarget.getVariableRelative("x", this.immediateParent));
+				this.setVariable('y', this.attachTarget.getVariableRelative("y", this.immediateParent) + this.attachTarget.height);
+				var right = this.x + this.width;
+				if (right > RootComponent.Singleton.width) {
+					var newX = this.x - (right - RootComponent.Singleton.width);
+					if (newX < 0) {
+						newX = 0;
+					}
+					this.setVariable("x", newX);
+				}
+				this.bringToFront();
+			}
+			else {
+				this.setVariable('x', -1000);
+				this.setVariable('y', -1000);
+			}
+			]]>
+		</method>
+	<method args="attachTarget" name="set_attachTarget">
+			<![CDATA[
+			this.setAttachTarget(attachTarget);
+			]]>
+		</method></FocusableComponent>
+</Definitions>

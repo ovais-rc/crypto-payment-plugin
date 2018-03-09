@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","es",{indent:"Aumentar sangría",outdent:"Reducir sangría"});

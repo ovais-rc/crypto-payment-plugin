@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","kk",{bold:"Қалың",italic:"Көлбеу",strike:"Сызылған",subscript:"Жоласты",superscript:"Жолүсті",underline:"Асты сызылған"});

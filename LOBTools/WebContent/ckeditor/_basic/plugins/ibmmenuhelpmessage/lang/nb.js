@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","nb",{keystrokeForContextMenu:"Ctrl+høyreklikk for flere alternativer",keystrokeForContextMenuMac:"Cmd+høyreklikk for flere alternativer"});

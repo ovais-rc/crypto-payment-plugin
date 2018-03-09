@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmsametimeemoticons","fi",{angel:"Enkeli",angry:"Vihainen",cool:"Viileä hymy",crying:"Itkeä",eyebrow:"Ihmetellä",frown:"Irvistää",goofy:"Hölmö",grin:"Virnistää",half:"Puolikas",idea:"Idea",laughing:"Nauraa",laughroll:"Nauraa kippurassa",no:"Ei",oops:"Hups",shy:"Ujo",smile:"Hymyillä",tongue:"Näyttää kieltä",wink:"Iskeä silmää",yes:"Kyllä"});

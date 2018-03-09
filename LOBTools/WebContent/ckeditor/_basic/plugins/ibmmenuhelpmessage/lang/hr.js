@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","hr",{keystrokeForContextMenu:"Ctrl + desni klik za više opcija",keystrokeForContextMenuMac:"Cmd + desni klik za više opcija"});

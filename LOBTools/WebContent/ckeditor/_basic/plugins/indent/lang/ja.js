@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("indent","ja",{indent:"インデントの増加",outdent:"インデントの減少"});

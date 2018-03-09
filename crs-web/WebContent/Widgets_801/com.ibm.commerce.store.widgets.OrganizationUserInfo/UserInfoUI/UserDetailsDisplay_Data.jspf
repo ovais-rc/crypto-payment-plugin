@@ -1,0 +1,188 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN UserDetailsDisplay_data.jspf -->
+<%--
+  *  - logonId
+  *  - name
+  *  - phone number
+  *  - email address
+--%>
+<c:remove var="rows" />
+<wcf:useBean var="rows" classname="java.util.ArrayList"/>
+<c:choose>
+	<c:when test="${locale eq 'ja_JP' || locale eq 'ko_KR' || locale eq 'zh_CN' || locale eq 'zh_TW'}">
+		<c:set var="userName" value="${lastName} ${firstName}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="userName" value="${firstName} ${lastName}"/>
+	</c:otherwise>
+</c:choose>
+
+<wcf:useBean var="row" classname="java.util.ArrayList"/>
+<wcst:message bundle="${widgetText}" key="LOGON_ID" var="label"/>
+<wcf:set target="${row}" value='${label}' />
+<wcf:set target="${row}" value='${fn:escapeXml(logonId)}' />
+<wcf:set target="${rows}" value="${row}" />
+<c:remove var="row" />
+<wcf:useBean var="row" classname="java.util.ArrayList"/>
+<wcst:message bundle="${widgetText}" key="NAME" var="label"/>
+<wcf:set target="${row}" value='${label}' />
+<wcf:set target="${row}" value="${fn:escapeXml(userName)}" />
+<wcf:set target="${rows}" value="${row}" />
+<c:remove var="row" />
+
+<c:forTokens items="${detailsFieldOrder}" delims="," var="field" varStatus="detailsCount">
+	<c:choose>
+		<c:when test="${field == 'EMAIL1' || field == 'email1'}">
+			<wcf:useBean var="row" classname="java.util.ArrayList"/>
+			<wcst:message bundle="${widgetText}" key="EMAIL" var="label"/>
+			<wcf:set target="${row}" value='${label}' />
+			<wcf:set target="${row}" value='<a class="link" href="mailTo: ${fn:escapeXml(email1)}">${fn:escapeXml(email1)}</a>' />
+			<wcf:set target="${rows}" value="${row}" />
+			<c:remove var="row" />
+		</c:when>
+		<c:when test="${field == 'phone1' && not empty phone1}">
+			<wcf:useBean var="row" classname="java.util.ArrayList"/>
+			<wcst:message bundle="${widgetText}" key="PHONE_NUMBER2" var="label"/>
+			<wcf:set target="${row}" value='${label}' />
+			<wcf:set target="${row}" value='${fn:escapeXml(phone1)}' />
+			<wcf:set target="${rows}" value="${row}" />
+			<c:remove var="row" />
+		</c:when>
+	</c:choose>
+</c:forTokens>
+
+<%-- 
+  ***
+  * Fields:
+  * Email store specials
+  * Preferred language
+  *	Preferred currency
+  *	Gender
+  * Birthday
+  * Country
+  * Phone #
+  ***
+--%>
+		
+<c:forTokens items="${flexFlowsFieldOrder}" delims="," var="field" varStatus="flexCount">
+	<wcf:useBean var="row" classname="java.util.ArrayList"/>
+	<c:choose>
+		<c:when test="${field == 'preferredLanguage'}">
+			<flow:ifEnabled feature="preferredLanguage">
+				<c:if test="${empty preferredLanguage}">
+					<c:set var="preferredLanguage" value="${CommandContext.languageId}"/>
+				</c:if>
+				<c:forEach items="${sdb.supportedLanguages}" var="language">
+					<c:if test="${language.localeName == preferredLanguage || language.languageId == preferredLanguage}">
+						<c:set var="preferredLanguage" ><c:out value="${language.descriptionString}"/></c:set>
+					</c:if>
+				</c:forEach>
+			</flow:ifEnabled>
+			<flow:ifDisabled feature="preferredLanguage">
+				<c:if test="${empty preferredLanguage}">
+					<c:set var="preferredLanguage" value="${CommandContext.locale}"/>
+				</c:if>
+			</flow:ifDisabled>
+			<wcst:message bundle="${widgetText}" key="REGISTER_${fn:toUpperCase(field)}" var="label"/>
+			<wcf:set target="${row}" value='${label}' />
+			<wcf:set target="${row}" value='${preferredLanguage}' />
+			<wcf:set target="${rows}" value="${row}" />
+		</c:when>
+		<c:when test="${field == 'preferredCurrency'}">
+			<flow:ifEnabled feature="preferredCurrency">
+				<c:if test="${empty supportedCurrencies}">
+					<c:set var="key1" value="store/${storeId}/configuration/com.ibm.commerce.foundation.supportedCurrencies+${langId}"/>
+					<c:set var="queryCurrentStoreCurrenciesResult" value="${cachedOnlineStoreMap[key1]}"/>
+					<c:if test="${empty queryCurrentStoreCurrenciesResult}">
+						<wcf:rest var="queryCurrentStoreCurrenciesResult" url="store/{storeId}/configuration/{uniqueId}" cached="true">
+							<wcf:var name="storeId" value="${storeId}"/>
+							<wcf:var name="uniqueId" value="com.ibm.commerce.foundation.supportedCurrencies"/>
+							<wcf:param name="langId" value="${langId}"/>
+						</wcf:rest>
+						<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${queryCurrentStoreCurrenciesResult}"/>
+					</c:if>
+					<c:set var="supportedCurrencies" value="${queryCurrentStoreCurrenciesResult.resultList[0].configurationAttribute}"/>
+				</c:if>
+
+				<c:forEach var="supportedCurrency" items="${supportedCurrencies}">
+					<c:set var="currentCurrencyCode" value="${json:findJSONObject(supportedCurrency.additionalValue, 'name', 'currencyCode').value}"/>
+					<c:choose>
+						<%-- pre-select the appropriate value in the drop down list. --%>
+						<c:when test="${!empty preferredCurrency && currentCurrencyCode == preferredCurrency}">
+							<c:set var="preferredCurrency"><c:out value="${supportedCurrency.primaryValue.value}"/></c:set>
+						</c:when>
+						<c:when test="${empty preferredCurrency && currentCurrencyCode == CommandContext.currency}">
+							<c:set var="preferredCurrency"><c:out value="${supportedCurrency.primaryValue.value}"/></c:set>
+						</c:when>
+					</c:choose>
+				</c:forEach>
+			</flow:ifEnabled>
+			<flow:ifDisabled feature="preferredCurrency">
+				<c:if test="${empty preferredCurrency}">
+					<c:set var="preferredCurrency" value="${CommandContext.currency}"/>
+				</c:if>
+			</flow:ifDisabled>
+			<wcst:message bundle="${widgetText}" key="REGISTER_${fn:toUpperCase(field)}" var="label"/>
+			<wcf:set target="${row}" value='${label}' />
+			<wcf:set target="${row}" value='${preferredCurrency}' />
+			<wcf:set target="${rows}" value="${row}" />
+		</c:when>
+		<c:when test="${field == 'Age'}">
+			<flow:ifEnabled feature="Age">
+				<wcst:message bundle="${widgetText}" key="fn:toUpperCase(field)" var="label"/>
+				<wcf:set target="${row}" value='${label}' />
+				<wcf:set target="${row}" value='${age}' />
+				<wcf:set target="${rows}" value="${row}" />
+			</flow:ifEnabled>
+		</c:when>
+		<c:when test="${field == 'Gender'}">
+			<flow:ifEnabled feature="Gender">
+			<wcst:message bundle="${widgetText}" key="fn:toUpperCase(field)" var="label"/>
+				<wcf:set target="${row}" value='${label}' />
+				<wcf:set target="${row}" value='${gender}' />
+				<wcf:set target="${rows}" value="${row}" />
+			</flow:ifEnabled>
+		</c:when>
+		<c:when test="${field == 'DateOfBirth'}">
+			<flow:ifEnabled feature="DateOfBirth">
+				<wcst:message bundle="${widgetText}" key="REG_BIRTHDAY" var="label"/>
+				<wcf:set target="${row}" value='${label}' />
+				<wcf:set target="${row}" value='${dateOfBirth}' />
+				<wcf:set target="${rows}" value="${row}" />
+			</flow:ifEnabled>
+		</c:when>
+		<c:when test="${field == 'MobilePhone'}">
+			<flow:ifEnabled feature="MobilePhone">
+				<!-- This code will include the Mobile country drop down list and the mobile Phone number field -->
+				<c:forEach var="mobileCountry" items="${countryBean.countries}">
+					<c:if test="${mobileCountry.code eq mobilePhoneNumber1Country || mobileCountry.displayName eq mobilePhoneNumber1Country || (empty mobilePhoneNumber1Country&&mobileCountry.code eq country_language_select[1]) }">
+						<c:set var="mobilePhoneNumber1CountryCode" value="${mobileCountry.callingCode}"/>
+					</c:if>
+				</c:forEach>
+				<c:if test="${mobilePhoneNumber1CountryCode==null }">
+					<c:set var="mobilePhoneNumber1CountryCode" value=""/>
+				</c:if>
+				<wcst:message bundle="${widgetText}" key="MOBILE_PHONE_NUMBER" var="label"/>
+				<wcf:set target="${row}" value='${label}' />
+				<wcf:set target="${row}" value='${fn:escapeXml(mobilePhoneNumber1)}' />
+				<wcf:set target="${rows}" value="${row}" />
+			</flow:ifEnabled>
+		</c:when>
+	</c:choose>
+	<c:remove var="row" />
+</c:forTokens>
+
+<!-- END UserDetailsDisplay_data.jspf -->

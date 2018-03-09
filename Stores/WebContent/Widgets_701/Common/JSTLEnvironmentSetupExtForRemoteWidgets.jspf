@@ -1,0 +1,96 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="flow.tld" prefix="flow" %>
+<%@ taglib uri="http://commerce.ibm.com/foundation" prefix="wcf" %>
+
+<flow:ifEnabled feature="RemoteWidget RemoteWidgetWishlist RemoteWidgetGiftregistry">
+	<c:if test="${empty requestScope.widgetEnvIncluded}">
+		<fmt:setBundle basename="/${sdb.jspStoreDir}/RemoteWidgetText" var="remoteWidgetText" scope="request"/>
+		<c:set var="widgetEnvIncluded" value="true" scope="request"/>
+		<wcst:alias name="ContextServiceFactory" var="ContextService" />
+		<wcst:mapper source="ContextService" method="findContext" var="Context" />
+		<c:set var="auditCtx" value="${Context['com.ibm.commerce.context.audit.AuditContext']}"/>
+		<c:choose>
+			<c:when test="${!empty auditCtx} }">
+				<c:set var="contentPersonalizationId" value="${auditCtx.currentPersonalizationId}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="contentPersonalizationId" value="${Context['personalizationId']}"/>
+			</c:otherwise>
+		</c:choose>
+		
+		<%--This is the variable that controls how many characters from the wish list name are displayed before dots are added as suffix --%>
+		<c:set var="maxCharsToDisplay" value="24" scope="request"/>
+		<c:set var="maxCharsToDisplayInDropDownMenu" value="20" scope="request"/>
+		<%-- for double byte, we need to lower the maximum number of characters to be displayed --%>
+		<c:if test="${CommandContext.locale == 'zh_TW' || CommandContext.locale == 'ja_JP' || CommandContext.locale == 'zh_CN' || CommandContext.locale == 'ko_KR'}" >
+			<c:set var="maxCharsToDisplay" value="${maxCharsToDisplay/2}" scope="request"/>
+			<c:set var="maxCharsToDisplayInDropDownMenu" value="${maxCharsToDisplayInDropDownMenu/2}" scope="request"/>
+		</c:if>
+		
+		<c:set var="key1" value="store/${storeId}/configuration/com.ibm.commerce.foundation.remoteWidgets"/>
+		<c:set var="remoteWidgetsConfig" value="${cachedOnlineStoreMap[key1]}"/>
+		<c:if test="${empty remoteWidgetsConfig}">
+			<wcf:rest var="queryRemoteWidgetsConfigResult" url="store/{storeId}/configuration/{uniqueId}" cached="true">
+				<wcf:var name="storeId" value="${storeId}"/>
+				<wcf:var name="uniqueId" value="com.ibm.commerce.foundation.remoteWidgets"/>
+			</wcf:rest>
+			<c:set var="remoteWidgetsConfig" value="${queryRemoteWidgetsConfigResult.resultList[0]}"/>
+			<wcf:set target = "${cachedOnlineStoreMap}" key="${key1}" value="${remoteWidgetsConfig}"/>
+		</c:if>
+
+		<c:forEach var="attribute" items="${remoteWidgetsConfig.configurationAttribute}">
+			<c:forEach var="additionalValue" items="${attribute.additionalValue}">
+				<c:choose>
+					<c:when test="${additionalValue.name == 'restContextPath'}">
+						<c:set var="restURI" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+					<c:when test="${additionalValue.name == 'restSSLPort'}">
+						<c:set var="restSSLPort" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+					<c:when test="${additionalValue.name == 'restNonSSLPort'}">
+						<c:set var="restNonSSLPort" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+					<c:when test="${additionalValue.name == 'restPreviewContextPath'}">
+						<c:set var="restPreviewURI" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+					<c:when test="${additionalValue.name == 'restPreviewSSLPort'}">
+						<c:set var="restPreviewSSLPort" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+					<c:when test="${additionalValue.name == 'restPreviewNonSSLPort'}">
+						<c:set var="restPreviewNonSSLPort" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+					<c:when test="${additionalValue.name == 'AffiliateSiteId'}">
+						<c:set var="affiliateId" value="${additionalValue.value}" scope="request"/>
+					</c:when>
+				</c:choose>
+			</c:forEach>
+		</c:forEach>
+		<c:choose>
+			<c:when test="${env_inPreview == 'true'}">
+				<c:set var="restURLPort" value="${restPreviewSSLPort}" scope="request"/>
+				<c:set var="restURLScheme" value="https" scope="request"/>
+				<c:set var="restURI" value="${restPreviewURI}" scope="request"/>
+			</c:when>
+			<c:when test="${!empty restNonSSLPort}">
+				<c:set var="restURLPort" value="${restNonSSLPort}" scope="request"/>
+				<c:set var="restURLScheme" value="http" scope="request"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="restURLPort" value="${restSSLPort}" scope="request"/>
+				<c:set var="restURLScheme" value="https" scope="request"/>
+			</c:otherwise>
+		</c:choose>
+	</c:if>
+</flow:ifEnabled>

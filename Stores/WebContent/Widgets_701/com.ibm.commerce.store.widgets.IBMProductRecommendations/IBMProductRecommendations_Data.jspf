@@ -1,0 +1,322 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+
+<%
+   /* Get the e-Marketing Spot name from the request parameters, and decode it in case it has been encoded. */
+   String emsName = request.getParameter("emsName");
+   if (emsName != null) {
+	  request.setAttribute("emsName", emsName);
+   }
+
+   Object DM_marketingSpotBehavior = request.getAttribute("DM_emsBehavior-" + emsName);
+    if (DM_marketingSpotBehavior != null) {
+   	request.setAttribute("DM_marketingSpotBehavior", DM_marketingSpotBehavior.toString());
+   }
+
+	/* Set the name of the command that has called this page. */
+	String pathInfo = (String)request.getAttribute("javax.servlet.forward.path_info");
+	if (pathInfo != null && pathInfo.startsWith ("/")) {
+		pathInfo = pathInfo.substring (1);
+	}
+	request.setAttribute("requestURI", pathInfo);
+
+%>
+
+
+<%--
+  *
+  * Set up the variables required by the snippet.
+  *
+--%>
+<c:set var="requestURI"                value="${requestScope.requestURI}"/>
+<c:set var="emsName"                   value="${requestScope.emsName}"/>
+<c:set var="espotName" value="${fn:replace(emsName,' ','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\\\\','')}"/>
+<c:set var="espotName" value="${fn:replace(espotName,'\"','')}"/>	
+<c:set var="espotName" value="${fn:replace(espotName,'\\\'','')}"/>	
+
+<c:if test = "${param.showFeed eq 'true'}">
+	<%@ include file="/Widgets_701/Common/JSTLEnvironmentSetupExtForRemoteWidgets.jspf"%>
+	<c:url var="eMarketingFeedURL" value="${restURLScheme}://${restServerName}:${restURLPort}${restURI}/stores/${storeId}/MarketingSpotData/${emsName}">
+		<c:param name="responseFormat" value="atom" />
+		<c:param name="langId" value="${langId}" />
+		<c:param name="currency" value="${env_currencyCode}"/>
+	</c:url>
+</c:if>
+
+<%--
+  *
+  * Specify if a fully qualified URL or relative paths should be used for
+  * image tags. A fully qualified URL is required for e-mail activity functionality.
+  *
+--%>
+<c:set var="prependFullURL">
+    <c:out value="${param.useFullURL}" default="false" />
+</c:set>
+
+<%--
+  *
+  * Set the ClickInfo command URL if the optional clickInfoURL parameter is provided; otherwise, use the
+  * default value of the URL.
+  *
+--%>
+<c:set value="ClickInfo" var="clickInfoCommand" />
+<c:set value="" var="clickOpenBrowser" />
+<c:if test="${!empty param.clickInfoURL}">
+    <c:set value="${param.clickInfoURL}" var="clickInfoCommand" />
+    <c:set value='target="_blank"' var="clickOpenBrowser" />
+</c:if>
+
+<%--
+  *
+  * Specify the host name of the URL that is used to point to the shared image directory.  
+  * Use this variable to reference images.
+  *
+--%>
+<c:set var="hostPath" value="" />
+<c:if test="${prependFullURL}">
+    <c:set value="${pageContext.request.scheme}://${pageContext.request.serverName}${portUsed}" var="hostPath" />
+</c:if>
+
+<%--
+  *
+  * Create the e-Marketing Spot.
+  *
+--%>
+<c:if test="${!empty emsName}" >
+<%-- Call the REST service to get the data to display in the e-Marketing Spot --%>
+<wcf:rest var="eSpotDatasRoot" url="/store/{storeId}/espot/{name}" format="json" >
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:var name="name" value="${emsName}" encode="true"/>
+          
+    <%-- the name of the e-Marketing Spot --%>
+    <wcf:param name="DM_EmsName" value="${emsName}" />
+
+	<wcf:param name="DM_marketingSpotBehavior" value="${requestScope.DM_marketingSpotBehavior}"/>
+
+   	<%-- do not retrieve the catalog entry SDO but obtain the catalog entry Id only --%>
+   	<wcf:param name="DM_ReturnCatalogEntryId" value="true" />
+
+	<%-- Example of including a value from a specific cookie
+	     <wcf:param name="MYCOOKIE" value="${cookie.MYCOOKIE.value}" />
+	--%>
+	    
+	<%-- Example of including all cookies 
+	     <c:forEach var="cookieEntry" items="${cookie}">
+	         <wcf:param name="${cookieEntry.key}" value="${cookieEntry.value.value}" />                    
+	     </c:forEach>
+	--%>
+	<%-- URL name value pair parameters --%> 
+	<c:catch>                   
+		<c:forEach var="aParam" items="${WCParamValues}">
+		    <c:forEach var="aValue" items="${aParam.value}">
+				<c:if test="${aParam.key !='logonPassword' && aParam.key !='logonPasswordVerify' && aParam.key !='URL' && aParam.key !='logonPasswordOld' && aParam.key !='logonPasswordOldVerify' && aParam.key !='account' && aParam.key !='cc_cvc' && aParam.key !='check_routing_number' && aParam.key !='plainString' && aParam.key !='xcred_logonPassword'}">
+					<wcf:param name="${aParam.key}" value="${aValue}"/>
+				</c:if>
+		    </c:forEach>
+		</c:forEach>
+	</c:catch>
+</wcf:rest>
+</c:if>
+<c:if test="${!empty eSpotDatasRoot.MarketingSpotData[0]}" >
+	<c:set  var="eSpotDatas" value="${eSpotDatasRoot.MarketingSpotData[0]}"/>
+</c:if>
+
+<wcf:eMarketingSpotCache marketingSpotDataJSON="${eSpotDatas}" catalogEntryDependencyName="productId" />
+
+<%-- Store data in map, make it can be retrieved in request scope --%>
+<c:if test="${IBMProductRecommendationDatasMap == null }" >
+	<jsp:useBean id="IBMProductRecommendationDatasMap" class="java.util.LinkedHashMap" type="java.util.Map" scope="request"/>
+</c:if>
+<c:set target="${IBMProductRecommendationDatasMap }" property="${emsName}" value="${eSpotDatas}" />
+
+
+<c:set var="numIntelligentOffer" value="0"/>
+
+<%-- Optional border. By default border will be present. pass showBorder = false to avoid border --%>
+<c:choose>
+	<c:when test="${empty param.showBorder}">
+		<c:set var="showBorder" value="true"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="showBorder" value="${param.showBorder}"/>
+	</c:otherwise>
+</c:choose>
+
+<%-- Optional header. By default header will be present. pass showHeader = false to avoid header --%>
+<c:choose>
+	<c:when test="${empty param.showHeader}">
+		<c:set var="showHeader" value="true"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="showHeader" value="${param.showHeader}"/>
+	</c:otherwise>
+</c:choose>
+
+<%-- Optional compare box. By default compare will be present. pass showCompareBox = false to avoid compare checkbox --%>
+<c:choose>
+	<c:when test="${empty param.showCompareBox}">
+		<c:set var="showCompareBox" value="true"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="showCompareBox" value="${param.showCompareBox}"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="pageSize" value="${param.pageSize}" />
+<c:if test="${empty pageSize}">
+	<c:set var="pageSize" value="4" />
+</c:if>
+
+<%-- Optional updateSwatch flag. By default it will be false. pass updateSwatch = true to update swatch by default --%>
+<c:choose>
+	<c:when test="${empty param.updateSwatch}">
+		<c:set var="updateSwatch" value="false"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="updateSwatch" value="${param.updateSwatch}"/>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="widgetSuffix" value="" />
+<c:if test="${(!empty param.pgl_widgetSlotId) && (!empty param.pgl_widgetDefId) && (!empty param.pgl_widgetId)}">
+	<c:set var="widgetSuffix" value="_${param.pgl_widgetSlotId}_${param.pgl_widgetDefId}_${param.pgl_widgetId}" />
+</c:if>
+
+<c:set var="background" value="${!empty param.background ? param.background : true}"/>
+<c:set var="border" value="${!empty param.border ? param.border : false}"/>
+<c:set var="columnCountByWidth" value="${!empty param.columnCountByWidth ? param.columnCountByWidth : '{0:1,201:2,451:3,651:4,801:5,1001:6}'}"/>
+
+<c:set var="parentCategoryId" value="" />
+<c:if test="${empty WCParam.productId && empty WCParam.categoryId}">
+	<c:set var="parentCategoryId" value="_TS_" />
+</c:if> 
+<c:if test="${!empty WCParam.categoryId}">
+	<c:set var="parentCategoryId" value="${WCParam.categoryId}" />
+</c:if> 
+<c:set var="mainPartNumber" value="${partNumber}" />
+<c:if test="${!empty param.partNumber}">
+	<c:set var="mainPartNumber" value="${param.partNumber}" />
+</c:if>
+
+<c:forEach var="eSpotData" items="${eSpotDatas.baseMarketingSpotActivityData}" varStatus="status">
+	<c:if test='${eSpotData.baseMarketingSpotDataType eq "IntelligentOffer"}'> 
+		<c:set var="numIntelligentOffer" value="${numIntelligentOffer + 1}"/>
+
+		<c:set var="WC_zone" value="${eSpotData.baseMarketingSpotActivityID}"/>			
+		<c:set var="WC_IntelligentOfferESpot_url_variable" value="WC_IntelligentOfferESpot_url_var_${status.count}_${WC_zone}"/>
+		<%-- url for the refresh area --%>
+		<wcf:url var="WC_IntelligentOfferESpot_url_variable" value="IntelligentOfferResultsView" type="Ajax">
+			<wcf:param name="langId" value="${WCParam.langId}" /> 
+			<wcf:param name="storeId" value="${WCParam.storeId}" />
+			<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+			<wcf:param name="emsName" value="${emsName}" />
+			<wcf:param name="mpe_id" value="${eSpotDatas.marketingSpotIdentifier}" />
+			<wcf:param name="intv_id" value="${eSpotData.activityIdentifierID}" />
+			<wcf:param name="activityName" value="${eSpotData.activityIdentifierName}" />
+			<wcf:param name="campaignName" value="${eSpotData.baseMarketingSpotCampaignName}" />
+			<wcf:param name="maxProductsToDisplay" value="${param.maxProductsToDisplay}"/>
+			<wcf:param name="pagination" value="${param.pagination}"/>
+			<wcf:param name="pageView" value="${param.pageView}"/>
+			<wcf:param name="currentPage" value="${param.currentPage}"/>
+			<c:forEach var="experiment" items="${eSpotData.experimentResult}" begin="0" end="0">
+				<wcf:param name="experimentId" value="${experiment.experimentResultId}" />
+				<wcf:param name="experimentName" value="${experiment.experimentResultName}" />
+				<wcf:param name="testElementId" value="${experiment.experimentResultTestElementId}" />
+				<wcf:param name="testElementName" value="${experiment.experimentResultTestElementName}" />
+				<wcf:param name="controlElement" value="${experiment.controlElement}" />
+			</c:forEach>
+			<wcf:param name="showBorder" value="${showBorder}"/>
+			<wcf:param name="showHeader" value="${showHeader}"/>
+			<wcf:param name="showCompareBox" value="${showCompareBox}"/>
+			<c:if test="${! empty mainPartNumber }">
+				<wcf:param name="mainPartNumber" value="${mainPartNumber}" />
+			</c:if>
+			<wcf:param name="mainProductId" value="${param.mainProductId}" />
+			<wcf:param name="widgetSuffix" value="${widgetSuffix}" />
+			<wcf:param name="pageSize" value="${pageSize}" />
+			<wcf:param name="showFeed" value="${param.showFeed }" />
+			<wcf:param name="feedURL" value="${eMarketingFeedURL}" />
+			<wcf:param name="widgetOrientation" value="${param.widgetOrientation}"/>
+			<wcf:param name="displayPreference" value="${param.displayPreference}" />
+			<wcf:param name="columnCountByWidth" value="${columnCountByWidth}"/>
+			<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+			<wcf:param name="numIntelligentOffer" value="${numIntelligentOffer}"/>
+			<wcf:param name="WC_zone" value="${WC_zone}"/>
+			<c:if test="${env_inPreview && !env_storePreviewLink}">
+				<wcf:param name="pgl_widgetName" value="${param.pgl_widgetName}" />
+				<wcf:param name="pgl_widgetId" value="${param.pgl_widgetId}" />
+				<wcf:param name="pgl_widgetSlotId" value="${param.pgl_widgetSlotId}"/>
+				<wcf:param name="pgl_widgetSeqeunce" value="${param.pgl_widgetSeqeunce}"/>
+				<wcf:param name="pgl_widgetDefName" value="${param.pgl_widgetDefName}"/>
+				<wcf:param name="populationChoice" value="${param.populationChoice}"/>
+			</c:if>
+		</wcf:url>
+			
+		<%-- define the refresh area --%>
+		<div class="WC_IntelligentOfferESpot_container_class_${WC_zone}" dojoType="wc.widget.RefreshArea" 
+   			id="WC_IntelligentOfferESpot_container_ID_${WC_zone}" 
+   			controllerId="WC_IntelligentOfferESpot_controller_ID_${WC_zone}">
+		</div>	
+		
+		<script type="text/javascript">
+			IntelligentOfferJS.declareRefreshController("<c:out value='WC_IntelligentOfferESpot_controller_ID_${WC_zone}' />",  "<c:out value='WC_IntelligentOfferESpot_context_ID_${WC_zone}' />", "${updateSwatch}");
+			<c:choose>
+				<c:when test="${emsName eq 'ShoppingCart_ProductRec' || emsName eq 'OrderConf_ProductRec'}">
+					dojo.addOnLoad(function() {
+						wc.render.getRefreshControllerById('<c:out value="WC_IntelligentOfferESpot_controller_ID_${WC_zone}"/>').url = '<c:out value="${WC_IntelligentOfferESpot_url_variable}" />';
+					});
+					dojo.topic.subscribe("order_contents_ProductRec", function(partNumbers) {				
+						//console.warn('before cmRecRequest - ' + partNumbers);
+						cmRecRequest ('<c:out value="${eSpotData.baseMarketingSpotActivityID}" />',partNumbers,'<wcf:out value="${WCParam.categoryId}" escapeFormat="js"/>','<wcf:out value="${param.randomize}" escapeFormat="js"/>','<wcf:out value="${param.searchTerm}" escapeFormat="js"/>');
+						cmDisplayRecs();
+					});
+				</c:when>
+				<c:otherwise>
+					dojo.addOnLoad(function() {
+						var url = '<c:out value="${WC_IntelligentOfferESpot_url_variable}" />';
+						var parentCategoryId = '<wcf:out value="${parentCategoryId}" escapeFormat="js"/>';
+						var mainPartNumber = '<wcf:out value="${mainPartNumber}" escapeFormat="js"/>';
+						if (url.indexOf('mainPartNumber') < 0 ){
+							//if cache enabled, we cannot get 'partNumber' from requestScope, we get it from hidden element instead.
+							var mainPartNumberDomElement = dojo.byId('IntelligentOfferMainPartNumber');
+							if (typeof mainPartNumberDomElement !== undefined && mainPartNumberDomElement !== null){
+								var mainPartNumber = mainPartNumberDomElement.innerHTML.replace(/^\s+|\s+$/g, '');
+								url = url + '&mainPartNumber=' + mainPartNumber;
+								//console.debug(url);
+							}
+						}
+						if (parentCategoryId.replace(/^\s+|\s+$/g, '') == ''){
+						//when we hit product page directly(not browsing from category page), the categoryId is not set to WCParam. We need to print it as hidden element for
+						//handling both cache and non-cached cases.
+							var categoryIdDomElement = dojo.byId('IntelligentOfferCategoryId');
+							if (typeof categoryIdDomElement !== undefined && categoryIdDomElement !== null){
+								parentCategoryId = categoryIdDomElement.innerHTML.replace(/^\s+|\s+$/g, '');
+							}
+						}
+						wc.render.getRefreshControllerById('<c:out value="WC_IntelligentOfferESpot_controller_ID_${WC_zone}"/>').url = url;									
+						//console.warn('before cmRecRequest');
+						cmRecRequest ('<c:out value="${eSpotData.baseMarketingSpotActivityID}" />',mainPartNumber, parentCategoryId,'<wcf:out value="${param.randomize}" escapeFormat="js"/>','<wcf:out value="${param.searchTerm}" escapeFormat="js"/>');
+					});
+				</c:otherwise>
+			</c:choose>
+		</script>
+			
+    </c:if>
+</c:forEach>
+
+<c:if test="${env_inPreview && !env_storePreviewLink}">
+	<wcst:message key="ES_IBMPRODUCT_RECOMMENDATION" var="espotTypeInfo" scope="request" bundle="${widgetPreviewText}"/>	
+</c:if>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("stylescombo","sl",{label:"Slogi",panelTitle:"Slogi",panelTitle1:"Slogi blokov",panelTitle2:"Vključeni slogi",panelTitle3:"Slogi predmeta"});

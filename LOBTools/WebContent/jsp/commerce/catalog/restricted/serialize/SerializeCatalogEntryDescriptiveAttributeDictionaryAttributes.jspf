@@ -1,0 +1,102 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<fmt:setLocale value="en_US" />
+<%--
+	====================================================================================================
+	Determine if the attribute is user data. An attribute is user data if the attribute has no usage set.
+	====================================================================================================
+--%>
+<c:if test="${!empty attribute.usage}" >
+	<%--
+		====================================================================================================
+		Determine if the attribute is inherited.
+		====================================================================================================
+	--%>
+	<c:set var="inherited" value=""/>
+	<c:if test="${(!empty attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID) &&
+					attribute.attributeIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId }">
+		<c:set var="inherited" value="Inherited"/>
+	</c:if>
+	
+	<c:set var="attributeType" value="AssignedValues" />
+	<c:if test="${!(empty attribute.attributeType)}">
+		<c:set var="attributeType" value="${attribute.attributeType}" />
+	</c:if>
+
+	<c:set var="attributeObjectType" value="${inherited}AttributeDictionaryAttributeWith${attributeType}" />
+	<c:set var="attributeReferenceObjectType" value="CatalogEntryReferenceDescriptive${attributeObjectType}" />
+	<c:set var="storeId" value="${param.storeId}"/>
+	<c:set var="deleteFlag" value="true"/>
+	<c:if test="${inherited == 'Inherited' && catentry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID != param.storeId}">
+		<c:set var="storeId" value="${catentry.catalogEntryIdentifier.externalIdentifier.storeIdentifier.uniqueID}"/>
+		<c:set var="deleteFlag" value="false"/>
+	</c:if>
+	<%--
+		====================================================================================================
+		Set the value object type.
+		====================================================================================================
+	--%>
+	<c:set var="firstMatch" value="true"/>
+	<c:set var="foundSingleValueMatch" value="false"/>
+	<%-- Iterate over the matching attributes to see if there is a value. --%>
+	<c:forEach var="matchingAttribute" items="${catentry.catalogEntryAttributes.attributes}">
+		<c:if test="${ matchingAttribute.attributeIdentifier.uniqueID == attribute.attributeIdentifier.uniqueID }" >
+			<c:if test="${firstMatch}">
+				<%-- If values is returned, this means support multiple values are turned on, read from values --%>
+				<c:choose>
+				<c:when test="${ !empty matchingAttribute.values}">
+					<c:if test="${ !empty matchingAttribute.values[0].identifier}">
+						<c:set var="firstMatch" value="false"/>
+						<%-- If each value in value, need to build a attribute reference object --%>
+						<c:forEach var="matchingValue" items="${matchingAttribute.values}">
+							<c:set var="valueStoreId" value="${matchingValue.storeID}" />
+							<c:set var="attrValId" value="${matchingValue.identifier}" />
+							<jsp:directive.include file="SerializeCatalogEntryAttributeDictionaryAttributeReference.jspf"/>
+						</c:forEach>		
+					</c:if>		
+				</c:when>
+				<%-- If values is not returned, this means only single value is supported, read from value --%>
+				<c:otherwise>
+					<c:set var="matchingValue" value="${matchingAttribute}"/>
+					<c:set var="foundSingleValueMatch" value="true"/>
+					<c:choose>
+						<c:when test="${ !empty matchingAttribute.value}">
+							<c:set var="firstMatch" value="false"/>
+							<c:set var="valueStoreId" value="${matchingAttribute.value.storeID}" />
+							<c:set var="attrValId" value="${matchingAttribute.value.identifier}" />
+						</c:when>
+						<c:otherwise>
+							<c:set var="valueStoreId" value="" />
+							<c:choose>
+								<c:when test="${attributeType == 'AssignedValues'}">
+									<c:set var="attrValId" value="0" />
+								</c:when>
+								<c:otherwise>
+									<c:set var="attrValId" value="" />	
+								</c:otherwise>
+							</c:choose>
+						</c:otherwise>
+					</c:choose>
+				</c:otherwise>
+				</c:choose>			
+			</c:if>
+		</c:if>
+	</c:forEach>
+	<%-- If there is no value, don't construct the reference as it will be invalid. --%>
+	<c:if test="${foundSingleValueMatch && (!empty matchingValue) && (attrValId != '') }">
+		<c:set var="matchingAttribute" value="${matchingValue}"/>
+		<jsp:directive.include file="SerializeCatalogEntryAttributeDictionaryAttributeReference.jspf"/>
+	</c:if>
+</c:if>

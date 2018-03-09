@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!-- Custom client action to archive promotion objects. -->
+	<ClientAction allowMultipleSelection="true" classDefinition="true" definitionName="cmc/promotion/ArchivePromotionClientAction">
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ClientActionUnsavedDialog" moduleName="cmc/foundation/ClientActionUnsavedDialog"/>
+		
+		<!---
+			Archive the promotion client objects.
+			
+			@param cmc/foundation/ModelObject[] objects A list of selected promotion objects to be archived.
+		-->	
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (objects && objects.length > 0) {
+				var objectsDirty = false;
+				for (var i = 0; i < objects.length; i++) {
+					var o = objects[i];
+					if (o.isOpenGroupDirty(true)) {
+						objectsDirty = true;
+						break;
+					}
+				}
+				if (!objectsDirty) {
+					if (objects.length == 1) {
+						require(["cmc/promotion/ArchivePromotionConfirmationDialog"], function(ArchivePromotionConfirmationDialog) {
+							ArchivePromotionConfirmationDialog.Singleton.openArchivePromotionConfirmationDialog(objects[0]);
+						});
+					}
+					else {
+						require(["cmc/promotion/MultipleArchivePromotionConfirmationDialog"], function(MultipleArchivePromotionConfirmationDialog) {
+							MultipleArchivePromotionConfirmationDialog.Singleton.openMultipleArchivePromotionConfirmationDialog(objects);
+						});
+					}
+				}
+				else {
+					ClientActionUnsavedDialog.Singleton.openClientActionUnsavedDialog(this);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Returns true if the context is not read only.
+			
+			@param cmc/foundation/ModelObject o: the object on which you want to perform this client action
+			@return boolean: true if the client action is enabled
+		-->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var enabled = this.inherited(arguments);
+			if (enabled && o.model.oEditor.respectWorkspaceContext) {
+				var readOnlyModeContextValue = ContextUtil.Singleton.findContextValue(null, "readOnlyMode");
+				enabled = (readOnlyModeContextValue.value != "true");
+			}
+			if (enabled && o.isContextReadOnly()) {
+				enabled = false;
+			}
+			return enabled;
+			]]>
+		</method>
+	</ClientAction>
+	
+	<!---
+		The promotion archive confirmation dialog. This dialog is used to prompt the user to archive a promotion object before archiving it.
+	-->
+	<AlertDialog definitionName="cmc/promotion/ArchivePromotionConfirmationDialog" showNo="true" showOK="false" showYes="true" singletonDefinition="true">
+		<dependency localName="ArchivePromotionService" moduleName="cmc/promotion/ArchivePromotionService"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		
+		<!-- 
+			Business Object Editor of the promotion object to be archived
+		 -->
+		<variable name="oEditor" value="${null}"/>
+		
+		<!--
+			 The Promotion Object to be archived
+		-->
+		<variable name="object" value="${null}"/>
+		
+		<!---
+			Confirm that the specified promotion object can be archived.
+			@param cmc/foundation/ModelObject object: the promotion object to be archived
+		-->
+		<method args="object" name="openArchivePromotionConfirmationDialog">
+			<![CDATA[
+			this.openWindow();
+			this.object = object;
+			this.oEditor = object.model.oEditor;
+			this.setVariable("promptText", promotionResources.Singleton.replaceValues("archiveConfirmationDialogText", [object.objectDisplayName]));
+			]]>
+		</method>
+		
+		<!---
+			Set the focus to Yes button
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.viewButtons.yesBtn);
+			]]>
+		</method>
+		
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Close the dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.oEditor = null;
+			this.object = null;
+			]]>
+		</method>
+		
+	    <!---
+	    	Archive the promotion object upon user's confirmation.
+	    -->
+		<method name="handleYes">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("proArchivePromotionConfirmationDialog handleYes");
+			var o = this.object;
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg(o.objectDisplayName);
+			ArchivePromotionService.Singleton.doRequest(o);
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+	</AlertDialog>
+	
+	<!---
+		The promotion archive confirmation dialog for multi-select. 
+		This dialog is used to prompt the user to archive a list of promotion objects before archiving it.
+		@param cmc/foundation/ModelObject objects: a list of promotion objects to be archived
+	-->
+	<ListAlert definitionName="cmc/promotion/MultipleArchivePromotionConfirmationDialog" promptText="${promotionResources.Singleton.archiveMultipleConfirmationDialogText.string}" showNo="true" showOK="false" showYes="true" singletonDefinition="true">
+		<dependency localName="ArchivePromotionService" moduleName="cmc/promotion/ArchivePromotionService"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		
+		<!--- 
+			A list of promotion objects that are to be archived. 
+		 -->
+		<variable name="objects" value="${null}"/>
+		
+		<!-- 
+			Business Object Editor of the promotion object to be archived
+		 -->
+		<variable name="oEditor" value="${null}"/>
+		
+		<!---
+			Confirm that the specified promotion objects can be archived in the case of a multi-select.
+			@param array objects: an array of promotion objects to be archived
+		 -->
+		<method args="objects" name="openMultipleArchivePromotionConfirmationDialog">
+			<![CDATA[
+			this.objects = objects;
+			this.oEditor = objects[0].model.oEditor;
+			this.openListAlertDialog(this.objects);
+			]]>
+		</method>
+		
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Close multiple delete confirmation dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.objects = null;
+			this.oEditor = null;
+			]]>
+		</method>
+		
+	    <!---
+	    	Archive the promotion objects upon user's confirmation.
+	    -->
+		<method name="handleYes">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("proMultipleArchivePromotionConfirmationDialog handleYes");
+			for (var i = 0; i < this.objects.length; i++) {
+				var o = this.objects[i];
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.appendMsg(o.objectDisplayName);
+				ArchivePromotionService.Singleton.doRequest(o);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+	</ListAlert>
+	
+	<!-- Archive Promotion Service -->
+	<Service definitionName="cmc/promotion/ArchivePromotionService" singletonDefinition="true" transactionService="true" url="/cmc/ArchivePromotion">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="promotionResources" moduleName="cmc/promotion/PromotionResources"/>
+
+		<!---
+			The display name for this service.
+		-->
+		<variable name="displayName" type="string" value="${promotionResources.Singleton.promotionList_archive_displayName.string}"/>
+		
+		<!--
+			The parameters for this service. 
+		-->
+		<ServiceParam name="storeId" parameterName="storeId">
+			<EnablementCondition checkObjectDefinition="true" conditionId="promotionCondition" enablementValue="Promotion" propertyName="objectType"/>
+		</ServiceParam>
+		<ServiceParam name="parentStoreId" parameterName="storeId" propertyName="objectStoreId">
+			<EnablementCondition checkObjectDefinition="true" conditionId="promotionCondition" enablementValue="InheritedPromotion" propertyName="objectType"/>
+		</ServiceParam>
+		<ServiceParam name="promotionId" propertyName="promotionId"/>
+		
+		<!---
+			@keywords private
+			This method is called when this custom service completed successfully.
+			If you want to perform additional logic after the service has completed,
+			override this method.
+			
+			@param cmc/foundation/ModelObject requestParent: the object on which this custom service was performed
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var msg;
+			var messageType = "customServiceSuccessful" + "_" + this.displayName + "_" + requestParent.openGroupObject.objectDefinition.displayName;
+			var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+			if (msgCount == 1) {
+				msg = foundationResources.Singleton.replaceValues("customServiceSuccessful", [this.displayName, requestParent.openGroupObject.objectDefinition.displayName, requestParent.openGroupObject.objectDisplayName]);
+			}
+			else {
+				msg = foundationResources.Singleton.replaceValues("multiCustomServiceSuccessful", [this.displayName, msgCount, requestParent.openGroupObject.objectDefinition.displayName]);
+			}
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			]]>
+		</method>
+	</Service>
+</Definitions>

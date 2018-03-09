@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This service updates an object on the WebSphere Commerce
+		server by invoking the URL specified in the <code>url</code> 
+		attribute. Every property that is part of the object that is dirty
+		will be passed as a parameter to the URL.  Additional parameters can be
+		added to the request by declaring {@link cmc/foundation/ServiceParam} instances
+		as children of the cmc/foundation/UpdateService instance.
+		
+		<p>This service is only used to update objects that have already been
+		persisted to the server. New objects will be persisted using {@link cmc/foundation/CreateService}.
+	
+		<p>An update service may only be declared as a child
+		of an instance of {@link cmc/foundation/ObjectDefinition}. 
+		
+		<p>If the object is updated successfully, a status message will be displayed 
+		in the message logger, and the object will be marked as not dirty.
+		If the updates fails, the error message returned by the URL displays 
+		in the message logger and the object will stay dirty.
+		
+		<p>Any validation error returned by the url will also be displayed to the
+		business user.
+
+		<p>The following example demonstrates the declaration of an update service.
+		The service includes one explicity declared service parameter that sends
+		a parameter called "objectId". The parameter value is retrieved from the
+		object property named "objectId". When the service request is invoked,
+		any dirty property associated with the business object will be included
+		as implicit parameters.
+			
+		@START_CODE
+		<UpdateService url="/cmc/UpdateMyObject">
+			<ServiceParam name="objectId" propertyName="objectId"/>
+		</UpdateService>
+		@END_CODE
+		
+		<p>The successful response from an update service must be an XML document
+		that has "object" as the name of the root element. If the response document includes
+		properties, then the properties will be applied to the client side representation
+		of the business object.  Update services do not typically need to return
+		updated property values. An updated property is only required if
+		the act of persisting the changes causes a change to the value of one
+		of the object properties. The following sample demonstrates the expected format
+		for a successful response. It includes an updated value for the property named
+		"objectId".
+			
+		@START_CODE
+		<object>
+			<objectId>111</objectId>
+		</object>
+		@END_CODE
+		
+		<p>If the request is not successful, then the response must be an XML document
+		that has "errors" as the name of the root element. The XML document must include
+		at least one element named "validationError" or an element named "exception". Validation
+		errors should be returned if the problem can be corrected by the business user. An example
+		of a validation error is a missing required parameter. Validation errors can either be "property"
+		level validation errors or "object" level validation errors. Property level validation errors
+		include the name of the specific property that was found to be a problem. Object level validation
+		errors do not include a property name and are not mapped to a specific problem.
+		An exception should be returned if the problem cannot be corrected by the business user.
+		An example of an exception is the user does not have the required access rights to perform
+		the action.
+		
+		<p>The following sample demonstrates an error response that includes an object level validation
+		error and a property level validation error.
+		
+		@START_CODE
+		<errors>
+			<validationError propertyName="name">Name is a required property.</validationError>
+			<validationError>The product could not be saved. Refer to the message logger for more details.</validationError>
+		</errors>
+		@END_CODE
+		
+		<p>The following sample demonstrates an error response that includes an exception.
+		
+		@START_CODE
+		<errors>
+			<exception>You do not have the correct access rights to complete this save operation.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service abortEmptyTransactions="true" classDefinition="true" definitionName="cmc/foundation/UpdateService" sendDirty="true" transactionService="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<!---
+			Send all of the object's properties as service parameters regardless of whether they
+			have changed since the last update. The default value is "false".
+		-->
+		<variable name="sendAll" type="boolean" value="false"/>
+		<!---
+			Send properties from the default language sensitive object. The
+			default language sensitive object is a child object of the current
+			object and its "languageId" property matches the default language
+			for the current store. The default value is "false".
+		-->
+		<variable name="sendDefaultLanguageProperties" type="boolean" value="false"/>
+		<!---
+			The prefix for implicitly included property parameters. This value is only used
+			if "sendPrefix" is set to "true". The default value is "PROPERTY_".
+		-->
+		<variable name="propertyPrefix" type="string" value="PROPERTY_"/>
+		<!---
+			Add the prefix specified by the "propertyPrefix" attribute to names of all
+			of the implicitly included property parameters. The default value is "false".
+		-->
+		<variable name="sendPrefix" type="boolean" value="false"/>
+		
+		<!--- 
+			@keywords private
+			Initialize the service and set the parent.saveService to this
+		-->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.saveService = this;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method is called when this update service completed successfully.
+			If you want to perform additional logic after the service has completed,
+			override this method.
+			
+			@param cmc/foundation/ModelObject requestParent: the object on which this update service was performed
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			if (ServiceTransactionUtil.Singleton.isLastTransactionInGroup(requestParent.transaction) && !ServiceTransactionUtil.Singleton.transactionGroupHasError(requestParent.transaction)) {
+				var objectDisplayName = requestParent.openGroupObject.objectDisplayName;
+				var objectDefinitionDisplayName = requestParent.openGroupObject.objectDefinition.displayName;
+				var msg;
+				var messageType = "saveServiceForOpenGroupObjectSuccessful" + "_" + objectDefinitionDisplayName;
+				if (objectDisplayName == objectDefinitionDisplayName || typeof (objectDefinitionDisplayName) == 'undefined' || objectDefinitionDisplayName == null) {
+					msg = foundationResources.Singleton.replaceValues("saveServiceForSingletonObjectSuccessful", [objectDisplayName]);
+				}
+				else {
+					var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+					if (msgCount == 1) {
+						msg = foundationResources.Singleton.replaceValues("saveServiceForOpenGroupObjectSuccessful", [objectDefinitionDisplayName, objectDisplayName]);
+					}
+					else {
+						msg = foundationResources.Singleton.replaceValues("saveServiceForMultiOpenGroupObjectSuccessful", [msgCount, objectDefinitionDisplayName]);
+					}
+				}
+				ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			}
+			]]>
+		</method>
+	</Service>
+</Definitions>

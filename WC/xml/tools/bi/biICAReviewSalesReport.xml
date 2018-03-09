@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report reportName="biICAReviewSalesReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+SELECT  
+	FO.ORDER_ID AS "Order_id",
+	FO.TIMEPLACED AS  "Order placed",
+	FO.TOTAL_SHIPPING AS "Shipping Amount",
+	PR.NAME AS "Item",
+	INT(FOI.NUM_UNITS) AS "Quantity",
+	COALESCE(FOI.UNIT_PRICE,0) AS "Item Price",
+	COALESCE(FOI.DISCOUNTS,0) AS "Discounts",
+	ROUND(COALESCE(FO.TAX_TOTAL,0),cur.decimalplaces) AS "Tax"	,
+	FO.ORDER_CURRENCY AS "Currency",
+	ROUND( COALESCE(FO.TAX_TOTAL,0) + COALESCE(FO.TOTAL_SHIPPING,0) + COALESCE(FO.TOTAL_VALUE,0) + COALESCE(FO.DISCOUNTS,0),cur.decimalplaces)
+FROM 
+	WCA.FACT_ORDERITEMS FOI,
+	WCA.FACT_ORDERS FO,
+	WCA.PRODUCT_REF PR,
+	WCA.USERREG USRG,
+	WCA.CURFORMAT CUR
+WHERE   
+	FO.ORDER_ID = FOI.ORDER_ID AND
+	
+		(WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SUBMITTED')=1 OR
+WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED')=1 ) AND
+
+	FOI.PRODUCT_ID = PR.PRODUCT_ID AND
+	USRG.USERS_ID = FO.MEMBER_ID AND
+	FO.STORE_ID  = {storeent_id}  AND
+	PR.LANGUAGE_ID IN (
+		SELECT
+			INTEGER(PR.PARAM_VALUE)
+		FROM
+			WCA.PARAMETERS PR
+		WHERE
+			PR.PARAM_TYPE='REPORT_LANGUAGE'
+		) 
+	AND
+	FO.LAST_UPDATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+        FO.LAST_UPDATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$ AND
+        ( CUR.CURFORMAT_ID = (
+    			SELECT MAX(DISTINCT CURFORM.CURFORMAT_ID) 
+    			FROM WCA.CURFORMAT CURFORM 
+			WHERE FOI.REPORT_CURRENCY= CURFORM.SETCCURR) )
+
+ORDER BY
+	{sortBy} {sortOrder}
+   </SQLvalue>
+                           <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>Orders</title>
+         <message>Orders</message>
+      </standardInfo>
+      <userDefinedParameters>
+      <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }
+	  </THStyle>
+	<TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }
+	</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+			<displayInHeader>false</displayInHeader>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+<columns>
+            <columnKey>C0</columnKey>
+            <columnName>orderId</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<displayInHeader>TRUE</displayInHeader>
+			<displayInSummary>True</displayInSummary>
+         </columns>
+
+		 <columns>
+            <columnKey>C1</columnKey>
+            <columnName>orderPlaced</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>date</columnType>
+			<displayInSummary>true</displayInSummary>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>shippingAmount</columnName>
+			<columnType>decimal</columnType>
+			<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			<displayInSummary>true</displayInSummary>
+			<columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>item</columnName>
+            <columnOptions>ALIGN=LEFT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>quantity</columnName>
+			<displayTotal>true</displayTotal>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C5</columnKey>
+            <columnName>Price</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+			<setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	 	 <columns>
+            <columnKey>C6</columnKey>
+            <columnName>discount</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+	    <columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+	 </columns>      
+	 <columns>
+            <columnKey>C7</columnKey>
+            <columnName>tax</columnName>
+            <columnOptions>ALIGN=LEFT  HEIGHT=20 NOWRAP</columnOptions>
+	    <columnType>decimal</columnType>
+	    <displayInSummary>true</displayInSummary>
+         </columns>           
+		 <columns>
+            <columnKey>C8</columnKey>
+            <columnName>currency</columnName>
+            <columnType>string</columnType>
+			<displayInSummary>true</displayInSummary>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+ 		 <columns>
+            <columnKey>C9</columnKey>
+            <columnName>total</columnName>
+			<columnType>decimal</columnType>
+			<displayInSummary>true</displayInSummary>
+			<columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+      </userDefinedParameters>
+   </display>
+
+  </Report>
+
+  <Report reportName="biICAReviewSalesReportLogonID" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+SELECT  
+	FO.ORDER_ID AS "Order_id",
+	FO.TIMEPLACED AS  "Order placed",
+	FO.TOTAL_SHIPPING AS "Shipping Amount",
+	PR.NAME AS "Item",
+	INT(FOI.NUM_UNITS) AS "Quantity",
+	COALESCE(FOI.UNIT_PRICE,0) AS "Item Price",
+	COALESCE(FOI.DISCOUNTS,0) AS "Discounts",
+	ROUND(COALESCE(FO.TAX_TOTAL,0),cur.decimalplaces) AS "Tax"	,
+	FO.ORDER_CURRENCY AS "Currency",
+	ROUND( COALESCE(FO.TAX_TOTAL,0) + COALESCE(FO.TOTAL_SHIPPING,0) + COALESCE(FO.TOTAL_VALUE,0) + COALESCE(FO.DISCOUNTS,0),cur.decimalplaces)
+FROM 
+	WCA.FACT_ORDERITEMS FOI,
+	WCA.FACT_ORDERS FO,
+	WCA.PRODUCT_REF PR,
+	WCA.USERREG USRG,
+	WCA.CURFORMAT CUR
+WHERE   
+	FO.ORDER_ID = FOI.ORDER_ID AND
+	
+		(WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SUBMITTED')=1 OR
+WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED')=1 ) AND
+
+	FOI.PRODUCT_ID = PR.PRODUCT_ID AND
+	USRG.USERS_ID = FO.MEMBER_ID AND
+	USRG.LOGONID = ('{logon_id}') AND
+	FO.STORE_ID  = {storeent_id}  AND
+	PR.LANGUAGE_ID IN (
+		SELECT
+			INTEGER(PR.PARAM_VALUE)
+		FROM
+			WCA.PARAMETERS PR
+		WHERE
+			PR.PARAM_TYPE='REPORT_LANGUAGE'
+		) 
+	AND
+	FO.LAST_UPDATE &gt;= $DB_TIMESTAMP_FUNC({StartDate})$ AND
+        FO.LAST_UPDATE &lt;= $DB_TIMESTAMP_FUNC({EndDate})$ AND
+        ( CUR.CURFORMAT_ID = (
+    			SELECT MAX(DISTINCT CURFORM.CURFORMAT_ID) 
+    			FROM WCA.CURFORMAT CURFORM 
+			WHERE FOI.REPORT_CURRENCY= CURFORM.SETCCURR) )
+
+ORDER BY
+	{sortBy} {sortOrder}
+   </SQLvalue>
+                           <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>Orders</title>
+         <message>Orders</message>
+      </standardInfo>
+      <userDefinedParameters>
+      <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }
+	  </THStyle>
+	<TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }
+	</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+			<displayInHeader>false</displayInHeader>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+<columns>
+            <columnKey>C0</columnKey>
+            <columnName>orderId</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<displayInHeader>TRUE</displayInHeader>
+			<displayInSummary>True</displayInSummary>
+         </columns>
+
+		 <columns>
+            <columnKey>C1</columnKey>
+            <columnName>orderPlaced</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>date</columnType>
+			<displayInSummary>true</displayInSummary>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>shippingAmount</columnName>
+			<columnType>decimal</columnType>
+			<setMinimumFractionDigits>2</setMinimumFractionDigits>
+			<displayInSummary>true</displayInSummary>
+			<columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>item</columnName>
+            <columnOptions>ALIGN=LEFT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>quantity</columnName>
+			<displayTotal>true</displayTotal>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+         <columns>
+            <columnKey>C5</columnKey>
+            <columnName>Price</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+			<setMinimumFractionDigits>2</setMinimumFractionDigits>
+         </columns>
+	 	 <columns>
+            <columnKey>C6</columnKey>
+            <columnName>discount</columnName>
+            <columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+	    <columnType>decimal</columnType>
+	    <setMinimumFractionDigits>2</setMinimumFractionDigits>
+	 </columns>      
+	 <columns>
+            <columnKey>C7</columnKey>
+            <columnName>tax</columnName>
+            <columnOptions>ALIGN=LEFT  HEIGHT=20 NOWRAP</columnOptions>
+	    <columnType>decimal</columnType>
+	    <displayInSummary>true</displayInSummary>
+         </columns>           
+		 <columns>
+            <columnKey>C8</columnKey>
+            <columnName>currency</columnName>
+            <columnType>string</columnType>
+			<displayInSummary>true</displayInSummary>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+ 		 <columns>
+            <columnKey>C9</columnKey>
+            <columnName>total</columnName>
+			<columnType>decimal</columnType>
+			<displayInSummary>true</displayInSummary>
+			<columnOptions>ALIGN=RIGHT  HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+      </userDefinedParameters>
+   </display>
+
+  </Report>   
+  </Reporting>

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		Context menu for the flow elements in the flow builder.
+		@keywords private
+	-->
+	<ContextMenu classDefinition="true" definitionName="cmc/foundation/FlowElementContextMenu">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StartElement" moduleName="cmc/foundation/StartElement"/>
+		<dependency localName="FlowPath" moduleName="cmc/foundation/FlowPath"/>
+		<dependency localName="FlowElement" moduleName="cmc/foundation/FlowElement"/>
+		<!--- @keywords private -->
+		<variable name="flowElement" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="multiselected" type="boolean" value="false"/>
+		
+		<!---
+			Populate and open the menu.
+			@keywords private
+		-->
+		<method args="e" name="openMenu">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.multiselected = (this.flowElement.parentFlow.selectedElements.length > 1);
+			this.inherited(arguments);
+			this.createMenuItems();
+			]]>
+		</method>
+		
+		
+		<!---
+			Invoke the details action
+			@keywords private
+		-->
+		<method name="doDetails">
+			<![CDATA[
+			this.flowElement.loadProperties();
+			]]>
+		</method>
+		
+		<!---
+			Invoke the remove action of flow elements
+			@keywords private
+		-->
+		<method name="doRemove">
+			<![CDATA[
+			this.flowElement.deleteFlowElements();
+			this.flowElement.parentFlow.unselectAll();
+			]]>
+		</method>
+		
+		<!---
+			Invoke the remove action of flow paths
+			@keywords private
+		-->
+		<method name="doDeletePath">
+			<![CDATA[
+			if (this.flowElement.o) {
+				this.flowElement.o.deleteObject();
+			}
+			]]>
+		</method>
+		
+		
+		<!---
+			Invoke the 'add a new path to branch' action
+			@keywords private
+		-->
+		<method name="doAddPath">
+			<![CDATA[
+			this.flowElement.addPath();
+			]]>
+		</method>
+		
+				<!---
+			Populate the context menu.
+			@keywords private
+	 	-->
+		<method name="createMenuItems">
+			<![CDATA[
+			if (this.flowElement instanceof StartElement.Class) {
+				this.addMenuItem(foundationResources.Singleton.contextMenuDetails.string, this, "doDetails");
+			}
+			else if (this.flowElement instanceof FlowPath.Class) {
+				if (this.flowElement.parentFlow.editableFlow && !this.multiselected) {
+					var siblings = this.flowElement.parentFlowElement.o.getObjects("FlowElement");
+					if (siblings.length > 2) {
+						this.addMenuItem(foundationResources.Singleton.contextMenuDelete.string, this, "doDeletePath");
+					}
+				}
+			}
+			else {
+				if (!this.multiselected) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuDetails.string, this, "doDetails");
+				}
+				var doRemoveEnabled = this.flowElement.parentFlow.editableFlow;
+				if (doRemoveEnabled) {
+					if (this.multiselected) {
+						for (var i = 0; i < this.flowElement.parentFlow.selectedElements.length; i++) {
+							var e = this.flowElement.parentFlow.selectedElements[i];
+							if (e instanceof FlowElement.Class) {
+								if (e.o && e.o.objectDefinition && e.isBranch()) {
+									continue;
+								}
+								if (e.fixedElement) {
+									doRemoveEnabled = false;
+									break;
+								}
+							}
+						}
+					}
+					else {
+						if (!this.flowElement.isBranch()) {
+							doRemoveEnabled = !this.flowElement.fixedElement;
+						}
+					}
+					if (doRemoveEnabled) {
+						this.addMenuItem(foundationResources.Singleton.contextMenuDelete.string, this, "doRemove");
+					}
+				}
+				if (this.flowElement.parentFlow.editableFlow && !this.multiselected && (this.flowElement.isBranch())) {
+					this.addMenuItem(foundationResources.Singleton.contextMenuAddPath.string, this, "doAddPath");
+				}
+			}
+			]]>
+		</method>
+		
+	</ContextMenu>
+		
+</Definitions>

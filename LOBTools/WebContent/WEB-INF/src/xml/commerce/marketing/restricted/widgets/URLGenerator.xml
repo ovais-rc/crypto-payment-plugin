@@ -1,0 +1,909 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Input text widget that is similar to {@link cmc/foundation/PropertyInputText} but does not understand the object model.
+		@keywords private
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/marketing/InputText" focusable="false" width="302">
+		<dependency localName="PropertiesComponentExtendedHelpIcon" moduleName="cmc/foundation/PropertiesComponentExtendedHelpIcon"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="mktPropertiesComponentPrompt" moduleName="cmc/marketing/PropertiesComponentPrompt"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			This attribute indicates that this properties view component is required. The default value for this attribute is "false".
+		-->
+		<variable name="required" type="boolean" value="false"/>
+		<!---
+			This attribute holds a string to use as the prompt text for this properties view component. The default value of this
+			attribute is null.
+		-->
+		<variable name="promptText" type="string" value="${null}"/>
+		<!---
+			This attribute provides the help text for this properties view component. The helpText will be used for creating tooltips.
+			The default value of this attribute is the empty string.
+			
+			@see cmc/foundation/ExtendedHelpIcon#helpText.
+		-->
+		<variable name="helpText" type="string" value="${null}"/>
+		<!--- input text value -->
+		<variable name="value" type="string" value=""/>
+
+		<!---
+			@keywords private
+			The colour of the background behind the input indicating a validator error. This matches @{link  cmc/foundation/Style#errorreminderbordercolor}.
+		-->
+		<variable name="errorColour" type="string" value="#e71d32"/>
+		<!---
+			@keywords private
+			The colour of the background behind the input when there is no validation error. Default is white.
+		-->
+		<variable name="defaultColour" type="string" value="#FFFFFF"/>
+
+		<!--- @keywords private -->
+		
+		
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			this.updateLayoutDel = new EventHandler.Class(this, "updateLayout");
+			this.createPrompt();
+			]]>
+		</handler>
+
+		<method name="destroy">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			delete this.updateLayoutDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This handler will recreate the prompt if the user changes their tooltip preference
+		-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCEnableExtendedHelp") {
+				if (this.prompt.extendedHelpIcon) {
+					this.prompt.extendedHelpIcon.destroy();
+				}
+				this.prompt.prompt.destroy();
+				this.createPrompt();
+			}
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			Creates the prompt.
+		-->
+		<method name="createPrompt">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var indent = 0;
+			var promptWidth = 164;
+			new mktPropertiesComponentPrompt.Class(this.prompt, {
+				name: "prompt",
+				width: 100,
+				multiline: true,
+				fgcolor: this.style.texthilitecolor,
+				resize: true,
+				x: indent
+			});
+			if ((PreferenceManager.Singleton.getPreference("CMCEnableExtendedHelp") == "true") && (this.helpText != null && this.helpText != "")) {
+				new PropertiesComponentExtendedHelpIcon.Class(this.prompt, {
+					propertiesComponent: this,
+					name: "extendedHelpIcon",
+					x: indent + this.prompt.prompt.width
+				});
+			}
+			this.updateLayout();
+			]]>
+		</method>
+
+		<method name="updateLayout">
+			<![CDATA[
+			this.updateLayoutDel.disconnectAll();
+			var extendedHelpIconHeight = 0;
+			var promptWidth = 164;
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.visible) {
+				promptWidth -= this.prompt.extendedHelpIcon.width;
+				extendedHelpIconHeight = this.prompt.extendedHelpIcon.height;
+				this.prompt.extendedHelpIcon.setVariable("x", promptWidth);
+				promptWidth -= 6;
+			}
+			var editorHeight = this.wrapper.height;
+			this.prompt.prompt.setVariable("width", promptWidth);
+			var promptY = 0;
+			var editorY = 0;
+			var extendedHelpIconY = 0;
+			var promptHeight = this.prompt.prompt.height;
+			var componentHeight = Math.max(Math.max(promptHeight, editorHeight), extendedHelpIconHeight);
+			var promptY = (componentHeight - promptHeight) / 2;
+			var editorY = (componentHeight - editorHeight) / 2;
+			var extendedHelpIconY = (componentHeight - extendedHelpIconHeight) / 2;
+			if (this.prompt.prompt.y != promptY) {
+				this.prompt.prompt.setVariable("y", promptY);
+			}
+			if (this.wrapper && this.wrapper.y != editorY) {
+				this.wrapper.setVariable("y", editorY);
+			}
+			if (this.prompt.extendedHelpIcon && this.prompt.extendedHelpIcon.y != extendedHelpIconY) {
+				this.prompt.extendedHelpIcon.setVariable("y", extendedHelpIconY);
+			}
+			this.updateLayoutDel.connect(this.prompt.prompt, "onheight");
+			this.updateLayoutDel.connect(this.wrapper, "onheight");
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Toggles the validation background colour on the input
+			@param boolean show Whether or not to set the error colour on the input widget.
+		-->
+		<method args="show" name="showError">
+			<![CDATA[
+			if (show) {
+				this.wrapper.setVariable('bgcolor', this.errorColour);
+			}
+			else {
+				this.wrapper.setVariable('bgcolor', this.defaultColour);
+			}
+			]]>
+		</method>
+
+		<!---
+			Returns the string value of this input field
+			@return string The text currently stored and shown to the user
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.value;
+			]]>
+		</method>
+
+		<!---
+			Sets the string value of this input field
+			@param string v The text to stored and show to the user
+		-->
+		<method args="v" name="setValue">
+			<![CDATA[
+			if (this.value != v) {
+				this.wrapper.input.setText(v);
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="5"/>
+		<Component name="prompt"/>
+
+		<Component bgcolor="#000000" height="${this.input.height + 2}" name="wrapper" width="${this.parent.width}">
+			<InputText enabled="${this.classroot.enabled}" name="input" width="${this.parent.width - 2}" x="1" y="1">
+				<handler name="ontext">
+					<![CDATA[
+					this.classroot.setVariable("value", this.getText());
+					]]>
+				</handler>
+				<handler name="onfocus">
+					<![CDATA[
+					EventUtil.trigger(this.classroot, "onfocus");
+					]]>
+				</handler>
+			</InputText>
+		</Component>
+	</FocusableComponent>
+
+	<!---
+		cmc/marketing/PropertyURLGenerator is a property editor and is used to create a {@link cmc/marketing/URLGenerator URL generator} widget that binds to a 
+		{@link cmc/foundation/ModelProperty property value}.  Use cmc/marketing/PropertyURLGenerator when an URL is needed within a {@link cmc/foundation/PropertyPane} or
+		{@link cmc/foundation/PropertyGroup}.
+		
+		@keywords final
+	-->
+	<PropertyEditor classDefinition="true" definitionName="cmc/marketing/PropertyURLGenerator" sizeToAvailableWidth="true">
+		<dependency localName="URLGenerator" moduleName="cmc/marketing/URLGenerator"/>
+		<!--- The store front command name to display a product. The default value is 'ProductDisplay'. -->
+		<variable name="productURL" type="string" value="ProductDisplay"/>
+		<!--- The store front command name to display a category. The default value is 'CategoryDisplay'. -->
+		<variable name="categoryURL" type="string" value="CategoryDisplay"/>
+		<!--- The store front command name to add an item to the shopping cart. The default value is 'OrderItemAdd'. -->
+		<variable name="shopcartURL" type="string" value="OrderItemAdd"/>
+		<!--- The store front command name to add an item to the wish list. The default value is 'InterestItemAdd'. -->
+		<variable name="wishlistURL" type="string" value="InterestItemAdd"/>
+		<!--- The store front command name to recommend a promotion. The default value is 'DiscountDetailsDisplayView'. -->
+		<variable name="promotionURL" type="string" value="DiscountDetailsDisplayView"/>
+		<!--- The store front command name to issue a coupon. The default value is 'CouponsIssue'. -->
+		<variable name="couponURL" type="string" value="CouponsIssue"/>
+		<!--- The store front command name to add the item to the shopping cart with promotion or coupon. The default value is 'AddOrderItemWithPromotionCodeOrCoupon'. -->
+		<variable name="addItemURL" type="string" value="AddOrderItemWithPromotionCodeOrCoupon"/>
+		<!-- This parameter control whether or not display the Predefined click action for a promotion in Click action type drop down list-->
+		<variable name="enablePromotionURL" type="boolean" value="true"/>
+
+		<!---
+			Create the editor for the given property component
+			@param cmc/foundation/PropertiesComponent parentComponent The parent properties component from which to create the editor
+			@keywords private
+		-->
+		<method args="parentComponent" name="createEditor">
+			<![CDATA[
+			var availableWidth = parentComponent.width - parentComponent.promptWidth - parentComponent.xspacing;
+			new URLGenerator.Class(parentComponent, {
+				name: "editor",
+				o: parentComponent.o,
+				property: parentComponent.property,
+				x: parentComponent.promptWidth + parentComponent.xspacing,
+				width: availableWidth,
+				enabled: parentComponent.enabled,
+				productURL: this.productURL,
+				categoryURL: this.categoryURL,
+				shopcartURL: this.shopcartURL,
+				wishlistURL: this.wishlistURL,
+				promotionURL: this.promotionURL,
+				couponURL: this.couponURL,
+				addItemURL: this.addItemURL,
+				enablePromotionURL: this.enablePromotionURL
+			});
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+		-->
+		<method name="getPromptTarget" args="component">
+			<![CDATA[
+			return component.editor ? component.editor.clickActionSelect : undefined;
+			]]>
+		</method>
+	</PropertyEditor>
+	
+	<!---
+		Marketing URL generator widget allows the user to set a pre-defined or custom URL. Several pre-defined URL's are supported: Display product;
+		Display category; Add to shopping cart; Add to wish list; Display promotion; Add to coupon wallet and Add item to cart with promotion.
+		For these URL's, {@link cmc/foundation/PropertyChildListEditor} widgets are used to select the corresponding
+		business object and the methods {@link cmc/marketing/URLGenerator#getProductURL}, {@link cmc/marketing/URLGenerator#getCategoryURL}, {@link cmc/marketing/URLGenerator#getShopCartURL},
+		{@link cmc/marketing/URLGenerator#getWishListURL}, {@link cmc/marketing/URLGenerator#getPromotionURL}, {@link cmc/marketing/URLGenerator#getCouponURL} and {@link cmc/marketing/URLGenerator#getAddItemURL}
+		are used to generate the actual URL value.
+		@keywords final
+	-->
+	<Component classDefinition="true" definitionName="cmc/marketing/URLGenerator">
+		<dependency localName="mktCategoryGrid" moduleName="cmc/marketing/CategoryGrid"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="TextComponent" moduleName="cmc/foundation/TextComponent"/>
+		<dependency localName="mktProductGrid" moduleName="cmc/marketing/ProductGrid"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<!--- @keywords private -->
+		<variable name="o"/>
+		<!---
+			Reference to  cmc/foundation/ModelProperty object that is being edited.
+			@keywords private
+		-->
+		<variable name="property" value="${null}"/>
+		
+		<!--- The store front command name to display a product. The default value is 'ProductDisplay'. -->
+		<variable name="productURL" type="string" value="ProductDisplay"/>
+		<!--- The store front command name to display a category. The default value is 'CategoryDisplay'. -->
+		<variable name="categoryURL" type="string" value="CategoryDisplay"/>
+		<!--- The store front command name to add an item to the shopping cart. The default value is 'OrderItemAdd'. -->
+		<variable name="shopcartURL" type="string" value="OrderItemAdd"/>
+		<!--- The store front command name to add an item to the wish list. The default value is 'InterestItemAdd'. -->
+		<variable name="wishlistURL" type="string" value="InterestItemAdd"/>
+		<!--- The store front command name to recommend a promotion. The default value is 'DiscountDetailsDisplayView'. -->
+		<variable name="promotionURL" type="string" value="DiscountDetailsDisplayView"/>
+		<!--- The store front command name to issue a coupon. The default value is 'issueCoupon'. -->
+		<variable name="couponURL" type="string" value="CouponsIssue"/>
+		<!--- The store front command name to add the item to the shopping cart with promotion or coupon. The default value is 'AddOrderItemWithPromotionCodeOrCoupon'. -->
+		<variable name="addItemURL" type="string" value="AddOrderItemWithPromotionCodeOrCoupon"/>
+		<!-- This parameter control whether or not display the Predefined click action for a promotion in Click action type drop down list-->
+		<variable name="enablePromotionURL" type="boolean" value="true"/>
+		
+		<!---
+			Whether or not the Add to Wish List option should be shown. This flag is set by
+			{@link cmc/marketing/URLGenerator#updateShowWishList} and should not be changed directly.
+		-->
+		<variable name="showWishListOption" type="boolean" value="true"/>
+		<!--- Whether or not this widget is enabled. -->
+		<variable name="enabled" type="boolean" value="true"/>
+		<!---
+			Number of child object associated to the current object.
+			@keywords private
+		-->
+		<variable name="childObjectsLength" type="number" value="0"/>
+		
+		<!--- @keywords private -->
+		<method args="args, parent" name="constructor">
+			<![CDATA[
+			this.updateValueDel = new EventHandler.Class(this, "updateValue");
+			this.storeValueDel = new EventHandler.Class(this, "storeValue");
+			this.showWishListDel = new EventHandler.Class(this, "updateShowWishList");
+			this.o = null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this._initcomplete = true;
+			if (this.o) {
+				this.storeValueDel.disconnectAll();
+				this.storeValueDel.connect(this.o, "onchildObjects");
+			}
+			this.updateValue();
+			this.updateShowWishList();
+			this.updateChildListEditors();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			if (this.storeValueDel) {
+				this.storeValueDel.disconnectAll();
+				delete this.storeValueDel;
+			}
+			if (this.showWishListDel) {
+				this.showWishListDel.disconnectAll();
+				delete this.showWishListDel;
+			}
+			if (this.updateActiveForErrorDel) {
+				this.updateActiveForErrorDel.disconnectAll();
+				delete this.updateActiveForErrorDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Updates the {@link cmc/marketing/URLGenerator#showWishListOption} flag which controls whether or not the "Add to Wish List" item
+			is available. Wish lists are not supported on stores that are not direct to the consumer. These store types include "B2B", "BBB",
+			"BRH", "BRP", "BMH", "BMP", "CHS", "CPS", "SCS", "DPS", "DPX", "SCP", "SPS", "SHS", "HCP", and "PBS".
+			See the documentation for the STORE table in the WebSphere Commerce Information Center for more information about store types.
+		-->
+		<method args="e" name="updateShowWishList">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.showWishListDel.disconnectAll();
+			if (this.o) {
+				var storeTypeContextValue = ContextUtil.Singleton.findContextValue(this.o, "storeType", this.showWishListDel);
+				if (storeTypeContextValue != null) {
+					var b2bStores = ["B2B", "BBB", "BRH", "BRP", "BMH", "BMP", "CHS", "CPS", "SCS", "DPS", "DPX", "SCP", "SPS", "SHS", "HCP", "PBS"];
+					var showWishList = true;
+					for (var i = 0; i < b2bStores.length; i++) {
+						if (storeTypeContextValue.value == b2bStores[i]) {
+							showWishList = false;
+							break;
+						}
+					}
+					this.setVariable("showWishListOption", showWishList);
+					if (this.predefinedView) {
+						var predefineSelector = this.predefinedView.combobox.actionSelect;
+						predefineSelector.wishList.hide = !this.showWishListOption;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			this._modelObjectLock = true;
+			if (newObject !== this.o) {
+				this.storeValueDel.disconnectAll();
+				this.o = newObject;
+				if (this.o != null) {
+					this.storeValueDel.connect(this.o, "onchildObjects");
+					this.updateValue();
+					this.updateShowWishList();
+				}
+			}
+			this.updateChildListEditors();
+			this._modelObjectLock = false;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Updates child list editors with the current object
+		-->
+		<method name="updateChildListEditors">
+			<![CDATA[
+			if (this.predefinedView) {
+				this.predefinedViewEditor1.productView.product.setModelObject(this.o);
+				this.predefinedViewEditor1.categoryView.category.setModelObject(this.o);
+				this.predefinedViewEditor2.skuView.item.setModelObject(this.o);
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this widget. Listeners are created to
+			watch the property value. If the property changes at anytime, the value of this checkbox will be 
+			refreshed. 
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this check box.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValue();
+				}
+				else {
+					if (this._initcomplete) {
+						this.urlView.url.setValue("");
+						this.clickActionSelect.selectItem("predefined");
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Updates the selections and views of the widget based on the stored property value.
+			This method uses the values from {@link cmc/marketing/URLGenerator#getProductURL}, {@link cmc/marketing/URLGenerator#getCategoryURL}, {@link cmc/marketing/URLGenerator#getShopCartURL},
+			and {@link cmc/marketing/URLGenerator#getWishListURL}, {@link cmc/marketing/URLGenerator#getPromotionURL}, {@link cmc/marketing/URLGenerator#getCouponURL} and {@link cmc/marketing/URLGenerator#getAddItemURL}
+			to determine which pre-defined URL is used. If the URL doesn't match any of the pre-defined URL's, a custom URL entry is assumed.
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this._updateObjectLock = true;
+			if (this.property && this._initcomplete) {
+				var url = this.property.value;
+				this.urlView.url.setValue(url);
+				if (!this._updateSelectionsLock && !this._selectedValueLock) {
+					if (url == "" && this.clickActionSelect.selectedValue.value == "url") {
+					}
+					else if (url == this.getProductURL()) {
+						this.clickActionSelect.selectItem("predefined");
+						this.predefinedView.combobox.actionSelect.selectItem("product");
+					}
+					else if (url == this.getCategoryURL()) {
+						this.clickActionSelect.selectItem("predefined");
+						this.predefinedView.combobox.actionSelect.selectItem("category");
+					}
+					else if (url == this.getShopCartURL()) {
+						this.clickActionSelect.selectItem("predefined");
+						this.predefinedView.combobox.actionSelect.selectItem("shopcart");
+					}
+					else if ((url == this.getWishListURL()) && this.showWishListOption) {
+						this.clickActionSelect.selectItem("predefined");
+						this.predefinedView.combobox.actionSelect.selectItem("wishlist");
+					}
+					else if (url == this.getPromotionURL()) {
+						this.clickActionSelect.selectItem("predefinedPromotion");
+						this.predefinedViewPromotion.combobox.actionSelect.selectItem("promotion");
+					}
+					else if (url == this.getCouponURL()) {
+						this.clickActionSelect.selectItem("predefinedPromotion");
+						this.predefinedViewPromotion.combobox.actionSelect.selectItem("coupon");
+					}
+					else if (url == this.getAddItemURL()) {
+						this.clickActionSelect.selectItem("predefinedPromotion");
+						this.predefinedViewPromotion.combobox.actionSelect.selectItem("addItem");
+					}
+					else {
+						this.clickActionSelect.selectItem("url");
+					}
+				}
+			}
+			this._updateObjectLock = false;
+			this.validate();
+			]]>
+		</method>
+		
+		<!---
+			Based on the selections, this method may call {@link cmc/marketing/URLGenerator#getProductURL}, {@link cmc/marketing/URLGenerator#getCategoryURL},
+			{@link cmc/marketing/URLGenerator#getShopCartURL}, {@link cmc/marketing/URLGenerator#getWishListURL}, {@link cmc/marketing/URLGenerator#getPromotionURL}, {@link cmc/marketing/URLGenerator#getCouponURL}
+			or {@link cmc/marketing/URLGenerator#getAddItemURL} to generate a URL and saves the value to the property.
+			@param Array childObjects An array of child objects to the current associated model object. This value is only populated when this
+					method is called due to the onchildobjects event from the current object.
+			@keywords private
+		-->
+		<method args="childObjects" name="storeValue">
+			<![CDATA[
+			if (typeof(childObjects) == "undefined") childObjects = null;
+			if (this.property && !this._updateObjectLock && !this._modelObjectLock && this._initcomplete) {
+				var newValue = "";
+				var urlSelected = false;
+				if (this.clickActionSelect.selectedValue) {
+					var selected = this.clickActionSelect.selectedValue.value;
+					if (selected == "none") {
+						newValue = "";
+					}
+					else if (selected == "url") {
+						urlSelected = true;
+						newValue = this.urlView.url.getValue();
+					}
+					else if ((selected == "predefined") && this.predefinedView.combobox.actionSelect.selectedValue) {
+						var selectedSection = this.predefinedView.combobox.actionSelect.selectedValue.value;
+						if (selectedSection == "product") {
+							newValue = this.getProductURL();
+						}
+						else if (selectedSection == "category") {
+							newValue = this.getCategoryURL();
+						}
+						else if (selectedSection == "shopcart") {
+							newValue = this.getShopCartURL();
+						}
+						else if (selectedSection == "wishlist") {
+							newValue = this.getWishListURL();
+						}
+					}
+					else if ((selected == "predefinedPromotion") && this.predefinedViewPromotion.combobox.actionSelect.selectedValue) {
+						var selectedSection = this.predefinedViewPromotion.combobox.actionSelect.selectedValue.value;
+						if (selectedSection == "promotion") {
+							newValue = this.getPromotionURL();
+						}
+						else if (selectedSection == "coupon") {
+							newValue = this.getCouponURL();
+						}
+						else if (selectedSection == "addItem") {
+							newValue = this.getAddItemURL();
+						}
+					}
+				}
+				if (this.property.value != newValue && (this.o.openGroupObject.openGroupDirty || urlSelected)) {
+					this._updateSelectionsLock = true;
+					this.property.change(newValue);
+					this._updateSelectionsLock = false;
+				}
+				if (childObjects == null || (childObjects.length >= this.childObjectsLength)) {
+					this.updateValue();
+				}
+				if (childObjects != null) {
+					this.childObjectsLength = childObjects.length;
+				}
+			}
+			this.validate();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method updates the display of error messages on this widget. This method will show or hide the {@link cmc/foundation/ErrorMessage} on the
+			URL input box as appropriate.
+			@param string validationError The error message to display. If this is blank or <code>null</code> and the error message is already visible,
+				it will be hidden.
+		 -->
+		<method args="validationError" name="updateErrorDisplay">
+			<![CDATA[
+			if (typeof(validationError) == "undefined") validationError = null;
+			if (validationError && (validationError != "")) {
+				var caller = this;
+				require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+					ErrorMessage.Singleton.setVariable("attachTarget", caller.urlView);
+				});
+				require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+					ErrorMessage.Singleton.show(validationError);
+				});
+			}
+			else {
+				var caller = this;
+				require(["cmc/foundation/ErrorMessage"], function(ErrorMessage) {
+					ErrorMessage.Singleton.hide(caller.urlView);
+				});
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method validates the input and shows/hides the validation background highlighting as well as the error message display.
+			URL values must not be blank and have a maximum length of 1024 characters.
+		-->
+		<method args="e" name="validate">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.clickActionSelect && this.clickActionSelect.selectedValue) {
+				if (!this.updateActiveForErrorDel) {
+					this.updateActiveForErrorDel = new EventHandler.Class(this, "validate");
+				}
+				this.updateActiveForErrorDel.disconnectAll();
+				ViewUtil.Singleton.registerVisibilityDelegate(this, this.updateActiveForErrorDel);
+				this.updateActiveForErrorDel.connect(FocusUtil, "onfocus");
+				var showError = (ViewUtil.Singleton.getInvisibleAncestor(this) == null) && (FocusUtil.getFocus() == this.urlView.url.wrapper.input.inputText);
+				var urlValue = this.urlView.url.getValue();
+				var urlLength = LangUtil.Singleton.getUTF8ByteCount(urlValue);
+				var pDef = this.property != null ? this.property.o.objectDefinition.getPropertyDefinition(this.property.o, this.property.propertyName, this.updateActiveForErrorDel) : null;
+				if ((pDef == null) || (this.clickActionSelect.selectedValue.value == "none") || ((urlValue != "") && (urlLength <= 1024))) {
+					this.updateErrorDisplay();
+					this.urlView.url.showError(false);
+					if (this.o) {
+						this.o.clearValidationError(this);
+					}
+				}
+				else if (this.property && this.o) {
+					var errorMessage = "";
+					if (urlValue == "") {
+						errorMessage = foundationResources.Singleton.replaceValues("requiredPropertyMissing", [pDef.displayName]);
+					}
+					else if (urlLength > 1024) {
+						errorMessage = foundationResources.Singleton.replaceValues("propertySizeTooLarge", [pDef.displayName]);
+					}
+					if (showError) {
+						this.updateErrorDisplay(errorMessage);
+					}
+					else {
+						this.updateErrorDisplay();
+					}
+					this.urlView.url.showError(true);
+					if (this.o) {
+						this.o.addValidationError(this, errorMessage);
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Generates the URL to display a product. The generated URL is in the form: <code>productURL?productId=X&catalogId=#catalogId#&storeId=#storeId#</code>
+			where <code>productURL</code> is the value stored in {@link cmc/marketing/URLGenerator#productURL} and <code>X</code> is the product id of the selected product.
+		-->
+		<method name="getProductURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				var products = this.o.getObjects("CatalogProducts/CatalogEntry");
+				if (products.length == 1) {
+					var productId = products[0].getPropertyValue("catentryId");
+					url += this.productURL;
+					url += "?productId=" + productId;
+					url += "&catalogId=#catalogId#&storeId=#storeId#";
+				}
+			}
+			return url;
+			]]>
+		</method>
+
+		<!---
+			Generates the URL to display a category. The generated URL is in the form: <code>categoryURL?identifer=X&categoryId=Y&catalogId=#catalogId#&storeId=#storeId#</code>
+			where <code>categoryURL</code> is the value stored in {@link cmc/marketing/URLGenerator#categoryURL}, <code>X</code> is the identifer of the selected category,
+			and <code>Y</code> is the category ID.
+		-->
+		<method name="getCategoryURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				var categories = this.o.getObjects("CatalogGroups/CatalogGroupAlias");
+				if (categories.length == 1) {
+					var identifier = categories[0].getPropertyValue("identifier");
+					var categoryId = categories[0].getPropertyValue("catgroupId");
+					url += this.categoryURL;
+					url += "?identifier=" + StringUtil.Singleton.encodeString(identifier);
+					url += "&categoryId=" + categoryId;
+					url += "&catalogId=#catalogId#&storeId=#storeId#";
+				}
+			}
+			return url;
+			]]>
+		</method>
+		
+		<!---
+			Generates the URL to add a product to the shopping cart. The generated URL is in the form: <code>shopcartURL?partNumber=X&URL=OrderCalculate?URL=OrderItemDisplay&calculationUsageId=-1&quantity=1&catalogId=#catalogId#&storeId=#storeId#</code>
+			where <code>shopcartURL</code> is the value stored in {@link cmc/marketing/URLGenerator#shopcartURL} and <code>X</code> is the part number of the selected item.
+		-->
+		<method name="getShopCartURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				var products = this.o.getObjects("CatalogItems/CatalogEntry");
+				if (products.length == 1) {
+					var partNumber = products[0].getPropertyValue("partnumber");
+					url += this.shopcartURL;
+					url += "?partNumber=" + StringUtil.Singleton.encodeString(partNumber);
+					url += "&URL=OrderCalculate?URL=OrderItemDisplay&calculationUsageId=-1&quantity=1&catalogId=#catalogId#&storeId=#storeId#";
+				}
+			}
+			return url;
+			]]>
+		</method>
+
+		<!---
+			Generates the URL to add a product to the wishlist. The generated URL is in the form: <code>wishlistURL?partNumber=X&URL=InterestItemDisplay&catalogId=#catalogId#&storeId=#storeId#</code>
+			where <code>wishlistURL</code> is the value stored in {@link cmc/marketing/URLGenerator#wishlistURL} and <code>X</code> is the part number of the selected item.
+		-->
+		<method name="getWishListURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				var products = this.o.getObjects("CatalogItems/CatalogEntry");
+				if (products.length == 1) {
+					var partNumber = products[0].getPropertyValue("partnumber");
+					url += this.wishlistURL;
+					url += "?partNumber=" + StringUtil.Singleton.encodeString(partNumber);
+					url += "&URL=InterestItemDisplay&catalogId=#catalogId#&storeId=#storeId#";
+				}
+			}
+			return url;
+			]]>
+		</method>
+
+		<!---
+			Generates the URL to recommend a promotion. The generated URL is in the form: <code>promotionURL?code=#promoName#&catalogId=#catalogId#&storeId=#storeId#&pStoreId=#pStoreId#</code>
+			where <code>promotionURL</code> is the value stored in {@link cmc/marketing/URLGenerator#promotionURL}.
+		-->
+		<method name="getPromotionURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				url += this.promotionURL;
+				url += "?code=#promoName#&catalogId=#catalogId#&storeId=#storeId#&pStoreId=#pStoreId#";
+			}
+			return url;
+			]]>
+		</method>
+
+		<!---
+			Generates the URL to issue a coupon. The generated URL is in the form: <code>couponURL?promotionName=#promoName#&catalogId=#catalogId#&storeId=#storeId#&URL=OrderCalculate?URL=OrderItemDisplay&calculationUsageId=#calUsageId#</code>
+			where <code>couponURL</code> is the value stored in {@link cmc/marketing/URLGenerator#couponURL}.
+		-->
+		<method name="getCouponURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				url += this.couponURL;
+				url += "?promotionName=#promoName#&catalogId=#catalogId#&storeId=#storeId#&URL=OrderCalculate?URL=OrderItemDisplay&calculationUsageId=#calUsageId#";
+			}
+			return url;
+			]]>
+		</method>
+
+		<!---
+			Generates the URL to add an item to the cart with a promotion or coupon. The generated URL is in the form: <code>addItemURL?partNumber=X&promoCode=#promoCode#&catalogId=#catalogId#&storeId=#storeId#&quantity=1&URL=OrderCalculate?URL=OrderItemDisplay&calculationUsageId=#calUsageId#</code>
+			where <code>addItemURL</code> is the value stored in {@link cmc/marketing/URLGenerator#addItemURL} and <code>X</code> is the part number of the selected item.
+		-->
+		<method name="getAddItemURL">
+			<![CDATA[
+			var url = "";
+			if (this.o && this.property) {
+				var products = this.o.getObjects("CatalogItems/CatalogEntry");
+				if (products.length == 1) {
+					var partNumber = products[0].getPropertyValue("partnumber");
+					url += this.addItemURL;
+					url += "?partNumber=" + StringUtil.Singleton.encodeString(partNumber);
+					url += "&promoCode=#promoCode#&catalogId=#catalogId#&storeId=#storeId#&quantity=1&URL=OrderCalculate?URL=OrderItemDisplay&calculationUsageId=#calUsageId#";
+				}
+			}
+			return url;
+			]]>
+		</method>
+
+		<AxisLayout axis="y" spacing="8"/>
+
+		<BaseComboBox enabled="${this.classroot.enabled}" name="clickActionSelect">
+			<handler name="onselectedValue">
+				<![CDATA[
+				if (!this.classroot._updateObjectLock && this.classroot._initcomplete && this.classroot.o && this.classroot.o.openGroupObject) {
+					this.classroot.o.openGroupObject.setVariable("openGroupDirty", true);
+				}
+				this.classroot._selectedValueLock = true;
+				this.classroot.storeValue();
+				this.classroot._selectedValueLock = false;
+				]]>
+			</handler>
+
+			<Textlistitem displayName="${marketingResources.Singleton.selectPredefined.string}" package="cmc/marketing" selected="true" value="predefined"/>
+			<Textlistitem displayName="${marketingResources.Singleton.selectPredefinedPromotion.string}" hide="${!this.classroot.enablePromotionURL}" package="cmc/marketing" value="predefinedPromotion"/>
+			<Textlistitem displayName="${marketingResources.Singleton.selectURL.string}" package="cmc/marketing" value="url"/>
+		</BaseComboBox>
+		
+		<Component name="predefinedView" visible="${this.parent.clickActionSelect.selectedValue &amp;&amp; this.parent.clickActionSelect.selectedValue.value == 'predefined'}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing}">
+				
+			<AxisLayout axis="y" spacing="5"/>
+			<Component name="combobox">
+				<TextComponent fgcolor="${this.classroot.parent.style.texthilitecolor}" multiline="true" text="${marketingResources.Singleton.predefinedClickAction.string}" width="${this.classroot.parent.promptWidth}"/>
+				<BaseComboBox enabled="${this.classroot.enabled}" name="actionSelect" x="${this.classroot.parent.promptWidth + this.classroot.parent.xspacing}">
+					<handler name="onselectedValue">
+						<![CDATA[
+						if (!this.classroot._updateObjectLock && this.classroot._initcomplete && this.classroot.o && this.classroot.o.openGroupObject) {
+							this.classroot.o.openGroupObject.setVariable("openGroupDirty", true);
+						}
+						this.classroot._selectedValueLock = true;
+						this.classroot.storeValue();
+						this.classroot._selectedValueLock = false;
+						]]>
+					</handler>
+					<Textlistitem displayName="${marketingResources.Singleton.displayProduct.string}" package="cmc/marketing" selected="true" value="product"/>
+					<Textlistitem displayName="${marketingResources.Singleton.displayCategory.string}" package="cmc/marketing" value="category"/>
+					<Textlistitem displayName="${marketingResources.Singleton.addShopCart.string}" package="cmc/marketing" value="shopcart"/>
+					<Textlistitem displayName="${marketingResources.Singleton.addInterestList.string}" name="wishList" package="cmc/marketing" value="wishlist"/>
+				</BaseComboBox>
+			</Component>
+		</Component>			
+		
+		<Component name="predefinedViewPromotion" visible="${this.parent.clickActionSelect.selectedValue &amp;&amp; this.parent.clickActionSelect.selectedValue.value == 'predefinedPromotion'}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing}">
+				
+			<AxisLayout axis="y" spacing="5"/>
+			<Component name="combobox">
+				<TextComponent fgcolor="${this.classroot.parent.style.texthilitecolor}" multiline="true" text="${marketingResources.Singleton.predefinedClickActionPromotion.string}" width="${this.classroot.parent.promptWidth}"/>
+				<BaseComboBox enabled="${this.classroot.enabled}" name="actionSelect" x="${this.classroot.parent.promptWidth + this.classroot.parent.xspacing}">
+					<handler name="onselectedValue">
+						<![CDATA[
+						if (!this.classroot._updateObjectLock && this.classroot._initcomplete && this.classroot.o && this.classroot.o.openGroupObject) {
+							this.classroot.o.openGroupObject.setVariable("openGroupDirty", true);
+						}
+						this.classroot._selectedValueLock = true;
+						this.classroot.storeValue();
+						this.classroot._selectedValueLock = false;
+						]]>
+					</handler>
+					<Textlistitem displayName="${marketingResources.Singleton.recommendPromotion.string}" package="cmc/marketing" selected="true" value="promotion"/>
+					<Textlistitem displayName="${marketingResources.Singleton.issueCoupon.string}" package="cmc/marketing" value="coupon"/>
+					<Textlistitem displayName="${marketingResources.Singleton.addItem.string}" package="cmc/marketing" value="addItem"/>
+				</BaseComboBox>
+			</Component>
+		</Component>
+		
+		<Component name="predefinedViewEditor1" visible="${this.parent.clickActionSelect.selectedValue &amp;&amp; this.parent.clickActionSelect.selectedValue.value == 'predefined'}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing}">
+		
+			<Component name="productView" visible="${this.classroot.predefinedView.combobox.actionSelect.selectedValue &amp;&amp; this.classroot.predefinedView.combobox.actionSelect.selectedValue.value == 'product'}">
+				<PropertyChildListEditor enabled="${this.classroot.enabled}" listClass="${mktProductGrid}" name="product" objectTypes="ChildProducts,ChildInheritedProducts" promptText="${marketingResources.Singleton.product.string}" required="true" singleChild="true"/>
+			</Component>
+			<Component name="categoryView" visible="${this.classroot.predefinedView.combobox.actionSelect.selectedValue &amp;&amp; this.classroot.predefinedView.combobox.actionSelect.selectedValue.value == 'category'}">
+				<PropertyChildListEditor enabled="${this.classroot.enabled}" listClass="${mktCategoryGrid}" name="category" objectTypes="ChildCatalogGroup,ChildInheritedCatalogGroup" promptText="${marketingResources.Singleton.category.string}" required="true" singleChild="true"/>
+			</Component>
+		</Component>
+		
+		<Component name="predefinedViewEditor2" visible="${(this.parent.clickActionSelect.selectedValue &amp;&amp; this.parent.clickActionSelect.selectedValue.value == 'predefined' &amp;&amp; this.parent.predefinedView.combobox.actionSelect.selectedValue &amp;&amp; (this.parent.predefinedView.combobox.actionSelect.selectedValue.value == 'shopcart' || this.classroot.predefinedView.combobox.actionSelect.selectedValue.value == 'wishlist')) || (this.parent.clickActionSelect.selectedValue &amp;&amp; this.parent.clickActionSelect.selectedValue.value == 'predefinedPromotion' &amp;&amp; this.parent.predefinedViewPromotion.combobox.actionSelect.selectedValue &amp;&amp; this.parent.predefinedViewPromotion.combobox.actionSelect.selectedValue.value == 'addItem')}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing}">
+		
+			<Component name="skuView">
+				<PropertyChildListEditor enabled="${this.classroot.enabled}" helpText="${marketingResources.Singleton.help_searchSKU.string}" listClass="${mktProductGrid}" name="item" objectTypes="ChildItems,ChildInheritedItems" promptText="${marketingResources.Singleton.sku.string}" required="true" singleChild="true"/>
+			</Component>
+		</Component>
+		
+		<Component name="urlView" visible="${this.parent.clickActionSelect.selectedValue &amp;&amp; this.parent.clickActionSelect.selectedValue.value != 'none'}" x="${0 - this.classroot.parent.promptWidth - this.classroot.parent.xspacing}">
+			<InputText enabled="${this.classroot.clickActionSelect.selectedValue &amp;&amp; this.classroot.clickActionSelect.selectedValue.value == 'url' &amp;&amp; this.classroot.enabled}" helpText="${marketingResources.Singleton.help_content_url.string}" name="url" package="cmc/marketing" promptText="${marketingResources.Singleton.url.string}" required="true" width="${this.classroot.width}">
+				<handler name="onvalue">
+					<![CDATA[
+					this.classroot.storeValue();
+					]]>
+				</handler>
+				<handler name="onfocus">
+					<![CDATA[
+					this.classroot.validate();
+					]]>
+				</handler>
+			</InputText>
+		</Component>
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method><method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+	</Component>
+
+ </Definitions>

@@ -1,0 +1,63 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<c:choose>
+	<c:when test="${!empty param.orgEntityId}">
+		<c:set var="orgEntityId" value="${param.orgEntityId}" scope="request"/>
+	</c:when>
+	<c:when test="${!empty WCParam.orgEntityId}">
+		<c:set var="orgEntityId" value="${WCParam.orgEntityId}" scope="request"/>
+	</c:when>
+</c:choose>
+
+
+<c:set var="canAdministerRolesForThisOrg" value="true"/>
+<c:if test="${topLevelOrgIdsRequired eq 'true'}">
+	<wcf:rest var="topLevelOrgDetails" url="store/${WCParam.storeId}/person/${userId}" scope="request">
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="profileName" value="IBM_User_Top_Level_Org_Administered"/>
+	</wcf:rest>
+
+	<c:forEach var="topLevelOrgId" items="${topLevelOrgDetails.topLevelOrganizationsDirectlyAdministered}">
+		<c:if test="${topLevelOrgId eq orgEntityId}">
+			<c:set var="canAdministerRolesForThisOrg" value="false"/>
+		</c:if>
+	</c:forEach>
+</c:if>
+
+<c:if test="${!empty orgEntityId && canAdministerRolesForThisOrg eq 'true'}">
+	<c:if test="${orgAvailableRolesRequired eq 'true'}">
+		<wcf:rest var="orgAvailableRoles" url="store/${WCParam.storeId}/organization/${orgEntityId}" scope="request">
+			<wcf:param name="responseFormat" value="json" />
+			<wcf:param name="profileName" value="IBM_Parent_Assigned_Roles_Details"/>
+		</wcf:rest>
+		<c:if test="${empty orgAvailableRoles.parentRolesWithDetails}">
+			<c:set var="parentOrgRolesEmpty" value="true"/>
+		</c:if>
+	</c:if>
+
+    <%-- In Edit page, orgEntityId will be the current org being edited. In Create Org Page, orgEntityId will be the orgId of parent Organizaiton selected. --%>
+	<c:if test="${!parentOrgRolesEmpty eq 'true'}">
+		<%-- Parent org roles are not empty, which means this org might have some roles --%>
+		<wcf:rest var="orgEntityRoles" url="store/${WCParam.storeId}/organization/${orgEntityId}" scope="request">
+			<wcf:param name="responseFormat" value="json" />
+			<wcf:param name="profileName" value="IBM_Assigned_Roles_Details"/>
+		</wcf:rest>
+	</c:if>
+
+</c:if>
+
+<c:set var="selectedRoleIds" value="" scope="request"/>
+<c:forEach var="role" items="${orgEntityRoles.rolesWithDetails}">
+	<c:set var="selectedRoleIds" value="${selectedRoleIds},${role.roleId}"/>
+</c:forEach>

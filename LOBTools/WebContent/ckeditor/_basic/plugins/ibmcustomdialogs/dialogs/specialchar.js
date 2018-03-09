@@ -1,0 +1,1 @@
+﻿CKEDITOR.tools.extend(CKEDITOR.ibm.dialogs,{specialchar:function(a){"specialchar"===a.dialog.getName()&&(a.getContents("info").elements[0].widths=["90%","10%"])}});

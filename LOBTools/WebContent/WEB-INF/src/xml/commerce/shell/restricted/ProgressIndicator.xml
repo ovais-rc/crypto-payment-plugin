@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		This class implements the progress indicator in the status area in Management
+		Center. Animation will start when one or more requests to the server is in
+		progress, and it will stop when all those requests are completed.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/ProgressIndicator" focusable="false">
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<!--- @keywords private -->
+		<variable name="progressCounter" type="number" value="0"/>
+		<!--- @keywords private -->
+		<variable name="totalActions" type="number" value="0"/>
+		<!--- @keywords private -->
+		<variable name="pendingActions" type="number" value="0"/>
+		<!--- @keywords private -->
+		<variable name="messageText" type="string" value="${shellResources.Singleton.systemApplicationServerProcessing.string}"/>
+
+		<Component align="center" height="${this.parent.height}" imageSet="statusAnimationOff" name="loadbar" width="25"/>
+
+		<!---
+			@keywords private
+			This method starts the animation of the progress indicator. It increments
+			an internal counter to record the number of processes running in the background.
+		-->
+		<method name="startAnimation">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ProgressIndicator", "startAnimation");
+			}
+			if (this.progressCounter == 0) {
+				this.loadbar.setVariable("imageSet", "statusAnimationOn");
+				MessageLogger.Singleton.serverProcessStart();
+			}
+			this.progressCounter++;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ProgressIndicator", "startAnimation", "Number of processes in progress now: " + this.progressCounter);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ProgressIndicator", "startAnimation");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method stops the animation of the progress indicator. It decrements
+			an internal counter that records the number of processes running in the
+			background. The animation will stop when the counter is 0.
+		-->
+		<method name="stopAnimation">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ProgressIndicator", "stopAnimation");
+			}
+			if (this.progressCounter > 0) {
+				this.progressCounter--;
+			}
+			if (this.progressCounter == 0) {
+				this.loadbar.setVariable("imageSet", "statusAnimationOff");
+				MessageLogger.Singleton.serverProcessComplete();
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ProgressIndicator", "stopAnimation", "Number of processes in progress now: " + this.progressCounter);
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/ProgressIndicator", "stopAnimation");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method keeps track of the total number of actions and the number of pending actions.
+		-->		
+		<method name="addAction">
+			<![CDATA[
+			this.totalActions += 1;
+			this.pendingActions += 1;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method keeps track of the number of pending actions, calculates the percentage of overall
+			operation completion, then display the progress status in the message bar.   
+		-->			
+		<method name="removeAction">
+			<![CDATA[
+			if (this.pendingActions > 0) {
+				this.pendingActions -= 1;
+			}
+			if (this.pendingActions == 0 || this.totalActions == 0) {
+				this.totalActions = 0;
+				this.messageText = shellResources.Singleton.systemApplicationServerProcessing.string;
+			}
+			else {
+				var percentDone = Math.round((this.totalActions - this.pendingActions) / this.totalActions * 100);
+				this.messageText = shellResources.Singleton.replaceValues("systemActionsCompleted", [percentDone]);
+			}
+			MessageLogger.Singleton.updateProcessingMsg();
+			]]>
+		</method>
+
+	</FocusableComponent>
+
+</Definitions>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","pt",{toolbar:"Origem",title:"Origem"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","ar",{block:"ضبط المحاذاة",center:"‏محاذاة للوسط‏",left:"‏محاذاة لليسار‏",right:"‏محاذاة لليمين‏"});

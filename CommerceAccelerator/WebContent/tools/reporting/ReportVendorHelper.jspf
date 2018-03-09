@@ -1,0 +1,188 @@
+<!-- ========================================================================
+  Licensed Materials - Property of IBM
+   
+  WebSphere Commerce
+   
+  (c) Copyright IBM Corp. 2001, 2002
+   
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ ===========================================================================-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+
+<%@page import="java.util.*" %>
+<%@page import="com.ibm.commerce.beans.DataBeanManager" %>
+<%@page import="com.ibm.commerce.command.CommandContext"%>
+<%@page import="com.ibm.commerce.server.ECConstants"%>
+<%@page import="com.ibm.commerce.inventory.beans.VendorListDataBean"%>
+<%@page import="com.ibm.commerce.inventory.beans.VendorDataBean"%>
+
+<%
+   CommandContext vendorHelperCC = (CommandContext) request.getAttribute(ECConstants.EC_COMMANDCONTEXT);
+   Hashtable      vendorHelperRB = (Hashtable)com.ibm.commerce.tools.util.ResourceDirectory.lookup("reporting.reportStrings", vendorHelperCC.getLocale());
+   String vendorHelperStoreId = vendorHelperCC.getStoreId().toString();
+   String vendorHelperLangId  = vendorHelperCC.getLanguageId().toString();
+%>
+
+
+<%!
+private String generateVendor(String container, Hashtable reportsRB, String availableLabel, String selectedLabel)
+{
+   String labels = "";
+
+   if (availableLabel != null && selectedLabel != null) {
+      labels       = "      <TR> " + 
+		   "         <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32>\n" + reportsRB.get(selectedLabel) + "\n" +
+                   "         </TD>\n" +
+                   "         <TD> </TD>" + 
+		   "         <TD ALIGN=LEFT VALIGN=CENTER HEIGHT=32>\n" + reportsRB.get(availableLabel) + "\n" +
+                   "         </TD>\n" +
+		   "      </TR>\n";
+   }
+
+   String result = "<FORM NAME=" + container + ">\n" + 
+                   "   <TABLE CELLPADDING=0 CELLSPACING=0>" +  labels  +		   
+                   "         <TD VALIGN=BOTTOM CLASS=selectWidth>\n" + 
+                   "            <SELECT NAME=collateralSelected ID=\"collateralSelected\" CLASS=selectWidth SIZE=5 MULTIPLE onChange=\"javascript:updateSelectedCollateral('" + container + "');\"></SELECT>\n" +
+                   "         </TD>\n" +
+                   "         <TD WIDTH=150px ALIGN=CENTER>\n" +
+                   "            <br>\n" +
+                   "            <INPUT TYPE=BUTTON NAME=addToSloshBucketButton      VALUE=\"" + reportsRB.get("VendorHelperSloshBucketAdd") + "\" style=\"width: 120px\" ONCLICK=\"javascript:addToSelectedCollateral('" + container + "');\" >\n" +
+                   "            <br>\n" +                                                                       
+                   "            <INPUT TYPE=BUTTON NAME=removeFromSloshBucketButton VALUE=\"" + reportsRB.get("VendorHelperSloshBucketRemove") + "\" style=\"width: 120px\" ONCLICK=\"javascript:removeFromSelectedCollateral('" + container + "')\" >\n" + 
+                   "            <br>" +
+                   "         </TD>\n" +
+                   "         <TD VALIGN=BOTTOM CLASS=selectWidth>\n" +
+                   "            <SELECT NAME=collateralAvailable ID=\"collateralAvailable\" CLASS=selectWidth SIZE=5 MULTIPLE onChange=\"javascript:updateAvailableCollateral('" + container + "');\"></SELECT>\n" +
+                   "         </TD>\n" +
+                   "      </TR>\n" +
+                   "   </TABLE>\n" +
+                   "</FORM>\n";
+
+
+   return result;
+}
+%>
+
+<SCRIPT>
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // If this is the first time the page is being loaded within the transaction then initialize the
+   // vendor data from the data bean.
+   // If this page is being reloaded within the transaction then retrieve the data from the parent object
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function onLoadVendor(container) 
+   {
+      var myContainer = parent.get(container, null);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // If false then this is the first time to the page and we need to generate the data bean
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      if (myContainer == null) initializeVendor(container);
+      else                     retrieveVendor(container);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      // Initialize the slosh bucket contents
+      ////////////////////////////////////////////////////////////////////////////////////////////////////
+      onLoadCollateral(container);
+      return;
+   }
+
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Initialize the vendor data from the data bean
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function initializeVendor(container) 
+   {
+      var myContainer = new Object();
+<%
+      try 
+      {
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         // Instantiate the vendor data bean
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         VendorListDataBean vendorList = new VendorListDataBean();
+         vendorList .setStoreentId(vendorHelperStoreId );
+         vendorList .setLanguageId(vendorHelperLangId );
+         DataBeanManager.activate(vendorList, request);
+
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         // Loop through the vendors and add to the selection box
+         //////////////////////////////////////////////////////////////////////////////////////////////
+         VendorDataBean[] vendors = vendorList.getVendorList();
+         for (int i = 0; i<vendors.length; i++) {
+	    String vendorName = vendors[i].getVendorName();
+	    String vendorId = vendors[i].getVendorId();
+	    if(vendorName !=null) vendorName= vendorName.trim(); else vendorName= "";
+	    if(vendorId!=null) vendorId = vendorId.trim(); else vendorId = "";
+%>
+            putAvailableCollateral(container, "<%=UIUtil.toJavaScript(vendorName)%>", "<%=UIUtil.toJavaScript(vendorId) %>");
+<%
+         }
+      } catch (Exception ex) {
+%>
+putAvailableCollateral(container, "Vendor Error 1", "1");
+<%
+System.out.println("THIS IS A VENDOR EXCEPTION");
+      }
+%>   
+      parent.put(container, myContainer);
+   }
+
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   // Retrieve the saved available vendor data
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   function retrieveVendor(container) 
+   {
+      retrieveCollateral(container);
+   }
+
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   // Save the vendor data
+   /////////////////////////////////////////////////////////////////////////////////////////////////
+   function saveVendor(container) 
+   {
+      saveCollateral(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return an array of selected vendor ids
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedVendorIDs(container)
+   {
+      return returnSelectedCollateralValue(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return an array of selected vendor names
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function returnSelectedVendorNames(container)
+   {
+      return returnSelectedCollateralText(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Return the number of selected vendors
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function getNumberOfSelectedVendors(container)
+   {
+      return getNumberOfSelectedCollateral(container);
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Validation function to ensure that a vendor has been selected
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////
+   function validateVendor(container)
+   {
+      if (getNumberOfSelectedVendors(container) == 0) {
+         parent.alertDialog("<%=UIUtil.toJavaScript(vendorHelperRB.get("VendorHelperNoSelection"))%>");
+         return false;
+      }
+      return true;
+   }
+
+	function setSelectVendorVisible(container, s) {
+		document.forms[container].collateralSelected.style.visibility = s;
+		document.forms[container].collateralAvailable.style.visibility = s;
+	}
+</SCRIPT>

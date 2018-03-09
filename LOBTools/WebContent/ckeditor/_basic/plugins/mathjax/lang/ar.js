@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("mathjax","ar",{title:"الرياضيات في TeX",button:"الرياضيات",dialogInput:"قم بكتابة TeX الخاص بك هنا",docUrl:"http://en.wikibooks.org/wiki/LaTeX/Mathematics",docLabel:"وثائق TeX",loading:"جاري التحميل...",pathName:"الرياضيات"});

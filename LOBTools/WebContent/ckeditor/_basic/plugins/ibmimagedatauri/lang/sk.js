@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","sk",{error:"Prilepovanie obrázkov momentálne nie je podporované. Použite voľbu Vložiť obrázok na lište nástrojov."});

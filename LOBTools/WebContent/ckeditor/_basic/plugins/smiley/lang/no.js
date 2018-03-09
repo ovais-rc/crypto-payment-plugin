@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","no",{options:"Alternativer for uttrykksikoner",title:"Uttrykksikoner",toolbar:"Sett inn uttrykksikon"});

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		This class implements the tab used in the work area in Management Center. Business object
+		editor that is displayed in the work area is controlled by the associated tab.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/ToolTab" focusable="false" height="${this.parent.height}">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			Identifier of the tool. This is a required attribute.
+		-->
+		<variable name="objectId" type="string"/>
+		<!---
+			Instance of the tool. This is a required attribute.
+		-->
+		<variable name="tool"/>
+		<!---
+			Text to display on the tab.
+		-->
+		<variable name="displayName" type="string" value="${this.tool.displayName}"/>
+
+		<!--- @keywords private -->
+		<variable name="active" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			]]>
+		</method>
+
+		<Component focusable="true" name="activeTab" visible="${this.classroot.active}" height="${this.parent.height}">
+			<Component imageSet="toolTabActive" name="background" stretches="width" x="${this.parent.height - this.height}" width="${this.parent.widthComp.width}"/>
+			<Component name="widthComp" height="${this.parent.height}">
+				<Component width="20"/>
+				<TextComponent name="text" resize="true" fgcolor="#4178be" fontsize="14" text="${this.classroot.displayName}" y="${this.classroot.getMiddleY(this.immediateParent.height, this.height)}"/>
+				<Component width="12"/>
+				<Component name="close" y="${this.classroot.getMiddleY(this.immediateParent.height, this.height)}" imageSet="toolTabClose">
+					<!--- @keywords private -->
+					<handler name="onclick">
+						<![CDATA[
+						ToolsController.Singleton.closeTool(this.classroot.objectId);
+						]]>
+					</handler>
+				</Component>
+				<Component width="12"/>
+				<AxisLayout axis="x"/>
+			</Component>
+
+			<!--- @keywords private -->
+			<handler name="onclick">
+				<![CDATA[
+				ToolsController.Singleton.focusTool(this.classroot.objectId);
+				]]>
+			</handler>
+			<!--- @keywords private -->
+			<handler args="k" name="onkeydown">
+				<![CDATA[
+				if (k == 27) {
+					EventUtil.trigger(this.widthComp.close, "onclick");
+				}
+				]]>
+			</handler>
+			<!--- @keywords private -->
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.parent.activeTabIndicator) {
+					new FocusIndicator.Class(this, {
+						name: "activeTabIndicator",
+						focusableView: this,
+						indicatorView: this.widthComp.text
+					});
+				}
+				]]>
+			</handler>
+		</Component>
+
+		<Component focusable="true" name="inactiveTab" visible="${!this.classroot.active}" height="${this.parent.height}">
+			<Component imageSet="toolTabInactive" name="background" stretches="width" x="${this.parent.height - this.height}" width="${this.parent.widthComp.width}"/>
+			<Component name="widthComp" height="${this.parent.height}">
+				<Component width="20"/>
+				<TextComponent name="text" resize="true" fontsize="14" text="${this.classroot.displayName}" y="${this.classroot.getMiddleY(this.immediateParent.height, this.height)}"/>
+				<Component width="12"/>
+				<Component name="close" y="${this.classroot.getMiddleY(this.immediateParent.height, this.height)}" imageSet="toolTabClose">
+					<!--- @keywords private -->
+					<handler name="onclick">
+						<![CDATA[
+						ToolsController.Singleton.closeTool(this.classroot.objectId);
+						]]>
+					</handler>
+				</Component>
+				<Component width="12"/>
+				<AxisLayout axis="x"/>
+			</Component>
+
+			<!--- @keywords private -->
+			<handler name="onclick">
+				<![CDATA[
+				ToolsController.Singleton.focusTool(this.classroot.objectId);
+				]]>
+			</handler>
+			<!--- @keywords private -->
+			<handler args="k" name="onkeydown">
+				<![CDATA[
+				if (k == 32 || k == 13) {
+					EventUtil.trigger(this, "onclick");
+				}
+				else if (k == 27) {
+					EventUtil.trigger(this.widthComp.close, "onclick");
+				}
+				]]>
+			</handler>
+			<!--- @keywords private -->
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.parent.inactiveTabIndicator) {
+					new FocusIndicator.Class(this.parent, {
+						name: "inactiveTabIndicator",
+						focusableView: this,
+						indicatorView: this.widthComp.text
+					});
+				}
+				]]>
+			</handler>
+		</Component>
+
+		<!---
+			This method brings this tab into focus.
+		-->
+		<method name="focus">
+			<![CDATA[
+			this.setVariable("active", true);
+			if (!ViewUtil.Singleton.containsView(this.tool, FocusUtil.getFocus())) {
+				FocusUtil.setFocus(this, false);
+			}
+			]]>
+		</method>
+
+		<!---
+			This method unfocuses this tab.
+		-->
+		<method name="unfocus">
+			<![CDATA[
+			this.setVariable("active", false);
+			]]>
+		</method>
+
+		<!---
+			Returns the y coordinate of a the given subview in the given container. This y coordinate
+			ensures the subview is placed in the middle of the container vertically.
+			@param number containerHeight: The height of the container view that contains the given subview
+			@param number subviewHeight: The height of the view that must be placed in the vertical middle of the container
+			@return number: the y coordinate of the subview relative to the container.
+		 -->
+		<method args="containerHeight, subviewHeight" name="getMiddleY">
+			<![CDATA[
+			return Math.round((containerHeight - subviewHeight + 1) / 2);
+			]]>
+		</method>
+	</FocusableComponent>
+
+</Definitions>

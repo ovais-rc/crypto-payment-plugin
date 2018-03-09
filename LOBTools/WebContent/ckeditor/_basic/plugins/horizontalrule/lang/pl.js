@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("horizontalrule","pl",{toolbar:"Wstaw linię poziomą"});

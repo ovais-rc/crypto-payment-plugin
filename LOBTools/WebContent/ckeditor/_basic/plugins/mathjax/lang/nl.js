@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("mathjax","nl",{title:"Wiskundige formules met TeX",button:"Math",dialogInput:"Schrijf hier uw TeX-invoer",docUrl:"http://en.wikibooks.org/wiki/LaTeX/Mathematics",docLabel:"TeX-documentatie",loading:"bezig met laden...",pathName:"math"});

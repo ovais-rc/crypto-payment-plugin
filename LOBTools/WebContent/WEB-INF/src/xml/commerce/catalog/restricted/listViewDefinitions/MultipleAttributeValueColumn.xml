@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+
+<Definitions>
+	<!---
+		@keywords final
+		Use this class to show a multiple attribute value selection editor in a grid cell.
+	-->
+	<GridChildObjectCheckboxCellDescriptor classDefinition="true" definitionName="cmc/catalog/MultipleAttributeValueCellDescriptor">
+		<dependency localName="MutipleAttributeValueEditor" moduleName="cmc/catalog/MutipleAttributeValueEditor"/>
+		<!---
+			@keywords private
+			Use {@link cmc/catalog/MutipleAttributeValueEditor} to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${MutipleAttributeValueEditor}"/>		
+	</GridChildObjectCheckboxCellDescriptor>
+	
+	<!---
+		@keywords final
+		Use this class to show a single attribute value selection editor in a grid cell.
+	-->
+	<GridChildObjectCheckboxCellDescriptor classDefinition="true" definitionName="cmc/catalog/SingleAttributeValueCellDescriptor">
+		<dependency localName="SingleAttributeValueEditor" moduleName="cmc/catalog/SingleAttributeValueEditor"/>
+		<!---
+			@keywords private
+			Use {@link cmc/catalog/SingleAttributeValueEditor} to create cell editor instances.
+		-->
+		<variable name="cellEditorClass" value="${SingleAttributeValueEditor}"/>		
+	</GridChildObjectCheckboxCellDescriptor>
+
+	<!---
+		@keywords private
+	-->
+	<AttributeValueEditor classDefinition="true" definitionName="cmc/catalog/MutipleAttributeValueEditor" package="cmc/catalog">
+	</AttributeValueEditor>
+	
+	<!---
+		@keywords private
+	-->
+	<AttributeValueEditor classDefinition="true" definitionName="cmc/catalog/SingleAttributeValueEditor" multipleSelection="false" package="cmc/catalog">
+	</AttributeValueEditor>
+
+	<!---
+		@keywords private
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/catalog/AttributeValueEditor" focusable="false" width="${this.immediateParent.availableWidth}">
+		<dependency localName="GetSelectedAttributeDictionaryAttributeValues" moduleName="cmc/catalog/GetSelectedAttributeDictionaryAttributeValues"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="AttributeValueSelectionDialog" moduleName="cmc/catalog/AttributeValueSelectionDialog"/>
+		<!---
+			The {@link cmc/foundation/ObjectDefinition#objectType object type} of the child object that will be created and deleted.
+			This attribute is required.
+		-->
+		<variable name="childObjectType" type="string"/>
+		<!---
+			The name of the property that contains the attribute value ID.
+			This attribute is required.
+		-->
+		<variable name="childPropertyName" type="string"/>
+		<!---
+			Indicates that multiple attribute values can  be selected.
+		-->
+		<variable name="multipleSelection" type="boolean" value="true"/>
+		<!--- @keywords private -->
+		<variable name="requestIdentifier" value="${-1}"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateValue();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			Update the value.
+			@keywords private
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.updateValueDel) == "undefined") {
+				this.updateValueDel = new EventHandler.Class(this, "updateValue");
+			}
+			this.requestIdentifier = -1;
+			this.updateValueDel.disconnectAll();
+			this.updateValueDel.connect(this, "ono");
+			if (this.o != null) {
+				var attributeObject = this.o.getObject("AttributeDictionaryAttributes");
+				var attributeId = attributeObject.getPropertyValue("attrId");
+				if (attributeId != "") {
+					var objects = this.o.getObjects(this.childObjectType, this.updateValueDel);
+					var attributeValueIds = "";
+					for (var i = 0; i < objects.length; i++) {
+						var attributeValueId = objects[i].getPropertyValue(this.childPropertyName);
+						if (attributeValueId != "") {
+							if (attributeValueIds != "") {
+								attributeValueIds += ",";
+							}
+							attributeValueIds += attributeValueId;
+						}
+					}
+					if (attributeValueIds != "") {
+						GetSelectedAttributeDictionaryAttributeValues.Singleton.doRequest(this, {
+							attributeId: attributeObject.getPropertyValue("attrId"),
+							attributeValueIds: attributeValueIds
+						});
+						this.requestIdentifier = GetSelectedAttributeDictionaryAttributeValues.Singleton.requestIdentifier;
+					}
+				}
+			}
+			if (this.requestIdentifier == -1) {
+				this.textView.setVariable("text", "");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the display text.
+			@keywords private
+		-->
+		<method args="newText" name="setDisplayText">
+			<![CDATA[
+			newText = StringUtil.Singleton.escapeText(newText);
+			if (this.textView.text != newText) {
+				this.textView.setVariable("text", newText);
+			}
+			]]>
+		</method>
+		
+		<handler name="onselected" eventSource="this.parent.row">
+			<![CDATA[
+			if (this.openDialogButton) {
+				if (this.openDialogButton.indicator) {
+					this.openDialogButton.indicator.setVariable("focusIndicatorColor", this.parent.row.selected ? "#ffffff" : "#000000");
+				}
+				var image = this.parent.row.selected ? 3 : 1;
+				this.openDialogButton.downImage = image;
+				this.openDialogButton.overImage = image;
+				this.openDialogButton.setVariable("normalImage", image);
+			}
+			]]>
+		</handler>
+		
+		<AxisLayout axis="x" spacing="0"/>
+		
+		<TextComponent multiline="true" name="textView" width="${this.parent.width - this.parent.openDialogButton.width}"/>	
+
+		<BaseButton enabled="${this.classroot.enabled}" focusable="true" imageSet="rteGridIcon" name="openDialogButton">
+			<!---
+				@keywords private
+				Open the dialog.
+			-->
+			<handler name="onclick">
+				<![CDATA[
+				if (this.classroot.o.model.oEditor.attributeValueSelectionDialog == null) {
+					new AttributeValueSelectionDialog.Class(this.classroot.o.model.oEditor, {
+						name: "attributeValueSelectionDialog",
+						model: this.classroot.o.model
+					});
+				}
+				this.classroot.o.model.oEditor.attributeValueSelectionDialog.openAttributeValueSelectionDialog(this.classroot);
+				]]>
+			</handler>
+			
+			<!---
+				@keywords private
+				Handle focus.
+			-->
+			<handler name="onfocus">
+				<![CDATA[
+				if (!this.indicator) {
+					new FocusIndicator.Class(this, {
+						name: "indicator",
+						focusableView: this,
+						indicatorView: this
+					});
+				}
+				]]>
+			</handler>
+		</BaseButton>
+	</FocusableComponent>
+	
+	<!---
+		@keywords private
+		
+		Attribute value selection dialog.
+	-->
+	<Dialog classDefinition="true" definitionName="cmc/catalog/AttributeValueSelectionDialog" title="${catalogResources.Singleton.utilitiesAttributeValueBrowseGridValue.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="catalogResources" moduleName="cmc/catalog/CatalogResources"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="AttributeValueSelectionGrid" moduleName="cmc/catalog/AttributeValueSelectionGrid"/>
+		<!---
+			Reference to grid editor from which this dialog was launched.
+		-->
+		<variable name="gridEditor"/>
+		<!---
+			Attribute object.
+		-->
+		<variable name="attributeObject"/>
+		<!---
+			Selected attribute values.
+		-->
+		<variable name="selectedValues" value="${[]}"/>
+		<!---
+			This attribute specifies the name of the grid definition class that displays the attribute values. 
+			This class must extend {@link cmc/foundation/BaseTemplateWizardGrid}.
+			The default value is {@link cmc/foundation/TemplateWizardGrid}.
+		-->
+		<variable name="gridDefinitionClass" type="module" value="${AttributeValueSelectionGrid}"/>
+		<!---
+			The cmc/foundation/Model instance.
+		-->
+		<variable name="model"/>
+
+		<!---
+			Handle OK. 
+		-->
+		<method name="onOk">
+			<![CDATA[
+			var childObjects = this.gridEditor.o.getObjects(this.gridEditor.childObjectType);
+			for (var i = 0; i < childObjects.length; i++) {
+				var value = childObjects[i].getPropertyValue(this.gridEditor.childPropertyName);
+				if (this.selectedValues.indexOf(value) == -1) {
+					childObjects[i].deleteObject();
+				}
+			}
+			for (var i = 0; i < this.selectedValues.length; i++) {
+				var objectType = this.gridEditor.childObjectType + "[" + this.gridEditor.childPropertyName + "=" + this.selectedValues[i] + "]";
+				var childObject = this.gridEditor.o.getObject(objectType, true);
+				if (childObject.implicitNewObject) {
+					childObject.setVariable("implicitNewObject", false);
+					childObject.openGroupObject.checkUnsavedChanges();
+				}
+			}
+			this.gridEditor.updateValue();
+			this.closeWindow();
+			]]>
+		</method>
+
+		<!---
+			Handle Cancel. 
+		-->
+		<method name="onCancel">
+			<![CDATA[
+			this.closeWindow();
+			]]>
+		</method>
+
+		<!---
+			Open the attribute value selection dialog.
+			@param cmc/catalog/AttributeValueEditor gridEditor grid cell editor
+		 -->
+		<method args="gridEditor" name="openAttributeValueSelectionDialog">
+			<![CDATA[
+			this.openWindow();
+			this.gridEditor = gridEditor;
+			var childObjects = this.gridEditor.o.getObjects(this.gridEditor.childObjectType);
+			for (var i = 0; i < childObjects.length; i++) {
+				this.selectedValues.push(childObjects[i].getPropertyValue(this.gridEditor.childPropertyName));
+			}
+			this.attributeObject = this.gridEditor.o.getObject("AttributeDictionaryAttributes");
+			this.attributeObject.bindViewToChildren(this.borderedView.attributeValueGrid, null, "AttributeDictionaryAttributeStringValue,InheritedAttributeDictionaryAttributeStringValue,AttributeDictionaryAttributeIntegerValue,InheritedAttributeDictionaryAttributeIntegerValue,AttributeDictionaryAttributeFloatValue,InheritedAttributeDictionaryAttributeFloatValue");
+			]]>
+		</method>
+
+		<!---
+			Close the dialog.
+		 -->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.attributeObject.releaseViewFromChildren(this.borderedView.attributeValueGrid);
+			this.gridEditor = null;
+			this.attributeObject = null;
+			this.selectedValues = [];
+			]]>
+		</method>
+
+		<variable name="availableWidth" type="number" value="400"/>
+		<variable name="availableHeight" type="number" value="400"/>
+		<BorderedView borderBottomSize="1" borderRightSize="1" borderColor="#d9d9d9" name="borderedView">
+			<!--- @keywords private -->
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				DefinitionUtil.createDefinitionInstance(this.classroot.gridDefinitionClass, this, {
+					name: "attributeValueGrid",
+					visible: true,
+					dialog: this.classroot
+				});
+				]]>
+			</method>
+		</BorderedView>
+		
+		<Component name="buttonSection" placement="footer">
+			<Button name="cancelButton" text="${foundationResources.Singleton.simpleDialogCancel.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.onCancel();
+					]]>
+				</handler>
+			</Button>		
+			<Button isdefault="true" name="okButton" text="${foundationResources.Singleton.simpleDialogOK.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.onOk();
+					]]>
+				</handler>
+			</Button>
+
+			<AxisLayout axis="x" spacing="10"/>
+		</Component>
+
+	</Dialog>
+	
+	<!---
+		@keywords private
+		Attribute value selection grid. 
+	-->
+	<ObjectGrid classDefinition="true" definitionName="cmc/catalog/BaseAttributeValueSelectionGrid" dragEnabled="false" editable="false" isConfigurable="false" listBorderSize="1" multiSelect="false" padding="0">
+		<!--- @keywords private -->
+		<variable name="dialog" value="${null}"/>
+		<!---
+			@keywords private
+			Handles ondblclick action from the row.
+			@param modelObject o: The object to activate.
+		-->
+		<method args="o" name="activateObject">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<GridAttributeValueSelectionCheckbox package="cmc/catalog"/>
+	</ObjectGrid>
+	
+	<!---
+		@keywords private
+	-->
+	<BaseCheckbox classDefinition="true" definitionName="cmc/catalog/GridAttributeValueSelectionCheckboxEditor">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<!--- Reference to cmc/foundation/ModelProperty object that is being edited. -->
+		<variable name="property" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.property) {
+				this.updateValue();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (typeof (this.property) == "undefined" || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				this.property = newProperty;
+				if (this.property) {
+					var multipleSelection = this.parent.grid.dialog.gridEditor.multipleSelection;
+					if (this.useRadioButton && multipleSelection) {
+						this.setVariable("useRadioButton", false);
+					}
+					else if (!this.useRadioButton && !multipleSelection) {
+						this.setVariable("useRadioButton", true);
+					}
+					this.updateValueDel.connect(this.property, "onvalue");
+					this.updateValueDel.connect(this.parent.grid.dialog, "onselectedValues");
+					this.updateValue();
+				}
+				else {
+					this.__updateValueLock = true;
+					this.setVariable("value", false);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this._initcomplete) {
+				var newValue = this.parent.grid.dialog.selectedValues.indexOf(this.property.value) >= 0;
+				if (newValue != this.value) {
+					this.__updateValueLock = true;
+					this.setVariable("value", newValue);
+					this.__updateValueLock = false;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method name="storeValue">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (this.property) {
+					var valueChanged = false;
+					var multipleSelection = this.parent.grid.dialog.gridEditor.multipleSelection;
+					var selectedValues = this.parent.grid.dialog.selectedValues;
+					var index = selectedValues.indexOf(this.property.value);
+					if (this.value) {
+						if (index == -1) {
+							if (multipleSelection) {
+								selectedValues.push(this.property.value);
+							}
+							else {
+								selectedValues = [this.property.value];
+							}
+							valueChanged = true;
+						}
+					}
+					else {
+						if (index != -1) {
+							if (multipleSelection) {
+								selectedValues.splice(index, 1);
+							}
+							else {
+								selectedValues = [];
+							}
+							valueChanged = true;
+						}
+					}
+					if (valueChanged) {
+						this.parent.grid.dialog.setVariable("selectedValues", selectedValues);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->		
+		<handler name="onvalue">
+			<![CDATA[
+			if (!this.__updateValueLock) {
+				this.storeValue();
+			}
+			]]>
+		</handler>
+	 <method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method></BaseCheckbox>
+	
+	<!---
+		@keywords private
+	-->
+	<GridColumn alignment="center" classDefinition="true" definitionName="cmc/catalog/GridAttributeValueSelectionCheckbox" draggable="false" propertyName="attrValId" resizable="false" sortable="false" width="80">
+		<dependency localName="GridAttributeValueSelectionCheckboxEditor" moduleName="cmc/catalog/GridAttributeValueSelectionCheckboxEditor"/>
+		<variable name="cellViewerClass" value="${GridAttributeValueSelectionCheckboxEditor}"/>
+	</GridColumn>
+	
+	<!---
+		@keywords private
+		This service returns the display names of the specified attribute values.
+	-->
+	<Service definitionName="cmc/catalog/GetSelectedAttributeDictionaryAttributeValues" retryOnError="true" sendDefaultLanguageId="true" singletonDefinition="true" url="/cmc/GetSelectedAttributeDictionaryAttributeValues">
+		<ServiceParam name="storeId"/>
+		<!---
+			@keywords private
+			Parse the returned values.
+			
+			@param node requestParent: the parent node for this service request
+			@param XML e: "values" data element
+			@param number requestIdentifier: unique request identifier
+		-->
+		<method args="requestParent, e, requestIdentifier" name="parseValues">
+			<![CDATA[
+			if (requestParent.requestIdentifier == requestIdentifier) {
+				var displayText = "";
+				var nodes = e.childNodes;
+				for (var i = 0; i < nodes.length; i++) {
+					var node = nodes[i];
+					if (node.nodeName == "value") {
+						var displayName = node.getAttribute("displayName");
+						if (displayText != "") {
+							displayText += ", ";
+						}
+						displayText += node.getAttribute("displayName");
+					}
+				}
+				requestParent.setDisplayText(displayText);
+			}
+			]]>
+		</method>
+	</Service>
+</Definitions>

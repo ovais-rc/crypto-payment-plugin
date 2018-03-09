@@ -1,0 +1,1570 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		List item.
+	-->
+	<BaseListItem classDefinition="true" definitionName="cmc/foundation/ListItem">
+		<!---
+			Icon.
+		-->
+		<variable name="icon" type="string" value="${null}"/>
+		<!---
+			Display key.
+		-->
+		<variable name="displayKey" value="${null}"/>
+		<!---
+			Display name.
+		-->
+		<variable name="displayName" type="string" value="${this.displayKey.string}"/>
+		<!---
+			Declare whether to add a separator before this list item or not
+		-->
+		<variable name="addSeparatorBefore" type="boolean" value="false"/>
+		<!---
+			Selected icon resource name.
+		-->
+		<variable name="selectedIcon" type="string" value="${null}"/>
+		<!---
+			Indent.
+		-->
+		<variable name="indent" type="number" value="0"/>
+		<!--- @keywords private -->
+		<variable name="useCompactPadding" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method args="s" name="_applystyle">
+			<![CDATA[
+			if (this.style != null) {
+				this.inherited(arguments);
+				if (this._enabled) {
+					if (this.selected) {
+						this.title.itemText.setVariable("fgcolor", "#ffffff");
+					}
+					else if (this.hilited) {
+						this.title.itemText.setVariable("fgcolor", this.style.texthilitecolor);
+					}
+					else {
+						this.title.itemText && this.title.itemText.setVariable("fgcolor", this.style.textcolor);
+					}
+				}
+				else {
+					if (this.hilited) {
+						this.title.itemText.setVariable("fgcolor", "#9d9d9d");
+					}
+					else {
+						this.title.itemText.setVariable("fgcolor", this.style.textdisabledcolor);
+					}
+				}
+			}
+			]]>
+		</method>
+		<AxisLayout axis="y"/>
+		<Component bgcolor="${this.classroot.style.bordercolor}" height="1" name="separator" visible="${this.parent.addSeparatorBefore}" width="${this.parent.width}"/>
+		<Component name="title" height="28">
+			<AxisLayout axis="x" inset="${this.classroot.indent + (this.classroot.useCompactPadding ? 4 : 7)}" spacing="6"/>
+			<Component name="selectedIconHolder" visible="${this.classroot.selectedIcon ? true : false}" width="16" valign="middle">
+				<Component imageSet="${this.classroot.selectedIcon}" name="selectedIconIndicator" visible="false"/>
+			</Component>
+			<Component currentImage="${this.classroot.selected ? 2 : 1}" imageSet="${this.classroot.icon}" name="itemIcon" valign="middle" visible="${this.classroot.icon ? true : false}"/>
+			<TextComponent name="itemText" resize="true" text="${this.classroot.displayName}" valign="middle" visible="${this.classroot.displayName ? true : false}"/>
+			<!-- Space to hold scroll bar -->
+			<Component width="20"/>
+		</Component>
+	</BaseListItem>
+
+	<!---
+		@keywords private
+		
+		Action list button.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/ActionListButton" doesenter="true">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="Node" moduleName="cmc/foundation/Node"/>
+		<dependency localName="BaseButton" moduleName="cmc/foundation/BaseButton"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ListItem" moduleName="cmc/foundation/ListItem"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Button resource name.
+		-->
+		<variable name="buttonResource" type="string" value="${null}"/>
+		<!---
+			Button resource name to be used when there is only one action in the list.
+		-->
+		<variable name="buttonResourceForSingleAction" type="string" value=""/>
+		<!---
+			Button display name.
+		-->
+		<variable name="buttonText" type="string" value=""/>
+		<!---
+			Resource name for the drop down image.
+		-->
+		<variable name="dropdownResource" type="string" value="dropdownToolbarIcon"/>
+		<!---
+			Action definitions.
+		-->
+		<variable name="actionDefinitions" value="${null}"/>
+		<!---
+			Current default definition.
+		-->
+		<variable name="defaultActionDefinition" value="${null}"/>
+		<!---
+			Flag that saves the current state of the action list.
+		-->
+		<variable name="actionListOpen" value="${this.actionList.visible}"/>
+		<!---
+			The list of items.
+		-->
+		<variable name="items" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="availableItems" value="${[]}"/>
+		<!---
+			Drop down offset.
+		-->
+		<variable name="dropdownOffset" type="number" value="0"/>
+		<!---
+			Resource name for the selected icon image.
+		-->
+		<variable name="selectedIcon" type="string" value="checkmarkIcon"/>
+		<!---
+			Display selected icon when the item is selected by user.
+		-->
+		<variable name="displaySelectedIndicator" type="boolean" value="false"/>		
+		<!--
+			Show drop down button even with only one item in list if this attribute is set to true.
+			Default value is set to false.
+		 -->
+		<variable name="showSingle" type="boolean" value="false"/>
+		<!--
+			Focus indicator color.
+		 -->
+		<variable name="focusIndicatorColor" type="string" value="#000000"/>
+		<!--
+			Action list attach offset.
+		-->
+		<variable name="actionListOffset" type="number" value="${this.buttonText == '' ? 0 : -1}"/>
+		
+		<BaseButton name="defaultActionButton">
+			<State active="${this.classroot.buttonText != ''}" name="state0"/>
+			<AxisLayout axis="x"/>
+			<Component name="text" visible="${this.parent.state0.active}" height="30" width="${this.text.width + 16}">
+				<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="1" height="${this.parent.height}"/>
+				<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="1" height="${this.parent.height}" x="${this.parent.width - 1}"/>
+				<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="${this.parent.width}" height="1"/>
+				<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="${this.parent.width}" height="1" y="${this.parent.height - 1}"/>
+				<TextComponent fgcolor="${this.classroot._enabled ? null : '#b1b1b1'}" name="text" text="${this.classroot.buttonText}" x="8" valign="middle"/>
+			</Component>
+			
+			<!---
+				Handler of onclick, replace the old "onclick" attribute
+			-->
+			<handler name="onclick">
+				<![CDATA[
+				if (Logger.Singleton.perfTraceEnabled) {
+					Logger.Singleton.perfTrace("cmc/foundation/ActionListButton", "onclick", "Start " + this.parent.name + " default Action");
+				}
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/ActionListButton onclick: " + this.parent.name);
+				this.parent.doAction(null);
+				if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+				if (Logger.Singleton.perfTraceEnabled) {
+					Logger.Singleton.perfTrace("cmc/foundation/ActionListButton", "onclick", "End " + this.parent.name + " default Action");
+				}
+				]]>
+			</handler>
+			
+			<method name="_callShow">
+				<![CDATA[
+				if (!this.__callShowLock) {
+					this.__callShowLock = true;
+					var dd = this.parent.actionDropdown;
+					if (this.parent.actionListOpen || (this.parent.actionDropdown._msdown && this.parent.actionDropdown._msin) || (this._msdown && this._msin)) {
+						this.showDown();
+					}
+					else if (this._msin || (dd._msin && !dd._msdown)) {
+						this.showOver();
+					}
+					else {
+						this.showUp();
+					}
+					dd._callShow();
+					this.__callShowLock = false;
+				}
+				]]>
+			</method>
+		</BaseButton>
+		<Component name="dropdownBackground" visible="${this.classroot.buttonText != '' &amp;&amp; this.classroot.actionDropdown.visible}" height="${this.classroot.defaultActionButton.height}" x="${this.classroot.defaultActionButton.width}" width="${(this.classroot.dropdownOffset * 2) + this.parent.actionDropdown.width + 1}">
+			<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="1" height="${this.parent.height}" x="${this.parent.width - 1}"/>
+			<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="${this.parent.width}" height="1"/>
+			<Component bgcolor="${this.classroot._enabled ? '#959595' : '#b1b1b1'}" width="${this.parent.width}" height="1" y="${this.parent.height - 1}"/>
+		</Component>
+		<BaseButton imageSet="${this.classroot.dropdownResource}" name="actionDropdown" visible="false" x="${this.classroot.defaultActionButton.width + this.classroot.dropdownOffset}" valign="middle" opacity="${this._enabled ? null : 0.50}">
+			<method name="_callShow">
+				<![CDATA[
+				if (!this.__callShowLock) {
+					this.__callShowLock = true;
+					var nb = this.parent.defaultActionButton;
+					if (this.parent.actionListOpen) {
+						BaseButton.Class.prototype.showDown.call(this);
+					}
+					else {
+						if (nb._msin) {
+							if (nb._msdown) {
+								this.showDown();
+							}
+							else {
+								this.showOver();
+							}
+						}
+						else {
+							this.inherited(arguments);
+						}
+					}
+					nb._callShow();
+					this.__callShowLock = false;
+				}
+				]]>
+			</method>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.openActionList();
+				]]>
+			</handler>
+		</BaseButton>
+
+		<FloatingList attach="${this.classroot.buttonText == '' ? 'bottom' : 'bottomleft'}" attachoffset="${this.classroot.actionListOffset}" doesenter="true" name="actionList" visible="false">
+			<!--- @keywords private -->
+			<handler args="k" name="onkeydown">
+				<![CDATA[
+				if (k != 37 && k != 38 && k != 39 && k != 40) {
+					var startIndex = 0;
+					for (var i = 0; i < this.owner.items.length; i++) {
+						var item = this.owner.items[i];
+						if (item.hilited == true && String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+							startIndex = i + 1;
+							break;
+						}
+					}
+					for (var i = 0; i < this.owner.items.length; i++) {
+						if (startIndex >= this.owner.items.length) {
+							startIndex = 0;
+						}
+						var item = this.owner.items[startIndex];
+						if (String.fromCharCode(k).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+							this.setHilite(item);
+							this.setVariable('doesenter', true);
+							break;
+						}
+						startIndex++;
+					}
+				}
+				]]>
+			</handler>
+			
+			<!--- @keywords private -->
+			<method args="item" name="select">
+				<![CDATA[
+				this.inherited(arguments);
+				this.setVariable("doesenter", true);
+				]]>
+			</method>
+			
+			<!--- @keywords private -->
+			<method name="getNextSelection">
+				<![CDATA[
+
+				]]>
+			</method>
+			<!--- @keywords private -->
+	        <method name="getPrevSelection">
+				<![CDATA[
+
+				]]>
+			</method>
+			
+		</FloatingList>
+		
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					focusIndicatorColor: this.focusIndicatorColor
+				});
+			}
+			]]>
+		</handler>
+		
+		<handler eventSource="this.actionList" name="onblur">
+			<![CDATA[
+			this.closeActionList();
+			]]>
+		</handler>
+		
+		<handler name="onactionListOpen">
+			<![CDATA[
+			this.defaultActionButton._callShow();
+			this.actionDropdown._callShow();
+			]]>
+		</handler>
+
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 32) {
+				EventUtil.trigger(this.defaultActionButton, "onclick");
+			}
+			else if (k == 40 && this.items.length > 1) {
+				this.openActionList();
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="doEnterDown">
+			<![CDATA[
+			EventUtil.trigger(this.defaultActionButton, "onclick");
+			]]>
+		</method>
+		
+		<handler args="k" eventSource="this.actionList" name="onkeydown">
+			<![CDATA[
+			if (k == 27) {
+				this.closeActionList();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Handler that gets executed when an item from the drop-down list is selected
+		-->
+		<handler args="v" eventSource="this.actionList" name="onselect">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionListButton", "onclick", "Start " + this.name + " " + v.value);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/ActionListButton onselect: " + this.name);
+			if (v.enabled) {
+				var action = v.value;
+				this.closeActionList();
+				this.doAction(action);
+				if ((this.displaySelectedIndicator) && (typeof (action.selectableAsDefaultDefinition) == "undefined" || action.selectableAsDefaultDefinition)) {
+					this.checkSelected(v);
+				}
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/ActionListButton", "onclick", "End " + this.name + " " + v.value);
+			}
+			]]>
+		</handler>
+
+		<!---
+			Set the current default action definition and display the selected indicator.
+		-->
+		<handler name="ondefaultActionDefinition">
+			<![CDATA[
+			this.selectDefaultActionDefinition();
+			]]>
+		</handler>
+
+		<!---
+			Set the current default action definition and display the selected indicator.
+		-->
+		<method name="selectDefaultActionDefinition">
+			<![CDATA[
+			if (this.displaySelectedIndicator && this.defaultActionDefinition) {
+				var defaultItem = null;
+				for (var i = 0; i < this.items.length; i++) {
+					if (defaultItem == null) {
+						defaultItem = this.items[i];
+					}
+					if (this.items[i].value == this.defaultActionDefinition) {
+						defaultItem = this.items[i];
+					}
+				}
+				this.checkSelected(defaultItem);
+			}
+			]]>
+		</method>
+
+		<!---
+			Display the selected indicator on the current default item from the list.
+			@param object v: the item selected from the list
+		-->
+		<method args="v" name="checkSelected">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				if (v.value == this.items[i].value) {
+					this.items[i].title.selectedIconHolder.selectedIconIndicator.setVariable("visible", true);
+				}
+				else {
+					this.items[i].title.selectedIconHolder.selectedIconIndicator.setVariable("visible", false);
+				}
+			}
+			]]>
+		</method>
+		
+		<handler name="onconstruct">
+			<![CDATA[
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			this.checkWidthDel = new EventHandler.Class(this, "checkWidth");
+			this.updateDisplayNamesDel = new EventHandler.Class(this, "updateDisplayNames");
+			]]>
+		</handler>
+		
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateActionDefinitions();
+			]]>
+		</method>
+		
+		<method name="destroy">
+			<![CDATA[
+			this.actionList.autoscrollbar = false;
+			this.checkMouseDel.disconnectAll();
+			delete this.checkMouseDel;
+			this.checkWidthDel.disconnectAll();
+			delete this.checkWidthDel;
+			this.updateDisplayNamesDel.disconnectAll();
+			delete this.updateDisplayNamesDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<handler name="onactionDefinitions">
+			<![CDATA[
+			if (this.inited) {
+				this.updateActionDefinitions();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Update the list of action definitions.
+		-->
+		<method name="updateActionDefinitions">
+			<![CDATA[
+			this.checkWidthDel.disconnectAll();
+			this.updateDisplayNamesDel.disconnectAll();
+			var definitions = this.actionDefinitions;
+			if (definitions == null) {
+				definitions = [];
+			}
+			while (this.items.length > 0) {
+				var item = this.items.pop();
+				item.setVariable("visible", false);
+				item.setVariable("value", null);
+				this.availableItems.unshift(item);
+			}
+			if (this.defaultActionDefinition != null && definitions.indexOf(this.defaultActionDefinition) == -1) {
+				this.defaultActionDefinition = null;
+			}
+			for (var i = 0; i < definitions.length; ++i) {
+				this.addActionDefinition(definitions[i]);
+			}
+			this.selectDefaultActionDefinition();
+			this.updateDropDownVisibility();
+			]]>
+		</method>
+		
+		<!---
+			Append the specified action definition to action drop down.
+			@param object def: the action definition
+		-->
+		<method args="def" name="addActionDefinition">
+			<![CDATA[
+			var item;
+			if (this.availableItems.length > 0) {
+				item = this.availableItems.shift();
+				item.setVariable("value", def);
+				item.setVariable("icon", def.icon ? def.icon : null);
+				item.setVariable("displayName", def.displayName);
+				item.setVariable("addSeparatorBefore", def.addSeparatorBefore ? def.addSeparatorBefore : false);
+				item.setVariable("selectedIcon", this.displaySelectedIndicator ? this.selectedIcon : null);
+				item.setVariable("visible", true);
+			}
+			else {
+				var item = new ListItem.Class(this.actionList, {
+					value: def,
+					icon: def.icon ? def.icon : null,
+					displayName: def.displayName,
+					addSeparatorBefore: def.addSeparatorBefore ? def.addSeparatorBefore : false,
+					selectedIcon: this.displaySelectedIndicator ? this.selectedIcon : null
+				});
+			}
+			this.items.push(item);
+			this.checkWidthDel.connect(item.title, "onwidth");
+			this.checkWidth();
+			if (def instanceof Node.Class) {
+				this.updateDisplayNamesDel.connect(def, "ondisplayName");
+			}
+			this.updateDropDownVisibility();
+			]]>
+		</method>
+		
+		<!---
+			Enable the specified action definition.
+			@param object def: the action definition
+		-->
+		<method args="def" name="enableActionDefinition">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				if (item.value == def) {
+					item.setVariable("enabled", true);
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Disable the specified action definition.
+			@param object def: the action definition
+		-->
+		<method args="def" name="disableActionDefinition">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				if (item.value == def) {
+					item.setVariable("enabled", false);
+					break;
+				}
+			}
+			]]>
+		</method>
+		
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.actionList.containsPt(this.actionList.getMouse("x"), this.actionList.getMouse("y"))) {
+				this.closeActionList();
+			}
+			]]>
+		</method>
+		
+		<method args="e" name="checkWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = 0;
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				var itemWidth = item.title.width;
+				if (itemWidth > newWidth) {
+					newWidth = itemWidth;
+				}
+			}
+			this.actionList.setVariable('width', newWidth + 10);
+			]]>
+		</method>
+		
+		<method args="e" name="updateDisplayNames">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			for (var i = 0; i < this.items.length; i++) {
+				this.items[i].setVariable("displayName", this.items[i].value.displayName);
+			}
+			]]>
+		</method>
+		
+		<method name="openActionList">
+			<![CDATA[
+			this.actionList.hilitedItem = null;
+			if (this.displaySelectedIndicator && this.defaultActionDefinition) {
+				for (var i = 0; i < this.items.length; i++) {
+					if (this.items[i].title.selectedIconHolder.selectedIconIndicator.visible) {
+						this.items[i].setHilite(true);
+						this.actionList.hilitedItem = this.items[i];
+					}
+					else {
+						this.items[i].setHilite(false);
+					}
+				}
+			}
+			else {
+				for (var i = 1; i < this.items.length; i++) {
+					this.items[i].setHilite(false);
+				}
+				this.items[0].setHilite(true);
+				this.actionList.hilitedItem = this.items[0];
+				this.actionList.setVariable('doesenter', true);
+			}
+			this.actionList.clearSelection();
+			this.actionList.setVariable("visible", true);
+			this.actionList.bringToFront();
+			ModalUtil.makeModal(this.actionList);
+			FocusUtil.setFocus(this.actionList, false);
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			this.setVariable("actionListOpen", true);
+			]]>
+		</method>
+		
+		<method name="closeActionList">
+			<![CDATA[
+			if (this.actionListOpen) {
+				this.setVariable("actionListOpen", false);
+				ModalUtil.release(this.actionList);
+				this.actionList.setVariable("visible", false);
+				FocusUtil.setFocus(this, false);
+				this.checkMouseDel.disconnectAll();
+			}
+			]]>
+		</method>
+		
+		<method args="action" name="doAction">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			Check to see whether or not the action list should show the options drop down. If there is only one option
+			then the drop down icon is not shown. Also, swap the icon to use buttonResourceForSingleAction if provided.
+		-->
+		<method name="updateDropDownVisibility">
+			<![CDATA[
+			if (this.items) {
+				this.actionDropdown.setVariable("visible", ((this.items.length > 1) || (this.showSingle && this.items.length == 1)) ? true : false);
+				if (this.buttonResource != null) {
+					var newButtonResource = this.buttonResource;
+					if (!this.actionDropdown.visible && this.buttonResourceForSingleAction != "") {
+						newButtonResource = this.buttonResourceForSingleAction;
+					}
+					this.defaultActionButton.setVariable("imageSet", newButtonResource);
+					this.defaultActionButton.setVariable("currentImage", this.enabled ? 1 : 4);
+				}
+			}
+			]]>
+		</method>
+	</FocusableComponent>
+
+	<!---
+		@keywords private
+		Value selector drop down list. Only one drop down list is created for all value selectors.
+	-->
+	<FloatingList attach="bottom" definitionName="cmc/foundation/ValueSelectorList" doesenter="true" initstage="defer" scrollBarClass="${VerticalScrollbar}" singletonDefinition="true" visible="false">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="ListItem" moduleName="cmc/foundation/ListItem"/>
+		<dependency localName="VerticalScrollbar" moduleName="cmc/foundation/VerticalScrollbar"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!--- @keywords private -->
+		<variable name="items" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="availableItems" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="valueSelector" value="${null}"/>
+		<!---
+			@keywords private
+			Maximum number of items to show before displaying a scrollbar
+		-->
+		<variable name="maxItemsToShow" type="number" value="15"/>
+		<!--- @keywords private -->
+		<variable name="restoreFocusable" type="boolean" value="false"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.checkMouseDel) {
+				this.checkMouseDel.disconnectAll();
+				delete this.checkMouseDel;
+			}
+			if (this.closeListDel) {
+				this.closeListDel.disconnectAll();
+				delete this.closeListDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.containsPt(this.getMouse("x"), this.getMouse("y"))) {
+				this.closeList();
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Open the list and attach it to the specified value selector.
+		-->
+		<method args="valueSelector" name="openList">
+			<![CDATA[
+			this.completeInstantiation();
+			this.closeList();
+			this.clearSelection();
+			this.restoreFocusable = valueSelector.focusable;
+			if (this.restoreFocusable) {
+				valueSelector.setVariable("focusable", false);
+			}
+			ModalUtil.makeModal(this);
+			this.setVariable("visible", true);
+			this.bringToFront();
+			FocusUtil.setFocus(this);
+			this.valueSelector = valueSelector;
+			var newWidth = valueSelector.width - 10;
+			var selectedItem = null;
+			var displaySelectedIndicator = this.valueSelector.displaySelectedIndicator ? true : false;
+			this.lockLayout();
+			for (var i = 0; i < valueSelector.values.length; ++i) {
+				var value = valueSelector.values[i];
+				if (!value.hide) {
+					var displayKey = value.displayKey ? value.displayKey : null;
+					var displayName;
+					if (displayKey != null) {
+						displayName = displayKey.string;
+					}
+					else {
+						displayName = value.displayName;
+					}
+					var item;
+					var indent = value.icon ? 3 : (value.indent ? value.indent : this.valueSelector.defaultItemIndent);
+					var useCompactPadding = !!this.valueSelector.useCompactPadding;
+					if (this.availableItems.length > 0) {
+						item = this.availableItems.shift();
+						item.setVariable("value", value);
+						item.setVariable("displayName", displayName);
+						item.setVariable("displayKey", displayKey);
+						item.setVariable("icon", value.icon ? value.icon : null);
+						item.setVariable("indent", indent);
+						item.setVariable("useCompactPadding", useCompactPadding);
+						item.setVariable("addSeparatorBefore", value.addSeparatorBefore ? value.addSeparatorBefore : false);
+						item.setVariable("selectedIcon", displaySelectedIndicator ? this.valueSelector.selectedIcon : null);
+						item.setVariable("visible", true);
+					}
+					else {
+						item = new ListItem.Class(this, {
+							value: value,
+							displayName: displayName,
+							displayKey: displayKey,
+							icon: value.icon ? value.icon : null,
+							indent: indent,
+							useCompactPadding: useCompactPadding,
+							addSeparatorBefore: value.addSeparatorBefore ? value.addSeparatorBefore : false,
+							selectedIcon: displaySelectedIndicator ? this.valueSelector.selectedIcon : null
+						});
+					}
+					this.items.push(item);
+					var itemWidth = item.title.width;
+					if (itemWidth > newWidth) {
+						newWidth = itemWidth;
+					}
+					if (valueSelector.selectedValue != null && (("value" in value && "value" in valueSelector.selectedValue && value.value == valueSelector.selectedValue.value) || (!("value" in value) && value.displayName == valueSelector.selectedValue.displayName && value.displayName != null))) {
+						if (this.hilitedItem) {
+							this.hilitedItem.setHilite(false);
+						}
+						this.hilitedItem = item;
+						item.setHilite(true);
+						selectedItem = item;
+						this.setVariable('doesenter', true);
+						item.title.selectedIconHolder.selectedIconIndicator.setVariable("visible", displaySelectedIndicator);
+					}
+					else {
+						item.setHilite(false);
+						item.title.selectedIconHolder.selectedIconIndicator.setVariable("visible", false);
+					}
+				}
+			}
+			this.unlockLayout();
+			if (!selectedItem && this.items[0]) {
+				this.items[0].setHilite(true);
+				this.hilitedItem = this.items[0];
+				selectedItem = this.items[0];
+			}
+			var numItems = (this.items.length > this.maxItemsToShow) ? this.maxItemsToShow : -1;
+			this.setVariable("shownitems", numItems);
+			this.setVariable('width', newWidth + 10);
+			this.setVariable("attach", valueSelector.selectorLocation ? valueSelector.selectorLocation : "bottom");
+			this.setVariable("attachoffset", valueSelector.selectorOffset ? valueSelector.selectorOffset : 0);
+			this.setVariable("attachxoffset", valueSelector.selectorXOffset ? valueSelector.selectorXOffset : 0);
+			this.setVariable("attachtarget", valueSelector);
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			this.valueSelector.setVariable("listOpen", true);
+			this.valueSelector.mouseIn = false;
+			if (typeof (this.closeListDel) === "undefined") {
+				this.closeListDel = new EventHandler.Class(this, "closeList");
+			}
+			KeyUtil.callOnKeyCombo(this.closeListDel, ['esc']);
+			if (selectedItem != null) {
+				this.ensureItemInView(selectedItem);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Close the list.
+		-->
+		<method args="e" name="closeList">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.valueSelector != null) {
+				this.lockLayout();
+				while (this.items.length > 0) {
+					var item = this.items.pop();
+					item.setVariable("visible", false);
+					item.setVariable("value", null);
+					this.availableItems.unshift(item);
+				}
+				this.unlockLayout();
+				KeyUtil.removeKeyComboCall(this.closeListDel, ['esc']);
+				ModalUtil.release(this);
+				this.valueSelector.setVariable("listOpen", false);
+				this.setVariable("visible", false);
+				this.checkMouseDel.disconnectAll();
+				if (this.restoreFocusable) {
+					this.valueSelector.setVariable("focusable", true);
+					this.restoreFocusable = false;
+				}
+				this.valueSelector.restoreFocus();
+				this.valueSelector = null;
+			}
+			]]>
+		</method>
+		
+		<method name="_setScroll">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="kc" name="_dokeydown">
+			<![CDATA[
+			if (this.items.length > 0) {
+				this.inherited(arguments);
+				var startIndex = 0;
+				for (var i = 0; i < this.items.length; i++) {
+					var item = this.items[i];
+					if (item.hilited == true && String.fromCharCode(kc).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+						startIndex = i + 1;
+						break;
+					}
+				}
+				for (var i = 0; i < this.items.length; i++) {
+					if (startIndex >= this.items.length) {
+						startIndex = 0;
+					}
+					var item = this.items[startIndex];
+					if (String.fromCharCode(kc).toUpperCase().charCodeAt(0) == item.displayName.toUpperCase().charCodeAt(0)) {
+						if (this.hilitedItem) {
+							this.hilitedItem.setHilite(false);
+						}
+						this.hilitedItem = item;
+						item.setHilite(true);
+						this.ensureItemInView(item);
+						this.setVariable('doesenter', true);
+						break;
+					}
+					startIndex++;
+				}
+				if (this.visible && this.hilitedItem != null && !this.hilitedItem.visible) {
+					this.hilitedItem.setHilite(false);
+					this.hilitedItem = this.items[this.items.length - 1];
+					this.hilitedItem.setHilite(true);
+					this.ensureItemInView(this.hilitedItem);
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler args="item" name="onselect">
+			<![CDATA[
+			var value = item.value;
+			var valueSelector = this.valueSelector;
+			this.closeList();
+			if (valueSelector != null) {
+				valueSelector.selectValue(value);
+			}
+			this.setVariable("doesenter", true);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="getNextSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+		<!--- @keywords private -->
+        <method name="getPrevSelection">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+	</FloatingList>
+		
+	<!---
+		This class is the base class for a generic value selector. You can use a value selector
+		to select a value from a drop-down list. You can set the list of values by calling addValue or setValues.
+		These methods accept value objects with the following properties:
+			<ul>
+			<li>value - the untranslated value
+			<li>displayName - the text that will be displayed in the list
+			<li>displayKey - optional {@link cmc/foundation/ResourceBundleKey resource bundle key} used to retrieve the translated display name
+			<li>icon - optional icon that will be displayed before the text
+			<li>addSeparator - optional boolean value that indicates that a separator is to be displayed before the value
+			</ul>
+	 -->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/BaseValueSelector">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ValueSelectorList" moduleName="cmc/foundation/ValueSelectorList"/>
+		<dependency localName="Node" moduleName="cmc/foundation/Node"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<!---
+			Reference to the selected object. If no item is selected, this value is <code>null</code>. It can be a simple
+			object, such as <code>cmc/foundation/PropertyValue</code>.
+			The value must have a property named 'displayName'. If the display name is
+			language-sensitive, this object must also have a property named 'displayKey'
+			with a type of {@link cmc/foundation/ResourceBundleKey}.
+			@type object: with a property named 'displayName'
+		-->
+		<variable name="selectedValue" value="${null}"/>
+		<!---
+			The {@link cmc/foundation/ResourceBundleKey} for the text that is displayed when an item is not selected from the drop-down list.
+			@type cmc/foundation/ResourceBundleKey
+		-->
+		<variable name="defaultTextResourceBundleKey" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="mouseIn" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="listOpen" type="boolean" value="false"/>
+		<!--- @keywords private -->
+		<variable name="padding" type="number" value="4"/>
+		<!--- @keywords private -->
+		<variable name="defaultItemIndent" type="number" value="0"/>
+		<!---
+			@keywords private
+			Array of values.
+		-->
+		<variable name="values" value="${[]}"/>
+		
+		<!---
+			@keywords private
+			Resource name for the selected icon image.
+		-->
+		<variable name="selectedIcon" type="string" value="checkmarkIcon"/>
+		<!---
+			@keywords private
+			Display selected icon when the item is selected by user.
+		-->
+		<variable name="displaySelectedIndicator" type="boolean" value="false"/>
+		<!---
+			Text color.
+		-->
+		<variable name="textColor" type="string" value="#464646"/>
+		<!---
+			Disabled text color.
+		-->
+		<variable name="disabledTextColor" type="string" value="#b1b1b1"/>
+		<!---
+			Focus indicator color.
+		 -->
+		<variable name="focusIndicatorColor" type="string" value="#000000"/>
+		
+		<!-- This tooltip will display the full text of the selected item if it has been truncated. -->
+		<Tooltip enabled="false" name="untruncatedText"/>
+
+		<Component name="selectedValueText" fgcolor="${this.classroot._enabled ? this.classroot.textColor : this.classroot.disabledTextColor}">
+			<TextComponent name="text"/>
+			
+			<TextComponent name="dots" text="${foundationResources.Singleton.gridTruncationText.string}" x="${this.parent.text.x + this.parent.text.width}">
+				<handler name="ontext">
+					<![CDATA[
+					this.parent.updateTextWidth();
+					]]>
+				</handler>
+				<handler name="oninit">
+					<![CDATA[
+					this.parent.updateTextWidth();
+					]]>
+				</handler>
+			</TextComponent>
+			<method args="text" name="updateDisplay">
+				<![CDATA[
+				this.text.setVariable("text", text);
+				this.classroot.untruncatedText.setVariable("text", text);
+				this.updateTextWidth();
+				]]>
+			</method>
+			
+			<method name="updateTextWidth">
+				<![CDATA[
+				if (this.classroot.visible) {
+					if (!this.classroot.hasSetWidth) {
+						this.dots.setVariable('width', 0);
+						this.dots.setVariable('visible', false);
+						this.classroot.untruncatedText.setVariable("enabled", false);
+						return;
+					}
+					var untruncatedWidth = this.classroot.getUntruncatedWidth();
+					if (untruncatedWidth > this.classroot.width) {
+						var newDotWidth = this.dots.getTextWidth();
+						var availableWidth = Math.max(0, this.classroot.width - (untruncatedWidth - this.text.getTextWidth()));
+						if (newDotWidth > availableWidth) {
+							newDotWidth = availableWidth;
+						}
+						this.dots.setVariable('width', newDotWidth);
+						this.dots.setVariable('visible', true);
+						this.text.setVariable('width', availableWidth - newDotWidth);
+						this.classroot.untruncatedText.setVariable("enabled", true);
+					}
+					else {
+						this.dots.setVariable('width', 0);
+						this.dots.setVariable('visible', false);
+						this.text.setVariable('width', this.text.getTextWidth());
+						this.classroot.untruncatedText.setVariable("enabled", false);
+					}
+				}
+				]]>
+			</method>
+			
+			<method name="getUntruncatedWidth">
+				<![CDATA[
+				return this.text.getTextWidth();
+				]]>
+			</method>
+			
+			<handler eventSource="this.classroot" name="onwidth">
+				<![CDATA[
+				this.updateTextWidth();
+				]]>
+			</handler>
+			
+			<handler eventSource="this.classroot" name="onvisible">
+				<![CDATA[
+				this.updateTextWidth();
+				]]>
+			</handler>
+			
+		</Component>
+		
+		<!--- @keywords private -->
+		<method args="parent, args" name="constructor">
+			<![CDATA[
+			this.updateSelectedValueDel = new EventHandler.Class(this, "updateSelectedValue");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.updateSelectedValue();
+			this.show();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateSelectedValueDel.disconnectAll();
+			delete this.updateSelectedValueDel;
+			this.updateDisplayNamesDel.unregisterAll();
+			delete this.updateDisplayNamesDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Clears the selected value (if any) and sets {@link cmc/foundation/BaseValueSelector#selectedValue selectedValue} to <code>null</code>.
+		-->
+		<method name="clearSelection">
+			<![CDATA[
+			this.selectValue(null);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="containsMouse">
+			<![CDATA[
+			if (this.containsPt(this.getMouse("x"), this.getMouse("y"))) {
+				return true;
+			}
+			return this.listOpen && ValueSelectorList.Singleton.containsPt(ValueSelectorList.Singleton.getMouse("x"), ValueSelectorList.Singleton.getMouse("y"));
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="openList">
+			<![CDATA[
+			if (this.enabled) {
+				ValueSelectorList.Singleton.openList(this);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Appends the specified value to the drop-down list.
+			@param Object value: The value to be added to the list. The object must have a <code>displayName</code>
+				attribute which is used as the display value for the entry.
+		-->
+		<method args="value" name="addValue">
+			<![CDATA[
+			this.values.push(value);
+			]]>
+		</method>
+		
+		<!---
+			Set the list of values that will be displayed in the drop-down list.
+			@param Object[] values: The array of values to be displayed to the list. Each value object in the array
+				must have a <code>displayName</code> attribute which is used as the display value for the entry.
+		-->
+		<method args="values" name="setValues">
+			<![CDATA[
+			this.values = [];
+			if (values != null) {
+				for (var i = 0; i < values.length; i++) {
+					this.values.push(values[i]);
+				}
+			}
+			if (this.selectedValue != null && this.values.indexOf(this.selectedValue) == -1) {
+				this.clearSelection();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onselectedValue">
+			<![CDATA[
+			this.updateSelectedValue();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method args="e" name="updateSelectedValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.isinited) {
+				this.updateSelectedValueDel.disconnectAll();
+				if (this.selectedValue) {
+					if (this.selectedValue instanceof Node.Class) {
+						this.updateSelectedValueDel.connect(this.selectedValue, "ondisplayName");
+					}
+					if (this.selectedValue.displayKey) {
+						this.updateSelectedValueDel.connect(this.selectedValue.displayKey, "onstring");
+						this.selectedValueText.updateDisplay(this.selectedValue.displayKey.string);
+					}
+					else {
+						this.selectedValueText.updateDisplay(this.selectedValue.displayName);
+					}
+				}
+				else if (this.defaultTextResourceBundleKey != null) {
+					this.updateSelectedValueDel.connect(this.defaultTextResourceBundleKey, "onstring");
+					this.selectedValueText.updateDisplay(this.defaultTextResourceBundleKey.string);
+				}
+				else {
+					this.selectedValueText.updateDisplay("");
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Calculates the width of this widget assuming the displayed text is not truncated. By default
+			the value is the width of the untruncated displayed text of this base selector. Override this
+			method if other visual display is introduced.
+			@keywords private
+		-->
+		<method name="getUntruncatedWidth">
+			<![CDATA[
+			return this.selectedValueText.getUntruncatedWidth();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Method that is called when the mouse is hovering over an item in the list. By default, this method does nothing
+			and could be extended to provide a change to the visual treatment of the widget.
+		-->
+		<method name="showDown">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Method that is called to show the default state of the widget. By default, this method does nothing
+			and could be extended to provide a change to the visual treatment of the widget.
+		-->
+		<method name="showUp">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Method that is called when the mouse is hovering over the widget. By default, this method does nothing
+			and could be extended to provide a change to the visual treatment of the widget.
+		-->
+		<method name="showOver">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="show">
+			<![CDATA[
+			if (this.listOpen) {
+				this.showDown();
+			}
+			else if (this.mouseIn) {
+				this.showOver();
+			}
+			else {
+				this.showUp();
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					offset: 1,
+					focusIndicatorColor: this.focusIndicatorColor
+				});
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onenabled">
+			<![CDATA[
+			this.show();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onmouseover">
+			<![CDATA[
+			this.mouseIn = true;
+			this.show();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onmouseout">
+			<![CDATA[
+			this.mouseIn = false;
+			this.show();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler name="onmousedown">
+			<![CDATA[
+			this.openList();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			this.callOnKeyDown(k);
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="doSpaceDown">
+			<![CDATA[
+			this.openList();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="k" name="callOnKeyDown">
+			<![CDATA[
+			if (k == 40) {
+				this.openList();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<handler name="onlistOpen">
+			<![CDATA[
+			this.show();
+			]]>
+		</handler>
+		
+		<!---
+			Saves a new value as the selected value of this selector. A new value will
+			be set only if the new value is different from the currently selected value.
+			This method does not check if a new value is in one of the displayed items. It is
+			the caller's responsibility to make sure the new value stored in
+			{@link cmc/foundation/BaseValueSelector#selectedValue selectedValue} is valid.
+			
+			@param Object newValue: The new value to be selected. Refer to {@link cmc/foundation/BaseValueSelector#selectedValue} for more detail.
+			@event onselectedValue Fires if the <code>newValue</code> is different than the current
+				{@link cmc/foundation/BaseValueSelector#selectedValue selectedValue}.
+		-->
+		<method args="newValue" name="selectValue">
+			<![CDATA[
+			if (newValue != this.selectedValue) {
+				this.setVariable("selectedValue", newValue);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="restoreFocus">
+			<![CDATA[
+			FocusUtil.setFocus(this);
+			]]>
+		</method>
+
+		<!---
+			Appends a value to the drop-down list.
+			@param String text: The display text for the new value.
+			@param Object value: The value object to be added to the list.
+			@param cmc/foundation/ResourceBundleKey: The key for the string value of the drop-down list.
+		-->
+		<method args="text, value, textKey" name="addItem">
+			<![CDATA[
+			if (typeof(textKey) == "undefined") textKey = null;
+			this.addValue({
+				value: value,
+				displayName: text,
+				displayKey: textKey
+			});
+			]]>
+		</method>
+		
+		<!---
+			Gets the selected value of this selector widget.
+			@returns Object The object stored in {@link cmc/foundation/BaseValueSelector#selectedValue selectedValue} is returned
+				if an item is selected. Otherwise <code>null</code> is returned.
+		-->
+		<method name="getValue">
+			<![CDATA[
+			if (this.selectedValue == null) {
+				return null;
+			}
+			return this.selectedValue.value;
+			]]>
+		</method>
+		
+		<!---
+			Selects an entry item based on value.
+			@param Object value: The value of the entry to select. If the value is not found in the list, <code>null</code>
+				is selected.
+		-->
+		<method args="value" name="selectItem">
+			<![CDATA[
+			for (var i = 0; i < this.values.length; ++i) {
+				var v = this.values[i];
+				if (LangUtil.Singleton.isIdentical(v.value, value)) {
+					this.selectValue(v);
+					return;
+				}
+			}
+			this.selectValue(null);
+			]]>
+		</method>
+		
+		<!---
+			Selects an entry item based on index.
+			@param integer index: The zero-based index of the entry to select. If this value is invalid, <code>null</code>
+				is selected.
+		-->
+		<method args="index" name="selectItemAt">
+			<![CDATA[
+			if (index > this.values.length) {
+				this.selectValue(null);
+			}
+			else {
+				this.selectValue(this.values[index]);
+			}
+			]]>
+		</method>
+	</FocusableComponent>
+	
+	<!--- @keywords private -->
+	<BaseValueSelector classDefinition="true" definitionName="cmc/foundation/ValueSelector" width="175" height="29">
+		<variable name="dropDownButtonAtLeft" type="boolean" value="false"/>
+		<variable name="showDropDownButton" type="boolean" value="true"/>
+		<variable name="dropDownResource" type="string" value="defaultDownArrow"/>
+		<!---
+			@keywords private
+			Indicates that the text should be centered in the value selector
+		-->
+		<variable name="centerText" type="boolean" value="false"/>
+		
+		<!--
+			The text and button(if it is shown) will placed in the center of the background.
+			It assumes the text and button in this selector are not taller than background views.
+		 -->
+		<Layout name="backgroundLayout">
+			<method name="init">
+				<![CDATA[
+				this.inherited(arguments);
+				if (this.classroot.hasSetWidth) {
+					this.updateHandler.connect(this.classroot, "onwidth");
+				}
+				this.updateHandler.connect(this.classroot, "onheight");
+				this.updateHandler.connect(this.classroot.selectedValueText, "onwidth");
+				this.updateHandler.connect(this.classroot.selectedValueText, "onheight");
+				this.updateHandler.connect(this.classroot.dropdown, "onwidth");
+				this.updateHandler.connect(this.classroot.dropdown, "onheight");
+				]]>
+			</method>
+			
+			<!--
+				Returns the x of selected value text. If the text is to the right of
+				dropdown button, a padding as defined in classroot.padding will be added
+				to the returned result.
+			 -->
+			<method name="getTextX">
+				<![CDATA[
+				var textX = this.classroot.padding;
+				if (this.classroot.hasSetWidth) {
+					var availableWidth = this.classroot.width - (2 * this.classroot.padding);
+					if (this.classroot.showDropDownButton) {
+						availableWidth -= this.classroot.dropdown.width;
+						if (this.classroot.dropDownButtonAtLeft) {
+							textX = this.getDropDownX() + this.classroot.dropdown.width + 2;
+							availableWidth -= 2;
+						}
+					}
+					if (this.classroot.centerText && this.classroot.selectedValueText.width < availableWidth) {
+						textX += Math.floor((availableWidth - this.classroot.selectedValueText.width) / 2);
+					}
+				}
+				else if (this.classroot.showDropDownButton && this.classroot.dropDownButtonAtLeft) {
+					textX = this.getDropDownX() + this.classroot.dropdown.width + 2;
+				}
+				return textX;
+				]]>
+			</method>
+
+			
+			<!--
+				Returns the y of selected value text. The value ensures the text is placed in
+				the middle of its background.
+			 -->
+			<method name="getTextY">
+				<![CDATA[
+				return (this.classroot.height - this.classroot.selectedValueText.height) / 2;
+				]]>
+			</method>
+			
+			<!--
+				Returns the x of drop down button if the button exists. Otherwise, the returned
+				value is undefined. If the drop down button is to the right of the selected
+				value text, a padding as defined in the classroot.padding will be added to
+				the returned result.
+			 -->
+			<method name="getDropDownX">
+				<![CDATA[
+				if (!this.classroot.showDropDownButton) {
+					return undefined;
+				}
+				if (this.classroot.dropDownButtonAtLeft) {
+					return this.classroot.padding;
+				}
+				if (this.classroot.hasSetWidth) {
+					return this.classroot.width - this.classroot.padding - this.classroot.dropdown.width;
+				}
+				else {
+					return this.classroot.padding + this.classroot.selectedValueText.width + this.classroot.padding;
+				}
+				]]>
+			</method>
+			
+			<!--
+				Returns the y of drop down button if the button is displayed. Otherwise, the
+				returned value will be undefined. The value ensures the button is placed in
+				the middle of its background.
+			 -->
+			<method name="getDropDownY">
+				<![CDATA[
+				if (this.classroot.showDropDownButton) {
+					return (this.classroot.height - this.classroot.dropdown.height) / 2;
+				}
+				return undefined;
+				]]>
+			</method>
+			
+			<method args="e" name="update">
+				<![CDATA[
+				if (typeof(e) == "undefined") e = null;
+				if (!this.locked) {
+					this.lock();
+					this.classroot.selectedValueText.setVariable('x', this.getTextX());
+					this.classroot.selectedValueText.setVariable('y', this.getTextY());
+					if (this.classroot.showDropDownButton) {
+						this.classroot.dropdown.setVariable('x', this.getDropDownX());
+						this.classroot.dropdown.setVariable('y', this.getDropDownY());
+					}
+					this.locked = false;
+				}
+				]]>
+			</method>
+		</Layout>
+			
+		<method name="getUntruncatedWidth">
+			<![CDATA[
+			var result = this.padding + this.selectedValueText.getUntruncatedWidth() + this.padding;
+			if (this.showDropDownButton) {
+				result += this.dropdown.width + 2;
+			}
+			return result;
+			]]>
+		</method>
+		
+		<Component imageSet="${this.classroot.dropDownResource}" name="dropdown" visible="${this.parent.showDropDownButton}"/>
+	</BaseValueSelector>
+
+</Definitions>

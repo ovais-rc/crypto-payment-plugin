@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","pt-br",{block:"Alinhar Justificado",center:"Alinhar no Centro",left:"Alinhar à Esquerda",right:"Alinhar à Direita"});

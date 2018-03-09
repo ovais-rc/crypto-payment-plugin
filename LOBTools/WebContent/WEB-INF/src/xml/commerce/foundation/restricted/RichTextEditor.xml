@@ -1,0 +1,1637 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		The cmc/foundation/RichTextEditor class will bind a {@link cmc/foundation/ModelProperty} with the {@link cmc/foundation/RichInputText} widget. The relationship 
+		is bi-directional.  This means that the rich inputbox text will be refreshed to represent the value of the property and 
+		the new property value will be stored when a user changes the rich inputbox text.
+		
+		If the user selects the "Use CKEditor" preference, then the behavior of this widget is changed to use
+		CKEditor for editing instead of the Management Center rich text editor.
+		
+		This text field is for internal use by both the properties and grid implementations. {@link cmc/foundation/PropertyRichTextEditor}, 
+		will create an cmc/foundation/RichTextEditor for use in the properties view. {@link cmc/foundation/GridRichText} creates cmc/foundation/RichTextEditor 
+		for use inside {@link cmc/foundation/Grid}.
+		
+	-->
+	<Component classDefinition="true" defaultplacement="extensionArea" definitionName="cmc/foundation/RichTextEditor">
+		<Component bgcolor="#F5FAFA" height="${this.parent.bottomBorder.y - 1}" name="background" width="${this.parent.width - 2}" x="1" y="1"/>
+		<Component height="${this.richTextEditorArea.height}" name="richBorder" width="${this.parent.width - (2 * this.classroot.editorPadding)}" x="${this.classroot.editorPadding}" y="0">
+			<Component name="richTextEditorArea" width="${this.parent.width - 2}" x="1" y="0"/>
+		</Component>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="RichInputText" moduleName="cmc/foundation/RichInputText"/>
+		<dependency localName="SpellCheckDialog" moduleName="cmc/foundation/SpellCheckDialog"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Height of the text area for the rich input text.
+		-->
+		<variable name="textAreaHeight" type="number" value="18"/>
+		<!--- 
+			Reference to {@link cmc/foundation/ModelProperty} object that is being edited. 
+		-->
+		<variable name="property" value="${null}"/>
+		<!---
+			Controls the enablement of the rich text editor.
+		-->
+		<variable name="enabled" type="boolean" value="true"/>
+		<!---
+			@keywords private 
+			Indicates that this rich text editor is currently in rich text mode or HTML mode.
+		-->
+		<variable name="richTextMode" type="boolean" value="true"/>
+		<!---
+			@keywords private 
+			Locks the stored value from being updated.
+		-->
+		<variable name="storeValueLock" type="boolean" value="false"/>
+		<!---
+			@keywords private 
+			Delay used in the delayStoreValue method, will wait this amount before calling storeValue
+		-->
+		<variable name="storeValueDelay" value="500"/> <!-- 1000ms = 1 second -->
+		<!---
+			@keywords private 
+			keeps track of the store value timer, when true the timer is already set
+		-->
+		<variable name="storeValuePending" type="boolean" value="false"/>
+		<!---
+			@keywords private 
+			Skip storing value of the property.
+		-->
+		<variable name="skipStoringValue" type="boolean" value="false"/>
+		<!--- 
+			Amount of padding to add to the sides of the rich text editor. The default value is "0". 
+		-->
+		<variable name="editorPadding" type="number" value="0"/>
+		<!---
+			@keywords private
+			Indicates whether the the <code>font-size</code> CSS attribute should be specified
+			in percentage values. If <code>false</code>, keyword values such as 'xx-small', x-small',
+			'small, 'medium', 'large', 'x-large' and 'xx-large' will be used instead.
+		-->
+		<variable name="usePercentageFontSizes" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			The raw html text value for this rich text editor. This attribute is only used when no property is specified.
+		-->
+		<variable name="value" type="string" value=""/>
+		<!---
+			@keywords private
+			Indicates the default mode for this editor. When a new value is set externally, this attribute
+			will control which mode is used to display the new text. The default mode will be overridden if
+			it is set to rich text and there are tags that the rich text mode cannot understand. The default
+			is true.
+		-->
+		<variable name="defaultToRichTextMode" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			This attribute provides a maximum text area height.
+		-->
+		<variable name="maximumHeight" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.updateEnabledDel = new EventHandler.Class(this, "updateEnabled");
+			this.updateEnabledDel.connect(this, "onenabled");
+			this.updateEnabled();
+			this.inherited(arguments);
+			this.updateValue();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateValueDel) {
+				this.updateValueDel.disconnectAll();
+				delete this.updateValueDel;
+			}
+			this.updateEnabledDel.disconnectAll();
+			delete this.updateEnabledDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Get the model object associated with this rich text editor instance.
+		-->
+		<method name="getModelObject">
+			<![CDATA[
+			return this.property ? this.property.o : this.o;
+			]]>
+		</method>
+		
+		<!---
+			@private
+			Resolve CKEditor imagePath tag against External static asset host
+			e.g. 'https://my.digitalexperience.ibm.com/1647d737-c555-451f-a655-6d3f96fd8ee2/AuroraStorefrontAssetStore
+					(/StaticContent/images/en_US/011B_EATDM_EliseKurkova_001.jpg)'
+		-->
+		<method name="resolveCKEditorImagePath">
+			<![CDATA[
+			var o = this.getModelObject();
+			var imagePathName = "'[imagePath]'";
+			var staticAssetHostname = ContextUtil.Singleton.findContextValue(o, "externalContentHostname") ? ContextUtil.Singleton.findContextValue(o, "externalContentHostname").value : null;
+			var tenantId = ContextUtil.Singleton.findContextValue(o, "externalContentTenantId") ? ContextUtil.Singleton.findContextValue(o, "externalContentTenantId").value : null;
+			if (this.CKEditorSubstitutionTags[imagePathName] 
+				&& !this.CKEditorSubstitutionTags[imagePathName].indexOf("http") == 0 
+				&& staticAssetHostname != null && tenantId != null){
+				this.CKEditorSubstitutionTags[imagePathName] = staticAssetHostname + '/' + tenantId + this.CKEditorSubstitutionTags[imagePathName];
+			}
+			]]>
+		</method>
+		<!---
+			Reset the rich input text field.
+		-->
+		<method name="resetRichInputText">
+			<![CDATA[
+			if (!this.richInputText) {
+				var o = this.getModelObject();
+				var storeObject = ContextUtil.Singleton.findStoreConfig(o);
+				var contentLocale = this.getLanguageObject().localeName;
+				var contentLanguage = contentLocale.toLowerCase().split('_').join('-');
+				var UILocale = PreferenceManager.Singleton.getPreference("preferredLanguage").toLowerCase().split('_').join('-');
+				var uriPrefix = null;
+				if (this.CKEditorSubstitutionTags == null && storeObject.CKEditorSubstitutionTags != null) {
+					this.CKEditorSubstitutionTags = storeObject.CKEditorSubstitutionTags.tags;
+					var langlocaleTagName = "'[langlocale]'";
+					this.CKEditorSubstitutionTags[langlocaleTagName] = this.getLanguageObject().localeName;
+					var imagePathName = "'[imagePath]'";
+					this.resolveCKEditorImagePath();
+					uriPrefix = this.CKEditorSubstitutionTags[imagePathName];
+				}
+				var css = "";
+				var cssLocales = "";
+				if (storeObject.storeCSS.url != null) {
+					if (!uriPrefix){
+						uriPrefix = storeObject.staticContent.uriPrefix;
+					}
+					css = uriPrefix + storeObject.storeCSS.url;
+					if (storeObject.storeCSS.locales != null) {
+						cssLocales = storeObject.storeCSS.locales;
+						if (cssLocales.indexOf(contentLocale) >= 0) {
+							css = css.replace("$locale$", contentLocale);
+						}
+						else {
+							css = css.replace("$locale$", "");
+						}
+					}
+				}
+				var ckeditorConfig = {
+					language: UILocale,
+					contentsLanguage: contentLanguage,
+					toolbar: 'IBM_CMC_Toolbar',
+					contentsCss: [css, '/lobtools/css/ckeditor/custom.css'],
+					fillEmptyBlocks: false,
+					removePlugins: 'elementspath',
+					toolbar_IBM_CMC_Toolbar: [{
+						name: 'document',
+						items: ['Source', '-', 'NewPage', 'DocProps', 'Preview', 'Print', '-', 'Templates']
+					}, {
+						name: 'clipboard',
+						items: ['Cut', 'Copy', 'Paste', 'PasteText', 'PasteFromWord', '-', 'Undo', 'Redo']
+					}, {
+						name: 'editing',
+						items: ['Find', '-', 'SelectAll']
+					}, '/', {
+						name: 'basicstyles',
+						items: ['Bold', 'Italic', 'Underline', 'Strike', 'Subscript', 'Superscript', '-', 'RemoveFormat']
+					}, {
+						name: 'paragraph',
+						items: ['NumberedList', 'BulletedList', '-', 'Outdent', 'Indent', '-', 'Blockquote', 'CreateDiv', '-', 'JustifyLeft', 'JustifyCenter', 'JustifyRight', 'JustifyBlock', '-', 'BidiLtr', 'BidiRtl']
+					}, {
+						name: 'links',
+						items: ['Link', 'Unlink', 'Anchor']
+					}, {
+						name: 'insert',
+						items: ['Image', 'Flash', 'Table', 'HorizontalRule', 'SpecialChar']
+					}, '/', {
+						name: 'styles',
+						items: ['Format', 'Font', 'FontSize']
+					}, {
+						name: 'colors',
+						items: ['TextColor', 'BGColor']
+					}, {
+						name: 'tools',
+						items: ['Maximize', 'ShowBlocks', '-', 'About']
+					}],
+					stylesSet: false,
+					startupMode: this.defaultToRichTextMode ? 'wysiwyg' : 'source'
+				};
+				this.richInputText = new RichInputText.Class(this.richBorder.richTextEditorArea, {
+					name: "richInputText",
+					enabled: this.enabled,
+					textAreaHeight: this.textAreaHeight,
+					parentTextEditor: this,
+					ckeditorConfig: ckeditorConfig
+				});
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Return the language object from the rich text editor if it is language sensitive or the store default locale if not
+		-->
+		<method name="getLanguageObject">
+			<![CDATA[
+			var langObject = null;
+			var o = getModelObject();
+			var storeConfig = ContextUtil.Singleton.findStoreConfig(o);
+			if (storeConfig != null) {
+				if (o.objectDefinition.languageSensitive) {
+					langObject = storeConfig.getLanguageById(o.getPropertyValue("languageId"));
+				}
+				else {
+					langObject = storeConfig.defaultLanguage;
+				}
+			}
+			return langObject;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Update the enablemenent of the rich text editor.
+		-->
+		<method args="e" name="updateEnabled">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.richInputText) {
+				this.richInputText.setVariable('enabled', this.enabled);
+			}
+			]]>
+		</method>
+
+		<!---
+			Set the {@link cmc/foundation/ModelProperty} to be associated with this rich input box. Listeners are created to
+			watch the property value. If the property changes at anytime, the updateValue method will be called.
+			@param cmc/foundation/ModelProperty newProperty: New Property associated with this input box.
+		-->
+		<method args="newProperty" name="setProperty">
+			<![CDATA[
+			if (!this.isinited || newProperty != this.property) {
+				if (typeof (this.updateValueDel) == "undefined") {
+					this.updateValueDel = new EventHandler.Class(this, "updateValue");
+				}
+				this.updateValueDel.disconnectAll();
+				if (this.property && this.storeValuePending) {
+					this.storeValue();
+				}
+				this.property = newProperty;
+				if (this.property) {
+					this.updateValueDel.connect(this.property, "onvalue");
+				}
+				else {
+					this.updateValueDel.connect(this, "onvalue");
+				}
+				this.setVariable("richTextMode", this.defaultToRichTextMode);
+				if (this.isinited) {
+					this.updateValue();
+				}
+				EventUtil.trigger(this, "onproperty");
+			}
+			]]>
+		</method>
+
+		<!--- 
+			Update and refresh the cmc/foundation/RichTextEditor value with a new {@link cmc/foundation/ModelProperty} value. 
+		-->
+		<method args="e" name="updateValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.storeValueLock) {
+				var value = this.property == null ? this.value : this.property.value;
+				if (typeof (this.richInputText) == "undefined" || value != this.getValueString()) {
+					this.skipStoringValue = true;
+					this.setValueString(value, true);
+					this.skipStoringValue = false;
+				}
+			}
+			]]>
+		</method>
+
+		<!--- 
+			Set the {@link cmc/foundation/ModelProperty} to represent the cmc/foundation/RichTextEditor value. This method is called when the input box
+			value is changed.
+		-->
+		<method args="e" name="storeValue">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.storeValuePending) {
+				this.storeValueDel.disconnectAll();
+				Timer.removeTimer(this.storeValueDel);
+			}
+			if (this.richInputText) {
+				this.storeValuePending = false;
+				this.storeValueLock = true;
+				var newValue = this.getValueString();
+				if (this.property) {
+					this.property.change(newValue);
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "INFO", "cmc/foundation/RichTextEditor", "storeValue", "updates the model property " + this.property.propertyName + " with new value " + newValue + this.getModelObject().logString());
+					}
+				}
+				else {
+					this.setVariable("value", newValue);
+				}
+				this.storeValueLock = false;
+			}
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Calls storeValue on a 2.5 second delay
+		-->
+		<method name="delayedStoreValue">
+			<![CDATA[
+			if (!this.skipStoringValue && !this.storeValuePending) {
+				this.storeValuePending = true;
+				if (typeof (this.storeValueDel) == "undefined") {
+					this.storeValueDel = new EventHandler.Class(this, "storeValue");
+				}
+				this.storeValueDel.disconnectAll();
+				if (this.property) {
+					this.storeValueDel.connect(this.getModelObject().openGroupObject, "beingSaved");
+				}
+				Timer.addTimer(this.storeValueDel, this.storeValueDelay);
+			}
+			]]>
+		</method>
+
+		<!---
+			Insert the specified text at the current selection point.
+			@param string normalText: the raw text
+		-->
+		<method args="normalText" name="insertTextAtSelection">
+			<![CDATA[
+			this.richInputText.insertTextAtSelection(normalText);
+			]]>
+		</method>
+		<!---
+			Get the text in a format suitable for storing in the model.
+			@return string: the html text
+		-->
+		<method name="getValueString">
+			<![CDATA[
+			var text = "";
+			if (this.richInputText) {
+				if (this.richTextMode) {
+					text = this.postFilter(this.richInputText.getText());
+				}
+				else {
+					text = this.richInputText.getText();
+				}
+			}
+			return text;
+			]]>
+		</method>
+		
+		<!---
+			Set the text from the model.
+			@param string str: the HTML text
+			@param boolean overrideRTMode: When this flag is set to true, the editor mode will be forced to HTML mode if the new string contains tags that are incompatible with rich text mode.
+		-->
+		<method args="str, overrideRTMode" name="setValueString">
+			<![CDATA[
+			this.resetRichInputText();
+			var filteredString = this.preFilter(str);
+			if (this.richTextMode) {
+				this.richInputText.updateText(filteredString);
+			}
+			else {
+				this.richInputText.updateText(str);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Switches rich text editor between HTML mode and rich text mode.
+			@param boolean prompt: display confirmation dialog if the mode switch will discard unrecognized HTML tags
+		-->
+		<method args="prompt" name="switchModes">
+			<![CDATA[
+			var filteredText = this.preFilter(this.richInputText.getText());
+			if (this.storeValuePending) {
+				this.storeValue();
+			}
+			this.setVariable("richTextMode", !this.richTextMode);
+			this.setValueString(this.property != null ? this.property.value : this.value, false);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Override to unescape xml tags such as <e-mail/> before it is sent to the service or mode is changed.
+			@param string text: the escaped text from the rich text editor.
+			@returns string: The input text with unescaped tags such as &lt;e-mail/&gt;.
+		-->
+		<method args="text" name="preFilter">
+			<![CDATA[
+			var tags = this.CKEditorSubstitutionTags;
+			if (!tags) {
+				var storeObject = ContextUtil.Singleton.findStoreConfig(this.getModelObject());
+				if (storeObject.CKEditorSubstitutionTags != null) {
+					tags = this.CKEditorSubstitutionTags = storeObject.CKEditorSubstitutionTags.tags;
+					var langlocaleTagName = "'[langlocale]'";
+					this.CKEditorSubstitutionTags[langlocaleTagName] = this.getLanguageObject().localeName;
+					this.resolveCKEditorImagePath();
+				}
+			}
+			if (tags) {
+				for (var key in tags) {
+					var r = new RegExp("'", "g");
+					var k = key.replace(r, "");
+					if (text.indexOf(k) != -1) {
+						var re = new RegExp(k.replace("[", "\\[").replace("]", "\\]"), "g");
+						text = text.replace(re, tags[key]);
+					}
+				}
+			}
+			return text;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Override to escape tags such as &lt;e-mail/&gt; so the rich text editor displays them properly.
+			@param string text: the original text from the server.
+			@returns string: The input text with escaped tags such as &lt;e-mail/&gt;.
+		-->
+		<method args="text" name="postFilter">
+			<![CDATA[
+			var tags = this.CKEditorSubstitutionTags;
+			if (!tags) {
+				var storeObject = ContextUtil.Singleton.findStoreConfig(this.getModelObject());
+				if (storeObject.CKEditorSubstitutionTags != null) {
+					tags = this.CKEditorSubstitutionTags = storeObject.CKEditorSubstitutionTags.tags;
+					var langlocaleTagName = "'[langlocale]'";
+					this.CKEditorSubstitutionTags[langlocaleTagName] = this.getLanguageObject().localeName;
+					this.resolveCKEditorImagePath();
+				}
+			}
+			if (tags) {
+				for (var key in tags) {
+					if (text.indexOf(tags[key]) != -1) {
+						var re = new RegExp(tags[key], "g");
+						var r = new RegExp("'", "g");
+						var k = key.replace(r, "");
+						text = text.replace(re, k);
+					}
+				}
+			}
+			return text;
+			]]>
+		</method>
+		
+		
+		
+		
+		
+		
+		
+		<Component name="extensionArea" width="${this.parent.width - (2 * this.classroot.editorPadding)}" x="${this.classroot.editorPadding}" y="${this.parent.richBorder.y + this.parent.richBorder.height}"/>
+		
+		<Component bgcolor="#A5B1C7" height="${this.parent.extensionArea.height == 0 ? 0 : 1}" name="bottomBorder" width="${this.parent.width}" y="${this.parent.extensionArea.y + this.parent.extensionArea.height}"/>
+
+		<method args="property" name="set_property">
+			<![CDATA[
+			this.setProperty(property);
+			]]>
+		</method>
+	</Component>
+
+	<!---
+		@keywords private
+		@keywords flash-only
+		
+		Rich text entry field. Instances of cmc/foundation/RichInputText are created by cmc/foundation/RichTextEditor.
+	-->
+	<InputTextComponent classDefinition="true" definitionName="cmc/foundation/RichInputText" multiline="true" width="${this.parent.width}">
+		<variable name="widgetClass" value="RichInputTextWidget"/>
+		<variable name="ckeditorConfig" value="{}"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="RichTextEditorUtil" moduleName="cmc/foundation/RichTextEditorUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="lang" moduleName="dojo/_base/lang"/>
+		<dependency localName="RichInputTextWidget" moduleName="cmc/foundation/widgets/RichInputTextWidget"/>		 
+		
+     			 
+		<!---
+			Ensure that the background color is white.
+		-->
+		<variable name="bgcolor" value="${this.enabled ? &quot;#FFFFFF&quot; : &quot;#EDEFF4&quot;}"/>
+		<!---
+			Initialize the height to the parent's "textAreaHeight" attribute.
+		-->
+		<variable name="height" value="${this.textAreaHeight}"/>
+		<!---
+			Reference to the parent {@link cmc/foundation/RichTextEditor}
+		-->
+		<variable name="parentTextEditor" value="${null}"/>
+		<!---
+			@keywords private
+			Cached selection position. When the input text loses focus, the selection is also lost.
+			This attribute is used to save the last selected position.
+		-->
+		<variable name="cachedSelectionPosition" value="0"/>
+		<!---
+			@keywords private
+			Cached selection size. When the input text loses focus, the selection is also lost.
+			This attribute is used to save the last seleciton size.
+		-->
+		<variable name="cachedSelectionSize" value="0"/>
+		<!---
+			@keywords private
+			Saved text. This is used to determine if the text has changed as the result of a keystroke.
+		-->
+		<variable name="savedText" value="${null}"/>
+		<!---
+			@keywords private
+			New text format to be used with the next change.
+		-->
+		<variable name="newTextFormat" value="${null}"/>
+		
+		<!---
+			Height of the text area for the rich input text.
+		-->
+		<variable name="textAreaHeight" type="number" value="18"/>
+		<!---
+			@keywords private 
+			The size of the padding for the rich input text widget.
+		-->
+		<variable name="inputTextPadding" type="number" value="5"/>
+		<!---
+			@keywords private
+			This is used to restrict the ontext handlers while text is being loaded from the setHTMLText method.
+		-->
+		<variable name="settingText" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			This is used to restrict the updateInputTextHeight only happen when dom is ready for CKEidtor.
+		-->
+		<variable name="editorDomReady" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.setVariable("scrollevents", true);
+			this.updateInputTextHeight();
+			this.updateRichTextModeDel = new EventHandler.Class(this, "updateRichTextMode");
+			this.updateRichTextModeDel.connect(this.parentTextEditor, "onrichTextMode");
+			this.displayLanguageDel = new EventHandler.Class(this, "updateDisplayLanguage");
+			this.checkFocusDel = new EventHandler.Class(this, "checkFocus");
+			this.updateDisplayLanguage();
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateRichTextModeDel.disconnectAll();
+			delete this.updateRichTextModeDel;
+			this.displayLanguageDel.disconnectAll();
+			delete this.displayLanguageDel;
+			this.checkFocusDel.disconnectAll();
+			delete this.checkFocusDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		
+		<!--- @keywords private -->
+		<method name="updateDisplayLanguage">
+			<![CDATA[
+			this.displayLanguageDel.disconnectAll();
+			var UILocale = ContextUtil.Singleton.findContextValue(null, "locale", this.displayLanguageDel).value.toLowerCase().split('_').join('-');
+			if (this.widget._ckeditor && UILocale != this.ckeditorConfig.language){
+				this.ckeditorConfig.language = UILocale;
+				this.widget.updateDisplayLanguage();
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+			Update the height to match the current text size.
+		-->
+		<method name="updateInputTextHeight">
+			<![CDATA[
+			EventUtil.disconnectAll(this, "updateInputTextHeight");
+			var invisibleParent = this.getInvisibleParent();
+			if (invisibleParent) {
+				EventUtil.connect(invisibleParent, "onvisible", this, "updateInputTextHeight");
+			}
+			else if (this.widget && this.widget._ckeditor && this.editorDomReady) {
+				var toolbarHeight = this.widget.getToolbarHeight();
+				this.setVariable("height", this.textAreaHeight + toolbarHeight);
+				var newHeight = this.getContentHeight();
+				if (newHeight <= this.textAreaHeight) {
+					newHeight = this.textAreaHeight;
+				}
+				if (this.parentTextEditor.maximumHeight != null && newHeight > this.parentTextEditor.maximumHeight) {
+					newHeight = this.parentTextEditor.maximumHeight;
+				}
+				if (this.height != newHeight + toolbarHeight) {
+					this.setVariable("height", newHeight + toolbarHeight);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Insert the specified text at the current selection point.  Either the cusor position or a selected
+			block of text, depending on what is currently selected.
+			@param string normalText: the raw text
+		-->
+		<method args="normalText" name="insertTextAtSelection">
+			<![CDATA[
+			if (this.widget) {
+				this.widget.insertText(normalText);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Set the text for this rich input text.
+			@param string newText: the new text
+		-->
+		<method args="newText" name="set_text">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this.settingText) {
+				this.parentTextEditor.delayedStoreValue();
+			}
+			this.updateInputTextHeight();
+			]]>
+		</method>
+		
+		<!---
+			Update the text for this rich input text. Use this method will ensure that
+			the newly set value is not stored back to the model.
+			@param string newText: new text
+		-->
+		<method args="newText" name="updateText">
+			<![CDATA[
+			this.settingText = true;
+			this.setVariable('text', newText);
+			this.settingText = false;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		
+		
+		<!---
+			@keywords private
+			Handle onfocus event. Reset the stored value of the cursor postion and the stored selection size.
+		-->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this,
+					offset: 1
+				});
+			}
+			this.cachedSelectionPosition = null;
+			this.cachedSelectionSize = null;
+			if (MouseUtil.currentMouseDownComponent == this){
+				this.checkFocusDel.connect(this, "onmouseup");
+			}
+			else {
+				this.checkFocus();
+			}
+			]]>
+		</handler>
+		
+		<!---
+			@keywords private
+			Handle onblur event. Store the value of the cursor postion and the selection size.
+		-->
+		<handler name="onblur">
+			<![CDATA[
+			if (this.parentTextEditor.storeValuePending) {
+				this.parentTextEditor.storeValue();
+			}
+			this.cachedSelectionPosition = this.getSelectionPosition();
+			this.cachedSelectionSize = this.getSelectionSize();
+			if (this.cachedSelectionSize < 0) {
+				this.cachedSelectionSize = 0;
+			}
+			if (this.cachedSelectionPosition < 0) {
+				this.cachedSelectionPosition = 0;
+			}
+			]]>
+		</handler>
+ 		
+ 		<method name="checkFocus">
+			<![CDATA[
+			this.checkFocusDel.disconnectAll();
+			if (this.parentTextEditor && this.parentTextEditor.parent && (typeof this.parentTextEditor.parent.checkFocus == "function")){
+				this.parentTextEditor.parent.checkFocus();
+				this.widget.setFocus(true);
+			}
+			else {
+				this.widget.setFocus(true);
+			}
+			]]>
+		</method>
+		
+		<method name="updateRichTextMode">
+			<![CDATA[
+			this.widget.applyRichTextMode();
+			]]>
+		</method>
+		
+		<method args="richTextMode" name="switchModes">
+			<![CDATA[
+			if (richTextMode != this.parentTextEditor.richTextMode) {
+				this.parentTextEditor.switchModes();
+			}
+			]]>
+		</method>
+		
+		<method name="getRichTextMode">
+			<![CDATA[
+			return this.parentTextEditor.richTextMode;
+			]]>
+		</method>
+		
+		<method name="setEditorDomReady" args="ready">
+			<![CDATA[
+			this.editorDomReady = ready;
+			]]>
+		</method>
+	
+	</InputTextComponent>
+
+	<!--- 
+		@keywords private
+		Toolbar separator between buttons for rich text editor 
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/RichTextEditorSeparator" imageSet="rteIconDivider" placement="buttons" y="${(this.immediateParent.height - this.height) / 2}"/>
+
+	<!---
+		@keywords private
+		
+		Color Button for rich text editor toolbar  
+	-->
+	<RichTextToolBarButton classDefinition="true" definitionName="cmc/foundation/RichTextEditorColorButton">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="ColorPicker" moduleName="cmc/foundation/ColorPicker"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.changeColorDel = new EventHandler.Class(this, "changeColor");
+			this.closeColorPickerDel = new EventHandler.Class(this, "closeColorPicker");
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (ColorPicker.Singleton.attachTarget == this) {
+				this.closeColorPicker();
+			}
+			this.changeColorDel.disconnectAll();
+			delete this.changeColorDel;
+			this.closeColorPickerDel.disconnectAll();
+			delete this.closeColorPickerDel;
+			this.checkMouseDel.disconnectAll();
+			delete this.checkMouseDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+	
+		<!---
+			Handle button click.
+		-->
+		<handler name="onclick">
+			<![CDATA[
+			this.openColorPicker();
+			]]>
+		</handler>
+	
+		<!---
+			Handle Key Down.
+		-->		
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 40) {
+				this.openColorPicker();
+			}
+			]]>
+		</handler>	
+		
+		<!---
+			Change the color.
+		-->
+		<method args="newColor" name="changeColor">
+			<![CDATA[
+			this.closeColorPicker();
+			this.parent.classroot.richInputText.applyTextFormat('color', ColorPicker.Singleton.color);
+			]]>
+		</method>
+		
+		<!---
+			Look for mouse clicks outside the color picker and close the color picker.
+		-->
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!ColorPicker.Singleton.containsPt(ColorPicker.Singleton.getMouse("x"), ColorPicker.Singleton.getMouse("y"))) {
+				this.closeColorPicker();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Open the color picker.
+		-->
+		<method name="openColorPicker">
+			<![CDATA[
+			this.closeColorPicker();
+			ColorPicker.Singleton.setAttachTarget(this);
+			ColorPicker.Singleton.animate("visible", !ColorPicker.Singleton.visible, 0, false);
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			KeyUtil.callOnKeyCombo(this.closeColorPickerDel, ['esc']);
+			this.changeColorDel.connect(ColorPicker.Singleton, "oncolor");
+			ModalUtil.makeModal(ColorPicker.Singleton);
+			FocusUtil.setFocus(ColorPicker.Singleton.colorCells);
+			]]>
+		</method>
+
+		<!---
+			Close the color picker.
+		-->
+		<method args="e" name="closeColorPicker">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containsView(ColorPicker.Singleton, FocusUtil.getFocus())) {
+				FocusUtil.setFocus(this, false);
+			}
+			ModalUtil.release(ColorPicker.Singleton);
+			ColorPicker.Singleton.setAttachTarget(null);
+			this.changeColorDel.disconnectAll();
+			KeyUtil.removeKeyComboCall(this.closeColorPickerDel, ['esc']);
+			this.checkMouseDel.disconnectAll();
+			ColorPicker.Singleton.setVariable("visible", false);
+			]]>
+		</method>
+	</RichTextToolBarButton>
+
+	<!--- @keywords private -->
+	<Node classDefinition="true" definitionName="cmc/foundation/DropDownValue">
+		<variable name="value" value="${null}"/>
+		<variable name="displayNameKey" value="${null}"/>
+	</Node>
+
+	<!--- @keywords private -->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/DropDownButton" focusable="false" pixellock="true">
+		<dependency localName="MouseUtil" moduleName="cmc/foundation/MouseUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="RichTextToolBarButton" moduleName="cmc/foundation/RichTextToolBarButton"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="ListItem" moduleName="cmc/foundation/ListItem"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		
+		<!---
+			Reference to the parent {@link cmc/foundation/RichTextEditor}
+		-->
+		<variable name="parentTextEditor" value="${null}"/>
+		
+		<variable name="buttonResource" type="string" value="${null}"/>
+		<variable name="actionListOpen" value="${this.actionList.visible}"/>
+		<variable name="items" value="${[]}"/>
+		<!--  The view whose button to which the drop down list should attached -->
+
+		<RichTextToolBarButton buttonResource="${this.classroot.buttonResource}" name="button" parentTextEditor="${this.parent.parentTextEditor}">
+			<method name="_callShow">
+				<![CDATA[
+				if (this.parent.actionListOpen) {
+					RichTextToolBarButton.Class.prototype.showDown.call(this);
+				}
+				else {
+					this.inherited(arguments);
+				}
+				]]>
+			</method>
+			<handler name="onclick">
+				<![CDATA[
+				this.parent.openActionList();
+				]]>
+			</handler>
+		</RichTextToolBarButton>
+
+		<FloatingList attach="bottom" name="actionList" visible="false">
+			<method name="updateAttachLocation">
+				<![CDATA[
+				this.inherited(arguments);
+				var right = this.x + this.width;
+				if (right > RootComponent.Singleton.width) {
+					var newX = this.x - (right - RootComponent.Singleton.width);
+					if (newX < 0) {
+						newX = 0;
+					}
+					this.setVariable("x", newX);
+				}
+				this.bringToFront();
+				]]>
+			</method>
+			
+			<!--- @keywords private -->
+			<method name="getNextSelection">
+				<![CDATA[
+
+				]]>
+			</method>
+			<!--- @keywords private -->
+	        <method name="getPrevSelection">
+				<![CDATA[
+
+				]]>
+			</method>
+		</FloatingList>
+
+		<method name="containsMouse">
+			<![CDATA[
+			if (this.containsPt(this.getMouse("x"), this.getMouse("y"))) {
+				return true;
+			}
+			return this.actionList.visible && this.actionList.containsPt(this.actionList.getMouse("x"), this.actionList.getMouse("y"));
+			]]>
+		</method>
+		<handler eventSource="this.actionList" name="onblur">
+			<![CDATA[
+			this.closeActionList();
+			]]>
+		</handler>
+
+		<handler name="onactionListOpen">
+			<![CDATA[
+			this.button._callShow();
+			]]>
+		</handler>
+
+		<handler args="k" eventSource="this.actionList" name="onkeydown">
+			<![CDATA[
+			if (k == 27) {
+				this.closeActionList();
+			}
+			]]>
+		</handler>
+
+		<handler args="v" eventSource="this.actionList" name="onselect">
+			<![CDATA[
+			var action = v.value;
+			this.closeActionList();
+			this.doAction(action);
+			]]>
+		</handler>
+
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.checkMouseDel = new EventHandler.Class(this, "checkMouse");
+			this.checkWidthDel = new EventHandler.Class(this, "checkWidth");
+			this.actionList.setVariable("attachoffset", this.immediateParent.height - this.button.y - this.button.height - 2);
+			this.actionList.setVariable("spacing", -2);
+			]]>
+		</method>
+
+		<method name="destroy">
+			<![CDATA[
+			this.actionList.autoscrollbar = false;
+			this.checkMouseDel.disconnectAll();
+			delete this.checkMouseDel;
+			this.checkWidthDel.disconnectAll();
+			delete this.checkWidthDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Append the specified action definition to action drop down.
+			@param object selection: the action definition
+		-->
+		<method args="selection" name="addSelection">
+			<![CDATA[
+			var item = new ListItem.Class(this.actionList, {
+				value: selection,
+				icon: null,
+				displayKey: selection.displayNameKey
+			});
+			this.items.push(item);
+			this.checkWidthDel.connect(item.title, "onwidth");
+			this.checkWidth();
+			]]>
+		</method>
+
+		<!---
+			Enable the specified selection item.
+			@param object selection: the action definition
+		-->
+		<method args="selection" name="enableSelection">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				if (item.value == selection) {
+					item.setVariable("enabled", true);
+					break;
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Disable the specified selection item.
+			@param object selection: the action definition
+		-->
+		<method args="selection" name="disableSelection">
+			<![CDATA[
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				if (item.value == selection) {
+					item.setVariable("enabled", false);
+					break;
+				}
+			}
+			]]>
+		</method>
+
+		<method args="e" name="checkMouse">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!this.actionList.containsPt(this.actionList.getMouse("x"), this.actionList.getMouse("y"))) {
+				this.closeActionList();
+			}
+			]]>
+		</method>
+
+		<method args="e" name="checkWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var newWidth = 0;
+			for (var i = 0; i < this.items.length; i++) {
+				var item = this.items[i];
+				var itemWidth = item.title.width;
+				if (itemWidth > newWidth) {
+					newWidth = itemWidth;
+				}
+			}
+			this.actionList.setVariable('width', newWidth + 10);
+			]]>
+		</method>
+
+		<method name="openActionList">
+			<![CDATA[
+			this.actionList.clearSelection();
+			this.actionList.setVariable("visible", true);
+			this.checkMouseDel.connect(MouseUtil, "onmousedown");
+			this.setVariable("actionListOpen", true);
+			this.parent.activeButton = this;
+			ModalUtil.makeModal(this.actionList);
+			FocusUtil.setFocus(this.actionList);
+			]]>
+		</method>
+
+		<method name="closeActionList">
+			<![CDATA[
+			if (ViewUtil.Singleton.containsView(this.actionList, FocusUtil.getFocus())) {
+				FocusUtil.setFocus(this, false);
+			}
+			this.setVariable("actionListOpen", false);
+			this.actionList.setVariable("visible", false);
+			this.checkMouseDel.disconnectAll();
+			this.parent.activeButton = null;
+			ModalUtil.release(this.actionList);
+			]]>
+		</method>
+
+		<method args="action" name="doAction">
+			<![CDATA[
+
+			]]>
+		</method>
+	</FocusableComponent>
+
+	<!-- /////////////////////////////////////// -->
+	<!-- Font Button  -->
+	<!-- /////////////////////////////////////// -->
+	<!--- @keywords private -->
+	<DropDownButton classDefinition="true" definitionName="cmc/foundation/RichTextEditorFontButton">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="LangUtil" moduleName="cmc/foundation/LangUtil"/>
+		<dependency localName="DropDownValue" moduleName="cmc/foundation/DropDownValue"/>
+		<method args="newfont" name="doAction">
+			<![CDATA[
+			this.parent.parent.classroot.richInputText.applyTextFormat('font', newfont.value);
+			]]>
+		</method>
+		<handler name="oninit">
+			<![CDATA[
+			LangUtil.Singleton.forEach([[foundationResources.Singleton.richTextFontArial, "Arial"], [foundationResources.Singleton.richTextFontGeorgia, "Georgia"], [foundationResources.Singleton.richTextFontTimesNewRoman, "Times New Roman"], [foundationResources.Singleton.richTextFontDefault, "Verdana"]], function(pair) {
+				var key = pair[0];
+				var font = pair[1];
+				var item = new DropDownValue.Class(this, {
+					name: font,
+					value: font,
+					displayNameKey: key
+				});
+				this.addSelection(item);
+				this.actionList.getItem(item).title.itemText.setAttribute("font", font);
+			}, this);
+			]]>
+		</handler>
+	</DropDownButton>
+
+	<!---
+		@keywords private
+		Rich text editor size button.
+	-->
+	<DropDownButton classDefinition="true" definitionName="cmc/foundation/RichTextEditorSizeButton">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="DropDownValue" moduleName="cmc/foundation/DropDownValue"/>
+		<handler name="oninit">
+			<![CDATA[
+			this.addSize('7', foundationResources.Singleton.richTextFontSize7);
+			this.addSize('9', foundationResources.Singleton.richTextFontSize9);
+			this.addSize('11', foundationResources.Singleton.richTextFontSize11);
+			this.addSize('13', foundationResources.Singleton.richTextFontSize13);
+			this.addSize('16', foundationResources.Singleton.richTextFontSize16);
+			this.addSize('20', foundationResources.Singleton.richTextFontSize20);
+			this.addSize('30', foundationResources.Singleton.richTextFontSize30);
+			]]>
+		</handler>
+
+		<method args="size, key" name="addSize">
+			<![CDATA[
+			var item = new DropDownValue.Class(this, {
+				name: "size_" + size,
+				value: size,
+				displayNameKey: key
+			});
+			this.addSelection(item);
+			]]>
+		</method>
+
+		<method args="newsize" name="doAction">
+			<![CDATA[
+			this.parent.parent.classroot.richInputText.applyTextFormat("size", newsize.value);
+			]]>
+		</method>
+	</DropDownButton>
+	
+	<!-- /////////////////////////////////////// -->
+	<!-- Rich Text Tool Bar Button  -->
+	<!-- /////////////////////////////////////// -->
+	<!--- @keywords private -->
+	<ToolBarButton classDefinition="true" definitionName="cmc/foundation/RichTextToolBarButton">
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<!---
+			Reference to the parent {@link cmc/foundation/RichTextEditor}
+		-->
+		<variable name="parentTextEditor" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 39) {
+				FocusUtil.setFocus(FocusUtil.getNext(this));
+			}
+			else if (k == 37) {
+				FocusUtil.setFocus(FocusUtil.getPrev(this));
+			}
+			else if (k == 27) {
+				FocusUtil.setFocus(this.parentTextEditor.richInputText);
+			}
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="getNextSelection">
+			<![CDATA[
+			return this.parentTextEditor.richInputText;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getPrevSelection">
+			<![CDATA[
+			return this.parentTextEditor.toolbarView;
+			]]>
+		</method>
+	</ToolBarButton>
+	
+	<!---
+		@keywords private
+		Rich text editor utility methods.
+	-->
+	<Node definitionName="cmc/foundation/RichTextEditorUtil" singletonDefinition="true">
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="str" name="unescapeXMLTags">
+			<![CDATA[
+			return StringUtil.Singleton.replace(StringUtil.Singleton.replace(str, "&lt;", "<"), "&gt;", ">");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="str" name="escapeXMLTags">
+			<![CDATA[
+			return StringUtil.Singleton.replace(StringUtil.Singleton.replace(str, "<", "&lt;"), ">", "&gt;");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="char" name="escapeChar">
+			<![CDATA[
+			if (char == "<") {
+				char = "&lt;";
+			}
+			else if (char == ">") {
+				char = "&gt;";
+			}
+			else if (char == "'") {
+				char = "&#39;";
+			}
+			else if (char == "\"") {
+				char = "&quot;";
+			}
+			else if (char == "&") {
+				char = "&amp;";
+			}
+			return char;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="str" name="unescapeString">
+			<![CDATA[
+			return StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(str, "&amp;", "&"), "&quot;", "\""), "&#39;", "'"), "&nbsp;", " "), "&lt;", "<"), "&gt;", ">");
+			]]>
+		</method>
+		<!---
+			@keywords private
+		-->
+		<method args="str" name="escapeString">
+			<![CDATA[
+			return StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(StringUtil.Singleton.replace(str, "&", "&amp;"), "\"", "&quot;"), "'", "&#39;"), "	", "&nbsp;"), "<", "&lt;"), ">", "&gt;");
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="str" name="containsEscapedChar">
+			<![CDATA[
+			var containsEscapedChar = false;
+			if (str.indexOf("&amp;") != -1 || str.indexOf("&quot;") != -1 || str.indexOf("&#39;") != -1 || str.indexOf("&nbsp;") != -1 || str.indexOf("&lt;") != -1 || str.indexOf("&gt;") != -1) {
+				containsEscapedChar = true;
+			}
+			return containsEscapedChar;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private  
+		-->
+		<method args="str" name="removeTags">
+			<![CDATA[
+			var index = str.indexOf("<", 0);
+			while (index != -1) {
+				var start = index;
+				var end = str.indexOf(">", index) + 1;
+				if (end <= 0) {
+					end = str.length;
+				}
+				var tag = str.slice(start, end);
+				if (tag == "<br />" || tag == "<br/>" || tag == "<br>" || tag == "</div>" || tag == "</p>" || tag == "<li>") {
+					str = StringUtil.Singleton.replace(str, tag, "\n");
+				}
+				else {
+					str = StringUtil.Singleton.replace(str, tag, "");
+				}
+				index = str.indexOf("<", 0);
+			}
+			return str;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<method args="newText" name="tagTextToLower">
+			<![CDATA[
+			var index = newText.indexOf("<", 0);
+			while (index != -1) {
+				var start = index;
+				var end = newText.indexOf(">", index) + 1;
+				if (end <= 0) {
+					break;
+				}
+				var tag = newText.slice(start, end);
+				var space = tag.indexOf(" ");
+				if (space != -1 && tag != "<br />") {
+					tag = tag.slice(0, space);
+					end = start + space;
+				}
+				tag = tag.toLowerCase();
+				var next = end;
+				if (tag == "<br>") {
+					tag = "<br/>";
+					next = next + 1;
+				}
+				else if (tag == "<br />") {
+					tag = "<br/>";
+					next = next - 1;
+				}
+				newText = newText.slice(0, start) + tag + newText.slice(end, newText.length);
+				index = newText.indexOf("<", next);
+			}
+			return newText;
+			]]>
+		</method>
+		
+		<!---
+			Validate that the HTML text is the correct format for this rich input text.
+			Looking for this format <br/><div><li><span></span><span></span></div><br/>
+			@param string newText: new HTML text
+		-->
+		<method args="newText" name="validHTMLText">
+			<![CDATA[
+			var passed = true;
+			var index = newText.indexOf("<", 0);
+			var outstandingLi = false;
+			var outstandingDiv = false;
+			var outstandingSpan = false;
+			while (index != -1) {
+				var start = newText.indexOf("<", index);
+				var end = newText.indexOf(">", index) + 1;
+				var tag = newText.slice(start, end);
+				if (tag == "<br/>") {
+					if (outstandingDiv || outstandingSpan) {
+						passed = false;
+						break;
+					}
+				}
+				else if (tag.indexOf("<li") == 0) {
+					if (outstandingSpan) {
+						passed = false;
+						break;
+					}
+					outstandingLi = true;
+				}
+				else if (tag == "<ul>" || tag == "</ul>") {
+				}
+				else if (tag == "</li>") {
+					if (!outstandingLi || outstandingSpan) {
+						passed = false;
+						break;
+					}
+					outstandingLi = false;
+				}
+				else if (tag == "</div>") {
+					if (!outstandingDiv || outstandingSpan) {
+						passed = false;
+						break;
+					}
+					outstandingDiv = false;
+				}
+				else if (tag == "</span>") {
+					if (!outstandingSpan) {
+						passed = false;
+						break;
+					}
+					outstandingSpan = false;
+				}
+				else if (tag.indexOf("<", 1) != -1) {
+					passed = false;
+					break;
+				}
+				else if (tag.indexOf("<div") == 0) {
+					if (outstandingDiv || outstandingSpan) {
+						passed = false;
+						break;
+					}
+					outstandingDiv = true;
+					outstandingLi = false;
+				}
+				else if (tag.indexOf("<span") == 0) {
+					if (outstandingSpan) {
+						passed = false;
+						break;
+					}
+					outstandingSpan = true;
+				}
+				else {
+					passed = false;
+					break;
+				}
+				index = newText.indexOf("<", index + 1);
+			}
+			if (outstandingDiv || outstandingSpan) {
+				passed = false;
+			}
+			return passed;
+			]]>
+		</method>
+		
+		<!---
+			@keywords flash-only 
+			
+			This method returns true if the two Flash TextFormat objects passed in are equal. The method will compare the 
+			following attributes of the TextFormat object:
+			<ul><li>align
+			<li>bold
+			<li>bullet
+			<li>color
+			<li>font
+			<li>indent
+			<li>italic
+			<li>size
+			<li>underline
+			</ul>
+			
+			@param TextFormat f1: the first format to compare
+			@param TextFormat f2: the second format to compare
+			@return boolean The method will return true if the two formats are equal, and false otherwise.
+		-->
+		<method args="f1, f2" name="areFormatsEqual">
+			<![CDATA[
+			return (f1.align == f2.align && f1.bold == f2.bold && f1.bullet == f2.bullet && f1.color == f2.color && f1.font == f2.font && f1.indent == f2.indent && f1.italic == f2.italic && f1.size == f2.size && f1.underline == f2.underline);
+			]]>
+		</method>
+	</Node>
+	
+	<!---
+		@keywords private
+		The editor wraps {@link cmc/foundation/RichTextEditor} to edit {@link cmc/foundation/RichInputText}. This edit does not
+		use {@link cmc/foundation/RichTextEditor#property}
+	-->
+	<RichTextEditor classDefinition="true" definitionName="cmc/foundation/ColumnRichTextEditor" maximumHeight="300" textAreaHeight="50" width="420">
+		<!--- 
+			@keywords private
+			The column being edited by {@link cmc/foundation/ColumnRichTextEditor} 
+		 -->
+		<variable name="column" value="${null}"/>
+		
+		<!--- Selected objects {@link cmc/foundation/ModelObject} in grid -->
+		<variable name="selectedObjects" value="${null}"/>
+		
+		<!--- @keywords private -->
+		<method name="getValue">
+			<![CDATA[
+			return this.value;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="initialValue" name="resetValue">
+			<![CDATA[
+			this.setVariable("richTextMode", this.defaultToRichTextMode);
+			this.setVariable("value", initialValue);
+			]]>
+		</method>
+		
+		<!---
+			Get the model object associated with this rich text editor instance.
+		-->
+		<method name="getModelObject">
+			<![CDATA[
+			return this.selectedObjects != null ? this.selectedObjects[0] : null;
+			]]>
+		</method>
+	</RichTextEditor>
+
+	<!---
+		<p>
+		This class declares an enablement condition that indicates whether to enable the cmc/foundation/PropertyRichTextEditor rich text editor.
+		</p><p>	
+		In the following example, a rich text editor and a multiline text editor are provided for the same long description property value. 
+		The rich text editor displays the HTML text as it appears in the storefront, while the multiline editor displays the actual HTML 
+		text that is generated. When a business user updates the long description in the rich text editor, the corresponding text is automatically 
+		updated in the multiline editor.
+		</p> 
+		
+		@START_CODE
+        <PropertyRichTextEditor
+            objectPath="CatalogEntryDescription"
+            promptText="${catalogResources.longDescriptionPrompt}" propertyName="lDesc">
+            <RichTextEnablementCondition/>
+        </PropertyRichTextEditor>
+        <PropertyInputMultiLineText objectPath="CatalogEntryDescription" propertyName="lDesc" promptText="${catalogResources.longDescriptionPrompt}"/>
+		@END_CODE
+		
+		Use the cmc/foundation/RichTextEnablementCondition class to disable the rich text editor in a field when unknown tags exist in the HTML that might corrupt 
+		existing tags.	
+	-->
+	<EnablementCondition classDefinition="true" definitionName="cmc/foundation/RichTextEnablementCondition" isPropertyValue="true" propertyName="${this.parent.propertyName}">
+		<dependency localName="RichTextEditorUtil" moduleName="cmc/foundation/RichTextEditorUtil"/>
+		
+		<!--- @keywords private -->
+		<method args="o" name="isEnabled">
+			<![CDATA[
+			var newText = RichTextEditorUtil.Singleton.tagTextToLower(this.getValue(o));
+			return RichTextEditorUtil.Singleton.validHTMLText(newText);
+			]]>
+		</method>
+	</EnablementCondition>
+	
+	<!---
+		@keywords private
+		Rich text editors alert dialog, called when switching to rich text mode.
+	-->
+	<AlertDialog definitionName="cmc/foundation/RichTextAlertDialog" showNo="true" showOK="false" showYes="true" singletonDefinition="true">
+		
+		<!--- @keywords private	-->
+		<variable name="richTextEditor" value="${null}"/>
+		
+		<!---
+			@keywords private
+			This method is called when the dialog is opened.
+		-->
+		<method args="alertText, richTextEditor" name="openRichTextAlertDialog">
+			<![CDATA[
+			this.openWindow();
+			this.setVariable("richTextEditor", richTextEditor);
+			this.setVariable("promptText", alertText);
+			]]>
+		</method>
+        
+		<!---
+			@keywords private
+			This method is called when the user selects the Yes option.
+		-->
+		<method name="handleYes">
+			<![CDATA[
+			this.richTextEditor.switchModes(false);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the dialog is closed.
+		-->
+		 <method name="closeWindow">
+			<![CDATA[
+			this.richTextEditor = null;
+			this.inherited(arguments);
+			]]>
+		</method>
+	</AlertDialog>
+	
+</Definitions>

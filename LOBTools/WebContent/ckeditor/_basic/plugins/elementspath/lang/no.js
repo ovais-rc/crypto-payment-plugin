@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("elementspath","no",{eleLabel:"Elementbane",eleTitle:"%1-element"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("blockquote","ja",{toolbar:"引用"});

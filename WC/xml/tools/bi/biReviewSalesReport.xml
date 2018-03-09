@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+  <Report reportName="biReviewSalesReport" online="true" dataSourceName="WCA DataSource">
+   <comment></comment>
+   <SQLvalue>
+SELECT
+   FS.LOGONID,
+   FS.USERNAME,
+   FS.ORDERID,
+   FS.TIMEPLACED,
+   FS.CURRENCY,
+   FS.SHIPCHARGE,
+   FS.TOTAL,
+   FS.ITEM,
+   FS.NUMUNITS,
+   FS.UNITPRICE
+FROM
+   (
+   SELECT
+      UREG.LOGONID AS LOGONID,
+      MEM.MEMBER_ID as MEMBER_ID,
+      FOI.ORDER_ID as ORDERID,
+      CONCAT(COALESCE(MEM.FIRST_NAME,''),CONCAT(CONCAT(' ',COALESCE(MEM.MIDDLE_NAME,'')),CONCAT(' ',COALESCE(MEM.LAST_NAME,'')))) AS USERNAME,		
+      FOI.CREATED_TIME AS TIMEPLACED,
+      FO.ORDER_CURRENCY AS CURRENCY,
+      FOI.SHIPCHARGE AS SHIPCHARGE,
+      '{mbrgrpname}' AS SEGMENTNAME,
+      (COALESCE(FOI.SALES_VALUE, 0) + COALESCE(FOI.SHIPCHARGE, 0) + COALESCE(FOI.TAX, 0) + COALESCE(FOI.DISCOUNTS, 0)) AS TOTAL,
+      PROD.NAME AS ITEM,
+      FOI.NUM_UNITS AS NUMUNITS,
+      FOI.UNIT_PRICE AS UNITPRICE
+   FROM
+      WCA.FACT_ORDERITEMS FOI,
+      WCA.FACT_ORDERS FO,
+      WCA.MEMBER MEM,
+      WCA.USERREG UREG,
+      WCA.PRODUCT_REF PROD
+   WHERE
+      FOI.STORE_ID IN ({storeent_id}) AND
+      FOI.ORDER_ID = FO.ORDER_ID AND
+      FOI.MEMBER_ID = MEM.MEMBER_ID AND
+      UREG.USERS_ID = MEM.MEMBER_ID AND
+      WCA.TIMEPERIOD_IN(DATE($DB_TIMESTAMP_FUNC({StartDate})$), DATE($DB_TIMESTAMP_FUNC({EndDate})$), FOI.PER_ID) = 1 AND
+      (WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SHIPPED') = 1 OR
+      WCA.PARAM_VALUE_IN(CHAR(FOI.ORDER_STATUS_ID), 'ORDER_STATUS_SUBMITTED') = 1) AND
+      WCA.IN_CUST_SEGMENT(FOI.MEMBER_ID, '{mbrgrpname}', FOI.PER_ID) = 1 AND
+      FOI.PRODUCT_ID = PROD.PRODUCT_ID AND
+      CHAR(PROD.LANGUAGE_ID) = WCA.PARAM_VALUE('REPORT_LANGUAGE')
+   ORDER BY
+      {sortBy} {sortOrder}, ORDERID {sortOrder}
+   ) AS FS
+
+
+
+   </SQLvalue>
+   <display>
+      <standardInfo>
+         <resourceBundle>bi.biNLS</resourceBundle>
+         <title>ReviewSales</title>
+         <message>ReviewSales</message>
+      </standardInfo>
+      <userDefinedParameters>
+         <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+         <TDStyle>TD { font-family : Arial, Helvetica, Sans-serif; font-size : 9pt; line-height: 9pt; color : Black; }</TDStyle>
+         <spaceBetweenColumns>20</spaceBetweenColumns>
+         <columnDefaultAttributes>
+            <displayInReport>true</displayInReport>
+			<displayInHeader>false</displayInHeader>
+			<displayInSummary>false</displayInSummary>
+			<displayTotal>false</displayTotal>
+            <columnWidth>0</columnWidth>
+            <maxEntryLength>999</maxEntryLength>
+            <columnType>string</columnType>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columnDefaultAttributes>
+         <columns>
+            <columnKey>C0</columnKey>
+            <columnName>logonId</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+			<displayInHeader>TRUE</displayInHeader>
+         </columns>         
+         <columns>
+            <columnKey>C1</columnKey>
+            <columnName>customerName</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+			<displayInSummary>True</displayInSummary>
+         </columns>
+         <columns>
+            <columnKey>C2</columnKey>
+            <columnName>orderId</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+          </columns>
+         <columns>
+            <columnKey>C3</columnKey>
+            <columnName>orderPlaced</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>date</columnType>
+         </columns>
+         <columns>
+            <columnKey>C4</columnKey>
+            <columnName>currency</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+	</columns>
+	 <columns>
+            <columnKey>C5</columnKey>
+            <columnName>shippingamount</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<displayTotal>True</displayTotal>
+			<columnType>decimal</columnType>
+         </columns>
+		 <columns>
+            <columnKey>C6</columnKey>
+            <columnName>total</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+			<displayTotal>true</displayTotal>
+		</columns>
+		 <columns>
+            <columnKey>C7</columnKey>
+            <columnName>item</columnName>
+            <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+         </columns>
+		 <columns>
+            <columnKey>C8</columnKey>
+            <columnName>quantity</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<displayTotal>true</displayTotal>
+		</columns>
+		 <columns>
+            <columnKey>C9</columnKey>
+            <columnName>itemPrice</columnName>
+            <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+			<columnType>decimal</columnType>
+			<setMinimumFractionDigits>2</setMinimumFractionDigits>
+		</columns>
+		</userDefinedParameters>
+   </display>
+  </Report>
+  </Reporting>

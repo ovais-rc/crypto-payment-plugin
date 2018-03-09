@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+		
+		Client action to handle the undo of a history record.
+	-->
+	<ClientAction childListEditorIcon="undoHistoryIcon" classDefinition="true" definitionName="cmc/workspace/UndoHistoryClientAction" displayName="${workspaceResources.Singleton.undo.string}" menuDisplayName="${workspaceResources.Singleton.undoMenu.string}">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+			
+		<method args="objects" name="performAction">
+			<![CDATA[
+			if (objects && objects.length > 0) {
+				if (objects.length == 1) {
+					require(["cmc/workspace/UndoConfirmationDialog"], function(UndoConfirmationDialog) {
+						UndoConfirmationDialog.Singleton.openUndoConfirmationDialog(objects[0]);
+					});
+				}
+				else {
+					require(["cmc/workspace/MultipleUndoConfirmationDialog"], function(MultipleUndoConfirmationDialog) {
+						MultipleUndoConfirmationDialog.Singleton.openMultipleUndoConfirmationDialog(objects);
+					});
+				}
+			}
+			]]>
+		</method>
+		
+	</ClientAction>
+	
+	<!---
+		@keywords private
+		
+		The undo confirmation dialog.
+		This dialog is used to prompt the user to confirm undo for a single history record.
+	-->
+	<AlertDialog definitionName="cmc/workspace/UndoConfirmationDialog" showNo="true" showOK="false" showYes="true" singletonDefinition="true">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="UndoHistoryService" moduleName="cmc/workspace/UndoHistoryService"/>
+	
+		<!---
+			The object that is to be undone.
+		-->
+		<variable name="undoObject" value="${null}"/>
+		
+		<!-- 
+			Business Object Editor of the object to be undone
+		 -->
+		<variable name="oEditor" value="${null}"/>
+		
+		<!---
+			Confirm that the specified object can be undone
+			@param cmc/foundation/ModelObject o: the object to be undone
+		-->
+		<method args="o" name="openUndoConfirmationDialog">
+			<![CDATA[
+			this.openWindow();
+			var name = o.getPropertyValue("objectCode");
+			this.setVariable("promptText", workspaceResources.Singleton.replaceValues("undoConfirmationDialogText", [name != null ? name : ""]));
+			this.undoObject = o;
+			this.oEditor = o.model.oEditor;
+			]]>
+		</method>
+		
+		<!---
+			Set the focus to Yes button
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.viewButtons.yesBtn);
+			]]>
+		</method>
+		
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Close the dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.undoObject = null;
+			this.oEditor = null;
+			]]>
+		</method>
+		
+	    <!---
+	    	Undo the object.
+	    -->
+		<method name="handleYes">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/workspace/UndoConfirmationDialog handleYes");
+			UndoHistoryService.Singleton.doRequest(this.undoObject);
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+	</AlertDialog>
+	
+	<!---
+		@keywords private
+		
+		The multiple undo confirmation dialog.
+		This dialog is used to prompt the user to confirm undo for multiple history records.
+	-->
+	<HistoryObjectListDialog definitionName="cmc/workspace/MultipleUndoConfirmationDialog" package="cmc/workspace" promptText="${workspaceResources.Singleton.multipleUndoConfirmationDialogText.string}" showNo="true" showOK="false" showYes="true" singletonDefinition="true">
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="UndoHistoryService" moduleName="cmc/workspace/UndoHistoryService"/>
+		
+		<!---
+			The array of objects that are to be undone.
+		-->
+		<variable name="undoObjects" value="${null}"/>
+		
+		<!-- 
+			Business Object Editor of the objects to be undone
+		 -->
+		<variable name="oEditor" value="${null}"/>
+		
+		<!---
+			Confirm that the specified objects can be undone
+			@param array objects: the objects to be undone
+		-->
+		<method args="objects" name="openMultipleUndoConfirmationDialog">
+			<![CDATA[
+			this.undoObjects = objects;
+			this.oEditor = objects[0].model.oEditor;
+			this.openListAlertDialog(this.undoObjects);
+			]]>
+		</method>
+		
+		<!---
+			Restore focus after close.
+		-->
+		<method name="restoreFocus">
+			<![CDATA[
+			this.inherited(arguments);
+			if (FocusUtil.getFocus() == null) {
+				this.oEditor.restoreFocus();
+			}
+			]]>
+		</method>
+		
+		<!---
+			Close dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			this.undoObjects = null;
+			this.oEditor = null;
+			]]>
+		</method>
+		
+	    <!---
+	    	Undo the objects.
+	    -->
+		<method name="handleYes">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/workspace/MultipleUndoConfirmationDialog handleYes");
+			for (var i = 0; i < this.undoObjects.length; i++) {
+				UndoHistoryService.Singleton.doRequest(this.undoObjects[i]);
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+	</HistoryObjectListDialog>
+	
+	<!---
+		@keywords private
+		
+		Base class for the multiple discard confirmation dialog. The dialog is used to prompt the user for confirmation when
+		an action has been triggered that will cause the changes to multiple objects to be undone.
+	-->
+	<AlertDialog classDefinition="true" definitionName="cmc/workspace/HistoryObjectListDialog">
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<!---
+			Open the multiple discard confirmation dialog.
+			@param array unsavedObjects: array of unsaved objects
+		-->
+		<method args="objects" name="openListAlertDialog">
+			<![CDATA[
+			this.openWindow();
+			this.objectsArea.objectItems.setObjects(objects);
+			]]>
+		</method>
+		
+		<!---
+			Set the focus to Yes button
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.viewButtons.yesBtn);
+			]]>
+		</method>
+		
+		<!---
+			Close multiple discard confirmation dialog.
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.objectsArea.objectItems.setObjects([]);
+			this.inherited(arguments);
+			]]>
+		</method>
+			
+		<Component clip="true" ignoreLayout="true" name="objectsArea" x="${this.parent.text.x}" y="${this.parent.text.y + this.parent.text.height + 5}">
+			
+			<!-- In case the number of objects to discard are too much for the dialog, create a container that can scroll so dialog doesn't get too long -->
+			<HistoryItemList height="150" name="objectItems" package="cmc/workspace" width="${this.parent.parent.text.width}"/>
+		</Component>
+	</AlertDialog>
+	
+	<!---
+		@keywords private
+		
+		Represents the list of history objects to be undone.
+	-->
+	<ObjectItemList classDefinition="true" definitionName="cmc/workspace/HistoryItemList">
+		<dependency localName="HistoryItem" moduleName="cmc/workspace/HistoryItem"/>
+		<!---
+			Set the array of objects.
+			
+			@param [cmc/foundation/ModelObject] newObjects: array of model objects
+		-->
+		<method args="newObjects" name="setObjects">
+			<![CDATA[
+			for (var i = 0; i < this.objectItems.length; i++) {
+				this.objectItems[i].setVariable("o", null);
+				this.objectItems[i].setVariable("visible", false);
+			}
+			for (var i = 0; i < newObjects.length; i++) {
+				if (i < this.objectItems.length) {
+					this.objectItems[i].setVariable("o", newObjects[i]);
+					this.objectItems[i].setVariable("visible", true);
+				}
+				else {
+					this.objectItems.push(new HistoryItem.Class(this.borderedView.clippedContent.content, {
+						o: newObjects[i],
+						focusable: false
+					}));
+				}
+			}
+			if (newObjects.length > 0) {
+				this.currentObjectIndex = 0;
+			}
+			else {
+				this.currentObjectIndex = -1;
+			}
+			this.updateHilite();
+			this.updateScroll();
+			]]>
+		</method>
+		
+	</ObjectItemList>
+	
+	<!---
+		@keywords private
+		
+		Represents a history object in the list of objects.
+		Both the icon and the display name of the object will be taken from the history objects.
+	-->
+	<Component classDefinition="true" definitionName="cmc/workspace/HistoryItem">
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			A reference to the instance of the {@link cmc/foundation/ModelObject} whose icon is being displayed. 
+		-->
+		<variable name="o" value="${null}"/>
+		<!---
+			Object icon.
+		-->
+		<variable name="icon" type="string" value="unknownObjectIcon"/>
+		<!---
+			Object display name.
+		-->
+		<variable name="objectDisplayName" value="${null}"/>
+		<!---
+			Indicates that this object has an error.
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Set the {@link cmc/foundation/ModelObject} to be associated with this item. 
+			@param cmc/foundation/ModelObject newObject New object associated with this item.
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (this.o != newObject) {
+				this.o = newObject;
+				if (this.o == null) {
+					this.setVariable("icon", null);
+					this.setVariable("objectDisplayName", "");
+					this.setVariable("hasError", false);
+				}
+				else {
+					var property = this.o.getProperty("objectType");
+					if (property != null) {
+						var propValue = property.propertyDefinition.getPropertyValue(property, null);
+						if (propValue) {
+							this.setVariable("icon", propValue.icon);
+						}
+					}
+					var name = this.o.getPropertyValue("objectCode");
+					if (name != null) {
+						this.setVariable("objectDisplayName", name);
+					}
+					var newHasError = this.o.openGroupObject != null && this.o.openGroupObject.errorInOpenGroup;
+					if (newHasError != this.hasError) {
+						this.setVariable("hasError", newHasError);
+					}
+				}
+				EventUtil.trigger(this, "ono", this.o);
+			}
+			]]>
+		</method>
+		
+		<Component name="objectItem">
+			<Component imageSet="${this.classroot.icon}" name="_icon"/>
+			<Component imageSet="treeErrorResource" name="_errorIcon" visible="${this.classroot.hasError}" x="${this.parent._icon.x + this.parent._icon.width - this.width - 1}" y="${this.parent._icon.y + this.parent._icon.height - this.height}"/>
+			<TextComponent name="_displayName" resize="true" text="${this.escapeText(this.classroot.objectDisplayName)}" x="${this.parent._errorIcon.x + this.parent._errorIcon.width + 1}"/>
+		</Component>
+	<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method></Component>
+	
+	<!---
+		@keywords private
+		
+		This service is used to undo a history record.
+	-->
+	<Service definitionName="cmc/workspace/UndoHistoryService" refreshChildren="true" singletonDefinition="true" transactionService="true" url="/cmc/DeleteTaskGroupHistory">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="workspaceResources" moduleName="cmc/workspace/WorkspaceResources"/>
+	
+		<ServiceParam name="taskGroupId" parentProperty="true" parentType="TaskGroup" propertyName="taskGroupId"/>
+		<ServiceParam name="taskGroupHistoryId" propertyName="taskGroupHistoryId"/>
+		
+		<!---
+			@keywords private
+			Initialize the service transaction object for this request.
+			@param Object transaction: the transaction object
+		-->
+		<method args="transaction" name="initializeTransaction">
+			<![CDATA[
+			if (!transaction.o.isDeleting()) {
+				ServiceTransactionUtil.Singleton.addDeleteObject(transaction, transaction.o);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when this custom service completed successfully. Client objects will be released if
+			necessary to make sure the association reference objects are up to date to reflect the changes after the
+			action.
+
+			@param cmc/foundation/ModelObject requestParent: The object on which this custom service was performed.
+		-->
+		<method args="requestParent" name="handleServiceSuccess">
+			<![CDATA[
+			this.inherited(arguments);
+			var msg;
+			var messageType = "undoHistorySuccessful";
+			var msgCount = 1 + ServiceTransactionUtil.Singleton.getTransactionEventMessageCount(requestParent.transaction, messageType);
+			if (msgCount == 1) {
+				var name = requestParent.getPropertyValue("objectCode");
+				msg = workspaceResources.Singleton.replaceValues("undoHistorySuccessful", [name != null ? name : ""]);
+			}
+			else {
+				msg = workspaceResources.Singleton.replaceValues("undoMultipleHistorySuccessful", [msgCount]);
+			}
+			ServiceTransactionUtil.Singleton.setTransactionEventMessage(requestParent.transaction, messageType, msg);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when a service response is successfully returned from the server. This does
+			not necessarily mean that the service completed successfully, it just means that there were no
+			communication errors. The specified dataset contains the response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceComplete">
+			<![CDATA[
+			var parentTaskGroup = ds.requestParent.parentObject;
+			var historyDef = parentTaskGroup.objectDefinition.getChildDefinition("TaskGroupHistory");
+			var historyObjDefs = [historyDef];
+			var refresh = false;
+			if (ServiceTransactionUtil.Singleton.isLastTransactionInGroup(ds.requestParent.transaction)) {
+				refresh = true;
+			}
+			this.inherited(arguments);
+			if (refresh) {
+				parentTaskGroup.refreshChildren(historyObjDefs);
+			}
+			]]>
+		</method>
+	</Service>
+	
+</Definitions>

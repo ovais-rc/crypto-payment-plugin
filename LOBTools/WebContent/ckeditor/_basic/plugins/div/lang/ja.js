@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("div","ja",{IdInputLabel:"ID",advisoryTitleInputLabel:"推奨タイトル",cssClassInputLabel:"スタイルシート・クラス",edit:"DIV の編集",inlineStyleInputLabel:"インライン・スタイル",langDirLTRLabel:"左から右 (LTR)",langDirLabel:"言語の方向",langDirRTLLabel:"右から左 (RTL)",languageCodeInputLabel:" 言語コード",remove:"DIV の削除",styleSelectLabel:"スタイル",title:"DIV コンテナーの作成",toolbar:"DIV コンテナーの作成"});

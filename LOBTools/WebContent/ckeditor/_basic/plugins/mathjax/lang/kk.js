@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("mathjax","kk",{title:"Математика TeX жүйесінде",button:"Математика",dialogInput:"TeX жүйесі туралы осы жерге жазыңыз",docUrl:"http://en.wikibooks.org/wiki/LaTeX/Mathematics",docLabel:"TeX құжаттамасы",loading:"жүктелуде...",pathName:"математика"});

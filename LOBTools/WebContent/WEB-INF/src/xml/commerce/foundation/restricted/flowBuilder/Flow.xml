@@ -1,0 +1,508 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!--- 
+		This class provides a basic view for a flow diagram in flow builder.
+		@keywords private 
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/Flow">
+		<dependency localName="StartElement" moduleName="cmc/foundation/StartElement"/>
+		<dependency localName="FlowPath" moduleName="cmc/foundation/FlowPath"/>
+		<dependency localName="FlowElement" moduleName="cmc/foundation/FlowElement"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="DefinitionUtil" moduleName="cmc/foundation/DefinitionUtil"/>
+		<dependency localName="MultiSelectBox" moduleName="cmc/foundation/MultiSelectBox"/>
+		<dependency localName="FlowUtils" moduleName="cmc/foundation/FlowUtils"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!--- @keywords private -->
+		<variable name="flowBuilder" value="${null}"/>
+
+		<!--- @keywords private -->
+		<variable name="selectedElements" value="${[]}"/>
+		<!--- @keywords private -->
+		<variable name="selectBox" value="${null}"/>
+
+		<!--- @keywords private -->
+		<variable name="editableFlow" type="boolean" value="true"/>
+
+		<!--- @keywords private -->
+		<variable name="o" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="flowPath" value="${null}"/>
+
+		<variable name="flowPathClass" type="module" value="${FlowPath}"/>
+ 
+		<handler name="oninit">
+			<![CDATA[
+			this.selectBox = new MultiSelectBox.Class(RootComponent.Singleton, {
+				selectArea: this.parent,
+				callback: this
+			});
+			if (this.flowPathClass.Class) {
+				this.flowPath = new this.flowPathClass.Class(this.mainflow.flowPathParent);
+			}
+			else {
+				this.flowPath = DefinitionUtil.createDefinitionInstance(this.flowPathClass, this.mainflow.flowPathParent);
+			}
+			this.updateFlow();
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.releaseModelObjectDel.disconnectAll();
+			delete this.releaseModelObjectDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Set the model object for this tree node to the specified object.
+			@param cmc/foundation/ModelObject newObject: the new object
+		-->
+		<method args="newObject" name="setModelObject">
+			<![CDATA[
+			if (newObject != this.o) {
+				if (this.o && this.flowBuilder && this.flowBuilder.propertiesPane.o && this.flowBuilder.propertiesPane.o != this.o) {
+					this.o.viewState = this.flowBuilder.propertiesPane.o.objectId;
+				}
+				if (this.releaseModelObjectDel) {
+					this.releaseModelObjectDel.disconnectAll();
+				}
+				else {
+					this.releaseModelObjectDel = new EventHandler.Class(this, "releaseModelObject");
+				}
+				this.o = newObject;
+				if (this.o) {
+					this.releaseModelObjectDel.connect(this.o, "beingDestroyed");
+					if (this.mainflow) {
+						this.mainflow.startElement.setModelObject(this.o);
+						if (this.o.viewState && "startElement" != this.o.viewState) {
+							if (FlowUtils.Singleton.getElementObject(this.o, this.o.viewState) == null) {
+								this.o.viewState = "";
+							}
+						}
+						if (!this.o.viewState || "startElement" == this.o.viewState) {
+							var setFocusToFirstInput = !this.o.viewState;
+							this.mainflow.startElement.loadProperties();
+							if (setFocusToFirstInput && this.flowBuilder) {
+								this.flowBuilder.resetPropertiesView();
+							}
+						}
+					}
+				}
+				this.updateFlow();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method releases the model object from this properties view by setting {@link cmc/foundation/ObjectProperties#o} to null.
+		-->
+		<method args="e" name="releaseModelObject">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("o", null);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="e" name="updateFlow">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.updateFlowDel) {
+				this.updateFlowDel.disconnectAll();
+			}
+			else {
+				this.updateFlowDel = new EventHandler.Class(this, "updateFlow");
+			}
+			if (this.flowPath) {
+				if (this.o) {
+					if (this.o.newObject) {
+						this.updateFlowDel.connect(this.o, "onchildObjects");
+					}
+					else {
+						this.updateFlowDel.connect(this.o, "onGetChildrenServiceCompleted");
+					}
+					var flowPathObj = this.o.getObject("FlowElement");
+					this.flowPath.setVariable("o", flowPathObj);
+				}
+				else {
+					this.flowPath.setVariable("o", null);
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="element" name="loadProperties">
+			<![CDATA[
+			if (element instanceof StartElement.Class) {
+				this.flowBuilder.propertiesPane.loadProperties(element.o, this.flowBuilder.generalPropertiesClass);
+				this.o.viewState = "startElement";
+			}
+			else {
+				this.flowBuilder.propertiesPane.loadProperties(element.o, null);
+				this.o.viewState = element.o.objectId;
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="hideProperties">
+			<![CDATA[
+			this.flowBuilder.propertiesPane.hideProperties();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="selectAreaCreated">
+			<![CDATA[
+			var selectBoxX = this.selectBox.getVariableRelative("x", RootComponent.Singleton);
+			var selectBoxY = this.selectBox.getVariableRelative("y", RootComponent.Singleton);
+			var selectBoxWidth = this.selectBox.width;
+			var selectBoxHeight = this.selectBox.height;
+			this.unselectAll();
+			this.selectSubviews(this, selectBoxX, selectBoxY, selectBoxX + selectBoxWidth, selectBoxY + selectBoxHeight);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="v, selectBoxX, selectBoxY, selectBoxToX, selectBoxToY" name="selectSubviews">
+			<![CDATA[
+			for (var i = 0; i < v.childComponents.length; i++) {
+				var e = v.childComponents[i];
+				if (e instanceof FlowElement.Class) {
+					var eX = e.MainView.iconcontentview.iconcontent.getVariableRelative("x", RootComponent.Singleton);
+					var eY = e.MainView.iconcontentview.iconcontent.getVariableRelative("y", RootComponent.Singleton);
+					var eWidth = e.MainView.iconcontentview.iconcontent.width;
+					var eHeight = e.MainView.iconcontentview.iconcontent.height;
+					if (eX > selectBoxX && eY > selectBoxY && eX < selectBoxToX && eY < selectBoxToY) {
+						if (e.visible) {
+							e.select();
+						}
+					}
+					else if ((eX + eWidth) > selectBoxX && eY > selectBoxY && (eX + eWidth) < selectBoxToX && eY < selectBoxToY) {
+						if (e.visible) {
+							e.select();
+						}
+					}
+					else if (eX > selectBoxX && (eY + eHeight) > selectBoxY && eX < selectBoxToX && (eY + eHeight) < selectBoxToY) {
+						if (e.visible) {
+							e.select();
+						}
+					}
+					else if ((eX + eWidth) > selectBoxX && (eY + eHeight) > selectBoxY && (eX + eWidth) < selectBoxToX && (eY + eHeight) < selectBoxToY) {
+						if (e.visible) {
+							e.select();
+						}
+					}
+				}
+				this.selectSubviews(e, selectBoxX, selectBoxY, selectBoxToX, selectBoxToY);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="parentElement, element" name="isParentElement">
+			<![CDATA[
+			var ancestor = element.parentFlowPath.parentFlowElement;
+			while (ancestor) {
+				if (ancestor == parentElement) {
+					return true;
+				}
+				ancestor = ancestor.parentFlowPath.parentFlowElement;
+			}
+			return false;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="element1, element2" name="getCommonParentElement">
+			<![CDATA[
+			var ancestor = element1;
+			while (ancestor) {
+				if (this.isParentElement(ancestor, element2)) {
+					return ancestor;
+				}
+				ancestor = ancestor.parentFlowPath.parentFlowElement;
+			}
+			return null;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="element" name="selected">
+			<![CDATA[
+			for (var i = 0; i < this.selectedElements.length; i++) {
+				if (this.selectedElements[i].parent != element.parent) {
+					var commonParentElement = this.getCommonParentElement(this.selectedElements[i], element);
+					if (commonParentElement != null) {
+						commonParentElement.unselectChildren();
+						if (commonParentElement != this.selectedElements[i]) {
+							commonParentElement.select();
+						}
+						return;
+					}
+				}
+			}
+			this.selectedElements.push(element);
+			var comparator = function(o1, o2) {
+				if (o1.x < o2.x) {
+					return -1;
+				}
+				else if (o1.x > o2.x) {
+					return 1;
+				}
+				else {
+					return 0;
+				}
+			};
+			this.selectedElements.sort(comparator);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="element" name="unselected">
+			<![CDATA[
+			if (!this._unselectAllInvoked) {
+				for (var i = 0; i < this.selectedElements.length; i++) {
+					if (this.selectedElements[i] == element) {
+						this.selectedElements[i] = null;
+						this.selectedElements.splice(i, 1);
+						return;
+					}
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="unselectAll">
+			<![CDATA[
+			this._unselectAllInvoked = true;
+			while (this.selectedElements.length > 0) {
+				var e = this.selectedElements.pop();
+				e.unselect();
+			}
+			this._unselectAllInvoked = false;
+			]]>
+		</method>
+
+		<method args="o" name="set_o">
+			<![CDATA[
+			this.setModelObject(o);
+			]]>
+		</method>
+
+		<AxisLayout axis="y"/>
+		<Component height="12" name="topPadding"/>
+		<Component name="mainflow">
+			<Component name="flowPathParent" x="47"/>
+			<StartElement name="startElement" parentFlow="${this.classroot}" x="20" y="6"/>
+			<Component imageSet="wcfFlowBuilderExit" name="exitIcon" x="${this.parent.flowPathParent.x + this.parent.flowPathParent.width - 5}" y="6"/>
+			<Component width="25" x="${this.parent.exitIcon.x + this.parent.exitIcon.width}"/>
+		</Component>
+		<Component height="15" name="bottomPadding"/>
+	</Component>
+
+	<!--- @keywords private -->
+	<Node definitionName="cmc/foundation/FlowUtils" singletonDefinition="true">
+		<dependency localName="Flow" moduleName="cmc/foundation/Flow"/>
+		<dependency localName="FlowPath" moduleName="cmc/foundation/FlowPath"/>
+		<dependency localName="FlowElement" moduleName="cmc/foundation/FlowElement"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!--- @keywords private -->
+		<method args="element" name="getParentFlow">
+			<![CDATA[
+			var ancestor = element;
+			while (ancestor != null && ancestor != RootComponent.Singleton) {
+				if (ancestor instanceof Flow.Class) {
+					return ancestor;
+				}
+				ancestor = ancestor.parent;
+			}
+			return null;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method args="element" name="getParentFlowPath">
+			<![CDATA[
+			var ancestor = element;
+			while (ancestor != null && ancestor != RootComponent.Singleton) {
+				if (ancestor instanceof FlowPath.Class) {
+					return ancestor;
+				}
+				ancestor = ancestor.parent;
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="element" name="getParentFlowElement">
+			<![CDATA[
+			var ancestor = element;
+			while (ancestor != null && ancestor != RootComponent.Singleton) {
+				if (ancestor instanceof FlowElement.Class) {
+					return ancestor;
+				}
+				ancestor = ancestor.parent;
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="element" name="getElementDepth">
+			<![CDATA[
+			var depth = 0;
+			var ancestor = element;
+			while (ancestor != null && ancestor != RootComponent.Singleton) {
+				if (ancestor instanceof Flow.Class) {
+					break;
+				}
+				else if (ancestor instanceof FlowPath.Class) {
+					depth++;
+				}
+				ancestor = ancestor.parent;
+			}
+			return depth;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+
+			Provides an array of child objects sorted by their sequence number as defined by their <code>sequence</code>
+			property.
+			
+			@param cmc/foundation/ModelObject parentObj Required parent object from which child objects will be searched.
+			@returns cmc/foundation/ModelObject[] An array of child objects of the <code>parentObj</code> sorted by sequence number.
+		-->
+		<method args="parentObj" name="getSortedElements">
+			<![CDATA[
+			var sequencePropertyName = "sequence";
+			var elements = [];
+			if (parentObj) {
+				elements = parentObj.getObjects("FlowElement");
+				var comparator = function(o1, o2) {
+					var seq1 = o1.getPropertyValue(sequencePropertyName);
+					var seq2 = o2.getPropertyValue(sequencePropertyName);
+					return Number(seq1) - Number(seq2);
+				};
+				elements.sort(comparator);
+			}
+			return elements;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+
+			Provides an unique sequence number for
+			@param cmc/foundation/ModelObject parentObj Required parent object from which child objects will be searched. The returned sequence number
+								  will be valid for use for a child object for this parent.
+			@param cmc/foundation/ModelObject referenceObj Optional reference child object of the given <code>parentObj</code>. If provided, the sequence
+								  number returned will be a sequence number smaller than the sequence number of this reference object.
+								  If not provided, the sequence number returned will be the larger than the current child object
+								  with the largest sequence.
+			@returns string A new, unique sequence number for a child object of the given <code>parentObj</code>. If <code>parentObj</code>
+							is missing, "-1" is returned.
+		-->
+		<method args="parentObj, referenceObj" name="getNextSequenceNumber">
+			<![CDATA[
+			if (typeof(referenceObj) == "undefined") referenceObj = null;
+			var sequencePropertyName = "sequence";
+			var increment = 1000;
+			if (parentObj) {
+				var childObjects = parentObj.getObjects("FlowElement");
+				if (childObjects.length == 0) {
+					return String(increment);
+				}
+				var sequences = [];
+				for (var i = 0; i < childObjects.length; i++) {
+					var seqProp = childObjects[i].getProperty(sequencePropertyName);
+					if (seqProp) {
+						sequences.push(Number(seqProp.value));
+					}
+				}
+				var comparator = function(x, y) {
+					return x - y;
+				};
+				sequences.sort(comparator);
+				if ((typeof (referenceObj) == "undefined") || !referenceObj) {
+					return String(sequences[sequences.length - 1] + increment);
+				}
+				else {
+					var seqProp = referenceObj.getProperty(sequencePropertyName);
+					if (seqProp) {
+						var referenceSeq = Number(seqProp.value);
+						for (var i = 0; i < sequences.length; i++) {
+							if (sequences[i] == referenceSeq) {
+								if (i == 0) {
+									return String(referenceSeq / 2);
+								}
+								else {
+									return String((sequences[i - 1] + referenceSeq) / 2);
+								}
+							}
+						}
+					}
+				}
+			}
+			return "-1";
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+
+			Locates the element object with the specified object ID.
+			@param cmc/foundation/ModelObject parentObject Required parent object from which child objects will be searched.
+			@param string objectId Object ID
+			@returns cmc/foundation/ModelObject The element object, or null if not found.
+		-->
+		<method args="parentObject, objectId" name="getElementObject">
+			<![CDATA[
+			var elementObject = null;
+			var childObjects = parentObject.getObjects("FlowElement");
+			for (var i = 0; i < childObjects.length; i++) {
+				var o = childObjects[i];
+				if (o.objectId == objectId) {
+					elementObject = o;
+					break;
+				}
+				elementObject = this.getElementObject(o, objectId);
+				if (elementObject != null) {
+					break;
+				}
+			}
+			return elementObject;
+			]]>
+		</method>
+	</Node>
+
+</Definitions>

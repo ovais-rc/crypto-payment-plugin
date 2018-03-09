@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","pt-br",{bulletedlist:"Lista com Marcador",numberedlist:"Lista Numerada",ibm:{numberedTitle:"Lista Numerada",bulletedTitle:"Lista com marcadores",description:"As configurações serão aplicadas ao nível da lista atual",fontsize:"Tamanho da fonte:"}});

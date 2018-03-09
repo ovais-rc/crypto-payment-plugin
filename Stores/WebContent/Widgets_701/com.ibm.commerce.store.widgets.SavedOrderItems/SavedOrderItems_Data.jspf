@@ -1,0 +1,700 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<c:set var="orderId" value="${WCParam.orderId}"/>
+<c:if test="${empty orderId}">
+	<c:set var="orderId" value="${param.orderId}"/>
+</c:if>
+
+<%-- Index to begin the saved order items paging with --%>
+<c:set var="beginIndex" value="${WCParam.beginIndex}" />
+<c:if test="${empty beginIndex || beginIndex < 0}">
+	<c:set var="beginIndex" value="0" />
+</c:if>
+
+<c:set var="pageSize" value="20"/>
+
+<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+
+<%-- Retrieve the details of the saved order by orderID --%>
+<wcf:rest var="order" url="store/{storeId}/order/{orderId}" scope="request">
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:var name="orderId" value="${orderId}" encode="true"/>
+	<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+	<wcf:param name="pageSize" value="${pageSize}"/>
+	<wcf:param name="pageNumber" value="${currentPage}"/>
+</wcf:rest>
+
+<%-- ****************************************************************
+	 pagination --%>
+<fmt:parseNumber var="totalCount" value="${order.recordSetTotal}" integerOnly="true"/>
+<fmt:formatNumber var="totalPages" value="${(totalCount / pageSize)}"/>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+<c:if test="${totalCount - (totalPages * pageSize) > 0}" >
+	<c:set var="totalPages" value="${totalPages + 1}" />
+</c:if>
+
+<%-- Set variables used by pagination controls --%>
+<c:set var="linkPrefix" value="savedOrderItemResults"/>
+<c:set var="eventName" value="showPageResultsForSavedOrderItems"/>
+<script type="text/javascript">
+	dojo.addOnLoad(function(){
+		dojo.subscribe("showPageResultsForSavedOrderItems",SavedOrderItemsJS,"showResultsPage");
+	});
+</script>
+
+<c:choose>
+	<c:when test="${beginIndex == 0}">
+		<c:set var="currentPage" value="1" />
+	</c:when>
+	<c:otherwise>
+		<fmt:formatNumber var="currentPage" value="${beginIndex / pageSize + 1}"/>
+		<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	</c:otherwise>
+</c:choose>
+
+<c:choose>
+	<c:when test="${beginIndex + pageSize >= totalCount}">
+		<c:set var="endIndex" value="${totalCount}" />
+	</c:when>
+	<c:otherwise>
+		<c:set var="endIndex" value="${beginIndex + pageSize}" />
+	</c:otherwise>
+</c:choose>
+
+<c:if test="${totalCount < (beginIndex+1) && totalCount != 0}">
+	<c:set var="beginIndex" value="${totalCount % pageSize == 0 ? totalCount - pageSize : totalCount - totalCount % pageSize}" />
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= totalCount}">
+			<c:set var="endIndex" value="${totalCount}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+	<wcf:rest var="order" url="store/{storeId}/order/{orderId}" scope="request">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:var name="orderId" value="${orderId}" encode="true"/>
+		<wcf:param name="sortOrderItemBy" value="orderItemID"/>
+		<wcf:param name="pageSize" value="${pageSize}"/>
+		<wcf:param name="pageNumber" value="${currentPage}"/>
+	</wcf:rest>
+</c:if>
+
+<c:if test="${totalCount == 0}">
+	<c:set var="beginIndex" value="0" />
+</c:if>
+
+<wcst:message var="pageDisplay1" key="SAVEDORDER_PAGE_DISPLAY1" bundle="${widgetText}"/>
+<wcst:message var="pageDisplay2" key="SAVEDORDER_PAGE_DISPLAY2" bundle="${widgetText}">
+	<c:choose>
+		<c:when test="${totalCount == 0}">
+			<wcst:param><wcst:formatNumber value="${beginIndex}"/></wcst:param>
+		</c:when>
+		<c:otherwise>
+			<wcst:param><wcst:formatNumber value="${beginIndex + 1}"/></wcst:param>
+		</c:otherwise>
+	</c:choose>
+	<wcst:param><wcst:formatNumber value="${endIndex}"/></wcst:param>
+	<wcst:param><wcst:formatNumber value="${totalCount}"/></wcst:param>
+</wcst:message>
+
+
+<%-- Used by the Set as Current Order and Checkout button --%>
+<wcf:url var="ShoppingCartURL" value="RESTOrderCalculate" type="Ajax">
+   <wcf:param name="langId" value="${langId}" />
+  <wcf:param name="storeId" value="${WCParam.storeId}" />
+  <wcf:param name="catalogId" value="${WCParam.catalogId}" />
+  <wcf:param name="URL" value="AjaxOrderItemDisplayView" />
+  <wcf:param name="errorViewName" value="AjaxOrderItemDisplayView" />
+  <wcf:param name="updatePrices" value="1" />
+  <wcf:param name="calculationUsageId" value="-1" />
+  <wcf:param name="orderId" value="${order.orderId}" />
+</wcf:url>
+
+<wcf:url var="SavedOrderItemTableView" value="SavedOrderItemTableView" type="Ajax">
+	<wcf:param name="langId" value="${WCParam.langId}"/>
+	<wcf:param name="storeId" value="${WCParam.storeId}"/>
+	<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+	<wcf:param name="orderId" value="${WCParam.orderId}"/>
+	<wcf:param name="ajaxStoreImageDir" value="${jspStoreImgDir}" />
+</wcf:url>
+
+<script type="text/javascript" src="${staticIBMAssetAliasRoot}${env_siteWidgetsDir}com.ibm.commerce.store.widgets.SavedOrderItems/javascript/SavedOrderItems.js"></script>
+
+<script type="text/javascript">
+	dojo.addOnLoad(function() {
+		SavedOrderItemsJS.setCommonParameters('<c:out value="${langId}"/>','<c:out value="${storeId}" />','<c:out value="${catalogId}" />','<c:out value="${order.orderId}" />');
+		SavedOrderItemsJS.initSavedOrderItemsUrl("${SavedOrderItemTableView}");
+		SavedOrderItemsJS.setCurrentShoppingCartURL('${ShoppingCartURL}');
+		<wcst:message var="SAVEDORDERITEM_DELETE_SUCCESS" key="SAVEDORDERITEM_DELETE_SUCCESS" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_SAVED_ORDER_QUANTITY_ONE_OR_MORE" key="ERROR_SAVED_ORDER_QUANTITY_ONE_OR_MORE" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_SAVED_ORDER_INVALID_SKU" key="ERROR_SAVED_ORDER_INVALID_SKU" bundle="${widgetText}"/>
+		<wcst:message var="SAVED_ORDER_EMPTY_SKU" key="SAVED_ORDER_EMPTY_SKU" bundle="${widgetText}"/>
+		<wcst:message var="SAVEDORDERITEM_ADD_SUCCESS" key="SAVEDORDERITEM_ADD_SUCCESS" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_SAVED_ORDER_CONTRACT_EXPIRED" key="ERROR_SAVED_ORDER_CONTRACT_EXPIRED" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_SAVED_ORDER_RETRIEVE_PRICE" key="ERROR_SAVED_ORDER_RETRIEVE_PRICE" bundle="${widgetText}"/>
+		<wcst:message var="ERROR_SAVED_ORDER_NOT_SET_CURRENT" key="ERROR_SAVED_ORDER_NOT_SET_CURRENT" bundle="${widgetText}"/>
+
+		MessageHelper.setMessage("SAVEDORDERITEM_DELETE_SUCCESS", <wcf:json object="${SAVEDORDERITEM_DELETE_SUCCESS}"/>);
+		MessageHelper.setMessage("ERROR_SAVED_ORDER_QUANTITY_ONE_OR_MORE", <wcf:json object="${ERROR_SAVED_ORDER_QUANTITY_ONE_OR_MORE}"/>);
+		MessageHelper.setMessage("ERROR_SAVED_ORDER_INVALID_SKU", <wcf:json object="${ERROR_SAVED_ORDER_INVALID_SKU}"/>);
+		MessageHelper.setMessage("SAVED_ORDER_EMPTY_SKU", <wcf:json object="${SAVED_ORDER_EMPTY_SKU}"/>);
+		MessageHelper.setMessage("SAVEDORDERITEM_ADD_SUCCESS", <wcf:json object="${SAVEDORDERITEM_ADD_SUCCESS}"/>);
+		MessageHelper.setMessage("ERROR_SAVED_ORDER_CONTRACT_EXPIRED", <wcf:json object="${ERROR_SAVED_ORDER_CONTRACT_EXPIRED}"/>);
+		MessageHelper.setMessage("ERROR_SAVED_ORDER_RETRIEVE_PRICE", <wcf:json object="${ERROR_SAVED_ORDER_RETRIEVE_PRICE}"/>);
+		MessageHelper.setMessage("ERROR_SAVED_ORDER_NOT_SET_CURRENT", <wcf:json object="${ERROR_SAVED_ORDER_NOT_SET_CURRENT}"/>);
+	});
+</script>
+
+<%@ include file="/Widgets_701/Common/SavedOrder/SavedOrder_OnBehalf_setup.jspf" %>
+
+<c:if test="${isOrderEditable eq 'false'}">
+  <c:set var="isTableEditable" value="false"/>
+</c:if>
+
+<%-- The following variable are passed to ItemTable_UI.jsp --%>
+<c:set var="widgetName" value="SavedOrderItems" />
+<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}" />
+
+<%-- ****************************************************************
+	 strings to to pass to UI JSP from properties file --%>
+
+<%-- table header --%>
+<c:set var="hCol1Text" value="" />
+<wcst:message var="hCol2Text" key="SAVEDORDERITEM_TABLECOL_PRODUCT_INFO" bundle="${widgetText}"/>
+<wcst:message var="hCol3Text" key="SAVEDORDERITEM_TABLECOL_AVAILABILITY" bundle="${widgetText}"/>
+<wcst:message var="hCol4Text" key="SAVEDORDERITEM_TABLECOL_QUANTITY" bundle="${widgetText}"/>
+<wcst:message var="hCol5Text" key="SAVEDORDERITEM_TABLECOL_EACH_PRICE" bundle="${widgetText}"/>
+<wcst:message var="hCol6Text" key="SAVEDORDERITEM_TABLECOL_TOTAL" bundle="${widgetText}"/>
+<c:if test="${isOrderEditable ne 'false'}">
+<wcst:message var="hCol7Text" key="SAVEDORDERITEM_TABLECOL_ACTIONS" bundle="${widgetText}" />
+</c:if>
+
+<%-- action buttons --%>
+<wcst:message var="btnAddItem" key="SAVEDORDER_BTN_ADD_ITEM" bundle="${widgetText}"/>
+<wcst:message var="btnRemoveItem" key="SAVEDORDER_BTN_REMOVE_ITEM" bundle="${widgetText}"/>
+
+<%-- action responses --%>
+<wcst:message var="msgQtyUpdated" key="SAVEDORDER_QTY_UPDATED" bundle="${widgetText}"/>
+
+<%-- ****************************************************************
+	 toolbar section  --%>
+
+<%-- set toolbarType to determine which toolbar JSP to include --%>
+<c:set var="toolbarType" value="InputsAndButtons_SavedOrderItems" />
+
+<%-- ****************************************************************
+	 header row main div class name --%>
+<c:set var="headerDivClass" value="row tableHeader" />
+
+<%--
+hCells is an array holding div class and contents of the cells in the header row, we have 7 columns for
+saved order items page so there are 7 cells.
+Structure of hCells array:
+"hCells": [
+	"hCell":{
+		"cellDivClass": <DIV_CLASS>
+		"cellContent": <CELL_CONTENT>
+	},
+
+The HTML of the header row is:
+<div class="<DIV_CLASS>">
+	<div class="cell">
+		<CELL_CONTENT>
+	</div>
+</div>
+--%>
+<wcf:useBean var="hCells" classname="java.util.ArrayList"/>
+
+<%-- header row column 1 --%>
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col2 previewImage" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol1Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+
+<%-- header row column 2 --%>
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col3 name" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol2Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+
+<%-- header row column 3 --%>
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col1 availability" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol3Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+
+<%-- header row column 4 --%>
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col1 quantity" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol4Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+
+<%-- header row column 5 --%>
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col1 eachCost" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol5Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+
+<%-- header row column 6 --%>
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col1 totalCost" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol6Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+
+<%-- header row column 7 --%>
+<c:if test="${isOrderEditable ne 'false'}">
+<wcf:useBean var="hCell" classname="java.util.HashMap"/>
+<wcf:set key="cellDivClass" value="col1 actions" target="${hCell}" />
+<wcf:set key="cellContent" value="${hCol7Text}" target="${hCell}" />
+<wcf:set target="${hCells}" value="${hCell}" />
+<c:remove var="hCell"/>
+</c:if>
+
+<%-- ****************************************************************
+	 table row main div class name --%>
+<c:set var="rowDivClass" value="row entry withPreviewImage" />
+
+<%--
+rows is an array holding rCells, each rCells record holds data for one row of the table
+rCells is an array holding div class, id and contents of the cells in a table row, we have 7 columns so there are 7 cells each row
+Structure of rCells array:
+"rCells": [
+	"rCell":{
+		"div1Class": <DIV1_CLASS>
+		"div2Class": <DIV2_CLASS>
+		"div2Id": <DIV2_ID>
+		"cellContent": <CELL_CONTENT>
+	},
+
+The HTML of a table cell is:
+<div class="<DIV1_CLASS>">
+	<div class="<DIV2_CLASS>" id="<DIV2_ID">
+		<CELL_CONTENT>
+	</div>
+</div>
+--%>
+
+<%-- Try to get it from our internal hashMap --%>
+<wcf:useBean var="missingCatentryIdsMap" classname="java.util.HashMap"/>
+<c:if test="${itemDetailsInThisOrder == null}">
+	<wcf:useBean var="itemDetailsInThisOrder" classname="java.util.HashMap" scope="request"/>
+</c:if>
+
+<%-- Process each cat entry item in the saved order to get the item details --%>
+<c:forEach var="orderItem0" items="${order.orderItem}">
+	<c:set var="aCatEntry" value="${itemDetailsInThisOrder[orderItem0.productId]}"/>
+	<c:if test="${empty aCatEntry}">
+		<c:set property="${orderItem0.productId}" value="${orderItem0.productId}" target="${missingCatentryIdsMap}"/>
+	</c:if>
+</c:forEach>
+<c:if test="${!empty missingCatentryIdsMap}">
+	<wcf:rest var="missingCatEntryInOrder" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byIds" >
+		<c:forEach var="missingCatEntryId" items="${missingCatentryIdsMap}">
+			<wcf:param name="id" value="${missingCatEntryId.value}"/>
+		</c:forEach>
+		<wcf:param name="langId" value="${langId}" />
+		<wcf:param name="currency" value="${env_currencyCode}" />
+		<wcf:param name="responseFormat" value="json" />
+		<wcf:param name="catalogId" value="${sdb.masterCatalog.catalogId}" />
+		<wcf:param name="profileName" value="IBM_findProductByIds_Summary_WithNoEntitlementCheck" />
+	</wcf:rest>
+</c:if>
+<c:forEach var="aCatEntry" items="${missingCatEntryInOrder.catalogEntryView}">
+	<c:set property="${aCatEntry.uniqueID}" value="${aCatEntry}" target="${itemDetailsInThisOrder}"/>
+</c:forEach>
+<c:remove var="missingCatentryIdsMap"/>
+
+<c:set var="rowCount" value="0"/>
+<wcf:useBean var="rows" classname="java.util.ArrayList"/>
+
+<c:forEach var="orderItem" items="${order.orderItem}" varStatus="istat">
+	<c:set var="catEntry" value="${itemDetailsInThisOrder[orderItem.productId]}"/>
+	<c:set var="itemUniqueId" value="${orderItem.orderItemId}"/>
+	<c:set var="patternName" value="ProductURL"/>
+	<c:set var="rowCount" value="${rowCount+1}"/>
+
+	<wcf:useBean var="rCells" classname="java.util.ArrayList"/>
+	<%-- table row column 1 --%>
+
+	<%-- The URL that links to the display catEntry page --%>
+	<wcf:url var="catEntryDisplayUrl" patternName="${patternName}" value="Product2">
+		<wcf:param name="catalogId" value="${WCParam.catalogId}"/>
+		<wcf:param name="storeId" value="${WCParam.storeId}"/>
+		<wcf:param name="productId" value="${orderItem.productId}"/>
+		<wcf:param name="langId" value="${langId}"/>
+		<wcf:param name="urlLangId" value="${urlLangId}" />
+	</wcf:url>
+
+	<%-- Variable to hold the item thumbnail  --%>
+	<c:if test="${!empty catEntry.thumbnail}">
+		<c:choose>
+			<c:when test="${(fn:startsWith(catEntry.thumbnail, 'http://') || fn:startsWith(catEntry.thumbnail, 'https://'))}">
+				<wcst:resolveContentURL var="thumbNail" url="${catEntry.thumbnail}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="thumbNail" value="${catEntry.thumbnail}" />
+			</c:otherwise>
+		</c:choose>
+	</c:if>
+
+	<%-- Variable to hold the item part number --%>
+	<c:choose>
+		<c:when test="${empty catEntry.name}">
+			<c:set var="cartItemName" value="${orderItem.partNumber}" />
+			<c:set var="cartItemPartNumber" value="${orderItem.partNumber}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="cartItemName" value="${catEntry.name}" />
+			<c:set var="cartItemPartNumber" value="${catEntry.partNumber}" />
+		</c:otherwise>
+	</c:choose>
+	<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+	<wcf:set key="div1Class" value="col2 previewImage" target="${rCell}" />
+	<wcf:set key="div2Class" value="cell" target="${rCell}" />
+	<wcf:set key="div2Id" value="" target="${rCell}" />
+	<c:set var='rCol1_HTML_TO_ADD' value='<img alt=\"${cartItemName}\" src=\"${thumbNail}\" />' />
+	<c:set var='rCol1_HTML_TO_ADD' value='${rCol1_HTML_TO_ADD} <input type=\"hidden\" value=\"${thumbNail}\" id=\"ProductInfoImage_${catEntry.uniqueID}\" />' />
+	<wcf:set key='cellContent' value='${rCol1_HTML_TO_ADD}' target='${rCell}' />
+	<wcf:set target="${rCells}" value="${rCell}" />
+	<c:remove var="rCol1_HTML_TO_ADD"/>
+	<c:remove var="thumbNail"/>
+	<c:remove var="rCell"/>
+
+	<%-- table row column 2 --%>
+	<%-- Retrieve contract information for the catalog entry--%>
+	<c:if test="${env_contractSelection}">	
+		<c:if test="${!empty orderItem.contractId}">
+			<wcf:rest var="getContractResponse" url="store/{storeId}/contract/{contractId}">
+				<wcf:var name="storeId" value="${WCParam.storeId}" />
+				<wcf:var name="contractId" value="${orderItem.contractId}" />
+				<wcf:param name="profileName" value="IBM_Contract_Usage"/>
+			</wcf:rest>
+			<c:set var="contract" value="${getContractResponse.resultList[0]}" />
+			<c:if test="${contract.usage != 0}">
+				<c:set var="contractName" value="${contract.name}"/>
+			</c:if>
+		</c:if>
+	</c:if>
+	
+	<wcst:message var="skuLabel" key="SAVEDORDERITEM_SKU_LABEL" bundle="${widgetText}"/>
+	<wcst:message var="contractLabel" key="ORDERDETAIL_TABLE_CONTRACT" bundle="${widgetText}"/>
+	<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+	<wcf:set key="div1Class" value="col3 name" target="${rCell}" />
+	<wcf:set key="div2Class" value="cell" target="${rCell}" />
+	<wcf:set key="div2Id" value="" target="${rCell}" />
+	<c:set var='rCol2_HTML_TO_ADD' value='<p class=\"field\">' />
+	<c:set var='rCol2_HTML_TO_ADD' value='${rCol2_HTML_TO_ADD} <a href=\"${catEntryDisplayUrl}\">${skuLabel}${cartItemPartNumber}</a></p>' />
+	<c:set var='rCol2_HTML_TO_ADD' value='${rCol2_HTML_TO_ADD} <p class=\"field\">${cartItemName}</p>' />
+	<c:set var='rCol2_HTML_TO_ADD' value='${rCol2_HTML_TO_ADD} <input type=\"hidden\" value=\"${cartItemName}\" id=\"ProductInfoName_${catEntry.uniqueID}\"/>' />
+	
+	<c:if test="${!empty contractName}">
+		<c:set var='rCol2_HTML_TO_ADD' value='${rCol2_HTML_TO_ADD} <p class=\"field\">' />
+		<c:set var='rCol2_HTML_TO_ADD' value='${rCol2_HTML_TO_ADD} ${contractLabel}&nbsp;${contractName}</p>' />
+	</c:if>
+	<wcf:set key='cellContent' value='${rCol2_HTML_TO_ADD}' target='${rCell}' />
+	<wcf:set target="${rCells}" value="${rCell}" />
+	<c:remove var="'rCol2_HTML_TO_ADD'"/>
+	<c:remove var="rCell"/>
+	<c:remove var="contractName"/>
+
+	<%-- table row column 3 --%>
+	<%@ include file="/Widgets_701/Common/CatalogEntryAvailability/CatalogEntryAvailabilityDisplay.jspf" %>
+	<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+	<wcf:set key="div1Class" value="col1 availability" target="${rCell}" />
+	<wcf:set key="div2Class" value="cell" target="${rCell}" />
+	<wcf:set key="div2Id" value="" target="${rCell}" />
+	<wcf:set key='cellContent' value='${availabilityDesc}' target='${rCell}' />
+	<wcf:set target="${rCells}" value="${rCell}" />
+	<c:remove var="rCell"/>
+
+	<%-- table row column 4 --%>
+	<%-- get the formatted qty for this item --%>
+	<fmt:formatNumber var="formattedQuantity" value="${orderItem.quantity}" pattern='#####'/>
+	<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+	<wcf:set key="div1Class" value="col1 quantity editable" target="${rCell}" />
+	<wcf:set key="div2Class" value="cell" target="${rCell}" />
+	<wcf:set key="div2Id" value="quantityCell_${rowCount}" target="${rCell}" />
+	<c:set var='rCol4_HTML_TO_ADD' value='<span class=\"spanacce\"><label for=\"orderItem_input_${rowCount}\"><wcst:message key=\"SAVEDORDERITEM_TABLECOL_QUANTITY\" bundle=\"${widgetText}\"/></label></span>' />
+	<c:choose>
+            <c:when test="${isOrderEditable ne 'false'}">
+            	<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <div class=\"quantityCellDiv\">'/>
+                <c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <input type=\"text\" id=\"orderItem_input_${rowCount}\" class=\"input_field\" value=\"${formattedQuantity}\" onchange=\"SavedOrderItemsJS.updateItemQuantity(this.value,${itemUniqueId},${rowCount})\" />' />
+                <c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <input type=\"hidden\" id=\"oldOrderItem_input_${rowCount}\" class=\"nodisplay\" value=\"${formattedQuantity}\" />' />
+              	<c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <div class=\"quantityUpdated\" id=\"orderItem_msg_qty_updated_${rowCount}\">' />
+        	      <c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} <img alt="${msgQtyUpdated}" src=\"${jspStoreImgDir}images/checkmark_icon_white.png\" />${msgQtyUpdated}' />
+                <c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} </div></div>' />
+            </c:when>
+            <c:otherwise>
+                <c:set var='rCol4_HTML_TO_ADD' value='${rCol4_HTML_TO_ADD} ${formattedQuantity}' />
+            </c:otherwise>
+    </c:choose>
+	<wcf:set key='cellContent' value='${rCol4_HTML_TO_ADD}' target='${rCell}' />
+	<wcf:set target="${rCells}" value="${rCell}" />
+	<c:remove var="rCol4_HTML_TO_ADD"/>
+	<c:remove var="rCell"/>
+
+	<%-- table row column 5 --%>
+	<fmt:formatNumber var="formattedUnitPrice" value="${orderItem.unitPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+	<c:out value="${formattedDiscountValue}" escapeXml="false" />
+	<c:out value="${CurrencySymbol}"/>
+	<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+	<wcf:set key="div1Class" value="col1 eachCost" target="${rCell}" />
+	<wcf:set key="div2Class" value="cell" target="${rCell}" />
+	<wcf:set key="div2Id" value="" target="${rCell}" />
+	<wcf:set key='cellContent' value='${formattedUnitPrice}' target='${rCell}' />
+	<wcf:set target="${rCells}" value="${rCell}" />
+	<c:remove var="rCell"/>
+
+	<%-- table row column 6 --%>
+	<fmt:formatNumber var="totalFormattedProductPrice" value="${orderItem.orderItemPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+	<wcf:useBean var="rCell" classname="java.util.HashMap"/>
+	<wcf:set key="div1Class" value="col1 totalCost" target="${rCell}" />
+	<wcf:set key="div2Class" value="cell" target="${rCell}" />
+	<wcf:set key="div2Id" value="" target="${rCell}" />
+	<c:choose>
+		<c:when test="${orderItem.freeGift}">
+			<wcst:message bundle="${widgetText}" key="SAVEDORDER_SHOPCART_FREE" var="shopCartFreeText" />
+			<c:set var='rCol6_HMTL_TO_ADD' value='${shopCartFreeText}'/>
+			<c:set var='rCol6_HMTL_TO_ADD' value='${rCol6_HMTL_TO_ADD} <input type=\"hidden\" value=\"${shopCartFreeText}\" id=\"ProductInfoPrice_${catEntry.uniqueID}\"/>' />
+		</c:when>
+		<c:otherwise>
+			<c:set var='rCol6_HMTL_TO_ADD' value='${totalFormattedProductPrice}' />
+			<c:set var='rCol6_HMTL_TO_ADD' value='${rCol6_HMTL_TO_ADD} <input type=\"hidden\" value=\"${totalFormattedProductPrice}\" id=\"ProductInfoPrice_${catEntry.uniqueID}\"/>' />
+		</c:otherwise>
+	</c:choose>
+	<wcf:set key='cellContent' value='${rCol6_HMTL_TO_ADD}' target='${rCell}' />
+	<wcf:set target="${rCells}" value="${rCell}" />
+	<c:remove var="rCol6_HTML_TO_ADD"/>
+	<c:remove var="rCell"/>
+
+	<%-- table row column 7 --%>
+	<c:if test="${isOrderEditable ne 'false'}">
+                <wcf:useBean var="rCell" classname="java.util.HashMap"/>
+                <wcst:message key="ACCE_SAVEDORDERITEM_REMOVE" bundle="${widgetText}" var="acceRemoveItem"/>
+                <wcf:set key="div1Class" value="col1 actions" target="${rCell}" />
+                <wcf:set key="div2Class" value="cell" target="${rCell}" />
+                <wcf:set key="div2Id" value="" target="${rCell}" />
+                <c:set var='rCol7_HTML_TO_ADD' value='<a table-toggle=\"actionDropdown${rowCount}\" table-parent=\"listTable\" role=\"button\" class=\"button_secondary actionButton\" id=\"actionButton${rowCount}\" href="#" >' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"left_border\"></div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"button_text\">' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <span>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <img src=\"${jspStoreImgDir}images/action_icon.png\" />' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </span>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"right_border\"></div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </a>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div id=\"actionDropdown${rowCount}\" class=\"actionDropdown\" table-parent=\"listTable\" >' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"actionItem\">' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"actionTitle\" onclick=\"SavedOrderItemsJS.addItemToCurrentOrder(\'${catEntry.partNumber}\',\'${rowCount}\',\'${catEntry.uniqueID}\');\"' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} onkeypress=\"if(event.keyCode == 0 || event.keyCode == 13){SavedOrderItemsJS.addItemToCurrentOrder(\'${catEntry.partNumber}\',\'${rowCount}\');}\" tabindex=\"-1\" role=\"menuitem\" aria-label=\"${btnAddItem}\">' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} ${btnAddItem}' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"actionItem\">' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} <div class=\"actionTitle\" onclick=\"SavedOrderItemsJS.deleteItem(\'${itemUniqueId}\');\"' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} onkeypress=\"if(event.keyCode == 0 || event.keyCode == 13){SavedOrderItemsJS.deleteItem(\'${itemUniqueId}\');}\" tabindex=\"-1\" role=\"menuitem\" aria-label=\"${btnRemoveItem}\">' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} ${btnRemoveItem}' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </a>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </div>' />
+                <c:set var='rCol7_HTML_TO_ADD' value='${rCol7_HTML_TO_ADD} </div>' />
+                <wcf:set key='cellContent' value='${rCol7_HTML_TO_ADD}' target='${rCell}' />
+                <wcf:set target="${rCells}" value="${rCell}" />
+                <c:remove var="rCol7_HTML_TO_ADD"/>
+                <c:remove var="rCell"/>
+	</c:if>
+
+	<wcf:set target="${rows}" value="${rCells}" />
+	<c:remove var="rCells"/>
+	<c:remove var="catEntry"/>
+</c:forEach>
+
+<%--
+fCells is an array holding contents of additional rows in the footer section.
+fCell is a hashmap holding contents of the row in a footer section,
+Structure of fCells array:
+"fCells": [
+	"fCell":{
+		"cellContent": <CELL_CONTENT>
+	},
+
+The HTML of a footer section is:
+<div class="row footer">
+	<div class="col12">
+		<CELL_CONTENT>
+		<div class="pageCount">
+			<b><c:out value="${pageDisplay1}"/> </b> <c:out value="${pageDisplay2}"/>
+		</div>
+	</div>
+</div>
+--%>
+<c:set var="footerDivClass" value="row footer savedOrderFooterSection"/>
+<c:set var="footerDivColClass" value="col12 savedOrderFooterColSection"/>
+<wcf:useBean var="fCells" classname="java.util.ArrayList"/>
+<wcf:useBean var="fCell" classname="java.util.HashMap"/>
+
+<%-- Order subtotal/total section --%>
+<wcst:message var="orderSubTotalLabel" key="SAVEDORDER_SUBTOTAL" bundle="${widgetText}"/>
+<wcst:message var="orderTotalLabel" key="SAVEDORDER_TOTAL" bundle="${widgetText}"/>
+<fmt:formatNumber var="subTotalFormattedOrderAmount" value="${order.totalProductPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+<fmt:formatNumber var ="totalFormattedOrderAmount" value="${order.grandTotal}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+
+<%-- Check and see if there is any product (i.e. order item) level adjustment to display --%>
+<c:set var="totalProductDiscount" value="0"/>
+<c:set var="hasProductDiscount" value="false"/>
+<c:forEach var="orderItemAdjustment" items="${order.adjustment}">
+	<c:if test="${!hasProductDiscount}">
+		<c:if test="${orderItemAdjustment.displayLevel == 'OrderItem'}">
+			<c:set var="hasProductDiscount" value="true"/>
+		</c:if>
+	</c:if>
+</c:forEach>
+<c:forEach var="orderItemAdjustment" items="${order.adjustment}">
+	<c:if test="${hasProductDiscount}">
+		<c:if test="${orderItemAdjustment.displayLevel == 'OrderItem'}">
+			<c:set var="totalProductDiscount" value="${totalProductDiscount + orderItemAdjustment.amount}"/>
+		</c:if>
+	</c:if>
+</c:forEach>
+<%-- Check and see if there is any order level adjustment to display --%>
+<c:forEach var="adjustment" items="${order.adjustment}">
+	<c:if test="${!displayDiscountTooltip}">
+		<c:if test="${adjustment.displayLevel == 'Order'}">
+			<c:set var="displayDiscountTooltip" value="true"/>
+		</c:if>
+	</c:if>
+</c:forEach>
+<c:remove var="adjustment"/>
+
+<%--Saved order total section Label column --%>
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <div class=\"col6 orderLabelCol\">' />
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <div class=\"cell\">' />
+
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderLabel\">${orderSubTotalLabel}</p>' />
+<c:if test="${hasProductDiscount}">
+	<wcst:message var="productDiscountLabel" key="SAVEDORDER_DISCOUNTS_PRODUCTS" bundle="${widgetText}"/>
+	<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderLabel\">${productDiscountLabel}</p>' />
+</c:if>
+<c:if test="${displayDiscountTooltip}">
+	<wcst:message var="orderLevelDiscountLabel" key="SAVEDORDER_DISCOUNT1" bundle="${widgetText}"/>
+	<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderLabel\"><span id=\"discountAcceText\" style=\"display:none\">${discountInfoTip}</span><span class=\"info_icon\" id=\"discountDetails\" tabIndex=\"0\" title=\"${discountInfoTip}\" onmouseover=\"javascript:this.title = \'\';\" onmouseout=\"javascript:this.title = document.getElementById(\'discountAcceText\').innerHTML;"> '/>
+	<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} ${orderLevelDiscountLabel}</span></p>' />
+</c:if>
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderLabel\"><b>${orderTotalLabel}</b></p>' />
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} </div></div>' />
+
+
+<%--Saved order total section Value column --%>
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <div class=\"col6 orderValueCol\">' />
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <div class=\"cell\">' />
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderValue\">${subTotalFormattedOrderAmount}</p>' />
+<c:if test="${hasProductDiscount}">
+	<fmt:formatNumber var="totalProductDiscountAmount" value="${totalProductDiscount}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+	<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderValue\">${totalProductDiscountAmount}</p>' />
+</c:if>
+<c:if test="${displayDiscountTooltip}">
+	<c:choose>
+	<c:when test="${isBiDiLocale && locale == 'iw_IL'}">
+		<fmt:formatNumber var="orderLevelDiscountAmount" pattern="#,##0.00 ¤;#,##0.00- ¤" value="${order.totalAdjustment - totalProductDiscount}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+	</c:when>
+	<c:otherwise>
+		<fmt:formatNumber var="orderLevelDiscountAmount" value="${order.totalAdjustment - totalProductDiscount}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
+	</c:otherwise>
+	</c:choose>
+	<%--<fmt:formatNumber var="orderLevelDiscountAmount" value="${order.totalAdjustment - totalProductDiscount1}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>--%>
+	<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderValue\">${orderLevelDiscountAmount}</p></p>' />
+</c:if>
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} <p class=\"orderValue orderFinalAmount\">${totalFormattedOrderAmount}</p>' />
+<c:set var='fCell_HTML_TO_ADD' value='${fCell_HTML_TO_ADD} </div></div>' />
+
+<wcf:set key='cellContent' value='${fCell_HTML_TO_ADD}' target='${fCell}' />
+<wcf:set target="${fCells}" value="${fCell}" />
+<c:remove var="fCell_HTML_TO_ADD"/>
+<c:remove var="fCell"/>
+<c:remove var="orderLevelDiscountAmount"/>
+<c:remove var="totalProductDiscountAmount"/>
+<c:remove var="totalFormattedOrderAmount"/>
+<%--
+***
+* Get current order lock status.
+***
+--%>
+<c:set var="cart" value="${requestScope.orderInCart}"/>
+<c:if test="${empty cart || cart == null}">
+	<wcf:rest var="cart" url="store/{storeId}/cart/@self">
+		<wcf:var name="storeId" value="${storeId}" encode="true"/>
+		<wcf:param name="isSummary" value="true"/>
+		<wcf:param name="pageSize" value="1"/>
+		<wcf:param name="pageNumber" value="1"/>
+	</wcf:rest>
+</c:if>
+<c:set var="currentOrderLocked" value="${cart.locked}"/>
+<c:if test="${currentOrderLocked == 'true'}" >
+	<c:set var="currentOrderEidtorId" value="${cart.orderEditor.uniqueID }" />
+</c:if>
+<c:set var="showSetCurrentOrderButton" value="true"/>
+<c:if test="${currentOrderLocked == 'true' && (env_shopOnBehalfSessionEstablished != 'true' || env_buyOnBehalfAdminUserId ne currentOrderEidtorId)}">
+			<c:set var="showSetCurrentOrderButton" value="false"/>
+		</c:if>
+<%-- Discount tooltip section --%>
+<div id="WC_${widgetName}_ToolTipSection" style="display:none">		
+		<span dojoType="wc.widget.Tooltip" connectId="discountDetails" style="display: none;">
+			<div class="widget_site_popup">
+				<div class="top">
+					<div class="left_border"></div>
+					<div class="middle"></div>
+					<div class="right_border"></div>
+				</div>
+				<div class="clear_float"></div>
+				<div class="middle">
+					<div class="content_left_border">
+						<div class="content_right_border">
+							<div class="content">
+								<div class="header" id="WC_${widgetName}_div_1"> 
+									 <span id="WC_${widgetName}_div_2"><wcst:message bundle="${widgetText}" key="SAVEDORDER_DISCOUNT_DETAILS_TITLE" /></span>
+									<div class="clear_float"></div>
+								</div>
+								<div class="body" id="WC_${widgetName}_div_3">
+									<c:forEach var="adjustment" items="${order.adjustment}">
+										<c:if test="${adjustment.displayLevel == 'Order'}">
+											<c:out value="${adjustment.description}" escapeXml="false"/>&nbsp;
+											<span class="tooltip_popup_price"><fmt:formatNumber value="${adjustment.amount}" type="currency" maxFractionDigits="${env_currencyDecimal}" minFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/><c:out value="${CurrencySymbol}"/></span><br />
+										</c:if>
+									</c:forEach>
+								</div>
+							</div>
+							<div class="clear_float"></div>
+						</div>
+					</div>
+				</div>									
+				<div class="clear_float"></div>
+				<div class="bottom">
+					<div class="left_border"></div>
+					<div class="middle"></div>
+					<div class="right_border"></div>
+				</div>
+				<div class="clear_float"></div>
+			</div>
+			</span>
+</div>

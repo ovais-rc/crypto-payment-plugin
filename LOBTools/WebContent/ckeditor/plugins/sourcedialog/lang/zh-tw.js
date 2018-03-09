@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("sourcedialog","zh-tw",{toolbar:"原始檔",title:"原始檔"});

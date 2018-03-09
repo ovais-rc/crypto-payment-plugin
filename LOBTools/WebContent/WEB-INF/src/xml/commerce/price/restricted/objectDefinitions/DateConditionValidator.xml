@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	
+	<!---
+		<p>This is an object level validator that ensures that the start date is not after the end date and
+		the start date is not equals the end date.
+		No error will be reported if either the start date or end date are blank.</p>
+	-->
+	<StartDateEndDateValidator classDefinition="true" definitionName="cmc/price/DateConditionValidator">
+		<dependency localName="priceResources" moduleName="cmc/price/PriceResources"/>
+		<dependency localName="DateUtil" moduleName="cmc/foundation/DateUtil"/>
+		
+		<!--- @keywords private -->
+		<variable name="message_specifyAStartTime" type="string" value="${priceResources.Singleton.errorMsg_SpecifyAStartTime.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_specifyAEndTime" type="string" value="${priceResources.Singleton.errorMsg_SpecifyAEndTime.string}"/>
+		<!--- @keywords private -->
+		<variable name="message_StartTimeEqualsEndTime" type="string" value="${priceResources.Singleton.errorMsg_StartTimeEqualsEndTime.string}"/>
+		
+		<!---
+			@keywords private 
+		 -->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			o.getProperty("startTime").clearValidationError(this);
+			o.getProperty("endTime").clearValidationError(this);
+			var startO = o.getObject(this.startDateObjectPath);
+			var endO = o.getObject(this.endDateObjectPath);
+			if (startO && endO) {
+				var startDateProperty = startO.getProperty(this.startDatePropertyName);
+				var endDateProperty = endO.getProperty(this.endDatePropertyName);
+				var clearError = true;
+				if (this.isEnabled(o)) {
+					var startDate = DateUtil.Singleton.parse(startDateProperty.value, DateUtil.Singleton.DATE_TIME_FORMAT);
+					var endDate = DateUtil.Singleton.parse(endDateProperty.value, DateUtil.Singleton.DATE_TIME_FORMAT);
+					if (startDateProperty.enabled && endDateProperty.enabled && startDate != null && endDate != null && startDate.getTime() >= endDate.getTime()) {
+						endDateProperty.addValidationError(this, this.getErrorMessage("endDateMustBeAfterStartDate", []));
+						clearError = false;
+					}
+				}
+				if (clearError) {
+					endDateProperty.clearValidationError(this);
+				}
+			}
+			if (o.getPropertyValue("isAllThroughTheDay") == "false") {
+				var startTime = DateUtil.Singleton.parse(o.getPropertyValue("startTime"), DateUtil.Singleton.TIME_FORMAT);
+				if (startTime == null || startTime == "") {
+					o.getProperty("startTime").addValidationError(this, this.message_specifyAStartTime);
+				}
+				var endTime = DateUtil.Singleton.parse(o.getPropertyValue("endTime"), DateUtil.Singleton.TIME_FORMAT);
+				if (endTime == null || endTime == "") {
+					o.getProperty("endTime").addValidationError(this, this.message_specifyAEndTime);
+				}
+				if (startTime != null && startTime != "" && endTime != null && endTime != "" && startTime.getTime() == endTime.getTime()) {
+					o.getProperty("endTime").addValidationError(this, this.message_StartTimeEqualsEndTime);
+				}
+			}
+			]]>
+		</method>
+		
+	</StartDateEndDateValidator>
+</Definitions>

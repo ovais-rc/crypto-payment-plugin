@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","zh-tw",{options:"表情符號選項",title:"表情符號",toolbar:"插入表情符號"});

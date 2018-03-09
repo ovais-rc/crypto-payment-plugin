@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *===================================================================
+ * Licensed Materials - Property of IBM
+ *
+ * WebSphere Commerce
+ *
+ * (c) Copyright International Business Machines Corporation. 2003
+ *     All rights reserved.
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *===================================================================
+-->
+<Reporting>
+
+<Report reportName="biProductSoldReport" online="true" dataSourceName="WCA DataSource">
+              <comment></comment>
+              <SQLvalue>
+select
+       PREF.NAME AS "Product Name",
+       SUM (FOI.NUM_UNITS) AS "Units Sold",
+       ROUND(SUM (coalesce(FOI.RPT_SALES_VALUE + FOI.RPT_DISCOUNTS,0)), cur.decimalplaces) AS "Sales Value",
+       FOI.REPORT_CURRENCY AS "Currency"
+from
+       WCA.FACT_ORDERITEMS FOI,
+       WCA.PERIOD P,
+       WCA.PRODUCT PRO,
+       WCA.PRODUCT_REF PREF,
+       WCA.CURFORMAT CUR
+where
+       (P.PER_ID = FOI.PER_ID and PRO.PRODUCT_ID NOT IN(SELECT INTEGER(PARAM.PARAM_VALUE) FROM WCA.PARAMETERS PARAM WHERE PARAM.PARAM_TYPE ='PRODUCT_ID_DEFAULT') and PRO.PRODUCT_ID NOT IN(SELECT INTEGER(PARAM.PARAM_VALUE) FROM WCA.PARAMETERS PARAM WHERE PARAM.PARAM_TYPE ='PRODUCT_ID_DEFAULT')
+       and PRO.PRODUCT_ID = FOI.PRODUCT_ID
+       and PREF.PRODUCT_ID = PRO.PRODUCT_ID
+       and FOI.STORE_ID IN ({storeent_id})
+       and PREF.LANGUAGE_ID IN (
+              select
+                     INTEGER(PR.PARAM_VALUE)
+              from
+                     WCA.PARAMETERS PR
+              where
+                     PR.PARAM_TYPE = 'REPORT_LANGUAGE'))
+       and (FOI.ORDER_STATUS_ID IN (
+              select
+                     INTEGER(PR.PARAM_VALUE)
+              from
+                     WCA.PARAMETERS PR
+              where
+                     PR.PARAM_TYPE IN ('ORDER_STATUS_SUBMITTED','ORDER_STATUS_SHIPPED'))
+       AND p.calendar_date &gt;= $DB_TIMESTAMP_FUNC({StartDate})$
+          AND p.calendar_date &lt;= $DB_TIMESTAMP_FUNC({EndDate})$
+       )
+       and ( cur.curformat_id = (select MAX(distinct curform.curformat_id) from wca.curformat curform where FOI.REPORT_CURRENCY= CURform.SETCCURR) )
+       
+group by
+       PREF.NAME,
+       FOI.REPORT_CURRENCY,
+	CUR.DECIMALPLACES
+ORDER BY
+       {sortBy} {sortOrder}
+              </SQLvalue>
+              <display>
+                     <standardInfo>
+                            <resourceBundle>bi.biNLS</resourceBundle>
+                            <title>productSalesValueAndUnitsSold</title>
+                            <message>productSalesValueAndUnitsSold</message>
+                     </standardInfo>
+                     <userDefinedParameters>
+                            <THStyle>TH { font-family : Times New Roman, Times, serif; font-size : 10pt; color : #565665; font-weight : bold; }</THStyle>
+                            <TDStyle>TD { font-family : Verdana,  Arial, Helvetica; font-size : 9pt; color : Black; }</TDStyle>
+                            <spaceBetweenColumns>20</spaceBetweenColumns>
+                            <columnDefaultAttributes>
+                                   <displayInReport>true</displayInReport>
+                                   <columnWidth>0</columnWidth>
+                                   <maxEntryLength>999</maxEntryLength>
+                                   <columnType>string</columnType>
+                                   <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+                            </columnDefaultAttributes>
+                            <columns>
+                                   <columnKey>C0</columnKey>
+                                   <columnName>product</columnName>
+                                   <columnOptions>ALIGN=LEFT HEIGHT=20 NOWRAP</columnOptions>
+                            </columns>
+                            <columns>
+                                   <columnKey>C1</columnKey>
+                                   <columnName>unitsSold</columnName>
+                                   <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+                                    <columnType>decimal</columnType>
+                                <setMinimumFractionDigits>0</setMinimumFractionDigits>
+                            </columns>
+                            <columns>
+                                   <columnKey>C2</columnKey>
+                                   <columnName>salesValue</columnName>
+                                   <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+                                   <columnType>decimal</columnType>
+                     <setMinimumFractionDigits>2</setMinimumFractionDigits>
+                            </columns>
+                            <columns>
+                                   <columnKey>C3</columnKey>
+                                   <columnName>currency</columnName>
+                                   <columnOptions>ALIGN=RIGHT HEIGHT=20 NOWRAP</columnOptions>
+                            </columns>
+                     </userDefinedParameters>
+              </display>
+       </Report>
+
+</Reporting>

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","bg",{fontSize:{label:"Размер",voiceLabel:"Размер на шрифта",panelTitle:"Размер на шрифта"},label:"Шрифт",panelTitle:"Име на шрифт",voiceLabel:"Шрифт"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","tr",{error:"Resim yapıştırma şu anda desteklenmemektedir. Lütfen bunun yerine 'Resim Ekle' araç çubuğu seçeneğini kullanın."});

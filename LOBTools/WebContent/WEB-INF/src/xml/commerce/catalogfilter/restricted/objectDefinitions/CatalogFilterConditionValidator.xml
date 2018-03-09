@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		Validator for a {@link cmc/catalogfilter/AttributeWithAssignedValuesObjectDefinition AttributeWithAssignedValuesObjectDefinition} or {@link cmc/catalogfilter/InheritedAttributeWithAssignedValuesObjectDefinition InheritedAttributeWithAssignedValuesObjectDefinition} 
+		or {@link cmc/catalogfilter/PropertyAttributeObjectDefinition  PropertyAttributeObjectDefinition}object. 
+		This ensures the following case: 
+		<ul>
+			<li>
+				When the condition operator is changed from multiple value to single value(or the reverse), clear all existing condition values.				
+			</li>
+			<li>
+				Keep the single value in UI in sync with the condition value child object.
+			</li>
+			<li>
+				Prompt error message when there is none condition value.
+			</li>
+		</ul>		
+	-->
+	<Validator classDefinition="true" definitionName="cmc/catalogfilter/CatalogFilterConditionWithAssignedValueValidator">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="catalogFilterResources" moduleName="cmc/catalogfilter/CatalogFilterResources"/>
+		<!-- Comma-seperated list of single-value operators. -->
+		<variable name="singleValueOperators" type="string" value="NUMBER_LESS_THAN,NUMBER_NOT_LESS_THAN,NUMBER_GREATER_THAN,NUMBER_NOT_GREATER_THAN"/>
+		<!-- The property name for single assigned value of condition. -->
+		<variable name="singleValuePropertyName" type="string" value="attrValue"/>
+		<!-- The property name for condition operator -->
+		<variable name="operatorPropertyName" type="string" value="operator"/>
+		<!-- The property name for previous condition operator -->
+		<variable name="prevOperatorPropertyName" type="string" value="previousOperator"/>
+		<!-- The property name for data type -->
+		<variable name="attrtypePropertyName" type="string" value="attrType"/>
+		<!-- The property name for previous data type  -->
+		<variable name="prevAttrtypePropertyName" type="string" value="previousType"/>
+		<!-- The object type of the child object for condition value. -->
+		<variable name="conditionValueObjectType" type="string"/>
+		<!-- The property name of the child object for condition value. -->
+		<variable name="conditionValuePropertyName" type="string" value="conditionAssignedValue"/>
+		<!--- @keywords private -->		
+		
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			var attrType = o.getPropertyValue(this.attrtypePropertyName);
+			if (attrType) {
+				var prevType = o.getPropertyValue(this.prevAttrtypePropertyName);
+				if (prevType != "") {
+					if (attrType != prevType) {
+						var otds = o.getObjects(this.conditionValueObjectType);
+						for (var i = 0; i < otds.length; i++) {
+							otds[i].deleteObject();
+						}
+						if ((attrType == 'String' && prevType != 'String') || (attrType != 'String' && prevType == 'String')) {
+							o.setPropertyValue('operator', null, "");
+							o.setPropertyValue(this.prevAttrtypePropertyName, null, attrType);
+						}
+						return;
+					}
+				}
+				var prop = o.propertyMap[this.attrtypePropertyName];
+				var OGDirty = false;
+				if (prop != null && prop.o.openGroupObject != null) {
+					OGDirty = prop.o.openGroupObject.openGroupDirty;
+				}
+				o.setPropertyValue(this.prevAttrtypePropertyName, null, attrType);
+				prop = o.propertyMap[this.prevAttrtypePropertyName];
+				prop.setVariable("dirty", false);
+				if (OGDirty == false && prop.o.openGroupObject != null) {
+					prop.o.openGroupObject.setVariable("openGroupDirty", false);
+				}
+			}
+			var operator = o.getPropertyValue(this.operatorPropertyName);
+			var prevOperator = o.getPropertyValue(this.prevOperatorPropertyName);
+			if (operator == null || operator == "") {
+				return;
+			}
+			var singleOps = StringUtil.Singleton.splitAndTrim(this.singleValueOperators, ",");
+			var isSingleOp = false;
+			for (var i = 0; i < singleOps.length; i++) {
+				if (operator == singleOps[i]) {
+					isSingleOp = true;
+				}
+			}
+			if (isSingleOp) {
+				var statusChanged = false;
+				if (prevOperator == "") {
+					var prop = o.propertyMap[this.operatorPropertyName];
+					var OGDirty = false;
+					if (prop != null && prop.o.openGroupObject != null) {
+						OGDirty = prop.o.openGroupObject.openGroupDirty;
+					}
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'single');
+					prop = o.propertyMap[this.prevAttrtypePropertyName];
+					prop.setVariable("dirty", false);
+					if (OGDirty == false && prop.o.openGroupObject != null) {
+						prop.o.openGroupObject.setVariable("openGroupDirty", false);
+					}
+				}
+				else if (prevOperator == "multiple") {
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'single');
+					statusChanged = true;
+				}
+				var currentValue = o.getPropertyValue(this.singleValuePropertyName);
+				if (currentValue == null || currentValue.length == 0) {
+					var errmsg = foundationResources.Singleton.replaceValues("requiredPropertyMissing", [catalogFilterResources.Singleton.catalogFilterAttributeValue.string]);
+					o.addValidationError(this, errmsg);
+				}
+				var otds = o.getObjects(this.conditionValueObjectType);
+				if (statusChanged) {
+					for (var i = 0; i < otds.length; i++) {
+						otds[i].deleteObject();
+					}
+					if (currentValue != null && currentValue.length > 0) {
+						o.setPropertyValue(this.singleValuePropertyName, null, "");
+					}
+				}
+				else {
+					if (otds == null || otds.length == 0) {
+						if (currentValue != null && currentValue.length > 0) {
+							var childObjDef = o.model.getObjectDefinition(o, this.conditionValueObjectType);
+							var newChild = o.model.createNewObject(childObjDef, o, false);
+							newChild.setPropertyValue(this.conditionValuePropertyName, null, currentValue);
+							o.updateChildObjects(true);
+						}
+					}
+					else {
+						if (currentValue != null) {
+							otds[0].setPropertyValue(this.conditionValuePropertyName, null, currentValue);
+						}
+						else {
+							otds[0].setPropertyValue(this.conditionValuePropertyName, null, "");
+						}
+						o.updateChildObjects(true);
+					}
+				}
+			}
+			else {
+				var statusChanged = false;
+				if (prevOperator == "") {
+					var prop = o.propertyMap[this.operatorPropertyName];
+					var OGDirty = false;
+					if (prop != null && prop.o.openGroupObject != null) {
+						OGDirty = prop.o.openGroupObject.openGroupDirty;
+					}
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'multiple');
+					prop = o.propertyMap[this.prevAttrtypePropertyName];
+					prop.setVariable("dirty", false);
+					if (OGDirty == false && prop.o.openGroupObject != null) {
+						prop.o.openGroupObject.setVariable("openGroupDirty", false);
+					}
+				}
+				else if (prevOperator == "single") {
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'multiple');
+					statusChanged = true;
+				}
+				var otds = o.getObjects(this.conditionValueObjectType);
+				if (statusChanged) {
+					for (var i = 0; i < otds.length; i++) {
+						var value = otds[i].getPropertyValue("conditionAssignedValue");
+						otds[i].deleteObject();
+					}
+					o.setPropertyValue(this.singleValuePropertyName, null, "");
+				}
+				else {
+					if (otds.length == 0) {
+						var errmsg = foundationResources.Singleton.replaceValues("requiredPropertyMissing", [catalogFilterResources.Singleton.catalogFilterAttributeValue.string]);
+						o.addValidationError(this, errmsg);
+					}
+				}
+			}
+			]]>
+		</method>
+	</Validator>
+
+	<!---
+		Validator for a {@link cmc/catalogfilter/AttributeWithAllowedValuesObjectDefinition AttributeWithAllowedValuesObjectDefinition} or {@link cmc/catalogfilter/InheritedAttributeWithAllowedValuesObjectDefinition InheritedAttributeWithAllowedValuesObjectDefinition} object. 
+		This ensures the following case: 
+		<ul>
+			<li>
+				When the condition operator is of single value but multiple values are specified, report an error.				
+			</li>
+		</ul>		
+	-->
+	<Validator classDefinition="true" definitionName="cmc/catalogfilter/CatalogFilterConditionWithAllowableValueValidator">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="catalogFilterResources" moduleName="cmc/catalogfilter/CatalogFilterResources"/>
+		<!-- Comma-seperated list of single-value operators. -->
+		<variable name="singleValueOperators" type="string" value="NUMBER_LESS_THAN,NUMBER_NOT_LESS_THAN,NUMBER_GREATER_THAN,NUMBER_NOT_GREATER_THAN"/>
+		<!-- The property name for condition operator -->
+		<variable name="operatorPropertyName" type="string" value="operator"/>
+		<!-- The property name for previous condition operator -->
+		<variable name="prevOperatorPropertyName" type="string" value="previousOperator"/>
+		<!-- The object type of the child object for condition value. -->
+		<variable name="conditionValueObjectType" type="string"/>
+
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			if (!o) {
+				return;
+			}
+			o.clearValidationError(this);
+			var operator = o.getPropertyValue(this.operatorPropertyName);
+			var prevOperator = o.getPropertyValue(this.prevOperatorPropertyName);
+			var singleOps = StringUtil.Singleton.splitAndTrim(this.singleValueOperators, ",");
+			var isSingleOp = false;
+			for (var i = 0; i < singleOps.length; i++) {
+				if (operator == singleOps[i]) {
+					isSingleOp = true;
+				}
+			}
+			var statusChanged = false;
+			if (isSingleOp) {
+				if (prevOperator == "") {
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'single');
+				}
+				else if (prevOperator == "multiple") {
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'single');
+					statusChanged = true;
+				}
+			}
+			else {
+				if (prevOperator == "") {
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'multiple');
+				}
+				else if (prevOperator == "single") {
+					o.setPropertyValue(this.prevOperatorPropertyName, null, 'multiple');
+					statusChanged = true;
+				}
+			}
+			var otds = o.getObjects(this.conditionValueObjectType);
+			if (otds.length == 0) {
+				var errmsg = foundationResources.Singleton.replaceValues("requiredPropertyMissing", [catalogFilterResources.Singleton.catalogFilterAttributeValue.string]);
+				o.addValidationError(this, errmsg);
+			}
+			if (statusChanged) {
+				for (var i = 0; i < otds.length; i++) {
+					otds[i].deleteObject();
+				}
+			}
+			]]>
+		</method>
+	</Validator>
+
+</Definitions>

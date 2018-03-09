@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		<p>Validator for {@link cmc/marketing/DisplayPromotionElementObject Display Promotion action}. This ensures that the
+		the promotion redemption method and content click action are valid.</p>
+		
+		<p>These are the valid combinations promotion redemption method and content click action:</p>
+		<p>
+		<table cellspacing="5">
+		<tr>
+		<td><u>Promotion</u></td>			<td><u>Content</u></td>
+		<tr>
+		<td>Qualifying purchase</td>		<td>Display promotion description</td>
+		<tr>
+		<td>Requires promotion codes</td>	<td>Display promotion description</td>
+		<tr>
+		<td></td>							<td>Add to shopping cart</td>
+		</tr>
+		<tr>
+		<td>Coupon promotion</td>			<td>Display promotion description</td>
+		<tr>
+		<td></td>							<td>Add coupon to customer's coupon wallet</td>
+		</tr>
+		</table>
+		</p>
+		
+		<p>There should only be one instance of this class defined for each {@link cmc/marketing/FlowElementObjectDefinition}.</p>
+	-->	 
+	<Validator classDefinition="true" definitionName="cmc/marketing/DisplayPromotionValidator">
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<!--- 
+			The object path that describes required child promotion objects. 
+		 -->
+		<variable name="objectPathPromotion" type="string" value="ChildPromotion/PromotionGroup"/>
+		
+		<!--- 
+			The object path that describes required child content objects. 
+		 -->
+		<variable name="objectPathContent" type="string" value="ChildContent/MarketingContentGroup"/>
+		
+		<!--- 
+			The error message to be added when the click action is not promotion-related.
+		 -->
+		<variable name="errorMessageWrongClickAction" type="string" value="${marketingResources.Singleton.promotionWrongClickAction.string}"/>
+		
+		<!--- 
+			The error message to be added when the click action is "Add coupon to customer's coupon wallet" and the promotion is not a coupon promotion.
+		 -->
+		<variable name="errorMessagePromotionNotCoupon" type="string" value="${marketingResources.Singleton.promotionNotCoupon.string}"/>
+		
+		<!--- 
+			The error message to be added when the click action is "Add to shopping cart" and the promotion is not a code promotion.
+		 -->
+		<variable name="errorMessagePromotionNotCode" type="string" value="${marketingResources.Singleton.promotionNotCode.string}"/>
+		
+		<!---
+			The store front command name to recommend a promotion. The default value is 'DiscountDetailsDisplayView'.
+		-->
+		<variable name="promotionURL" type="string" value="DiscountDetailsDisplayView"/>
+		
+		<!---
+			The store front command name to issue a coupon. The default value is 'CouponsIssue'.
+		-->
+		<variable name="couponURL" type="string" value="CouponsIssue"/>
+		
+		<!---
+			The store front command name to add the item to the shopping cart with promotion or coupon. The default value is 'AddOrderItemWithPromotionCodeOrCoupon'.
+		-->
+		<variable name="addItemURL" type="string" value="AddOrderItemWithPromotionCodeOrCoupon"/>
+		
+		<!---
+			@keywords private
+		 -->
+		<method args="o, property" name="validate">
+			<![CDATA[
+			if (typeof(property) == "undefined") property = null;
+			var childObjectsPromotion = o.getObjects(this.objectPathPromotion);
+			var childObjectsContent = o.getObjects(this.objectPathContent);
+			if (childObjectsPromotion.length >= 1 && childObjectsContent.length >= 1) {
+				var promotion = childObjectsPromotion[0];
+				var couponRequired = promotion.getPropertyValue("couponRequired");
+				var codeRequired = promotion.getPropertyValue("promotionCodeRequired");
+				var content = childObjectsContent[0];
+				var clickAction = content.getPropertyValue("url");
+				var index = clickAction.indexOf('?');
+				if (index > -1) {
+					clickAction = clickAction.substring(0, index);
+				}
+				var isPromotionURL = clickAction == this.promotionURL;
+				var isCouponURL = clickAction == this.couponURL;
+				var isAddItemURL = clickAction == this.addItemURL;
+				if (!isPromotionURL && !isCouponURL && !isAddItemURL) {
+					o.addValidationError(this, this.errorMessageWrongClickAction);
+					return;
+				}
+				if (isCouponURL && couponRequired != "true") {
+					o.addValidationError(this, this.errorMessagePromotionNotCoupon);
+					return;
+				}
+				if (isAddItemURL && (codeRequired != "true" && couponRequired != "true")) {
+					o.addValidationError(this, this.errorMessagePromotionNotCode);
+					return;
+				}
+			}
+			o.clearValidationError(this);
+			]]>
+		</method>
+	</Validator>
+
+</Definitions>

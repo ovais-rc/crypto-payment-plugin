@@ -1,0 +1,270 @@
+<!-- Copyright IBM Corp. 2010-2014  All Rights Reserved. -->
+<project name="CKEditor" default="init" basedir=".">
+
+	<property file="build.properties"/>		<!-- create a build.properties if you wish to override the default properties. -->
+	<property file="default.properties"/>
+	
+	<target name="init">	
+		<echo message="Starting CKEditor build..." />
+		<antcall target="archive" />		
+		<echo message="CKEditor build finished." />
+	</target>
+	
+	<target name="clean" description="Delete all files created by a previous execution of the releaser tool">			
+		<echo message="Deleting existing CKEditor release files...${release.dir}" />
+		<delete dir="${release.dir}" quiet="true" />
+	</target>
+		<!-- ===Plugin Catalog Targets=================================================================================== -->
+	<macrodef name="catalog-iterate" description="Call the specified target in each of the required catalog plugin build files" >
+		<attribute name="target"/>
+		<sequential>
+			<subant target="@{target}" inheritall="true" >
+				<fileset dir="${catalog.dir}" includes="${catalog.plugins}"/>
+			</subant>
+		</sequential>
+	</macrodef>
+
+	<target name="catalog-plugins" if="catalog.plugins" description="Instruct catalog plugins to push in their contributions to the release" >
+		<catalog-iterate target="deploy"/>
+	</target>
+	<!-- ============================================================================================================ -->
+
+	<target name="build" depends="clean, catalog-plugins, update-revision" description="Run the CKReleaser tool">
+
+		<condition property="build.number" value="${version}.${committed.max}" else="${version}">
+			<isset property="committed.max" />
+		</condition>
+
+		<echo message="Building CKEditor version ${build.number} ...${releaser.dir} source dir:${releaser.source.dir} dest dir:${releaser.release.dir} " />
+		<java jar="${releaser.dir}/ckbuilder.jar" fork="true" dir="${releaser.dir}" outputproperty="releaser.output">
+			<!--<arg value="${releaser.def.file}"/>-->
+			<arg value="--build"/>
+			<arg value="${releaser.source.dir}"/>		<!-- sourceDir: path to the ckeditor source root directory. -->
+			<arg value="${releaser.release.dir}"/>		<!-- releaseDir: the subfolder to place the release in. -->
+			<arg value="--version=${build.number}"/>
+			<arg value="--build-config"/>
+			<arg value="build-config.js"/>
+			<!--<arg value="${build.number}"/>		-->		<!-- version: the version number returned by CKEDITOR.version. -->
+			<!--<arg value="ckeditor_${build.number}"/>	-->	<!-- releaseFile: the name of the zip file to place the release in. -->
+		</java>
+		
+		<echo message="Building Basic CKEditor version ${build.number} ...${releaser.dir} source dir:${releaser.source.dir} dest dir:${releaser.release.dir} " />
+				<java jar="${releaser.dir}/ckbuilder.jar" fork="true" dir="${releaser.dir}" outputproperty="releaser.output">
+					<!--<arg value="${releaser.def.file}"/>-->
+					<arg value="--build"/>
+					<arg value="${releaser.source.dir}"/>		<!-- sourceDir: path to the ckeditor source root directory. -->
+					<arg value="${release.src.dir}/_basic"/>		<!-- releaseDir: the subfolder to place the release in. -->
+					<arg value="--version=${build.number}"/>
+					<arg value="--build-config"/>
+					<arg value="basic-build-config.js"/>
+					<arg value="--no-zip=true"/>	
+					<arg value="--no-tar=true"/>
+					<!--<arg value="${build.number}"/>		-->		<!-- version: the version number returned by CKEDITOR.version. -->
+					<!--<arg value="ckeditor_${build.number}"/>	-->	<!-- releaseFile: the name of the zip file to place the release in. -->
+				</java>
+				
+		<echo message="Output: ${releaser.output}" />
+
+		<fail message="A JavaScript syntax error was found during code compression. Please check the above output for more information.">
+			<condition>
+				<contains string="${releaser.output}" substring="Error: syntax error" />
+			</condition>
+		</fail>
+			  
+		<fail message="The CKEditor build did not create the two release archive files. The CKReleaser tool may have failed.">
+			<condition>
+				<not>
+					<resourcecount count="2">
+						<fileset id="fs" dir="./dev/builder/release" includes="ckeditor_${build.number}.zip, ckeditor_${build.number}.tar.gz"/>
+					</resourcecount>
+				</not>
+			</condition>
+		</fail>
+
+	</target>
+
+	<target name="update-revision" if="revision">
+		<echo message="Setting CKEDITOR revision to: ${revision}" />
+		<replace dir="." encoding="UTF-8" failOnNoReplacements="false" summary="true" token="%REV%" value="${revision}">
+			<include name="**/*.js"/>
+		</replace>
+	</target>
+	
+	<!-- IMPORTANT: Add your custom CKEditor plugin files to this task - include all files that will be in the built plugins folder. You do not need to 
+			include any files in the _source/plugins directory - their copyright headers will not be stripped by the releaser tool. -->
+	<target name="copyright-full"
+			description="The CKReleaser tool will strip comments, including copyright headers. Add the IBM copyright header to any files added by IBM">	
+			
+		<echo message="Adding IBM copyright header to IBM files..." />
+
+		<replaceregexp match="^" replace="/*Copyright IBM Corp. 2009-2014  All Rights Reserved.*/" byline="false" encoding="UTF-8">		
+			<fileset dir="${release.src.dir}/">				
+		
+			<!-- The dialog customisations -->
+			<include name="plugins/ibmcustomdialogs/dialogs/*.js"/>
+				
+			<!-- IBM extensions -->
+			<include name="extensions/*.js"/>
+				
+			<!-- ibmspellchecker dialog -->
+			<include name="plugins/ibmspellchecker/dialogs/ibmspellchecker.js" />
+							
+			<!-- ibmtabletools dialogs -->
+			<include name="plugins/ibmtabletools/dialogs/*.js" />
+							
+			<!-- urllink dialog -->
+			<include name="plugins/ibmurllink/dialogs/urllink.js" />
+			
+			<!-- Dojo Wrapper -->
+			<include name="wrappers/dojo/1.7/ckeditor/widget/CKEditor.js" />
+						
+			</fileset>
+		</replaceregexp>
+		
+		<!-- Remove the unicode BOM at the start of CK files  -->
+		<replaceregexp match="&#xFEFF;" replace="" byline="false" encoding="UTF-8">		
+			<fileset dir="${release.src.dir}/">				
+		
+			<!-- The dialog customisations -->
+			<include name="plugins/ibmcustomdialogs/dialogs/*.js"/>
+				
+			<!-- IBM extensions -->
+			<include name="extensions/*.js"/>
+				
+			<!-- ibmspellchecker dialog -->
+			<include name="plugins/ibmspellchecker/dialogs/ibmspellchecker.js" />
+							
+			<!-- ibmtabletools dialogs -->
+			<include name="plugins/ibmtabletools/dialogs/*.js" />
+							
+			<!-- urllink dialog -->
+			<include name="plugins/ibmurllink/dialogs/urllink.js" />
+			
+			<!-- Dojo Wrapper -->
+			<include name="wrappers/dojo/1.7/ckeditor/widget/CKEditor.js" />
+						
+			</fileset>
+		</replaceregexp>
+			
+	</target>	
+	
+	<target name="copyright-portions" 
+			description="Add the IBM portions copyright header to all files modified by IBM">
+			
+		<echo message="Adding IBM portions copyright header to IBM modified files in...${release.src.dir}" />
+		
+		<replace dir="${release.src.dir}/" encoding="UTF-8" failOnNoReplacements="true" summary="true">
+		
+			<include name="ckeditor.js" />	<!-- IBM plugins are packed into ckeditor.js during the build -->
+			<include name="config.js" />
+			<include name="contents.css" />
+			
+			<!-- Language files -->
+			<include name="lang/*.js"/>
+			<include name="plugins/a11yhelp/dialogs/lang/*.js"/>
+			<include name="plugins/specialchar/dialogs/lang/*.js"/>
+			
+			<!-- Uncompressed Source Files -->
+			<include name="_source/config.js" />
+			<include name="_source/contents.css" />
+			<include name="_source/ckeditor.js" /> 	<!-- IBM apis.js extension gets appended to source/ckeditor.js during the build -->			
+			<include name="_source/core/lang.js" /> <!-- IBM supportedLanguages.js extension gets appended to source/core/lang.js during the build -->
+			
+			<!-- Uncompressed Language files -->
+			<include name="_source/lang/*.js"/>
+			<include name="_source/plugins/*/lang/*.js"/>
+			<include name="_source/plugins/*/dialogs/lang/*.js"/>	
+			
+			<replacefilter>
+				<replacetoken><![CDATA[For licensing, see LICENSE.html or http://ckeditor.com/license]]></replacetoken> 
+				<replacevalue><![CDATA[For licensing, see LICENSE.html or http://ckeditor.com/license
+								
+				Portions Copyright IBM Corp., 2009-2014.]]></replacevalue>
+			</replacefilter>
+			
+			<replacefilter>
+				<replacetoken><![CDATA[For licensing, see LICENSE.md or http://ckeditor.com/license]]></replacetoken> 
+				<replacevalue><![CDATA[For licensing, see LICENSE.md or http://ckeditor.com/license
+								
+				Portions Copyright IBM Corp., 2009-2014.]]></replacevalue>
+			</replacefilter>
+			
+		</replace>
+	</target>
+	
+	<target name="append-supportedLanguages" description="Append supportedLanguages.js to _source/core/lang.js">
+		<antcall target="appendExtension">
+		    <param name="extensionFile" value="supportedLanguages.js"/>
+			<param name="targetFile" value="_source/core/lang.js"/>
+		</antcall>
+	</target>
+	
+	<target name="append-ibmapis" description="Append apis.js to _source/ckeditor.js">
+		<antcall target="appendExtension">
+		    <param name="extensionFile" value="apis.js"/>
+			<param name="targetFile" value="_source/ckeditor.js"/>
+		</antcall>
+	</target>
+	
+	<target name="appendExtension">
+		<echo message="Appending ${extensionFile} to ${targetFile}..." />
+		<concat destfile="${release.src.dir}/${targetFile}" append="yes">
+			<filelist dir="${release.src.dir}/_source/extensions/" files="${extensionFile}"/>
+		</concat>
+		<echo message="Removing surplus IBM copyright notices from ${targetFile}..." />
+		<replaceregexp file="${release.src.dir}/${targetFile}" 
+			match="^.*Copyright IBM Corp.*All Rights Reserved.*\s*"
+			replace="" byline="true" encoding="UTF-8"
+		/>
+	</target>
+	
+	<target name="copy_basic">	
+		<copy todir="${release.src.dir}/_basic" >  
+		    <fileset dir="${release.src.dir}/_basic/ckeditor"/>  
+		</copy>
+		<delete>
+		    <dirset dir="${release.src.dir}/_basic" />
+		    <fileset dir="${release.src.dir}/_basic/" includes="**/ckeditor/**" />
+		</delete>
+		<move todir="${release.src.dir}/_basic/" includeemptydirs="false">
+		    <fileset dir="${release.src.dir}/_basic"/>
+		    <mapper type="glob" from="basic-config.js" to="config.js"/>
+		</move>
+	</target>
+	
+	<target name="copy_source">	
+		<echo message="Copying Source files"/>
+		<copy todir="${release.src.dir}/_source" overwrite="true">
+			<fileset dir="${deploy.dir}" includes="**/*" >
+				<exclude name=".project"/>
+				<exclude name="build.xml"/>
+				<exclude name="catalog-common.xml"/>
+				<exclude name="default.properties"/>
+				<exclude name="LICENSE.md"/>
+				<exclude name="README.md"/>
+				<exclude name="dev/"/>
+				<exclude name="samples/"/>
+			</fileset>
+		</copy>
+	</target>
+	
+	<target name="createVersionFile">
+		<echo message="cke_version=${version}${line.separator}" append="true" file="${release.src.dir}/version.txt"/>
+		<echo message="cke_revision=${revision}" append="true" file="${release.src.dir}/version.txt"/>
+	</target>
+	
+	<target name="archive" depends="build, copy_basic, copy_source, copyright-full, copyright-portions, append-supportedLanguages, append-ibmapis"
+			description="Deleted the archives created by the releaser, and create a new archive containing the updates from the above tasks">
+
+		<echo message="Replacing archived releases created by the releaser tool with a zip of the compressed source..." />		
+		<delete>
+			<fileset dir="${release.dir}" includes="*" />
+		</delete>
+		
+		<antcall target="createVersionFile" />
+		
+		<zip destfile="${release.dir}/${release.archive.name}">
+			<zipfileset dir="${release.src.dir}" prefix="ckeditor" />
+		</zip>
+	</target>
+</project>

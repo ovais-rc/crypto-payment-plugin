@@ -1,0 +1,1356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2017 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		
+		Base class for tree node.
+	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/Tree">
+		<dependency localName="TreePageDown" moduleName="cmc/foundation/TreePageDown"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="PanelManager" moduleName="cmc/foundation/PanelManager"/>
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="TreePageUp" moduleName="cmc/foundation/TreePageUp"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="ModalUtil" moduleName="cmc/foundation/ModalUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+			
+		<variable name="defaultplacement" value="children"/>
+		<variable name="open" type="boolean" value="false"/>
+		<variable name="selected" type="boolean" value="false"/>
+		<variable name="hilited" type="boolean" value="false"/>
+		<variable name="xindent" type="number" value="10"/>
+		<variable name="yindent" type="number" value="20"/>
+		<variable name="showroot" type="boolean" value="true"/>
+		<variable name="focused" type="boolean" value="false"/>
+		<variable name="_currentChild" type="number" value="0"/>
+		<variable name="_lastfocused" value="null"/>
+		<!---
+			Tree node icon.
+		-->
+		<variable name="icon" type="string" value="treeFolderResource"/>
+		<!---
+			Indicates that this view is the active view. This value
+			is only valid on the root tree node.
+		-->
+		<variable name="activated" type="boolean" value="false"/>
+		<!---
+			Indicates that this tree node has an error.
+		-->
+		<variable name="hasError" type="boolean" value="false"/>
+		<!---
+			Indicates that this tree node is a leaf
+		-->
+		<variable name="isTreeLeaf" type="boolean" value="false"/>
+		<!---
+			The maximum number of child nodes to allow.
+		-->
+		<variable name="maxObjectViews" type="number" value="${null}"/>
+		<!---
+			The status message to display when the tree node is expanded.
+		-->
+		<variable name="statusMessage" type="string" value=""/>
+		<!---
+			The tree node that currently has the maximum width. This value is only valid
+			in the root tree node.
+		-->
+		<variable name="widestTree" value="${null}"/>
+		<!---
+			The width of the widest tree node. This value is only valid
+			in the root tree node.
+		-->
+		<variable name="widestTreeWidth" type="number" value="0"/>		
+		
+		<!---
+			@keywords private
+			text color
+		-->
+		<variable name="textColor" type="string" value="#464646"/>
+
+		<!---
+			@keywords private
+			text style
+		-->
+		<variable name="textStyle" type="string" value="plain"/>
+
+		<event name="onselect"/>
+		<event name="onfocus"/>
+		
+		<!--- @keywords private  -->
+		<method args="value" name="set_open">
+			<![CDATA[
+			this.open = value;
+			if (this._initcomplete && this.isTreeLeaf) {
+				this.open = false;
+			}
+			else if (this._initcomplete) {
+				this.openChildren(value);
+			}
+			EventUtil.trigger(this, "onopen", this.open);
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="value" name="set_selected">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (value) {
+					this.getRoot().select(this);
+				}
+				else {
+					this.getRoot().unselect(this);
+				}
+			}
+			else {
+				this.setSelected(value);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="tree" name="select">
+			<![CDATA[
+			var root = this.getRoot();
+			if (root) {
+				if (root.selectedTree) {
+					root.unselect(root.selectedTree);
+				}
+				root.selectedTree = tree;
+				if (tree) {
+					tree.setSelected(true);
+				}
+				EventUtil.trigger(root, "onselect", tree);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="tree" name="unselect">
+			<![CDATA[
+			if (tree) {
+				var root = this.getRoot();
+				if (root) {
+					if (root.selectedTree == tree) {
+						root.selectedTree = null;
+						tree.setSelected(false);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="value" name="set_hilited">
+			<![CDATA[
+			if (this._initcomplete) {
+				if (value) {
+					this.getRoot().hilite(this);
+				}
+				else {
+					this.getRoot().unhilite(this);
+				}
+			}
+			else {
+				this.setHilited(value);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="tree" name="hilite">
+			<![CDATA[
+			var root = this.getRoot();
+			if (root) {
+				if (root.hilitedTree) {
+					root.unhilite(root.hilitedTree);
+				}
+				root.hilitedTree = tree;
+				if (tree) {
+					tree.setHilited(true);
+				}
+				EventUtil.trigger(root, "onhilite", tree);
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="tree" name="unhilite">
+			<![CDATA[
+			if (tree) {
+				var root = this.getRoot();
+				if (root) {
+					if (root.hilitedTree == tree) {
+						root.hilitedTree = null;
+						tree.setHilited(false);
+					}
+				}
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method name="isRoot">
+			<![CDATA[
+			return !(this.parent instanceof exports.Class);
+			]]>
+		</method>
+		
+		<!--- @keywords private  -->
+		<method name="keySelect">
+			<![CDATA[
+			this.setVariable("selected", true);
+			]]>
+		</method>
+
+		<!--- @keywords private  -->
+		<method name="getSelection">
+			<![CDATA[
+			var selectedTree = null;
+			var root = this.getRoot();
+			if (root != null) {
+				selectedTree = root.selectedTree;
+			}
+			return selectedTree;
+			]]>
+       	</method>
+       	
+		<!--- @keywords private  -->
+		<method args="value" name="setSelected">
+			<![CDATA[
+			this.selected = value;
+			if (!this.isRoot()) {
+				EventUtil.trigger(this, "onselect", this);
+			}
+			EventUtil.trigger(this, "onselected", value);
+			]]>           
+		</method>
+		
+		<!--- @keywords private  -->
+		<method args="value" name="setHilited">
+			<![CDATA[
+			this.hilited = value;
+			EventUtil.trigger(this, "onhilited", value);
+			]]>           
+		</method>
+
+		<!--- @keywords private  -->
+		<method args="focus,root" name="setTreeFocus">
+			<![CDATA[
+			if (this['item']) {
+				this.item.setVariable("focusable", focus);
+			}
+			this.setVariable("focused", focus);
+			if (root == null) root = this.getRoot();
+			EventUtil.trigger(root, "onfocus", this);
+			if (this != root) EventUtil.trigger(this, "onfocus", this);
+			]]>
+		</method>
+
+		<!--- @keywords private  -->
+		<method args="child" name="getChildIndex">
+			<![CDATA[
+			var index = -1;
+			var childComponents = this.children.childComponents;
+			if (childComponents != null) {
+				for (var i = 0; i < childComponents.length; i++) {
+					if (childComponents[i] == child) {
+						index = i;
+						break;
+					}
+				}
+			}
+			return -1;
+			]]>
+		</method>
+
+		<!--- @keywords private  -->
+		<method args="value" name="openChildren">
+			<![CDATA[
+			this.children.setVariable("visible", value && this.children.childComponents != null && this.children.childComponents.length > 0);
+			]]>
+		</method>
+
+		<Component name="item">
+			<handler args="kc" name="onkeydown">
+				<![CDATA[
+				this.classroot.keyboardNavigate(kc);
+				]]>
+			</handler>
+			<Component bgcolor="yellow" height="${this.parent.treeitem.height}" name="contextMenuArea" opacity="0.0001" width="${this.parent.treeitem.width}" x="${this.parent.treeitem.x}" y="${this.parent.treeitem.y}"/>
+			<Component name="treeitem">
+				<Tooltip enabled="false" name="tooltip" text="${this.parent.text.text}"/>
+				
+				<handler name="onclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/Tree onclick: " + this.text.getText());
+					CallbackUtil.Singleton.addDeferredCallback(this.doClickDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+				
+				<method args="e" name="doClick">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					if (Logger.Singleton.perfTraceEnabled) {
+						Logger.Singleton.perfTrace("cmc/foundation/Tree", "doClick", "treeitem: " + this.text.getText() + " Start");
+					}
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "CONFIG", "cmc/foundation/Tree", "doClick", "treeitem: " + this.text.getText());
+					}
+					this.classroot.changeFocus(null);
+					if (!this.classroot.selected) {
+						this.classroot.setVariable('selected', true);
+					}
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "CONFIG", "cmc/foundation/Tree", "END doClick", "treeitem: " + this.text.getText());
+					}
+					if (Logger.Singleton.perfTraceEnabled) {
+						Logger.Singleton.perfTrace("cmc/foundation/Tree", "doClick", "treeitem: " + this.text.getText() + " End");
+					}
+					]]>
+				</method>
+	
+				<handler name="ondblclick">
+					<![CDATA[
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/Tree ondblclick: " + this.text.getText());
+					CallbackUtil.Singleton.addDeferredCallback(this.doDoubleClickDel, null, CallbackUtil.Singleton.PRIORITY_FOREGROUND);
+					if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+					]]>
+				</handler>
+				
+				<handler name="onmouseover">
+					<![CDATA[
+					this.classroot.setVariable("hilited", true);
+					]]>
+		        </handler>
+		
+				<handler name="onmouseout">
+					<![CDATA[
+					this.classroot.setVariable("hilited", false);
+					]]>
+				</handler>
+				
+				<!--- @keywords private -->
+				<handler name="oninit">
+					<![CDATA[
+					this.doClickDel = new EventHandler.Class(this, "doClick");
+					this.doDoubleClickDel = new EventHandler.Class(this, "doDoubleClick");
+					]]>
+				</handler>
+				
+				<!--- @keywords private -->
+				<method name="destroy">
+					<![CDATA[
+					this.doClickDel.disconnectAll();
+					this.doDoubleClickDel.disconnectAll();
+					delete this.doClickDel;
+					delete this.doDoubleClickDel;
+					this.inherited(arguments);
+					]]>
+				</method>
+	
+				<method args="e" name="doDoubleClick">
+					<![CDATA[
+					if (typeof(e) == "undefined") e = null;
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "CONFIG", "cmc/foundation/Tree", "doDoublelick", "treeitem: " + this.text.getText());
+					}
+					EventUtil.trigger(this.classroot, "onactivate");
+					if (Logger.Singleton.enabled) {
+						Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "CONFIG", "cmc/foundation/Tree", "END doDoublelick", "treeitem: " + this.text.getText());
+					}
+					]]>
+				</method>
+				
+				<Component height="${this.parent.height}" name="indent" ignoreSize="true"/>
+				<Component name="icons" height="28">
+					<Component currentImage="${(this.classroot.open ? 2 : 1) + (this.classroot.selected ? 2 : 0)}" imageSet="objectTreeExpander" name="expander" opacity="${this.classroot.isTreeLeaf ? 0.00001 : 1.0}" valign="middle"/>
+					<Component currentImage="${this.classroot.selected ? 2 : 1}" imageSet="${this.classroot.icon}" name="icon" x="${this.parent.expander.width}" valign="middle"/>
+					<Component imageSet="treeErrorResource" name="errorIcon" visible="${this.classroot.hasError}" x="${this.parent.icon.x + this.parent.icon.width - this.width}" y="${this.parent.icon.y + this.parent.icon.height - this.height}"/>
+					<handler name="onclick">
+						<![CDATA[
+						if (Logger.Singleton.perfTraceEnabled) {
+							Logger.Singleton.perfTrace("cmc/foundation/Tree", "Expand", "treeitem: " + this.parent.text.getText() + " Start");
+						}
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "CONFIG", "cmc/foundation/Tree", "onclick", "treeitem: " + this.parent.text.getText());
+						}
+						if (this.classroot.isTreeLeaf) {
+							this.parent.doClick();
+						}
+						else {
+							if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/Tree onclick: " + this.parent.text.getText());
+							this.classroot.setVariable("open", !this.classroot.open);
+							if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+						}
+						if (Logger.Singleton.enabled) {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.view", "CONFIG", "cmc/foundation/Tree", "END onclick", "treeitem: " + this.parent.text.getText());
+						}
+						if (Logger.Singleton.perfTraceEnabled) {
+							Logger.Singleton.perfTrace("cmc/foundation/Tree", "Expand", "treeitem: " + this.parent.text.getText() + " End");
+						}
+						]]>
+					</handler>
+				</Component>
+				<TextComponent fontstyle="${this.classroot.textStyle}" name="text" resize="true" text="${this.escapeText(this.classroot.text)}" x="${this.parent.icons.width + 5}" y="5"/>
+				<TextComponent multiline="true" name="statusMessage" text="${this.classroot.statusMessage}" visible="${this.text != ''}" width="${Math.max(this.classroot.width - 20, 50)}" x="20" y="${this.visible ? this.parent.icons.y + this.parent.icons.height : 0}"/>
+			</Component>
+		</Component>
+		<Component name="children" x="${this.parent.xindent}" y="${this.parent.yindent}">
+			<method name="init">
+				<![CDATA[
+				this.setVariable("visible", this.classroot.open && this.childComponents != null && this.childComponents.length > 0);
+				this.inherited(arguments);
+				]]>
+			</method>
+			<handler name="onaddChildComponent">
+				<![CDATA[
+				if (this.childComponents.length == 1 && this.classroot.open) {
+					this.setVariable("visible", true);
+				}
+				]]>
+			</handler>
+			<AxisLayout spacing="0"/>
+		</Component>
+
+		<!---
+			Check that there is a focusable tree node.
+		-->
+		<method name="checkFocusable">
+			<![CDATA[
+			var root = this.getRoot();
+			if (root._lastfocused == null || root._lastfocused == root || !root._lastfocused.visible) {
+				if (root._lastfocused) {
+					root._lastfocused.setTreeFocus(false, root);
+				}
+				if (this.root.children && this.root.children.childComponents != null) {
+					for (var i = 0; i < root.children.childComponents.length; i++) {
+						if (root.children.childComponents[i].visible) {
+							root.setVariable("_currentChild", i);
+							var focusableTree = root.children.childComponents[i];
+							focusableTree.setTreeFocus(true, root);
+							root.setVariable("_lastfocused", focusableTree);
+							break;
+						}
+					}
+				}
+			}
+			]]>
+		</method>
+				
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			if (this.isRoot()) {
+				var focusItem = this.item;
+				if (!this.showroot) {
+					this.item.destroy();
+					this.item = null;
+					focusItem = null;
+					this.setVariable("open", true);
+					this.children.setVariable("x", 0);
+					this.children.setVariable("y", 0);
+					var childComponents = this.children.childComponents;
+					if (childComponents.length > 0 && (childComponents[0] instanceof exports.Class)) {
+						focusItem = childComponents[0].item;
+					}
+				}
+				if (focusItem){
+					this.changeFocus(focusItem.parent);
+				}
+			}
+			else {
+				this.treeitem = this.item.treeitem;
+			}
+			if (this.selected) this.set_selected(true);
+			this.updateBGColorDel = new EventHandler.Class(this, "updateBGColor");
+			this.updateBGColorDel.connect(this, "onselected");
+			this.updateBGColorDel.connect(this, "onhilited");
+			this.updateBGColorDel.connect(this, "ontextColor");
+			var clipView = this.getClipView();
+			this.adjustWidthDel = new EventHandler.Class(this, "adjustWidth");
+			if (this.treeitem) {
+				var indentWidth = this.treeitem.getVariableRelative("x", clipView) - clipView.x;
+				this.treeitem.indent.setVariable("x", -indentWidth);
+				this.treeitem.indent.setVariable("width", indentWidth);
+				this.adjustWidthDel.connect(this.treeitem.icons, "onwidth");
+				this.adjustWidthDel.connect(this.treeitem.text, "onwidth");
+			}
+			this.adjustWidthDel.connect(clipView, "onavailableWidth");
+			this.adjustWidthDel.connect(this.getRoot(), "onwidestTreeWidth");
+			this.adjustWidth();
+			this.checkFocusable();
+			this.checkWidestTree();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+		-->
+		<handler name="onvisible">
+			<![CDATA[
+			this.checkFocusable();
+			]]>
+		</handler>
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.item" name="onfocus">
+			<![CDATA[
+			var root = this.getRoot();
+			if (root != this) {
+				this.oEditor.model.setVariable("activeSelectionView", root);
+			}
+			this.setVariable("focused", true);
+			this.setVariable("hilited", true);
+			if (this.parent.children) {
+				this.parent.setVariable("_currentChild", this.parent.children.childComponents.indexOf(this));
+			}
+			if (this.menu) {
+				var caller = this;
+				require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+					ContextMenuUtil.Singleton.setAsDefault(caller.menu);
+				});
+			}
+			if (this.item && !this.item.indicator) {
+				new FocusIndicator.Class(this.item, {
+					name: "indicator",
+					focusableView: this.item,
+					indicatorView: this.item.treeitem,
+					focusIndicatorColor: this.selected ? "#ffffff" : "#000000"
+				});
+			}
+			]]>
+		</handler>	
+		
+		<!--- @keywords private -->
+		<handler eventSource="this.item" name="onblur">
+			<![CDATA[
+			this.setVariable("focused", false);
+			this.setVariable("hilited", false);
+			if (this.menu) {
+				var caller = this;
+				require(["cmc/foundation/ContextMenuUtil"], function(ContextMenuUtil) {
+					ContextMenuUtil.Singleton.resetDefault(caller.menu);
+				});
+			}
+			]]>
+		</handler>		
+	
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateBGColorDel.disconnectAll();
+			delete this.updateBGColorDel;
+			this.adjustWidthDel.disconnectAll();
+			delete this.adjustWidthDel;
+			if (this.checkWidestTreeDel) {
+				this.checkWidestTreeDel.disconnectAll();
+				delete this.checkWidestTreeDel;
+			}
+			if (this.selected) {
+				this.setVariable("selected", false);
+			}
+			if (this.focused) {
+				this.changeFocus(this.getRoot());
+			}
+			if (this.hilited) {
+				this.setVariable("hilited", false);
+			}
+			if (this.clipView) {
+				delete this.clipView;
+			}
+			if (this.children) {
+				this.openChildren(false);
+				this.children.destroy();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the first visible child tree
+		-->
+		<method name="getFirstChildTree">
+			<![CDATA[
+			var visibleChild = null;
+			if (this.open && this.children.childComponents && this.children.childComponents.length > 0) {
+				var views = this.children.childComponents;
+				for (var i = 0; i < views.length; i++) {
+					var v = views[i];
+					if (v.visible && v instanceof exports.Class) {
+						visibleChild = v;
+						break;
+					}
+				}
+			}
+			return visibleChild;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Get the last visible child tree
+		-->
+		<method name="getLastChildTree">
+			<![CDATA[
+			var visibleChild = null;
+			if (this.open && this.children.childComponents && this.children.childComponents.length > 0) {
+				var views = this.children.childComponents;
+				for (var i = views.length - 1; i >= 0; i--) {
+					var v = views[i];
+					if (v.visible && v instanceof exports.Class) {
+						visibleChild = v;
+						break;
+					}
+				}
+			}
+			return visibleChild;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			overrides OL keyboardNavigate for shortcutkey support
+		-->
+		<method args="key" name="keyboardNavigate">
+			<![CDATA[
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.start("cmc/foundation/Tree keyboardNavigate: " + this.item.treeitem.text.getText() + "/key=" + key);
+			if (key == 35) {
+				this.end();
+			}
+			else if (key == 36) {
+				this.home();
+			}
+			else if (key == 40) {
+				if (this.getFirstChildTree() != null) {
+					this._focusFirstChild();
+				}
+				else {
+					this._focusNextSibling();
+				}
+			}
+			else {
+				if (key == 32) {
+					this.keySelect();
+				}
+				else if (key == 37) {
+					if (this.open) {
+						this.setVariable("open", false);
+					}
+					else {
+						this._focusParent();
+					}
+				}
+				else if (key == 38) {
+					this._focusPreviousSibling();
+				}
+				else if (key == 39) {
+					if (!this.open) {
+						this.setVariable("open", true);
+					}
+					else {
+						this._focusFirstChild();
+					}
+				}
+				else if (key == 40) {
+					if (this.open && this.children.childComponents.length > 0 && (this.children.childComponents[0] instanceof exports.Class)) {
+						this._focusFirstChild();
+					}
+					else {
+						this._focusNextSibling();
+					}
+				}
+			}
+			if (EventTimer.Singleton.enabled) EventTimer.Singleton.end();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Change focus to a new tree node
+		-->
+		<method args="treeNode" name="changeFocus">
+			<![CDATA[
+			if (treeNode == null) treeNode = this;
+			var root = treeNode.getRoot();
+			if (root._lastfocused) {
+				root._lastfocused.setTreeFocus(false, root);
+			}
+			if (treeNode != root) {
+				var index = treeNode.parent.getChildIndex(treeNode);
+				if (index != -1) {
+					treeNode.parent.setVariable("_currentChild", index);
+				}
+			}
+			root.setVariable("_lastfocused", treeNode);			
+			if (typeof (treeNode) != "undefined" && treeNode != null && treeNode.item) {
+				var panel = PanelManager.Singleton.findPanel(treeNode);
+				panel.show(treeNode.item);
+			}
+			treeNode.setTreeFocus(true, root);
+			FocusUtil.setFocus(treeNode.item);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="restoreFocus">
+			<![CDATA[
+			if (this.visible || this.isRoot()) {
+				this.changeFocus(null);
+			}
+			else {
+				this.parent.restoreFocus();
+			}
+			]]>
+		</method>
+	
+		<!---
+			@keywords private
+			Focus on last tree node and scroll to bottom
+		-->
+		<method name="end">
+			<![CDATA[
+			this.getRoot()._focusLastChild();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Focus on first tree node and scroll to top
+		-->
+		<method name="home">
+			<![CDATA[
+			this.getRoot()._focusFirstChild();
+			]]>
+		</method>
+								
+		<!---
+			Get the clip view.
+		-->
+		<method name="getClipView">
+			<![CDATA[
+			var root = this.getRoot();
+			if (!root.clipView) {
+				var v = this;
+				do {
+					if (typeof (v.availableWidth) != "undefined") {
+						break;
+					}
+					v = v.immediateParent;
+				}
+				while (v && v != RootComponent.Singleton);
+				if (v != RootComponent.Singleton) {
+					root.clipView = v;
+				}
+			}
+			return root.clipView;
+			]]>
+		</method>
+		
+		<!---
+			Update the background color.
+		-->
+		<method args="e" name="updateBGColor">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.treeitem) {
+				var c = "#ffffff";
+				var f = this.textColor;
+				if (this.selected) {
+					c = "#4178be";
+					f = "#ffffff";
+				}
+				else if (this.hilited) {
+					c = "#e6effb"
+				}
+				this.item.treeitem.setVariable("bgcolor", c);
+				this.item.treeitem.setVariable("fgcolor", f);
+				this.item.treeitem.indent.setVariable("bgcolor", c);
+				if (this.item && this.item.indicator) {
+					this.item.indicator.setVariable("focusIndicatorColor", this.selected ? "#ffffff" : "#000000");
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Adjust the width of the tree node so it matches the widest tree node.
+		-->
+		<method args="e" name="adjustWidth">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var root = this.getRoot();
+			if (this != root) {
+				var newWidth = root.clipView.availableWidth > root.widestTreeWidth ? root.clipView.availableWidth : root.widestTreeWidth;
+				var treeWidth = this.getTreeWidth();
+				if (newWidth < treeWidth) {
+					newWidth = treeWidth;
+				}
+				this.item.treeitem.setVariable('width', newWidth - this.item.treeitem.indent.width);
+				if (root.widestTree == this) {
+					if (treeWidth > root.widestTreeWidth) {
+						root.setVariable("widestTreeWidth", treeWidth);
+					}
+					else if (treeWidth < root.widestTreeWidth) {
+						root.setVariable("widestTree", null);
+					}
+				}
+				else if (treeWidth > root.widestTreeWidth) {
+					root.setVariable("widestTree", null);
+				}
+				this.item.treeitem.tooltip.setVariable("enabled", this.item.treeitem.text.width + this.item.treeitem.icons.width > root.clipView.availableWidth);
+			}
+			]]>
+		</method>
+
+		<!---
+			Update the widest tree.
+		-->
+		<method args="e" name="checkWidestTree">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.isRoot()) {
+				if (typeof this.checkWidestTreeDel == "undefined") {
+					this.checkWidestTreeDel = new EventHandler.Class(this, "checkWidestTree");
+				}
+				this.checkWidestTreeDel.disconnectAll();
+				this.setVariable("widestTree", this.getWidestTree());
+				this.checkWidestTreeDel.connect(this, "onwidestTree");
+				var newWidth = 0;
+				if (this.widestTree != null) {
+					this.checkWidestTreeDel.connect(this.widestTree.item.treeitem.text, "onwidth");
+					this.checkWidestTreeDel.connect(this.widestTree.item.treeitem.icons, "onwidth");
+					this.checkWidestTreeDel.connect(this.widestTree.item.treeitem.indent, "onwidth");
+					this.checkWidestTreeDel.connect(this.widestTree, "onvisible");
+					this.checkWidestTreeDel.connect(this.widestTree.parent, "onopen");
+					newWidth = this.widestTree.getTreeWidth();
+				}
+				this.setVariable("widestTreeWidth", newWidth);
+			}
+			]]>
+		</method>
+
+		<!---
+			Get the widest tree node.
+		-->
+		<method name="getWidestTree">
+			<![CDATA[
+			var widestTree = null;
+			var widestTreeWidth = 0;
+			if (this.open) {
+				for (var i = 0; i < this.children.childComponents.length; i++) {
+					var v = this.children.childComponents[i];
+					if (v.visible) {
+						var treeWidth = v.getTreeWidth();
+						if (treeWidth > widestTreeWidth) {
+							widestTree = v;
+							widestTreeWidth = treeWidth;
+						}
+						var widestChildTree = v.getWidestTree();
+						if (widestChildTree != null) {
+							treeWidth = widestChildTree.getTreeWidth();
+							if (treeWidth > widestTreeWidth) {
+								widestTree = widestChildTree;
+								widestTreeWidth = treeWidth;
+							}
+						}
+					}
+				}
+			}
+			return widestTree;
+			]]>
+		</method>
+
+		<!---
+			Get the width of this tree node.
+		-->
+		<method name="getTreeWidth">
+			<![CDATA[
+			var treeWidth = 0;
+			if (this.item.treeitem && this.item.treeitem.text && this.item.treeitem.icons && this.item.treeitem.indent) {
+				treeWidth = this.item.treeitem.text.width + this.item.treeitem.icons.width + this.item.treeitem.indent.width;
+			}
+			return treeWidth;
+			]]>
+		</method>
+
+		<!--- Handle setting the model object list -->
+		<handler name="onoList">
+			<![CDATA[
+			if (this.oList && this.maxObjectViews != null) {
+				if (!this.pageUp) {
+					new TreePageUp.Class(this, {
+						name: "pageUp",
+						oList: this.oList
+					});
+				}
+				if (!this.pageDown) {
+					new TreePageDown.Class(this, {
+						name: "pageDown",
+						oList: this.oList
+					});
+				}
+			}
+			]]>
+		</handler>
+		
+		<!---
+			Put keyboard focus on parent. This method is overridden from
+			basetree to allow for the view recycling behaviour in cmc/foundation/ModelObjectList.
+			@keywords private
+		-->
+		<method name="_focusParent">
+			<![CDATA[
+			if (this.isRoot() || this.parent.item == null) return;
+			this.setVariable("_currentChild", 0);
+			this.changeFocus(this.parent);
+			this.setVariable("_currentChild", this.getFirstChildTree());
+			]]>
+		</method>
+
+		<!---
+			Put keyboard focus on the first child. This method is overridden from
+			basetree to allow for the view recycling behaviour in cmc/foundation/ModelObjectList.
+			@keywords private
+		-->
+		<method name="_focusFirstChild">
+			<![CDATA[
+			if (this.oList) {
+				var childView = this.getFirstChildTree();
+				if (childView != null) {
+					this.changeFocus(childView);
+				}
+			}
+			else {
+				if (this.children.childComponents.length > 0 && (this.children.childComponents[0] instanceof exports.Class)) {
+					this.setVariable("_currentChild", 0);
+					this.changeFocus(this.children.childComponents[0]);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Put keyboard focus on the last child. This method is overridden from
+			basetree to allow for the view recycling behaviour in cmc/foundation/ModelObjectList.
+			@keywords private
+		-->
+		<method name="_focusLastChild">
+			<![CDATA[
+			if (this.oList) {
+				var childView = this.getLastChildTree();
+				if (childView != null) {
+					if (childView.getFirstChildTree() == null) {
+						this.setVariable("_currentChild", this.children.childComponents.indexOf(childView));
+						this.changeFocus(childView);
+					}
+					else {
+						childView._focusLastChild();
+					}
+				}
+			}
+			else {
+				if (this.children.childComponents[n] instanceof exports.Class) {
+					var last = this.children.childComponents[n];
+					if (last.open && last.children.childComponents.length > 0) {
+						var next = last.children.childComponents.length - 1;
+						if (last.children.childComponents[next] instanceof exports.Class) {
+							last._focusLastChild();
+							return;
+						}
+					}
+					this.setVariable("_currentChild", n);
+					this.changeFocus(this.children.childComponents[n]);
+				}
+			}
+			]]>
+		</method>
+
+		<!---
+			Put keyboard focus on previous sibling. This method is overridden from
+			basetree to allow for the view recycling behaviour in cmc/foundation/ModelObjectList.
+			@keywords private
+		-->
+		<method name="_focusPreviousSibling">
+			<![CDATA[
+			if (this.parent.oList && !this.isRoot()) {
+				if (!this.parentOList) {
+					if (this.isRoot()) return;
+					if (this.parent._currentChild == 0) {
+						this._focusParent();
+						return;
+					}
+					var prev = this.parent._currentChild - 1;
+					this.parent.setVariable("_currentChild", prev);
+					var sibling = this.parent.children.childComponents[prev];
+					if (sibling.open && sibling.children.childComponents && (sibling.children.childComponents[0] instanceof exports.Class)) {
+						sibling._focusLastChild();
+					}
+					else {
+						this.changeFocus(sibling);
+					}
+				}
+				else {
+					var previousView = null;
+					var objects = this.parent.oList.filteredObjects;
+					var index = objects.indexOf(this.o) - 1;
+					if (index >= 0) {
+						var previousObject = objects[index];
+						this.parent.oList.showObjectInView(previousObject);
+						for (var i = 0; i < this.parent.children.childComponents.length; i++) {
+							if (this.parent.children.childComponents[i].o == previousObject) {
+								previousView = this.parent.children.childComponents[i];
+								break;
+							}
+						}
+					}
+					else {
+						for (var i = 0; i < this.parent.children.childComponents.length; i++) {
+							var v = this.parent.children.childComponents[i];
+							if (!v.parentOList) {
+								previousView = v;
+							}
+							else {
+								break;
+							}
+						}
+					}
+					if (previousView != null) {
+						this.parent.setVariable("_currentChild", this.parent.children.childComponents.indexOf(previousView));
+						if (previousView.getLastChildTree() != null) {
+							previousView._focusLastChild();
+						}
+						else {
+							this.changeFocus(previousView);
+						}
+					}
+					else {
+						this._focusParent();
+					}
+				}
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Put keyboard focus on next sibling. This method is overridden from
+			basetree to allow for the view recycling behaviour in cmc/foundation/ModelObjectList.
+			@keywords private
+		-->
+		<method name="_focusNextSibling">
+			<![CDATA[
+			if (this.parent.oList && !this.isRoot()) {
+				var nextView = null;
+				if (!this.parentOList) {
+					if (!this.isRoot()) {
+						var next = this.parent._currentChild + 1;
+						if (next < this.parent.children.childComponents.length) {
+							this.parent.setVariable("_currentChild", next);
+							this.changeFocus(this.parent.children.childComponents[next]);
+						}
+						else {
+							this.parent._focusNextSibling();
+						}
+					}
+				}
+				else {
+					var nextView = null;
+					var objects = this.parent.oList.filteredObjects;
+					var index = 0;
+					if (this.o) {
+						index = objects.indexOf(this.o) + 1;
+					}
+					if (objects.length > index) {
+						var nextObject = objects[index];
+						this.parent.oList.showObjectInView(nextObject);
+						for (var i = 0; i < this.parent.children.childComponents.length; i++) {
+							var v = this.parent.children.childComponents[i];
+							if (v.o == nextObject) {
+								nextView = v;
+								break;
+							}
+						}
+					}
+				}
+				if (nextView != null) {
+					this.parent.setVariable("_currentChild", this.parent.children.childComponents.indexOf(nextView));
+					this.changeFocus(nextView);
+				}
+				else {
+					this.parent._focusNextSibling();
+				}
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private  -->
+		<method args="v, p, a" name="determinePlacement">
+			<![CDATA[
+			if (p == "dragtreegroup") {
+				return this;
+			}
+			if (p == "dragtreeitem") {
+				return this.item.treeitem;
+			}
+			if (p == "treeitem") {
+				return this.treeitem;
+			}
+			if (p == "children") {
+				return this.children;
+			}
+			if (p == "item") {
+				return this.item;
+			}
+			return this;
+			]]>
+		</method>		
+
+		<!--- @keywords private  -->
+		<method name="getRoot">
+			<![CDATA[
+			if (!this.root) {
+				var c = this;
+				while (c.parent instanceof exports.Class) {
+					c = c.parent;
+				}
+				this.root = c;
+			}
+			return this.root;
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords private
+		
+		Tree page up button.
+	-->
+	<RepeaterButton classDefinition="true" definitionName="cmc/foundation/TreePageUp" imageSet="stepperUpButton" normalImage="1" overImage="2" placement="tree" visible="false" x="45">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<variable name="oList"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			this.updateVisibilityDel = new EventHandler.Class(this, "updateVisibility");
+			this.updateVisibility();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateVisibilityDel.disconnectAll();
+			delete this.updateVisibilityDel;
+			]]>
+		</method>
+	
+		<!---
+			Handle mouse still down event.
+		-->
+		<handler name="onmousestilldown">
+			<![CDATA[
+			this.pageUp();
+			]]>
+		</handler>
+
+		<!---
+			Handle mouse down event.
+		-->
+		<handler name="onmousedown">
+			<![CDATA[
+			this.pageUp();
+			]]>
+		</handler>
+
+		<!---
+			Handle onopen event of parent.
+		-->
+		<handler eventSource="this.parent" name="onopen">
+			<![CDATA[
+			this.updateVisibility();
+			]]>
+		</handler>
+		
+		<!---
+			Update the visibility of the scroll button.
+		-->
+		<method args="e" name="updateVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateVisibilityDel.disconnectAll();
+			var newVisible = this.parent.open && this.oList.filteredObjects.length > 0 && this.oList.fromIndex > 0;
+			var newY = 0;
+			var newHeight = 0;
+			var newYIndent = this.parent.item.y + this.parent.item.height + 1;
+			if (newVisible) {
+				newY = this.parent.item.height + 1;
+				newHeight = this.currentImageHeight;
+				newYIndent = this.parent.item.y + this.parent.item.height + newHeight + 1;
+			}
+			if (newY != this.y) {
+				this.setVariable("y", newY);
+			}
+			if (newHeight != this.height) {
+				this.setVariable("height", newHeight);
+			}
+			if (newYIndent != this.parent.yindent) {
+				this.parent.setVariable("yindent", newYIndent);
+			}
+			if (newVisible != this.visible) {
+				this.setVariable("visible", newVisible);
+			}
+			if (this.parent.open) {
+				this.updateVisibilityDel.connect(this.parent.item, "onheight");
+				this.updateVisibilityDel.connect(this.parent.item, "ony");
+				this.updateVisibilityDel.connect(this.oList, "objectViewsUpdated");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Scroll up a page.
+		-->
+		<method name="pageUp">
+			<![CDATA[
+			this.parent.children.setVariable('height', this.parent.children.height);
+			this.oList.setFromIndex(this.oList.fromIndex - this.parent.maxObjectViews);
+			this.parent.children.setVariable('height', null);
+			]]>
+		</method>
+	</RepeaterButton>
+
+	<!---
+		@keywords private
+		
+		Tree page down button.
+	-->
+	<RepeaterButton classDefinition="true" definitionName="cmc/foundation/TreePageDown" imageSet="stepperDownButton" normalImage="1" overImage="2" placement="tree" visible="false" x="45" y="${this.parent.children.y + this.parent.children.height}">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<variable name="oList"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			var caller = this;
+			require(["cmc/foundation/CanvasMenu"], function(CanvasMenu) {
+				CanvasMenu.Singleton.addView(caller);
+			});
+			this.updateVisibilityDel = new EventHandler.Class(this, "updateVisibility");
+			this.updateVisibility();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			this.updateVisibilityDel.disconnectAll();
+			delete this.updateVisibilityDel;
+			]]>
+		</method>
+	
+		<!---
+			Handle mouse still down event.
+		-->
+		<handler name="onmousestilldown">
+			<![CDATA[
+			this.pageDown();
+			]]>
+		</handler>
+		
+		<!---
+			Handle mouse down event.
+		-->
+		<handler name="onmousedown">
+			<![CDATA[
+			this.pageDown();
+			]]>
+		</handler>
+		
+		<!---
+			Handle onopen event of parent.
+		-->
+		<handler eventSource="this.parent" name="onopen">
+			<![CDATA[
+			this.updateVisibility();
+			]]>
+		</handler>
+		
+		<!---
+			Update the visibility of the scroll button.
+		-->
+		<method args="e" name="updateVisibility">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.updateVisibilityDel.disconnectAll();
+			var newVisible = this.parent.open && this.oList.filteredObjects.length > (this.oList.toIndex + 1);
+			var newY = 0;
+			var newHeight = 0;
+			if (newVisible) {
+				newY = this.parent.children.y + this.parent.children.height + 1;
+				newHeight = this.currentImageHeight;
+			}
+			if (newY != this.y) {
+				this.setVariable("y", newY);
+			}
+			if (newHeight != this.height) {
+				this.setVariable("height", newHeight);
+			}
+			if (newVisible != this.visible) {
+				this.setVariable("visible", newVisible);
+			}
+			if (this.parent.open) {
+				this.updateVisibilityDel.connect(this.parent.children, "onheight");
+				this.updateVisibilityDel.connect(this.parent.children, "ony");
+				this.updateVisibilityDel.connect(this.oList, "objectViewsUpdated");
+			}
+			]]>
+		</method>
+		
+		<!---
+			Scroll down a page.
+		-->
+		<method name="pageDown">
+			<![CDATA[
+			this.parent.children.setVariable('height', this.parent.children.height);
+			this.oList.setToIndex(this.oList.toIndex + this.parent.maxObjectViews);
+			this.parent.children.setVariable('height', null);
+			]]>
+		</method>
+	</RepeaterButton>
+	
+	
+</Definitions>

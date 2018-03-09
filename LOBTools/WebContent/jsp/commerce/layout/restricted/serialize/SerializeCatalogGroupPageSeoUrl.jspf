@@ -1,0 +1,76 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2012 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<jsp:useBean id="seoUrlKeywordList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="seoPrefixUrlList" class="java.util.HashMap" type="java.util.Map"/>
+<jsp:useBean id="inheritedSeoUrlKeywordList" class="java.util.HashMap" type="java.util.Map"/>
+
+<c:forEach var="seoURL" items="${catalogGroup.SEOURL}">
+	<c:set var="inherited" value=""/>
+		
+	<c:if test="${seoURL.parentStoreIdentifier.uniqueID != currentStoreId}">
+		<c:set var="inherited" value="Inherited"/>
+	</c:if>
+	
+	<c:forEach var="seoURLKeyword" items="${seoURL.URLKeyword}">
+		<c:if test="${seoURLKeyword.language != null}">
+			<c:choose>
+				<c:when test="${inherited != '' }">
+					<c:if test="${seoURLKeyword.keyword != null && seoURLKeyword.keyword != ''}">
+						<c:set target="${inheritedSeoUrlKeywordList}" property="${seoURLKeyword.language}" value="${seoURLKeyword.keyword}"/>
+					</c:if>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${seoURLKeyword.keyword != null && seoURLKeyword.keyword != ''}">
+						<c:set target="${seoUrlKeywordList}" property="${seoURLKeyword.language}" value="${seoURLKeyword.keyword}"/>
+					</c:if>
+					<c:if test="${seoURLKeyword.URLPrefix != null && seoURLKeyword.URLPrefix != ''}">
+						<c:set target="${seoPrefixUrlList}" property="${seoURLKeyword.language}" value="${seoURLKeyword.URLPrefix}"/>
+					</c:if>
+				</c:otherwise>
+			</c:choose>		
+		</c:if>
+	</c:forEach>
+</c:forEach>
+
+<c:set var="fullUrl" value=""/>
+<c:set var="urlKeyword" value=""/>
+<c:forEach var="language" items="${supportedDataLangIds}">
+	<c:choose>
+		<c:when test="${(seoUrlKeywordList[language] != '' && seoUrlKeywordList[language] != null) && seoPrefixUrlList[language] != ''}">
+			<c:set var="fullUrl" value="${fn:replace(seoPrefixUrlList[language],'$SEO:PRIMARYTOKEN$',seoUrlKeywordList[language])}"/>
+			<c:set var="urlKeyword" value="${seoUrlKeywordList[language]}"/>
+		</c:when>
+		<c:when test="${(seoUrlKeywordList[language] == '' || seoUrlKeywordList[language] == null) && seoPrefixUrlList[language] != '' && !empty (inheritedSeoUrlKeywordList[language])}">
+			<c:choose>
+				<c:when test="${fn:contains(seoPrefixUrlList[language],'$SEO:STORETOKEN$')}">
+					<c:set var="isAssetStore" value="true"/>
+				</c:when>
+				<c:otherwise>
+					<c:set var="fullUrl" value="${fn:replace(seoPrefixUrlList[language],'$SEO:PRIMARYTOKEN$',inheritedSeoUrlKeywordList[language])}"/>
+					<c:set var="urlKeyword" value="${inheritedSeoUrlKeywordList[language]}"/>
+				</c:otherwise>
+				</c:choose>
+		</c:when>
+		<c:otherwise>
+			<c:set var="fullUrl" value=""/>
+		</c:otherwise>
+	</c:choose>
+	<c:if test="${urlKeyword != '' && fullUrl != ''}">
+		<object>
+			<alias><wcf:cdata data="${storeName} - ${urlKeyword}"/></alias>
+			<url><wcf:cdata data="${fullUrl}"/></url>
+		</object>
+	</c:if>
+</c:forEach>

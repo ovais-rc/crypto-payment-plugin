@@ -1,0 +1,82 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN UserRoleManagementOrgList_Data.jspf -->
+<c:set var="widgetName" value="UserRoleManagement"/>
+<c:set var="widgetNameCaps" value="${fn:toUpperCase(widgetName)}"/>
+<c:set var="eventName" value="userRoleOrgListShowPage"/>
+<c:set var="linkPrefix" value="userRoleOrgListResults"/>
+<c:set var="widgetSuffix" value="${widgetName}" />
+<%-- set default page size for org list to 20 --%>
+<c:set var="pageSize" value="20" />
+
+
+<wcf:rest var="organizationList" url="store/{storeId}/organization" >
+	<wcf:var name="storeId" value="${storeId}" encode="true"/>
+	<wcf:param name="responseFormat" value="json" />
+	<wcf:param name="q" value="organizationsICanAdmin"/>
+	<wcf:param name="profileName" value="IBM_Organization_List_Summary"/>
+	<wcf:param name="startIndex" value="${beginIndex}" />
+	<wcf:param name="maxResults" value="${pageSize}" />
+	<c:if test="${not empty WCParam.orgNameSearch }">
+		<wcf:param name="orgName" value="${WCParam.orgNameSearch}" />
+		<wcf:param name="orgNameSearchType" value="${WCParam.searchType}" />
+	</c:if>
+</wcf:rest>
+<c:set var="organizations" value="${organizationList.organizationDataBeans }"/>
+<c:set var="numEntries" value="${organizationList.recordSetTotal}" />
+<wcf:useBean var="currentOrgNameMap" classname="java.util.LinkedHashMap"/>
+<c:forEach var="org" items="${organizations}" varStatus="status">
+	<wcf:set target="${currentOrgNameMap}" key="${org.organizationId}"  value="${org.displayName}"/>
+</c:forEach>
+<c:choose>
+	<c:when test="${not empty WCParam.selectOrgId}" >
+		<c:set var="selectOrgId" value="${WCParam.selectOrgId}" />
+	</c:when>
+	<c:when test="${not empty organizations[0]}" >
+		<c:set var="selectOrgId" value="${organizations[0].organizationId}" />
+		<wcf:set target="${currentOrgNameMap}" key="first"  value="${organizations[0].organizationId}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="selectOrgId" value="" />
+	</c:otherwise>
+</c:choose>
+	<%-- ****************************************************************
+	     pagination --%>
+	
+	<fmt:formatNumber var="totalPages" value="${(numEntries%pageSize) > 0 ? (numEntries/pageSize) + 0.5 : numEntries/pageSize}" type="number" pattern="#"/>		
+	<fmt:parseNumber var="totalPages" integerOnly="true">${totalPages}</fmt:parseNumber>
+	<%-- 	to show/hide search according to number of pages
+			hide search form if only one page.
+	 --%>
+	
+	<c:choose>
+		<c:when test="${beginIndex + pageSize >= numEntries}">
+			<c:set var="endIndex" value="${numEntries}" />
+		</c:when>
+		<c:otherwise>
+			<c:set var="endIndex" value="${beginIndex + pageSize}" />
+		</c:otherwise>
+	</c:choose>
+	
+	<fmt:formatNumber var="currentPage" value="${(beginIndex/pageSize)+1}"/>
+	<fmt:parseNumber var="currentPage" value="${currentPage}" integerOnly="true"/>
+	
+	<wcst:message var="pageDisplay1" key="ORGANIZATIONUSERSLIST_PAGE_DISPLAY1" bundle="${widgetText}"/>
+	<wcst:message var="pageDisplay2" key="ORGANIZATIONUSERSLIST_PAGE_DISPLAY2" bundle="${widgetText}"> 
+		<wcst:param><wcst:formatNumber value="${beginIndex < endIndex ? beginIndex + 1 : endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${endIndex}"/></wcst:param>
+		<wcst:param><wcst:formatNumber value="${numEntries}"/></wcst:param>
+	</wcst:message>
+<!-- END UserRoleManagementOrgList_Data.jspf -->

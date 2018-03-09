@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("smiley","pt-br",{options:"Opções de emoticon",title:"Emoticons",toolbar:"Inserir Emoticon"});

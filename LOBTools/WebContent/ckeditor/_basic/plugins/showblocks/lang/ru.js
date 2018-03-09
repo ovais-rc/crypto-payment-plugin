@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("showblocks","ru",{toolbar:"Показать блоки"});

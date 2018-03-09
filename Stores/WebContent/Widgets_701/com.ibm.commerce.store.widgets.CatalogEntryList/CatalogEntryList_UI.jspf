@@ -1,0 +1,393 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2013, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<c:if test="${param.enableSKUListView == 'true' || WCParam.enableSKUListView == 'true'}">
+	<c:set var="enableSKUListView" value="true" scope="request"/>
+</c:if>
+
+<c:if test="${totalCount > 0}">
+
+	<script>
+		dojo.addOnLoad(function(){
+			if(window.initialMinPrice == null && window.initialMaxPrice == null)
+			{
+				window.initialMinPrice = '${WCParam.minPrice}';
+				window.initialMaxPrice = '${WCParam.maxPrice}';
+			}
+			SearchBasedNavigationDisplayJS.init('${widgetSuffix}','${ProductListingViewURL}',{"pageView": '<c:out value='${pageView}'/>', "minPrice": '${WCParam.minPrice}', "maxPrice": '${WCParam.maxPrice}', "enableSKUListView": '${enableSKUListView}', "widgetPrefix": '${widgetPrefix}'});
+			if(!!'<wcf:out value = "${WCParam.searchTerm}" escapeFormat = "js"/>'){
+				shoppingActionsJS.setSearchTerm('<wcf:out value = "${WCParam.searchTerm}" escapeFormat="js"/>');
+			}	
+			<c:set var="specialStr01" value="'"/>
+			<c:set var="replaceStr01" value="\\\'"/>
+			<c:if test="${disableProductCompare == 'false'}">
+				shoppingActionsJS.setCompareReturnName('<c:out value="${fn:replace(compareReturnName, specialStr01, replaceStr01)}" escapeXml="false"/>');
+			</c:if>
+		});
+	</script>
+
+		<div class="productListingWidget">
+		
+							<script>
+								dojo.addOnLoad(function(){
+									dojo.topic.subscribe("Facet_Add", function(){
+										if (arguments.length > 0) {
+											SearchBasedNavigationDisplayJS.appendFilterFacet(arguments[0]);
+										} else {
+											SearchBasedNavigationDisplayJS.appendFilterPriceRange("<c:out value='${env_CurrencySymbolToFormat}' escapeXml='false'/>");
+										}
+										SearchBasedNavigationDisplayJS.doSearchFilter();
+										dojo.publish("CIRefreshProductOverlay");
+									});
+									dojo.topic.subscribe("Facet_Remove", function(){
+									if (arguments.length > 0) {
+											SearchBasedNavigationDisplayJS.removeFilterFacet(arguments[0]);
+											SearchBasedNavigationDisplayJS.doSearchFilter();											
+										} else {
+											SearchBasedNavigationDisplayJS.removeFilterPriceRange();
+										}
+										dojo.publish("CIRefreshProductOverlay");
+									});
+									dojo.topic.subscribe("Facet_RemoveAll", function(){
+										SearchBasedNavigationDisplayJS.clearAllFacets(true);
+										dojo.publish("CIRefreshProductOverlay");
+									});
+								});
+							</script>
+							
+							<div class="header_bar">
+								<div class="title"><wcst:message key="PAGINATION_PRODUCTS" bundle="${widgetText}"/> 
+									<span class="num_products">&#40;&nbsp;
+										<c:set var="beginCounter" value="${beginIndex + 1}"/>
+										<c:if test="${totalCount == 0}">
+											<c:set var="beginCounter" value = "0"/>
+										</c:if>
+										<wcst:message key="PAGINATION_{0}_TO_{1}_OF_{2}" bundle="${widgetText}">
+											<wcst:param value="${beginCounter}"/>
+											<wcst:param value="${endIndex}"/>
+											<wcst:param value="${totalCount}"/>
+										</wcst:message>
+										&nbsp;&#41;
+									</span>
+								</div>
+	
+								<%-- Set variables used by pagination controls --%>
+								<c:set var="otherViews" value="true"/> <%-- display list and grid view icons --%>
+								<c:set var="otherViewsEventName" value="toggleViewEvent"/>
+								<c:set var="eventName" value="showResultsForPageNumber"/>
+								<script>
+									dojo.addOnLoad(function(){
+										dojo.subscribe("toggleViewEvent",SearchBasedNavigationDisplayJS,"toggleView");
+										dojo.subscribe("showResultsForPageNumber",SearchBasedNavigationDisplayJS,"showResultsPage");
+										<c:if test="${env_inPreview && !env_storePreviewLink}">
+										dojo.subscribe("CMPageRefreshEvent",function(){
+											var previewHeader = window.parent.frames[0];
+											if(previewHeader.isSpotsShown()) {
+												previewHeader.showESpots();previewHeader.showESpots();
+												}
+											});
+										</c:if>
+									});
+								</script>
+
+								<div class="controls <c:if test = '${totalPages > 1}'>pagination_present</c:if>">
+									<c:set var="linkPrefix" value="categoryResults"/>
+									<%@include file="/Widgets_701/Common/PaginationControls.jspf" %>
+								
+									<div class="sorting_view_controls_container">
+										<div class="sorting_controls">
+											<span class="order_by_label"><label for="orderBy${widgetSuffix}"><wcst:message key="SN_SORT_BY" bundle="${widgetText}"/></label>:</span>
+											<div id="orderByDropdown${widgetSuffix}" class="orderByDropdown selectWrapper">
+												<select data-dojo-type="dijit/form/Select" title="<wcst:message key='SN_SORT_BY_USAGE' bundle='${widgetText}'/>" id="orderBy${widgetSuffix}" baseClass="dijitSelect dijitValidationTextBox orderBySelect" name="orderBy" onChange="javaScript:setCurrentId('orderBy${widgetSuffix}');SearchBasedNavigationDisplayJS.sortResults(this.value)">
+													<option <c:if test="${sortBy == ''}">selected="selected"</c:if> value = ""><wcst:message key="SN_NO_SORT" bundle="${widgetText}"/></option>
+													<option <c:if test="${sortBy == '1'}">selected="selected"</c:if> value = "1"><wcst:message key="SN_SORT_BY_BRANDS" bundle="${widgetText}"/></option>
+													<option <c:if test="${sortBy == '2'}">selected="selected"</c:if> value = "2"><wcst:message key="SN_SORT_BY_NAME" bundle="${widgetText}"/></option>
+													<c:if test="${globalpricemode == 1}">
+														<option <c:if test="${sortBy == '3'}">selected="selected"</c:if> value = "3"><wcst:message key="SN_SORT_LOW_TO_HIGH" bundle="${widgetText}"/></option>
+														<option <c:if test="${sortBy == '4'}">selected="selected"</c:if> value = "4"><wcst:message key="SN_SORT_HIGH_TO_LOW" bundle="${widgetText}"/></option>
+													</c:if>
+												</select>
+											</div>
+											<%-- Set default sort by value --%>
+											<c:if test="${not empty sortBy }" >
+												<c:if test="${globalpricemode == 1 || sortBy == '1' || sortBy == '2'}"  >
+													<script type="text/javascript">
+														dojo.addOnLoad(function(){
+															var sort = dojo.byId("orderBy${widgetSuffix}");
+															if (sort != null) {
+																sort.value = '<c:out value="${sortBy}"/>';
+																SearchBasedNavigationDisplayJS.updateContextProperties("searchBasedNavigation_context",{"orderBy":sort.value});
+															}
+														});
+													</script>
+												</c:if>
+											</c:if>
+											<span class="page_size_label"><label for="pageSize${widgetSuffix}"><wcst:message key="PC_ITEMS_PER_PAGE" bundle="${widgetText}"/></label>:</span>
+											<div id="pageSizeDropdown${widgetSuffix}" class="selectWrapper selectWrapperPageSize">
+												<select data-dojo-type="dijit/form/Select" title="<wcst:message key='PC_ITEMS_PER_PAGE_USAGE' bundle='${widgetText}'/>" 	
+													id="pageSize${widgetSuffix}" class="pageSize" name="pageSize" 
+													onChange="javaScript:setCurrentId('pageSize${widgetSuffix}');SearchBasedNavigationDisplayJS.setPageSize(this.value)"
+													baseClass="dijitSelect dijitValidationTextBox pageSizeSelect">
+													<option <c:if test="${pageSize == '6'}">selected="selected"</c:if> value = "6">6</option>
+													<option <c:if test="${pageSize == '' || pageSize == '12'}">selected="selected"</c:if> value = "12">12</option>
+													<option <c:if test="${pageSize == '18'}">selected="selected"</c:if> value = "18">18</option>
+												</select>
+											</div>
+										</div>
+										
+										<c:if test = '${otherViews == "true"}'>
+											<div class="view_controls">
+											
+											<%-- Display grid view and list view icon.. grid mode being default--%>
+										<c:choose>
+												<c:when test="${pageView == 'list'}">
+													<c:set var="linkId" value="WC_SearchBasedNavigationResults_pagination_link_grid_${linkPrefix}"/>
+													<a alt="<wcst:message key='PC_SWITCH_TO_GRID_VIEW' bundle='${widgetText}'/>" role="button" class="grid_icon" id="${linkId}" href='javascript:dojo.publish("${otherViewsEventName}",[{pageView:"grid",linkId:"${linkId}",enableSKUListView:"${enableSKUListView}"}])' title="<wcst:message key='PC_SWITCH_TO_GRID_VIEW' bundle='${widgetText}'/>"></a>
+													<div class="list_icon" role="button" aria-disabled="true" aria-label="<wcst:message key='PC_SWITCH_TO_LIST_VIEW' bundle='${widgetText}'/>" ></div>
+												</c:when>
+												<c:otherwise>
+													<div class="grid_icon" role="button" aria-disabled="true" aria-label="<wcst:message key='PC_SWITCH_TO_GRID_VIEW' bundle='${widgetText}'/>" ></div>
+													<c:set var="linkId" value="WC_SearchBasedNavigationResults_pagination_link_list_${linkPrefix}"/>
+													<a alt="<wcst:message key='PC_SWITCH_TO_LIST_VIEW' bundle='${widgetText}'/>" role="button" class="list_icon" id="${linkId}" href='javascript:dojo.publish("${otherViewsEventName}",[{pageView:"list",linkId:"${linkId}",enableSKUListView:"${enableSKUListView}"}])' title="<wcst:message key='PC_SWITCH_TO_LIST_VIEW' bundle='${widgetText}'/>"></a>
+												</c:otherwise>
+											</c:choose>
+											</div>
+										</c:if>
+									</div>
+								
+								</div>
+	
+							</div>
+	
+							<div class="product_listing_container">
+								<c:if test="${totalCount > 0}">
+									<c:choose>
+										<%-- Display the results in either grid mode or in list mode.. grid mode being default --%>
+										<c:when test="${pageView == 'list'}">
+											<ul class="list_mode grid" data-dojo-type="wc/widget/Grid" data-dojo-props="columnCountByWidth:${columnCountByWidth_List}">
+													<%-- For list view use getCatalogEntryViewDetailsByID to get all attributes combinations (required for 'swatch' features) --%>
+													<%-- For list view in search results use getCatalogEntryViewAllByID to get everything with attachments --%>
+													<c:set var="expressionBuilder" value="getCatalogEntryViewDetailsByID"/>
+													<c:set var="searchProfile" value="IBM_findCatalogEntryDetailsWithAttachments_PriceMode"/>
+												
+													<%-- 
+														If product details are displayed ( like attributes ), then fetch the details using more detailed profile since
+														the results fetched from search service is not sufficient.
+														But if SKU list table is populated using Ajax call, then more detailed profile is not needed.
+													--%>
+													<c:if test = "${enableSKUListView != 'true'}">
+														<wcf:rest var="catalogNavigationView" url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/byIds" >
+															<c:forEach var = "catEntry" items = "${globalresults}" varStatus = "status">
+																<wcf:param name="id" value="${catEntry.uniqueID}"/>
+															</c:forEach>
+															<wcf:param name="langId" value="${langId}" />
+															<wcf:param name="currency" value="${env_currencyCode}" />
+															<wcf:param name="responseFormat" value="json" />
+															<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+															<wcf:param name="profileName" value="IBM_findProductByIdsWithAttributesAndAttachments" />
+															<c:forEach var="contractId" items="${env_activeContractIds}">
+																<wcf:param name="contractId" value="${contractId}"/>
+															</c:forEach>
+														</wcf:rest>
+													</c:if>
+																
+													<c:set var="position" value="${beginIndex }"/>
+													<input id="lastShowSKUList" type="hidden" value="" />
+													<c:forEach var = "catEntry" items = "${globalresults}" varStatus = "status"><c:if test="${!empty contentPositions}">
+															<c:remove var="displayContentName"/>
+															<c:forEach var="contentPosition" items="${contentPositions}" varStatus="aStatusLoop">
+																<fmt:parseNumber var="contentPositionInt" integerOnly="true" type="number" value="${contentPosition}" parseLocale="en_US"/>
+																<c:if test="${contentPositionInt-1 == position}">
+																	<c:set var="position" value="${position + 1}" />
+																	<c:set var="displayContentName" value="${contentNames[aStatusLoop.index]}"/><li>
+																		<%@include file="AdditionalContents_UI.jspf"%>
+																	</li></c:if>
+															</c:forEach>
+														</c:if><c:set var="position" value="${position + 1}"/><c:set var="catEntryIdentifier" value="${catEntry.uniqueID}" scope="request"/><c:set var="catalogEntryDetails" value="${catEntry}" scope="request"/><c:set var="originalSearchCatEntry" value="${catEntry}" scope="request"/><c:forEach var="sku" items="${catalogNavigationView.catalogEntryView}" varStatus="status1"><c:if test="${sku.uniqueID eq catEntryIdentifier}"><c:set var="catalogEntryDetails" value="${sku}" scope="request"/></c:if></c:forEach><li>
+														
+														<%-- If Single SKU product, pass in the SKU as catentry identifier instead of product --%>
+														<c:if test="${!empty catEntry.singleSKUCatalogEntryID}">
+															<c:set var="catEntryIdentifier" value="${catEntry.singleSKUCatalogEntryID}" scope="request"/>
+														</c:if>
+
+														<c:choose>
+															<c:when test="${empty WCParam.searchTerm}">
+																<%out.flush();%>
+																<c:import url="${env_siteWidgetsDir}Common/CatalogEntry/CatalogEntryDisplay.jsp">
+																	<c:param name="pageView" value="list"/>
+																	<c:param name="disableProductCompare" value="${disableProductCompare}" />
+																	<c:param name="catEntryIdentifier" value="${catEntryIdentifier}"/> <%-- Pass catEntryIdentifier parameter so that CatalogEntryDisplay can be cached, based on catEntryIdentifier --%>
+																	<c:param name="catEntryPartNumber" value="${catEntry.partNumber}"/>
+																	<c:param name="fromWidget" value="CatalogEntryList"/>
+																	<c:param name="widgetPrefix" value="${widgetPrefix}"/>
+																	<c:param name="imageDisplayItemID" value="${catEntry.imageDisplayItemID}"/>
+																</c:import>
+																<%out.flush();%>
+															</c:when>
+															<c:otherwise>
+																<%out.flush();%>
+																<c:import url="${env_siteWidgetsDir}Common/CatalogEntry/CatalogEntryDisplay.jsp">
+																	<c:param name="pageView" value="list"/>
+																	<c:param name="displayAttachments" value="true"/>
+																	<c:param name="disableProductCompare" value="${disableProductCompare}" />
+																	<c:param name="excludeUsageStr" value="ANGLEIMAGES_THUMBNAIL,ANGLEIMAGES_FULLIMAGE,ANGLEIMAGES_HDIMAGE,IMAGE_SIZE_55,IMAGE_SIZE_40,IMAGE_SIZE_330,IMAGE_SIZE_1000,SWATCH_IMAGE"/>
+																	<c:param name="catEntryIdentifier" value="${catEntryIdentifier}"/> <%-- Pass catEntryIdentifier parameter so that CatalogEntryDisplay can be cached, based on catEntryIdentifier --%>
+																	<c:param name="catEntryPartNumber" value="${catEntry.partNumber}"/>
+																	<c:param name="fromWidget" value="CatalogEntryList"/>
+																	<c:param name="widgetPrefix" value="${widgetPrefix}"/>
+																</c:import>
+																<%out.flush();%>
+															</c:otherwise>
+														</c:choose>
+														
+															<div class="catEntryList_border"></div>
+														</li><c:if test="${!empty contentPositions}">
+															<c:remove var="displayContentName"/>
+															<c:forEach var="contentPosition" items="${contentPositions}" varStatus="bStatusLoop">
+																<fmt:parseNumber var="contentPositionInt" integerOnly="true" type="number" value="${contentPosition}" parseLocale="en_US"/>
+																<c:if test="${contentPositionInt-1 == position}">
+																	<c:set var="position" value="${position + 1}" />
+																	<c:set var="displayContentName" value="${contentNames[bStatusLoop.index]}"/><li>
+																		<%@include file="AdditionalContents_UI.jspf"%>
+																	</li></c:if>
+															</c:forEach>
+														</c:if></c:forEach>
+											</ul>
+										</c:when>
+										<c:otherwise>
+											<ul class="grid_mode grid" data-dojo-type="wc/widget/Grid" data-dojo-props="columnCountByWidth:${columnCountByWidth_Grid}">
+												<c:set var="position" value="${beginIndex }"/>
+												<c:forEach var="catEntry" items="${globalresults}" varStatus="statusColumn"><c:if test="${!empty contentPositions}">
+														<c:remove var="displayContentName"/>
+														<c:forEach var="contentPosition" items="${contentPositions}" varStatus="aStatusLoop">
+															<fmt:parseNumber var="contentPositionInt" integerOnly="true" type="number" value="${contentPosition}" parseLocale="en_US"/>
+															<c:if test="${contentPositionInt-1 == position}">
+																<c:set var="position" value="${position + 1}" />
+																<c:set var="displayContentName" value="${contentNames[aStatusLoop.index]}"/><li>
+																	<%@include file="AdditionalContents_UI.jspf"%>
+																</li></c:if>
+														</c:forEach>
+													</c:if><c:set var="position" value="${position + 1}" /><c:set var="catEntryIdentifier" value="${catEntry.uniqueID}" scope="request"/><c:set var="catalogEntryDetails" value="${catEntry}" scope="request"/><c:forEach var="sku" items="${catalogNavigationView1.catalogEntryView}" varStatus="status1">
+														<c:if test="${sku.uniqueID eq catEntryIdentifier}">
+															<c:set var="catalogEntryDetails" value="${sku}" scope="request"/>
+														</c:if>
+													</c:forEach><li>
+													
+														<%-- If Single SKU product, pass in the SKU as catentry identifier instead of product --%>
+														<c:if test="${!empty catEntry.singleSKUCatalogEntryID}">
+															<c:set var="catEntryIdentifier" value="${catEntry.singleSKUCatalogEntryID}" scope="request"/>
+														</c:if>
+														
+														<%out.flush();%>
+														<c:import url="${env_siteWidgetsDir}Common/CatalogEntry/CatalogEntryDisplay.jsp">
+															<c:param name="pageView" value="grid"/>
+															<c:param name="disableProductCompare" value="${disableProductCompare}" />
+															<c:param name="catEntryIdentifier" value="${catEntryIdentifier}"/> <%-- Pass catEntryIdentifier parameter so that CatalogEntryDisplay can be cached, based on catEntryIdentifier --%>
+															<c:param name="fromWidget" value="CatalogEntryList"/>
+															<c:param name="imageDisplayItemID" value="${catEntry.imageDisplayItemID}"/>
+														</c:import>
+														<%out.flush();%>
+														<div class="catEntryGrid_border"></div>
+													</li><c:if test="${!empty contentPositions}">
+														<c:remove var="displayContentName"/>
+														<c:forEach var="contentPosition" items="${contentPositions}" varStatus="bStatusLoop">
+															<fmt:parseNumber var="contentPositionInt" integerOnly="true" type="number" value="${contentPosition}" parseLocale="en_US"/>
+															<c:if test="${contentPositionInt-1 == position}">
+																<c:set var="position" value="${position + 1}" />
+																<c:set var="displayContentName" value="${contentNames[bStatusLoop.index]}"/><li>
+																	<%@include file="AdditionalContents_UI.jspf"%>
+																</li></c:if>
+														</c:forEach>
+													</c:if></c:forEach>
+											</ul>
+										</c:otherwise>
+									</c:choose>
+								</c:if>
+							</div>
+		</div>
+		<flow:ifEnabled feature="Analytics">
+			<c:set var="singleQuote" value="'"/>
+			<c:set var="escapedSingleQuote" value="\\\\'"/>
+			<c:set var="doubleQuote" value="\""/>
+			<c:set var="escapedDoubleQuote" value="\\\\\""/>
+	
+			<c:remove var="analyticsEscapedFacetAttributes"/>
+			<c:set var="analyticsEscapedFacetAttributes" value="${fn:replace(analyticsFacetAttributes, singleQuote, escapedSingleQuote)}"/>
+			<c:set var="analyticsEscapedFacetAttributes" value="${fn:replace(analyticsEscapedFacetAttributes, doubleQuote, escapedDoubleQuote)}"/>
+	
+			<c:remove var="analyticsEscapedSearchTerm"/>
+			<c:set var="analyticsEscapedSearchTerm" value="${fn:replace(searchTerm, singleQuote, escapedSingleQuote)}"/>
+			<c:set var="analyticsEscapedSearchTerm" value="${fn:replace(analyticsEscapedSearchTerm, doubleQuote, escapedDoubleQuote)}"/>
+			<div id="catalog_search_result_information" style="visibility:hidden">
+				{	searchResult: {
+					pageSize: <c:out value="${pageSize}"/>, 
+					searchTerms: '<c:out value="${analyticsEscapedSearchTerm}"/>', 
+				 	totalPageNumber: <c:out value="${totalPages}"/>, 
+				  	totalResultCount: <c:out value="${totalCount}"/>, 
+				  	currentPageNumber:<c:out value="${currentPage}"/>,
+					attributes: "<c:out value="${analyticsEscapedFacetAttributes}"/>"
+					}
+				}
+		</div>
+		</flow:ifEnabled>
+	
+	<div class="compareCheckboxLabels">
+	    <label><wcst:message key="COMPARE" bundle="${widgetText}"/></label>
+	    <label><wcst:message key="ADD_MORE_TO_COMPARE" bundle="${widgetText}"/></label>
+	    <label><wcst:message key="ADDED" bundle="${widgetText}"/></label>
+	</div>
+</c:if>
+
+
+
+	<div id="facetCounts${widgetSuffix}">
+		<script>
+			SearchBasedNavigationDisplayJS.facetFromRest = new Array;
+			function updateFacetCounts() {
+				<c:forEach var="facetField" items="${globalfacets}">
+					<c:forEach var="item" items="${facetField.entry}" varStatus="aStatus">
+						<c:set var="multiFacet" value="${facetField.extendedData['allowMultipleValueSelection'] ? facetField.extendedData['allowMultipleValueSelection'] : false}"/>
+						<c:set var="itemLength" value="${fn:length(item.label)}" />
+						<c:set var="itemLabel" value="${fn:substring(item.label,0,itemLength)}" />
+						<c:set var="itemLabel" value="${fn:replace(itemLabel,'\"','&quot;')}"/>
+						<c:choose>
+						    <c:when test="${item.extendedData['unitID'] != 'C62' && !empty item.extendedData['unitOfMeasure']}">
+						        <wcst:message var="displayValue" key="PD_ATTR_UOM" bundle="${widgetText}">
+						        <wcst:param><c:out value="${itemLabel}" escapeXml="false"/></wcst:param>
+						        <wcst:param><c:out value="${item.extendedData['unitOfMeasure']}" escapeXml="false"/></wcst:param>
+						        </wcst:message>
+						    </c:when>
+						    <c:otherwise>
+						        <c:set var="displayValue" value="${fn:escapeXml(item.label)}"/>
+						        </c:otherwise>
+						</c:choose>
+						SearchBasedNavigationDisplayJS.updateFacetCount(
+						"${item.extendedData['uniqueId']}",
+						<c:out value="${item.count}"/>, 
+						"${item.value}", 
+						"${displayValue}",
+						"${item.image}",
+						"${env_imageContextPath}",
+						"${facetField.value}",
+						<c:out value="${multiFacet}"/>);
+						SearchBasedNavigationDisplayJS.facetFromRest.push("${item.extendedData['uniqueId']}");
+					</c:forEach>
+				</c:forEach>
+				<c:if test="${!empty originalTotalSearchCount && !empty totalSearchCount}">
+					dojo.publish("FacetCount_updated", [{origSearchCount:<c:out value="${originalTotalSearchCount}"/>, totalSearchCount:<c:out value="${totalSearchCount}"/>,totalCount:<c:out value="${totalCount}"/>,totalContentCount:<c:out value="${totalContentCount}"/>}]);
+				</c:if>
+			}
+		</script>
+	</div>
+	

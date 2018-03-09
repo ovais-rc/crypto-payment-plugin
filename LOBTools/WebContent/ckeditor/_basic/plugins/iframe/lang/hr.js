@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","hr",{border:"Pokaži rub okvira",noUrl:"Upišite iframe URL",scrolling:"Omogući kliznike",title:"IFrame svojstva",toolbar:"Umetni IFrame",ibm:{title:"IFrame"}});

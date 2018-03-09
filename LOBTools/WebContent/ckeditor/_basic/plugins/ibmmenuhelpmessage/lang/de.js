@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","de",{keystrokeForContextMenu:"Für weitere Optionen auf Strg + rechte Maustaste klicken",keystrokeForContextMenuMac:"Für weitere Optionen auf cmd + rechte Maustaste klicken"});

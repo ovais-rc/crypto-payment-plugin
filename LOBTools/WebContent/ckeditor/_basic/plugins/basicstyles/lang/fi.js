@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("basicstyles","fi",{bold:"Lihavointi",italic:"Kursivointi",strike:"Yliviivaus",subscript:"Alennettu",superscript:"Korotettu",underline:"Alleviivaus"});

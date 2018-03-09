@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","ru",{button:"Шаблоны",emptyListMsg:"(Шаблоны не заданы)",insertOption:"Заменить фактическое содержимое",options:"Параметры шаблона",selectPromptMsg:"Выберите шаблон, который необходимо открыть в редакторе",title:"Шаблоны материалов"});

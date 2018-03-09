@@ -1,0 +1,1207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+
+	<!---
+		@keywords private
+
+		The base class that implements an item (text key and its value) in a user preference object {@link cmc/shell/UserPreferenceObject}.
+	-->
+	<Node classDefinition="true" definitionName="cmc/shell/PreferenceValue">
+		<!--- @keywords private -->
+		<variable name="text" type="string" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="textKey" value="${null}"/>
+		<!--- @keywords private -->
+		<variable name="value" type="string"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.addItem(this.text, this.value, this.textKey);
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="getDisplayText">
+			<![CDATA[
+			var displayText = this.text;
+			if (this.textKey != null) {
+				displayText = this.textKey.string;
+			}
+			return displayText;
+			]]>
+		</method>
+	</Node>
+
+	<!---
+		The base class that represents a user preference object. All preference objects in Management Center should
+		extend this class, and implement their own set of methods: applyValue, getValue, loadValue and validateValue.
+	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/shell/UserPreferenceObject" focusable="false">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			Flag that determines whether user preference is enabled in the dialog. If the value of this flag is
+			set to false, then this preference will be read-only in the dialog. The default value is set as the
+			globalPreferenceEnabled attribute in {@link cmc/shell/ConfigProperties}.
+		-->
+		<variable name="preferenceEnabled" type="boolean" value="${ConfigProperties.Singleton.globalPreferenceEnabled}"/>
+		<!---
+			Flag that determines whether this user preference is a custom attribute or not. If this preference
+			is a custom attribute, then it will be persisted in the member attribute table in the database.
+			The default value is true.
+		-->
+		<variable name="customAttribute" type="boolean" value="true"/>
+		<!---
+			Name of the user preference in preference dialog. This field is required to uniquely identify this
+			preference among the preference objects that may have been defined in the dialog.
+		-->
+		<variable name="preferenceName" type="string"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			PreferenceManager.Singleton.addUserPreferenceObject(this);
+			]]>
+		</handler>
+
+		<!---
+			This method is called when the value of this preference is updated in the dialog to apply the value
+			to the global preference setting if applicable. By default, it sends an event to preference manager
+			to notify this preference update. Override this method to implement additional logic that needs to
+			be performed upon update to this preference.
+		-->
+		<method name="applyValue">
+			<![CDATA[
+			PreferenceManager.Singleton.sendPreferenceChangedEvent(this.preferenceName);
+			]]>
+		</method>
+
+		<!---
+			This method returns the value of this preference. This method is called by the preference manager to
+			retrieve the value of this preference and execute save action to persist this preference to the
+			database. Override this method to implement the logic to retrieve the value of this preference from
+			the control implemented in the dialog.
+
+			@returns string: The value of this preference.
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return null;
+			]]>
+		</method>
+
+		<!---
+			This method sets the value of this preference to the control implemented in the dialog by retrieving
+			the value of this preference from the map object in preference manager. Override this method to
+			implement the logic to get the value of this preference from the preference manager and set the control
+			in the dialog to display the value properly.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+
+			]]>
+		</method>
+
+		<!---
+			This method validates the value of this preference. By default, this method always returns true.
+			Override this method to implement this preference's own validation logic.
+
+			@returns string: True if the value of this preference is validated; false otherwise.
+		-->
+		<method name="validateValue">
+			<![CDATA[
+			return true;
+			]]>
+		</method>
+
+		<!---
+			This method returns the view in this preference in which the default focus goes to. By default,
+			this method always returns null. Override this method to implement this preference's own logic to
+			return the proper view.
+
+			@returns view: The view which the default focus goes to.
+		-->
+		<method name="getDefaultFocusView">
+			<![CDATA[
+			return null;
+			]]>
+		</method>
+	</FocusableComponent>
+
+	<!---
+		This class defines the user preference for the Store Name. It extends {@link cmc/shell/UserPreferenceObject} to
+		implement persistence of the default Store Name preference and includes a find store service to
+		validate the specified Store Name.
+		The default Store Name preference is defined by the defaultPreferredStore attribute in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/StorePreference" package="cmc/shell" preferenceName="CMCDefaultStore">
+		<dependency localName="ErrorMessageView" moduleName="cmc/foundation/ErrorMessageView"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="StringUtil" moduleName="cmc/foundation/StringUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="StoreUtil" moduleName="cmc/foundation/StoreUtil"/>
+		<dependency localName="Component" moduleName="cmc/foundation/Component"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<!---
+			@keywords private
+			This flag determines if the value of the Store Name preference has been validated.
+		-->
+		<variable name="isValueValidated" type="boolean" value="true"/>
+
+		<!---
+			@keywords private
+			This method returns the value of the Store Name preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return StringUtil.Singleton.trim(this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.getText());
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the Store Name preference from the map object in
+			the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredStore);
+			}
+			this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.setText(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			this.hideValidationError();
+			this.isValueValidated = true;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/StorePreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method validates the value of the Store Name preference.
+			@returns string: True if the value of this preference is validated; false otherwise.
+		-->
+		<method name="validateValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/StorePreference", "validateValue");
+			}
+			if (!this.isValueValidated) {
+				if (this.getValue() == '') {
+					this.validationPassed();
+				}
+				else {
+					this.wcfValidateStoreName.doRequest(this, {
+						searchText: this.getValue(),
+						usage: ContextUtil.Singleton.findContextValue(null, "accessibleTools").value
+					});
+				}
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/StorePreference", "validateValue", this.isValueValidated);
+			}
+			return this.isValueValidated;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="validationPassed">
+			<![CDATA[
+			this.hideValidationError();
+			this.isValueValidated = true;
+			PreferenceManager.Singleton.savePreferenceValues();
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="validationFailed">
+			<![CDATA[
+			this.showValidationError();
+			this.isValueValidated = false;
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="showValidationError">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/StorePreference", "showValidationError");
+			}
+			if (!this.storePreferenceView.storeFieldView.storeEditorView.errorDecorator) {
+				var decorator = new Component.Class(this.storePreferenceView.storeFieldView.storeEditorView, {
+					name: "errorDecorator",
+					y: this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.y - 1,
+					x: this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.x - 1,
+					bgcolor: "#e71d32",
+					height: this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.height + 2,
+					width: this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.width + 2,
+					visible: false
+				});
+				decorator.sendBehind(this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore);
+			}
+			this.storePreferenceView.storeFieldView.storeEditorView.errorDecorator.setVariable("visible", true);
+			if (!this.errorMessageView) {
+				this.errorMessageView = new ErrorMessageView.Class(this.classroot, {
+					attach: "bottom",
+					visible: false
+				});
+				this.errorMessageView.setVariable("attachTarget", this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore);
+			}
+			this.errorMessageView.show(shellResources.Singleton.errorInvalidStoreName.string);
+			this.checkErrorMessageView();
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/StorePreference", "showValidationError");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="hideValidationError">
+			<![CDATA[
+			if (this.storePreferenceView.storeFieldView.storeEditorView.errorDecorator) {
+				this.storePreferenceView.storeFieldView.storeEditorView.errorDecorator.setVariable("visible", false);
+			}
+			if (this.errorMessageView) {
+				this.errorMessageView.hide();
+				this.checkErrorMessageViewDel.disconnectAll();
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="checkErrorMessageView">
+			<![CDATA[
+			if (!this.checkErrorMessageViewDel) {
+				this.checkErrorMessageViewDel = new EventHandler.Class(this, "checkErrorMessageView");
+			}
+			else {
+				this.checkErrorMessageViewDel.disconnectAll();
+			}
+			if (this.errorMessageView.showing) {
+				var visibilityView = ViewUtil.Singleton.getInvisibleAncestor(this);
+				if (visibilityView != null) {
+					this.hideValidationError();
+				}
+				else {
+					ViewUtil.Singleton.registerVisibilityDelegate(this, this.checkErrorMessageViewDel);
+				}
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.changeStoreDel = new EventHandler.Class(this, "changeStore");
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			delete this.changeStoreDel;
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method changes the currently persisted store to match the store that is currently selected
+			@param cmc/foundation/Store newStore: the new store
+		-->
+		<method args="newStore" name="changeStore">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/StorePreference", "changeStore");
+			}
+			if (newStore != null) {
+				this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore.setText(newStore.storeName);
+				this.hideValidationError();
+				this.isValueValidated = true;
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/StorePreference", "changeStore");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the default store input text control which the default focus goes to.
+			@returns view: The view which the default focus goes to.
+		-->
+		<method name="getDefaultFocusView">
+			<![CDATA[
+			return this.storePreferenceView.storeFieldView.storeEditorView.selectedDefaultStore;
+			]]>
+		</method>
+
+		<!--- Validate store name using find stores service. -->
+		<Service name="wcfValidateStoreName" retryOnError="true" sendMaxItems="true" sendTimeZoneId="false" sendWorkspaceContext="false" url="/cmc/FindStores">
+			<!---
+				Parse the store objects.
+				@param node requestParent: the parent node for this service request
+				@param XML dataElement: "values" data element
+				@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+				@param string reqIdentifier: the request identifier associated with the dataset that returned this data
+				@param number startIndex: the start index for this request
+			-->
+			<method args="requestParent, dataElement, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+				<![CDATA[
+				var stores = StoreUtil.Singleton.parseStores(dataElement);
+				var storeFound = false;
+				for (var i = 0; i < stores.length; i++) {
+					var store = stores[i];
+					if (store.storeName == requestParent.getValue()) {
+						storeFound = true;
+						break;
+					}
+				}
+				if (storeFound) {
+					requestParent.validationPassed();
+				}
+				else {
+					requestParent.validationFailed();
+				}
+				]]>
+			</method>
+		</Service>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="storePreferenceView">
+			<TextComponent text="${shellResources.Singleton.userPreferenceDialogStorePrompt.string}"/>
+			<Component name="storeFieldView" width="230">
+				<Component name="storeEditorView">
+					<InputText name="selectedDefaultStore" height="35" width="200">
+						<handler args="code" name="onkeydown">
+							<![CDATA[
+							this.classroot.hideValidationError();
+							this.classroot.isValueValidated = false;
+							]]>
+						</handler>
+						<handler name="onfocus">
+							<![CDATA[
+							this.parent.parent.storeSearchButton.setVariable("isdefault", true);
+							]]>
+						</handler>
+						<handler name="onblur">
+							<![CDATA[
+							this.parent.parent.storeSearchButton.setVariable("isdefault", false);
+							]]>
+						</handler>
+					</InputText>
+				</Component>
+				<FocusableBaseButton doesenter="true" imageSet="storeSearchIcon" name="storeSearchButton" y="6" >
+					<handler name="onclick">
+						<![CDATA[
+						var caller = this;
+						require(["cmc/foundation/StoreSearchDialog"], function(StoreSearchDialog) {
+							StoreSearchDialog.Singleton.openStoreSearchDialog(caller.classroot.changeStoreDel, caller.parent.storeEditorView.selectedDefaultStore.getText(), ContextUtil.Singleton.findContextValue(null, "accessibleTools").value);
+						});
+						]]>
+					</handler>
+					<Tooltip text="${shellResources.Singleton.findButton.string}"/>
+				</FocusableBaseButton>
+				<AxisLayout axis="x" spacing="5"/>
+			</Component>
+			<AxisLayout axis="y" spacing="2"/>
+		</Component>
+		<ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogStoreExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogStoreTip.string}" name="storeExtendedHelpIcon"/>
+	</UserPreferenceObject>
+
+	<!---
+		User preference class for default language preference. Language preference
+		is used to specify the language that all user interface text in Management Center should be in.  If this preference
+		is not set, the default language will be used.  The default language is defined as defaultPreferredLanguage attribute
+		in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" customAttribute="false" definitionName="cmc/shell/LanguagePreference" package="cmc/shell" preferenceName="preferredLanguage">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- Name of the class that defines the list of available languages. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			new this.listClass.Class(this.languagePreferenceView, {
+				name: "languageList",
+				enabled: this.preferenceEnabled
+			});
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method applies the preference value to the global setting if applicable.
+		-->
+		<method name="applyValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LanguagePreference", "applyValue");
+			}
+			var locale = ContextUtil.Singleton.findContextValue(null, "locale");
+			if (locale.value != PreferenceManager.Singleton.getPreference(this.preferenceName)) {
+				locale.setVariable("value", PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			setLoggedInUserLocale(locale.value);
+			this.inherited(arguments);
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/LanguagePreference", "applyValue");
+			}
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the value of this preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.languagePreferenceView.languageList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of this preference from the map object in preference manager
+			to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredLanguage);
+			}
+			this.languagePreferenceView.languageList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/LanguagePreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="languagePreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent text="${shellResources.Singleton.userPreferenceDialogLanguagePrompt.string}"/>
+		</Component>
+		<ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogLanguageExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogLanguageTip.string}" name="languageExtendedHelpIcon"/>
+	</UserPreferenceObject>
+
+	<!---
+		User preference class for the extended help preference. Extended
+		help shows information about different user interface elements.  The user can get the extended help by either
+		clicking a help icon or by placing the mouse cursor over a button.  If this preference is not set, the default
+		setting will be used.  The default setting is defined as defaultPreferredExtendedHelp attribute in
+		{@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/ExtendedHelpPreference" package="cmc/shell" preferenceName="CMCEnableExtendedHelp">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!---
+			@keywords private
+			This method returns the value of this preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.extendedHelpEnabled.getValue().toString();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of this preference from the map object in preference manager
+			to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredExtendedHelp.toString());
+			}
+			this.extendedHelpEnabled.setValue(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/ExtendedHelpPreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<BaseCheckbox name="extendedHelpEnabled" text="${shellResources.Singleton.userPreferenceDialogEnableTooltipPrompt.string}"/>
+		<ExtendedHelpIcon extendedHelpText="${shellResources.Singleton.userPreferenceDialogEnableTooltipExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogEnableTooltipTip.string}" name="extHelpExtendedHelpIcon"/>
+	</UserPreferenceObject>
+	
+	<!---
+		This class defines the user preferences for the Date format preference. If this preference
+		is not set, the default date format will be used.  The default date format is defined by the defaultPreferredDateFormat attribute
+		in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/DateFormatPreference" package="cmc/shell" preferenceName="CMCDateFormat">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- The name of the class that defines the list of available Date formats. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			new this.listClass.Class(this.dateFormatPreferenceView, {
+				name: "dateFormatList",
+				enabled: this.preferenceEnabled
+			});
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method returns the value of this preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.dateFormatPreferenceView.dateFormatList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the resource key of this preference.
+			@returns cmc/foundation/ResourceBundleKey: resource key of this preference
+		-->
+		<method name="getDisplayKey">
+			<![CDATA[
+			return this.dateFormatPreferenceView.dateFormatList.selectedValue.displayKey;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of this preference from the map object in preference manager
+			to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredDateFormat);
+			}
+			this.dateFormatPreferenceView.dateFormatList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/DateFormatPreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="dateFormatPreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent text="${shellResources.Singleton.userPreferenceDialogDateFormatPrompt.string}"/>
+	    </Component>
+	    <ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogDateFormatExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogDateFormatTip.string}" name="dateFormatExtendedHelpIcon"/>
+	</UserPreferenceObject>
+
+	<!---
+		This class defines the user preferences for the Time format preference. If this preference
+		is not set, the default time format will be used.  The default Time format is defined by the
+		defaultPreferredTimeFormat attribute in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/TimeFormatPreference" package="cmc/shell" preferenceName="CMCTimeFormat">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- The name of the class that defines the list of available Time formats. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			new this.listClass.Class(this.timeFormatPreferenceView, {
+				name: "timeFormatList",
+				enabled: this.preferenceEnabled
+			});
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method returns the value of the Time format preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.timeFormatPreferenceView.timeFormatList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the text of the Time format preference.
+			@returns string: text of this preference
+		-->
+		<method name="getText">
+			<![CDATA[
+			return this.timeFormatPreferenceView.timeFormatList.selectedValue.getDisplayText();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the Time format preference from the map object in
+			the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredTimeFormat);
+			}
+			this.timeFormatPreferenceView.timeFormatList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/TimeFormatPreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="timeFormatPreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent text="${shellResources.Singleton.userPreferenceDialogTimeFormatPrompt.string}"/>
+		</Component>
+		<ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogTimeFormatExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogTimeFormatTip.string}" name="timeFormatExtendedHelpIcon"/>
+	</UserPreferenceObject>
+		
+	<!---
+		This class defines the user preference for the time zone. If this preference is not set, the default time zone will be used. The default time zone is the server time zone.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/TimeZonePreference" package="cmc/shell" preferenceName="CMCTimeZone">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+
+		<!---
+			@keywords private
+			This method returns the value of the Time Zone preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.timeZonePreferenceView.timeZoneList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the Time Zone preference from the map object in
+			the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			var contextValue = ContextUtil.Singleton.findContextValue(null, "timeZoneId");
+			var currentPreference = PreferenceManager.Singleton.getPreference(this.preferenceName);
+			if (currentPreference == undefined || currentPreference == "") {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, contextValue.value);
+			}
+			this.timeZonePreferenceView.timeZoneList.selectValue({
+				value: PreferenceManager.Singleton.getPreference(this.preferenceName),
+				displayName: ContextUtil.Singleton.findContextValue(null, "timeZoneDisplayName").value
+			});
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/TimeZonePreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method applies the timezone preference value to the global setting if applicable.
+		-->
+		<method name="applyValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/TimeZonePreference", "applyValue");
+			}
+			var timeZoneId = ContextUtil.Singleton.findContextValue(null, "timeZoneId");
+			if (timeZoneId.value != PreferenceManager.Singleton.getPreference(this.preferenceName)) {
+				timeZoneId.setVariable("value", PreferenceManager.Singleton.getPreference(this.preferenceName));
+				ContextUtil.Singleton.findContextValue(null, "timeZoneDisplayName").setVariable("value", this.timeZonePreferenceView.timeZoneList.selectedValue.displayName);
+				if (typeof (ToolsController.Singleton) != "undefined") {
+					ToolsController.Singleton.resetAllTools();
+				}
+				this.inherited(arguments);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/TimeZonePreference", "applyValue");
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="timeZonePreferenceView">		
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent text="${shellResources.Singleton.userPreferenceDialogTimeZonePrompt.string}"/>
+			<BaseComboBox enabled="${this.parent.preferenceEnabled}" name="timeZoneList" width="230" height="35">
+				<!--- @keywords private -->
+				<method name="openList">
+					<![CDATA[
+					if (typeof (ToolsController.Singleton) != "undefined" && ToolsController.Singleton.hasUnsavedChangesAllTools()) {
+						require(["cmc/shell/ChangeTimeZoneUnsavedDialog"], function(ChangeTimeZoneUnsavedDialog) {
+							ChangeTimeZoneUnsavedDialog.Singleton.openWindow();
+						});
+					}
+					else if (ServiceTransactionUtil.Singleton.hasOutstandingTransactions()) {
+						require(["cmc/shell/TransactionProgressDialog"], function(TransactionProgressDialog) {
+							TransactionProgressDialog.Singleton.openWindow();
+						});
+					}
+					else {
+						this.inherited(arguments);
+					}
+					]]>
+				</method>
+	
+				<!--- @keywords private -->
+				<Service retryOnError="true" sendIdentity="true" sendTimeZoneId="false" sendWorkspaceContext="false" url="/cmc/GetTimeZonesDetail">
+					<!--- @keywords private -->
+					<method name="init">
+						<![CDATA[
+						this.inherited(arguments);
+						this.loadDel = new EventHandler.Class(this, "load");
+						this.load();
+						]]>
+					</method>
+	
+					<!--- @keywords private -->
+					<method name="destroy">
+						<![CDATA[
+						this.inherited(arguments);
+						this.loadDel.disconnectAll();
+						delete this.loadDel;
+						]]>
+					</method>
+	
+					<!--- @keywords private -->
+					<method args="e" name="load">
+						<![CDATA[
+						if (typeof(e) == "undefined") e = null;
+						this.loadDel.disconnectAll();
+						var invisibleView = ViewUtil.Singleton.getInvisibleAncestor(this);
+						if (invisibleView != null) {
+							this.loadDel.connect(invisibleView, "onvisible");
+						}
+						else {
+							this.loadDel.connect(ContextUtil.Singleton.findContextValue(null, "locale"), "onvalue");
+							this.parent.values = [];
+							this.doRequest();
+						}
+						]]>
+					</method>
+	
+					<!--- @keywords private -->
+					<method args="requestParent, e, requestIdentifier" name="parseValues">
+						<![CDATA[
+						var nodes = e.childNodes;
+						for (var i = 0; i < nodes.length; i++) {
+							var node = nodes[i];
+							if (node.nodeName == "timeZone") {
+								var timeZoneId = null;
+								var displayName = null;
+								for (var j = 0; j < node.childNodes.length; j++) {
+									var childNode = node.childNodes[j];
+									var textNode = childNode.firstChild;
+									if (textNode != null && (textNode.nodeType == 3 || textNode.nodeType == 4)) {
+										if (childNode.nodeName == "id") {
+											timeZoneId = textNode.nodeValue;
+										}
+										else if (childNode.nodeName == "displayName") {
+											displayName = textNode.nodeValue;
+										}
+									}
+								}
+								this.parent.addValue({
+									value: timeZoneId,
+									displayName: displayName
+								});
+							}
+						}
+						]]>
+					</method>
+				</Service>
+			</BaseComboBox>
+		</Component>
+		<ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogTimeZoneExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogTimeZoneTip.string}" name="timeZoneExtendedHelpIcon"/>
+	</UserPreferenceObject>
+	
+	
+	<!---
+		This class defines the user preferences for the Start week with this day preference. If this preference
+		is not set, the default setting will be used.  The default day to use as the first day of the week is defined by the
+		defaultPreferredFirstDayOfWeek attribute in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/FirstDayOfWeekPreference" package="cmc/shell" preferenceName="CMCFirstDayOfWeek">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- The name of the class that defines the list of available days to use as the first day of the week. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			new this.listClass.Class(this.firstDayOfWeekPreferenceView, {
+				name: "firstDayOfWeekList",
+				enabled: this.preferenceEnabled
+			});
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method returns the value of the Start week with this day preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.firstDayOfWeekPreferenceView.firstDayOfWeekList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the Start week with this day preference from the map object
+			in the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredFirstDayOfWeek);
+			}
+			this.firstDayOfWeekPreferenceView.firstDayOfWeekList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/FirstDayOfWeekPreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="firstDayOfWeekPreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent text="${shellResources.Singleton.userPreferenceDialogFirstDayOfWeekPrompt.string}"/>
+		</Component>
+		<ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogFirstDayOfWeekExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogFirstDayOfWeekTip.string}" name="firstDayOfWeekExtendedHelpIcon"/>
+	</UserPreferenceObject>
+
+	<!---
+		This class defines the user preferences for the Number format preference. If this preference is
+		not set, the default number format will be used.  The default Number format is defined by the
+		defaultPreferredNumberFormat attribute in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/NumberFormatPreference" package="cmc/shell" preferenceName="CMCNumberFormat">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- The name of the class that defines the list of available Number formats. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			new this.listClass.Class(this.numberFormatPreferenceView, {
+				name: "numberFormatList",
+				enabled: this.preferenceEnabled
+			});
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method returns the value of the Number format preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.numberFormatPreferenceView.numberFormatList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the text of the Number format preference.
+			@returns string: text of this preference
+		-->
+		<method name="getText">
+			<![CDATA[
+			return this.numberFormatPreferenceView.numberFormatList.selectedValue.getDisplayText();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the Number format preference from the map
+			object in the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredNumberFormat);
+			}
+			this.numberFormatPreferenceView.numberFormatList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/NumberFormatPreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="numberFormatPreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent name="numberFormatPrompt" text="${shellResources.Singleton.userPreferenceDialogNumberFormatPrompt.string}"/>
+		</Component>
+	    <ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogNumberFormatExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogNumberFormatTip.string}" name="numberFormatExtendedHelpIcon"/>
+	</UserPreferenceObject>
+	
+	<!---
+		@keywords private
+		This service uses current time zone id to get the time zone display name and time zone offset with respect to server time zone.
+		If the current time zone is not set, this service returns server time zone, its display name, and zero offset.
+	  -->
+	<Service definitionName="cmc/shell/GetTimeZoneService" retryOnError="true" sendIdentity="true" sendTimeZoneId="false" sendWorkspaceContext="false" singletonDefinition="true" url="/cmc/GetTimeZone">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		
+		<!--- @keywords private -->
+		<handler eventSource="RootComponent.Singleton" name="oninit">
+			<![CDATA[
+			this.loadDel = new EventHandler.Class(this, "load");
+			this.loadDel.connect(ContextUtil.Singleton.findContextValue(null, "locale"), "onvalue");
+			this.loadDel.connect(PreferenceManager.Singleton, "onisInitialized");
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<method args="e" name="load">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (PreferenceManager.Singleton.isInitialized) {
+				this.doRequest(this, {
+					timeZoneId: ContextUtil.Singleton.findContextValue(null, "timeZoneId").value
+				});
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private	-->
+		<handler args="preference" eventSource="PreferenceManager.Singleton" name="preferenceChanged">
+			<![CDATA[
+			if (preference == "CMCTimeZone") {
+				this.load();
+			}
+			]]>
+		</handler>
+	</Service>
+	
+	<!---
+		This class defines the user preferences for the page size preference. If this preference is
+		not set, the default page size will be used.  The default page size is defined by the
+		defaultPreferredPageSize attribute in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/PageSizePreference" package="cmc/shell" preferenceName="CMCPageSize">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ToolsController" moduleName="cmc/shell/ToolsController"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- The name of the class that defines the list of available page sizes. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			new this.listClass.Class(this.pageSizePreferenceView, {
+				name: "pageSizeList",
+				enabled: this.preferenceEnabled
+			});
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the value of the page size preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.pageSizePreferenceView.pageSizeList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the text of the page size preference.
+			@returns string: text of this preference
+		-->
+		<method name="getText">
+			<![CDATA[
+			return this.pageSizePreferenceView.pageSizeList.selectedValue.getDisplayText();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the page size preference from the map
+			object in the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredPageSize);
+			}
+			this.pageSizePreferenceView.pageSizeList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/PageSizePreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method applies the page size preference value to the global setting if applicable.
+		-->
+		<method name="applyValue">
+			<![CDATA[
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/PageSizePreference", "applyValue");
+			}
+			var maxRecordSetTotal = ContextUtil.Singleton.findContextValue(null, "maxRecordSetTotal");
+			var pageSize = PreferenceManager.Singleton.getPreference(this.preferenceName);
+			if (maxRecordSetTotal.value != pageSize) {
+				maxRecordSetTotal.setVariable("value", pageSize);
+				if (typeof (ToolsController.Singleton) != "undefined") {
+					ToolsController.Singleton.resetAllTools();
+				}
+				this.inherited(arguments);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.shell", "cmc/shell/PageSizePreference", "applyValue");
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="pageSizePreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent name="pageSizePrompt" text="${shellResources.Singleton.userPreferenceDialogPageSizePrompt.string}"/>		
+		</Component>
+		<ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogPageSizeExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogPageSizeTip.string}" name="pageSizeExtendedHelpIcon"/>
+	</UserPreferenceObject>
+
+	<!---
+		This class defines the user preferences for the Text Direction preference. If this preference is
+		not set, the default text direction will be used.  The default Text direction is defined by the
+		defaultPreferredTextDirection attribute in {@link cmc/shell/ConfigProperties}.
+	-->
+	<UserPreferenceObject classDefinition="true" definitionName="cmc/shell/TextDirectionPreference" package="cmc/shell" preferenceName="CMCTextDirection">
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>		
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="shellResources" moduleName="cmc/shell/ShellResources"/>
+		<dependency localName="PreferenceManager" moduleName="cmc/shell/PreferenceManager"/>
+		<!--- The name of the class that defines the list of available Text Directions. -->
+		<variable name="listClass" type="module"/>
+
+		<!--- @keywords private -->
+		<handler name="oninit">
+			<![CDATA[
+			new this.listClass.Class(this.textDirectionPreferenceView, {
+				name: "textDirectionList",
+				enabled: this.preferenceEnabled
+			});
+			]]>
+		</handler>
+
+		<!---
+			@keywords private
+			This method returns the value of the Text Direction preference.
+			@returns string: value of this preference
+		-->
+		<method name="getValue">
+			<![CDATA[
+			return this.textDirectionPreferenceView.textDirectionList.getValue();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method returns the text of the Text Direction preference.
+			@returns string: text of this preference
+		-->
+		<method name="getText">
+			<![CDATA[
+			return this.textDirectionPreferenceView.textDirectionList.selectedValue.getDisplayText();
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			This method sets the value of the Text Direction preference from the map
+			object in the preference manager to the object in the user interface.
+		-->
+		<method name="loadValue">
+			<![CDATA[
+			if (PreferenceManager.Singleton.getPreference(this.preferenceName) == undefined) {
+				PreferenceManager.Singleton.setPreference(this.preferenceName, ConfigProperties.Singleton.defaultPreferredTextDirection);
+			}
+			this.textDirectionPreferenceView.textDirectionList.selectItem(PreferenceManager.Singleton.getPreference(this.preferenceName));
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.shell", "INFO", "cmc/shell/TextDirectionPreference", "loadValue", "Loaded the following value for this preference: " + PreferenceManager.Singleton.getPreference(this.preferenceName));
+			}
+			]]>
+		</method>
+
+		<AxisLayout axis="x" spacing="8"/>
+		<Component name="textDirectionPreferenceView">
+			<AxisLayout axis="y" spacing="2"/>
+			<TextComponent name="textDirectionPrompt" text="${shellResources.Singleton.userPreferenceDialogTextDirectionPrompt.string}"/>
+		</Component>
+	    <ExtendedHelpIcon y="28" extendedHelpText="${shellResources.Singleton.userPreferenceDialogTextDirectionExtendedHelp.string}" helpText="${shellResources.Singleton.userPreferenceDialogTextDirectionTip.string}" name="numberFormatExtendedHelpIcon"/>
+	</UserPreferenceObject>
+</Definitions>

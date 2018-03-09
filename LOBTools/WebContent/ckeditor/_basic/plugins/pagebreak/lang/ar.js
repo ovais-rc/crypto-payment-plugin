@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","ar",{alt:"فاصل الصفحات",toolbar:"ادراج فاصل صفحات"});

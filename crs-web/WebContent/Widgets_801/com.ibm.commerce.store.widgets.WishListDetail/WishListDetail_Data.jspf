@@ -1,0 +1,217 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<!-- BEGIN WishListDetail_Data.jspf -->
+
+<%@ include file="/Widgets_801/Common/nocache.jspf" %>
+<%@ include file="/Widgets_801/Common/JSTLEnvironmentSetupExtForRemoteWidgets.jspf"%>
+
+<c:set var="myAccountPage" value="true" scope="request"/>
+<c:set var="bHasWishList" value="true" />
+<c:set var="wishListPage" value="true" />
+<c:set var="emailError" value="false" />
+		
+<c:set var="pageSize" value="${param.pageSize}" />
+<c:if test="${empty pageSize}">
+	<c:set var="pageSize" value="12" />
+</c:if>
+<c:set var="wishListViaEmail" value="false" />
+<c:if test="${(WCParam.wishListEMail != null && !empty WCParam.wishListEMail  && WCParam.wishListEMail == 'true')}">
+	<c:set var="wishListViaEmail" value="true" />
+</c:if>
+
+<c:if test="${(param.wishListEMail != null && !empty param.wishListEMail && param.wishListEMail == 'true')}">
+	<c:set var="wishListViaEmail" value="true" />
+</c:if>
+
+<c:choose>
+	<%-- users have explicitly chosen a pageView --%>
+	<c:when test="${!empty WCParam.pageView}">
+		<c:set var="pageView" value="${WCParam.pageView}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="pageView" value="image" />
+	</c:otherwise>
+</c:choose>
+
+<c:set var="startIndex" value="${WCParam.startIndex}" />
+<c:if test="${empty startIndex}">
+    <c:set var="startIndex" value="0" />
+</c:if>
+<%@ include file="/Widgets_801/Common/MultipleWishList/GetDefaultWishList.jspf" %>	
+
+<c:choose>
+    <c:when test="${!empty WCParam.wishListEMail && WCParam.wishListEMail != null && WCParam.wishListEMail == 'true'}">
+        <%-- from shared wish list page - user can be a guest user or a registered user who is not the owner of the wish list --%>
+        <c:set var="sharedWishList" value="true" scope="request"/>
+        <c:choose>
+            
+            <c:when test="${empty WCParam.externalId}">
+                <c:set var="emailError" value="true" />
+            </c:when>
+            
+            <c:otherwise>
+                <c:set var="selectedWishListExternalId" value="${WCParam.externalId}"/>
+                <%@ include file="/Widgets_801/Common/MultipleWishList/GetWishListItemsByExternalId.jspf" %>
+                <fmt:parseNumber var="numEntries" value="${wishListResult.recordSetTotal}" integerOnly="true" />
+
+                <c:if test="${(numEntries == 0 && startIndex != 0) || (numEntries < startIndex )}">
+                    <%-- when nothing is returned - it can be that last item from the page is removed, go back one page --%>
+                    <c:set var="startIndex" value="${startIndex - pageSize}" />
+                    <c:if test="${startIndex < 0}">
+                        <c:set var="startIndex" value="0" />
+                    </c:if>
+                    <%@ include file="/Widgets_801/Common/MultipleWishList/GetWishListItemsByExternalId.jspf" %>
+                </c:if>
+                
+                <c:if test="${selectedWishList == null}">
+                    <c:set var="emailError" value="true" />
+                </c:if>
+                
+                <c:if test="${empty selectedWishList.item}">
+                    <c:set var="bHasWishList" value="false"/>
+                </c:if>
+            </c:otherwise>
+        </c:choose>
+        
+    </c:when>
+    
+    <c:when test="${empty defaultWishList}">
+        <%-- from my account wish list page - if user has no wish list defined, set bHasWishList to false --%>
+        <c:set var="bHasWishList" value="false"/>
+    </c:when>
+    
+    <c:when test="${WCParam.giftListId == -1}">
+        <%-- from my account wish list page - user selected the dummy Wish List entry, set bHasWishList to false --%>
+        <c:set var="bHasWishList" value="false"/>
+    </c:when>
+    
+    <c:otherwise>
+        <%-- from my account wish list page - user has wish list defined, get the detail of user's default wish list --%>
+        <c:set var="selectedWishListExternalId" value="${defaultWishList.externalIdentifier}"/>
+        <c:set var="selectedWishListId" value="${defaultWishList.uniqueID}"/>
+        <%@ include file="/Widgets_801/Common/MultipleWishList/GetWishListItemsByExternalId.jspf" %>
+        <fmt:parseNumber var="numEntries" value="${wishListResult.recordSetTotal}" integerOnly="true" />
+        <c:if test="${(numEntries == 0 && startIndex != 0) || (numEntries < startIndex )  }">
+            <%-- when nothing is returned - it can be that last item from the page is removed, go back one page --%>
+            <c:set var="startIndex" value="${startIndex - pageSize}" />
+            <c:if test="${startIndex < 0}">
+                <c:set var="startIndex" value="0" />
+            </c:if>
+            <%@ include file="/Widgets_801/Common/MultipleWishList/GetWishListItemsByExternalId.jspf" %>
+        </c:if>
+        
+        <c:if test="${empty selectedWishList.item}">
+            <c:set var="bHasWishList" value="false"/>
+        </c:if>
+    </c:otherwise>
+</c:choose>
+<fmt:parseNumber var="numEntries" value="${wishListResult.recordSetTotal}" integerOnly="true" />
+<c:set var="numEntries" value="${numEntries}"/>
+
+<fmt:formatNumber var="totalPages" value="${(numEntries/pageSize)+1}"/>
+<c:if test="${numEntries%pageSize == 0}">
+    <fmt:formatNumber var="totalPages" value="${numEntries/pageSize}"/>
+    <c:if test="${totalPages == 0 && numEntries!=0}">
+        <fmt:formatNumber var="totalPages" value="1"/>
+    </c:if>
+</c:if>
+<fmt:parseNumber var="totalPages" value="${totalPages}" integerOnly="true"/>
+
+<c:set var="currentPage" value="${param.currentPage}" />
+<c:if test="${empty currentPage}">
+    <c:set var="currentPage" value="0" />
+</c:if>
+
+<c:if test="${currentPage < 0}">
+    <c:set var="currentPage" value="0"/>
+</c:if>
+<c:if test="${currentPage >= (totalPages)}">
+    <c:set var="currentPage" value="${totalPages-1}"/>
+</c:if>
+<c:set var="endIndex" value="${(currentPage + 1) * pageSize}"/>
+<c:if test="${endIndex > numEntries}">
+    <c:set var="endIndex" value="${numEntries}"/>
+</c:if>	
+<wcf:url var="WishListDetailFullURL" value="WishListResultDisplayViewV2" type="Ajax">
+	<wcf:param name="langId" value="${langId}" />						
+	<wcf:param name="storeId" value="${WCParam.storeId}" />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+	<wcf:param name="currentPage" value="${currentPage}" />
+	<wcf:param name="startIndex" value="${startIndex}" />
+	<wcf:param name="pageView" value="detailed" />
+	<c:if test="${wishListViaEmail == 'true'}">
+		<wcf:param name="wishListEMail" value="true" />
+		<wcf:param name="externalId" value="${WCParam.externalId}" />
+	</c:if>
+</wcf:url>
+
+<wcf:url var="WishListResultDisplayViewURL" value="WishListResultDisplayViewV2" type="Ajax">
+	<wcf:param name="langId" value="${langId}" />						
+	<wcf:param name="storeId" value="${WCParam.storeId}" />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+	<wcf:param name="currentPage" value="${currentPage}" />
+	<wcf:param name="startIndex" value="${startIndex}" />
+	<wcf:param name="pageView" value="image" />
+	<c:if test="${wishListViaEmail == 'true'}">
+		<wcf:param name="wishListEMail" value="true" />
+		<wcf:param name="externalId" value="${WCParam.externalId}" />
+	</c:if>
+</wcf:url>
+
+<wcf:url var="WishListResultDisplay" value="WishListResultDisplayViewV2" type="Ajax">
+	<wcf:param name="langId" value="${langId}" />						
+	<wcf:param name="storeId" value="${WCParam.storeId}" />
+	<wcf:param name="catalogId" value="${WCParam.catalogId}" />
+	<wcf:param name="pageView" value="${pageView}" />
+	<c:if test="${wishListViaEmail == 'true'}">
+		<wcf:param name="wishListEMail" value="true" />
+		<wcf:param name="externalId" value="${WCParam.externalId}" />
+	</c:if>
+</wcf:url>
+
+<c:choose>
+    <c:when test="${pageView == 'image'}">	<%-- aka grid view --%>
+        <c:set var="columnCountByWidth_Grid" value='{"0":1,"600":2,"800":3,"1200":4,"1600":5}' />
+        <c:set var="layoutClass" value="grid_mode" />
+        <c:set var="borderClass" value="catEntryGrid_border" />
+    </c:when>
+    <c:otherwise> <%-- detailed view, aka list view --%>
+        <c:set var="columnCountByWidth_Grid" value='{"0":1,"800":2}' />
+        <c:set var="layoutClass" value="list_mode" />
+        <c:set var="borderClass" value="catEntryList_border" />
+    </c:otherwise>
+</c:choose>
+
+<c:if test="${param.enableSKUListView == 'true' || WCParam.enableSKUListView == 'true'}">
+	<c:set var="enableSKUListView" value="true" scope="request"/>
+</c:if>
+
+<script>
+    $(document).ready(function(){
+        WishListDetailJS.updateContentURL("<c:out value="${WishListResultDisplay}"/>");
+        wcTopic.subscribeOnce("showResultsForPageNumber_wishListDetail", 
+            $.proxy(WishListDetailJS.showResultsPage, WishListDetailJS));
+        
+        <c:if test="${env_inPreview && !env_storePreviewLink}">
+            wcTopic.subscribeOnce("CMPageRefreshEvent",function(){
+                var previewHeader = window.parent.frames[0];
+                if(previewHeader.isSpotsShown()) {
+                    previewHeader.showESpots();previewHeader.showESpots();
+                    }
+                });
+        </c:if>
+    });
+</script>
+<!-- END WishListDetail_Data.jspf -->

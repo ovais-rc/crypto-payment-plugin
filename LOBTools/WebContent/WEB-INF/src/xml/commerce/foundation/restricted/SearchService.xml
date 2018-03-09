@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		A service that will search for business objects based on user specified criteria. A search service
+		may only be declared as a child of an instance of {@link cmc/foundation/SearchDefinition}.
+		
+		<p>Search services must be prepared to accept the following implicit parameters:
+		<ul>
+			<li>searchText: This parameter is included if the search is launched from the business object
+			editor search area. The value of the "searchText" parameter is the text entered
+			by the user. Search services should interpret leading and trailing asterisk characters
+			as a request for wild card search.</li>
+			<li>maxItems: This is an integer value that indicates the desired page size for the result set.</li>
+			<li>recordSetStartNumber: This is an integer value that is sent if the result set is broken up
+			into multiple pages. The second and subsequent page requests will include this parameter.</li>
+			<li>dataLanguageIds: This is the default language ID. Search services that return translated data
+			must respect this parameter and only return the translated data that matches the specified language ID.</li>
+		</ul>
+		
+		<p>Search definitions that include a value for "advancedSearchContentClass" can add
+		the advanced search parameters without explicitly declaring instances of cmc/foundation/ServiceParam.
+		If the advanced search dialog is used to launch the search service, then the "searchText"
+		parameter will not be included in the request.
+
+		<p>Additional service parameters can be defined by declaring instances of
+		{@link cmc/foundation/ServiceParam} as children of the cmc/foundation/SearchService instance.
+		
+		<p>The following example demonstrates the declaration of a search service
+		that returns products. It declares two additional service parameters (storeId and masterCatalogId) that are resolved
+		from context values.
+		
+		@START_CODE
+		<SearchService name="findProducts" url="/cmc/FindProducts">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="masterCatalogId"/>
+		</SearchService>
+		@END_CODE
+		
+		<p>The successful response from a search service must be an XML document that has a root element named
+		"objects". The child elements of the "objects" element must all be named "object" and they
+		must identify their object type by the specification of a the "objectType" attribute. The "objects"
+		element must include the following attributes:
+		<ul>
+			<li>recordSetCompleteIndicator - this value is true if the response is the last page of the result set</li>
+			<li>recordSetStartNumber - the starting index into the result set for the current page</li>
+			<li>recordSetCount - the number of objects returned by this page</li>
+			<li>recordSetTotal - the total number of objects in the complete result set</li>
+		</ul>
+		The "objects" element may optionally include an attribute called "recordSetReferenceId" that will be sent back
+		as a parameter on the request for the next page of search results. This may be used to optimize the search service.
+		
+		<p>Object and property elements returned from a search service may optionally include a "readonly" attribute.
+		If the value is set to "true", then the framework will prevent the user from making changes to that object
+		or property instance.
+		
+		<p>The following sample demonstrates a response that returns three product objects. Notice that
+		in addition to some object properties each product object includes an embedded
+		child object for the catalog entry description.
+		
+		@START_CODE
+		<objects recordSetCompleteIndicator="true"
+				recordSetReferenceId="ac97a350-df32-11dc-83e5-829b47bb4a4f:3"
+				recordSetStartNumber="0" recordSetCount="3" recordSetTotal="3">
+			<object objectType="Product">
+ 				<catentryId>10275</catentryId>
+				<catenttypeId>ProductBean</catenttypeId>
+				<partnumber>FUCO-01</partnumber>
+				<object objectType="CatalogEntryDescription">
+					<languageId>-1</languageId>
+					<name>Sleek Occasional Table</name>
+					<sDesc>The sleek styling makes this occasional table a
+					perfect addition to your home.</sDesc>
+				</object>
+			</object>
+			<object objectType="Product">
+				<catentryId>10277</catentryId>
+				<catenttypeId>ProductBean</catenttypeId>
+				<partnumber>FUCO-02</partnumber>
+				<object objectType="CatalogEntryDescription">
+					<languageId>-1</languageId>
+					<name>Modern Occasional Table</name>
+					<sDesc>Modern occasional table to go with the
+					modern decor.</sDesc>
+				</object>
+			</object>
+			<object objectType="Product">
+				<catentryId>10279</catentryId>
+				<catenttypeId>ProductBean</catenttypeId>
+				<partnumber>FUCO-03</partnumber>
+				<object objectType="CatalogEntryDescription">
+					<languageId>-1</languageId>
+					<name>Two-Drawer Coffee Table</name>
+					<sDesc>This beautiful coffee table will fit
+					perfectly into any living area.</sDesc>
+				</object>
+			</object>
+		</objects>
+		@END_CODE
+		
+		<p>If an exception occurs while processing a search service, the response must be an XML document that
+		has a root element named "errors". The "errors" element must include one child element named "exception".
+		The "exception" element includes a message suitable for display to the user. The following example demonstrates
+		a valid error response for a search service.
+
+		@START_CODE
+		<errors>
+			<exception>You do not have the required access rights to perform this search.</exception>
+		</errors>
+		@END_CODE
+	-->
+	<Service abortResultsOverLimit="false" classDefinition="true" definitionName="cmc/foundation/SearchService" retryOnError="true" sendDefaultLanguageId="true" sendMaxItems="true" stoppable="true">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FoundationConstants" moduleName="cmc/foundation/FoundationConstants"/>
+		<dependency localName="EventTimer" moduleName="cmc/shell/EventTimer"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.parent.searchService = this;
+			this.doParseCompleteDel = new EventHandler.Class(this, "doParseComplete");
+			this.doParseStopDel = new EventHandler.Class(this, "doParseStop");
+			]]>
+		</method>
+
+		<!--- @keywords private -->		
+		<method name="destroy">
+			<![CDATA[
+			this.inherited(arguments);
+			delete this.doParseCompleteDel;
+			delete this.doParseStopDel;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Create a meaningful message about the search results.
+			@param cmc/foundation/ModelSearchResults s: the search results object
+			@param XML e: "values" data element
+			@param string numberOfObjects: the total number of objects returned (use this for services with no paging support)
+			@param number reqIdentifier: the request identifier
+		-->
+		<method args="s, e, numberOfObjects, reqIdentifier" name="buildSearchStatusMessage">
+			<![CDATA[
+			if (typeof(reqIdentifier) == "undefined") reqIdentifier = -1;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.entering("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchService", "buildSearchStatusMessage(s, e, numberOfObjects, reqIdentifier)", [s, e, numberOfObjects, reqIdentifier]);
+			}
+			var message = null;
+			var isException = e ? false : true;
+			if (!isException) {
+				var totalRecords = Number(e.getAttribute("recordSetTotal"));
+				var recordSetComplete = e.getAttribute("recordSetCompleteIndicator") != "false";
+				var searchOptions = reqIdentifier == this.requestIdentifier ? s.searchOptions : null;
+				if (searchOptions != null && typeof (searchOptions.searchUniqueId) != "undefined") {
+					if (!isNaN(totalRecords) && totalRecords == 0) {
+						message = foundationResources.Singleton.replaceValues("searchObjectNotFoundMsg", [searchOptions.searchText]);
+					}
+					else {
+						message = foundationResources.Singleton.replaceValues("searchObjectFoundMsg", [searchOptions.searchText]);
+					}
+				}
+				else if (searchOptions != null && typeof (searchOptions.searchText) != "undefined") {
+					if (isNaN(totalRecords) && typeof (numberOfObjects) != "undefined") {
+						message = foundationResources.Singleton.replaceValues("searchResultsSuccessMsg", [numberOfObjects, searchOptions.searchText]);
+					}
+					else if (isNaN(totalRecords)) {
+						message = foundationResources.Singleton.replaceValues("searchResultsGeneralMsg", [searchOptions.searchText]);
+					}
+					else if (totalRecords == 0 && searchOptions.searchText == "") {
+						message = foundationResources.Singleton.searchResultsNoCriteriaMsg.string;
+					}
+					else if (totalRecords == 0 && searchOptions.searchText != "") {
+						message = foundationResources.Singleton.replaceValues("searchResultsNoResultsMsg", [searchOptions.searchText]);
+					}
+					else if (!recordSetComplete || s.currPageNum > 0) {
+						message = foundationResources.Singleton.replaceValues("searchResultsOverLimitMsg", [s.currPageNum, totalRecords, searchOptions.searchText]);
+					}
+					else {
+						message = foundationResources.Singleton.replaceValues("searchResultsSuccessMsg", [totalRecords, searchOptions.searchText]);
+					}
+				}
+				else {
+					if (isNaN(totalRecords) && typeof (numberOfObjects) != "undefined") {
+						message = foundationResources.Singleton.replaceValues("advSearchResultsSuccessMsg", [numberOfObjects]);
+					}
+					else if (isNaN(totalRecords)) {
+						message = foundationResources.Singleton.advSearchResultsGeneralMsg.string;
+					}
+					else if (totalRecords == 0) {
+						message = foundationResources.Singleton.advSearchResultsNoResultsMsg.string;
+					}
+					else if (searchOptions != null && totalRecords > this.getMaxRecordSetTotal()) {
+						message = foundationResources.Singleton.replaceValues("advSearchResultsOverLimitMsg", [s.currPageNum, totalRecords]);
+					}
+					else {
+						message = foundationResources.Singleton.replaceValues("advSearchResultsSuccessMsg", [totalRecords]);
+					}
+				}
+			}
+			else {
+				message = foundationResources.Singleton.serviceError.string;
+			}
+			return message;
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.exiting("com.ibm.commerce.lobtools.foundation.view", "cmc/foundation/SearchService", "buildSearchStatusMessage(s, e, numberOfObjects, reqIdentifier)");
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when a service response is successfuly returned from the server. This does
+			not necessarily mean that the service completed successfully, it just means that there were no
+			communication errors. The specified dataset contains the response XML.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceComplete">
+			<![CDATA[
+			if (!ds.args.recordSetStartNumber || ds.args.recordSetStartNumber == ds.startIndex) {
+				ds.requestParent.reset();
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Check if there are more results awaiting to be returned from this service
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param XML e: "objects" element
+		-->		
+		<method args="ds, e" name="hasMoreRecords">
+			<![CDATA[
+			if (this.requestIdentifier != ds.requestIdentifier) {
+				return false;
+			}
+			return this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Parse the "objects" element returned from a successful request.
+			@param cmc/foundation/ModelSearchResults s: the search results object
+			@param XML e: the objects data element
+			@param boolean hasMoreRecordsFlag: true when more records exist that have not been loaded
+			@param string reqIdentifier: the request identifier associated with the dataset that returned this data
+			@param number startIndex: the start index for this request
+		-->
+		<method args="s, e, hasMoreRecordsFlag, reqIdentifier, startIndex" name="parseObjects">
+			<![CDATA[
+			s.model.doDeferredParseObjects(e, null, this.doParseCompleteDel, {
+				e: e,
+				s: s,
+				reqIdentifier: reqIdentifier,
+				hasMoreRecordsFlag: hasMoreRecordsFlag,
+				startIndex: startIndex
+			}, this.stoppable, this.doParseStopDel, {
+				s: s,
+				reqIdentifier: reqIdentifier,
+				hasMoreRecordsFlag: hasMoreRecordsFlag
+			}, null, s.localContext);
+			]]>
+		</method>
+			
+		<!--- @keywords private -->
+		<method args="args" name="doParseComplete">
+			<![CDATA[
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/SearchService", "doParseComplete", "Start update UI for " + args.objects.length + " Objects returned");
+			}
+			var objects = args.objects;
+			var s = args.s;
+			var e = args.e;
+			var reqIdentifier = args.reqIdentifier;
+			var maxRecordSetTotal = this.getMaxRecordSetTotal();
+			var startIndex = args.startIndex;
+			var totalRecords = Number(e.getAttribute("recordSetTotal"));
+			var currPageNum = Math.ceil((startIndex + maxRecordSetTotal) / maxRecordSetTotal);
+			var lastPageNum = currPageNum;
+			if (startIndex + maxRecordSetTotal < totalRecords) {
+				lastPageNum += Math.ceil((totalRecords - startIndex - maxRecordSetTotal) / maxRecordSetTotal);
+			}
+			if (this.requestIdentifier == reqIdentifier && s.searchOptions != null) {
+				s.setVariable("startIndex", args.startIndex);
+				s.setVariable("totalRecords", totalRecords);
+				s.setVariable("currPageNum", currPageNum);
+				s.setVariable("lastPageNum", lastPageNum);
+			}
+			var statusMessage = this.buildSearchStatusMessage(s, e, objects.length, reqIdentifier);
+			var params = {};
+			params.requestIdentifier = reqIdentifier;
+			params.searchResultObjects = objects;
+			params.statusMessage = statusMessage;
+			EventUtil.trigger(s, "onsearchComplete", params);
+			if (this.requestIdentifier == reqIdentifier && s.searchOptions != null) {
+				if (!args.hasMoreRecordsFlag) {
+					s.setVariable("statusMessage", statusMessage);
+				}
+				var searchResultObjects = s.searchResultObjects;
+				for (var i = 0; i < objects.length; i++) {
+					var o = objects[i];
+					s.objectDestroyedDel.connect(o, "beingDestroyed");
+					s.searchResultObjects.push(o);
+				}
+				s.updateModelObjectLists();
+			}
+			if (EventTimer.Singleton.enabled) {
+				EventTimer.Singleton.updateObjCount(args.objects.length);
+			}
+			if (Logger.Singleton.enabled) {
+				Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.service", "CONFIG", "cmc/foundation/SearchService", "doParseComplete", "requestIdentifier=" + reqIdentifier + " " + this.url);
+			}
+			if (Logger.Singleton.perfTraceEnabled) {
+				Logger.Singleton.perfTrace("cmc/foundation/SearchService", "doParseComplete", "End update UI for for " + args.objects.length + " Objects returned");
+			}
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="args" name="doParseStop">
+			<![CDATA[
+			var s = args.s;
+			var reqIdentifier = args.reqIdentifier;
+			var hasMoreRecordsFlag = args.hasMoreRecordsFlag;
+			if (!hasMoreRecordsFlag) {
+				var statusMessage = foundationResources.Singleton.searchStopped.string;
+				var params = {};
+				params.requestIdentifier = this.requestIdentifier;
+				params.statusMessage = statusMessage;
+				EventUtil.trigger(s, "onsearchComplete", params);
+				if (this.requestIdentifier == reqIdentifier) {
+					s.setVariable("statusMessage", statusMessage);
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the service has been stopped, aborting a request or response.
+			@param cmc/foundation/ServiceDataset ds: dataset
+		-->
+		<method args="ds" name="serviceStopped">
+			<![CDATA[
+			var s = ds.requestParent;
+			var statusMessage = foundationResources.Singleton.searchStopped.string;
+			var params = {};
+			params.requestIdentifier = this.requestIdentifier;
+			params.statusMessage = statusMessage;
+			EventUtil.trigger(s, "onsearchComplete", params);
+			if (this.requestIdentifier == ds.requestIdentifier) {
+				s.setVariable("statusMessage", statusMessage);
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			Handle service exception.
+			@param cmc/foundation/ServiceDataset ds: dataset
+			@param string message: the exception message
+			@param string code: the exception code
+		-->
+		<method args="ds, message, code" name="handleException">
+			<![CDATA[
+			if (typeof(code) == "undefined") code = null;
+			var s = ds.requestParent;
+			var statusMessage = message;
+			if (code == FoundationConstants.Singleton.ERROR_SEARCH_RESULTS_OVER_SERVER_LIMIT) {
+				if (typeof (s.searchOptions.searchText) != "undefined") {
+					statusMessage = foundationResources.Singleton.replaceValues("searchResultsOverServerLimitMsg", [s.searchOptions.searchText]);
+				}
+				else {
+					statusMessage = foundationResources.Singleton.advSearchResultsOverServerLimitMsg.string;
+				}
+			}
+			var params = {};
+			params.requestIdentifier = this.requestIdentifier;
+			params.statusMessage = statusMessage;
+			EventUtil.trigger(s, "onsearchComplete", params);
+			if (this.requestIdentifier == ds.requestIdentifier) {
+				s.hasError = true;
+				s.setVariable("statusMessage", statusMessage);
+			}
+			]]>
+		</method>
+
+	</Service>
+</Definitions>

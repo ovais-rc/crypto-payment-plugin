@@ -1,0 +1,140 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2000, 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%
+	// Add the information for each page used in this notebookWizard. This information
+	// is simply stored in javascript variables to be used on the client.
+
+	Vector pageList = Util.convertToVector(UIProperties.getXMLObject("panel"));
+	String startingPage = request.getParameter("startingPage");
+	UIProperties.setStartingPage(startingPage);
+
+	com.ibm.commerce.wc.version.CommerceEARVersionInfo ver = new com.ibm.commerce.wc.version.CommerceEARVersionInfo();
+	
+	boolean enableFlag = true;
+
+	for (Enumeration pages = pageList.elements(); pages.hasMoreElements();) {
+		Hashtable singlePage = (Hashtable)pages.nextElement();
+
+		/* if the startingPage was not passed in in the URL, set it to be the first page. */
+		if (UIProperties.getStartingPage()== null) {
+			UIProperties.setStartingPage((String)singlePage.get("name"));
+		}
+
+		enableFlag = true;
+
+            	// check to see if the panel is associated with a feature which is enabled and only then
+            	// output it to the screen
+		String iFeature = (String) singlePage.get("feature");
+		
+		if (iFeature != null) {
+			String productName = (ver.isToolKit()) ? "toolkit" : "server";
+			String verNum = "" + ver.getVersion() + ver.getRelease();
+			
+			iFeature = "version" + java.io.File.separatorChar + iFeature + "." + productName + "." + verNum + ".component";
+		
+			java.net.URL compFile = this.getClass().getClassLoader().getResource(iFeature);
+			
+			if (compFile == null) enableFlag = false;
+		}
+		
+		if (enableFlag) {
+		
+		out.println("var page = new Object();");
+
+		for (Enumeration pageAttributes = singlePage.keys(); pageAttributes.hasMoreElements();) {
+			Object attributeKey = pageAttributes.nextElement();
+			Object attributeValue = singlePage.get(attributeKey);
+
+			if (!(attributeValue instanceof Vector) && !(attributeValue instanceof Hashtable)) {
+				String val = (String)attributeValue;
+				out.println("page['" + attributeKey + "'] = '" + attributeValue + "';");
+			}
+      	}
+%>
+
+page.parms = new Array();
+
+<%
+		if (singlePage.get("passAllParameters") != null) {
+			String passAllParameters = (String) singlePage.get("passAllParameters");
+			
+			if (passAllParameters.compareTo("true") == 0) {
+				Enumeration paramNames = request.getParameterNames();
+				while (paramNames.hasMoreElements()) {
+%>
+page.parms[page.parms.length] = "<%=UIUtil.toJavaScript((String)paramNames.nextElement())%>";
+<%          
+				}
+			}
+		}
+
+		if (singlePage.get("parameters") != null) {
+%>
+page.parms = "<%=singlePage.get("parameters")%>".split(",");
+<%
+		}
+%>
+page.nlsName      = "<%=UIUtil.toJavaScript(UIProperties.getResourceString((String)singlePage.get("name")))%>";
+page.groupNLSName = "<%=UIUtil.toJavaScript(UIProperties.getResourceString((String)singlePage.get("group")))%>";
+page.nlsTitle     = "";
+page.validated    = "NO";
+page.next         = null;
+page.prev         = currPanel;
+page.branchIndex  = null;
+
+// don't insert into pageArray if this page info already exists (wizard chaining)
+if (pageArray[page.name] == null) {
+	if (currPanel != null) {
+		pageArray[currPanel].next = page.name;
+	}
+	pageArray[page.name] = page;
+}
+
+currPanel = page.name;
+<%
+		} // end if component
+	}
+%>
+firstPanel = "<%=((Hashtable)pageList.firstElement()).get("name")%>";
+currPanel = "<%=UIProperties.getStartingPage()%>";
+currGroup = pageArray[currPanel].groupNLSName;
+<%
+	// Add the parameters of this request to the client's model. This will allow
+	// any panel to access them.
+
+	Enumeration paramNames = request.getParameterNames();
+	String name = "",value = "";
+
+	while (paramNames.hasMoreElements()) {
+		name = (String)paramNames.nextElement();
+		value = (String)request.getParameter(name);
+		value = UIUtil.toJavaScript(value);
+		out.println("put(\"" + UIUtil.toJavaScript(name) + "\", \"" + value + "\");");
+	}
+
+	// Add the databeans to the model only if we aren't starting the element for the first time
+	// Assume that if they pass in a starting page, this isn't the first time the wizard has loaded
+	// and therefore should not re-create the javascript bean from the javabean
+
+	String reloadBean = request.getParameter("reloadBean");
+
+	if (startingPage == null || (startingPage != null && reloadBean != null && reloadBean.toUpperCase().equals("TRUE"))) {
+		try {
+      		out.println(UIProperties.getDataPopulationCode(request));
+      	}
+      	catch (Exception e) {
+      		out.println("document.location = \"LoginTimeoutErrorView\";");
+      	}
+	}
+%>

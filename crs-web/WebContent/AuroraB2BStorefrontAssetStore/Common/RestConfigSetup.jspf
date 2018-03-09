@@ -1,0 +1,88 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@	page session="false"%><%@ 
+	page pageEncoding="UTF-8"%><%@
+	taglib uri="http://commerce.ibm.com/base" prefix="wcbase" %><%@
+	taglib uri="http://commerce.ibm.com/foundation" prefix="wcf" %><%@ 
+	taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %><%@ 
+	taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
+	<%@ taglib uri="http://commerce.ibm.com/foundation-fep/stores" prefix="wcst" %>
+	
+
+<c:set var="storeId" value="${CommandContext.storeId}" />
+<c:set var="locale" value="${CommandContext.locale}" />
+<c:set var="langId" value="${CommandContext.languageId}" />
+
+<wcst:alias name="ModuleConfig" var="configInst" />
+<wcst:mapper source="configInst" method="getWebModule" var="moduleConfig" />
+<%-- Determine if we are in preview mode. --%>
+<wcst:preview var="env_inPreview" />
+
+
+<wcst:mapper source="configInst" method="getValue" var="propertyConfig"/>
+<c:set var="restServerName" value="${propertyConfig['WebServer/HostName']}" scope="request"/>
+
+<c:if test="${empty REST_CONFIG}">
+	<jsp:useBean id="REST_CONFIG" class="java.util.HashMap" scope="request"/>
+	<c:choose>
+		<c:when test="${pageContext.request.secure}">
+			<c:choose>
+				<c:when test="${env_inPreview}">
+					<c:if test="${empty secureRestPreviewConfig}">
+						<jsp:useBean id="secureRestPreviewConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${secureRestPreviewConfig}" property="schema" value="https"/>
+						<c:set target="${secureRestPreviewConfig}" property="host" value="${restServerName}"/>
+						<c:set target="${secureRestPreviewConfig}" property="port" value="${moduleConfig['RestPreview'].SSLPort}"/>
+						<c:set target="${secureRestPreviewConfig}" property="contextPath" value="${moduleConfig['RestPreview'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${secureRestPreviewConfig}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${empty secureRestConfig}">
+						<jsp:useBean id="secureRestConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${secureRestConfig}" property="schema" value="https"/>
+						<c:set target="${secureRestConfig}" property="host" value="${restServerName}"/>
+						<c:set target="${secureRestConfig}" property="port" value="${moduleConfig['Rest'].SSLPort}"/>
+						<c:set target="${secureRestConfig}" property="contextPath" value="${moduleConfig['Rest'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${secureRestConfig}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:when>
+		<c:otherwise>
+			<c:choose>
+				<c:when test="${env_inPreview}">
+					<c:if test="${empty restPreviewConfig}">
+						<jsp:useBean id="restPreviewConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${restPreviewConfig}" property="schema" value="http"/>
+						<c:set target="${restPreviewConfig}" property="host" value="${pageContext.request.serverName}"/>
+						<c:set target="${restPreviewConfig}" property="port" value="${moduleConfig['RestPreview'].nonSSLPort}"/>
+						<c:set target="${restPreviewConfig}" property="contextPath" value="${moduleConfig['RestPreview'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${restPreviewConfig}"/>
+				</c:when>
+				<c:otherwise>
+					<c:if test="${empty restConfig}">
+						<jsp:useBean id="restConfig" class="java.util.HashMap" scope="request"/>
+						<c:set target="${restConfig}" property="schema" value="http"/>
+						<c:set target="${restConfig}" property="host" value="${pageContext.request.serverName}"/>
+						<c:set target="${restConfig}" property="port" value="${moduleConfig['Rest'].nonSSLPort}"/>
+						<c:set target="${restConfig}" property="contextPath" value="${moduleConfig['Rest'].contextPath}"/>
+					</c:if>
+					<c:set target="${REST_CONFIG}" property="${storeId}" value="${restConfig}"/>
+				</c:otherwise>
+			</c:choose>
+		</c:otherwise>
+	</c:choose>
+</c:if>

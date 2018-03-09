@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("font","ar",{fontSize:{label:"الحجم",voiceLabel:"‏حجم طاقم الطباعة‏",panelTitle:"‏حجم طاقم الطباعة‏"},label:"طاقم طباعة",panelTitle:"اسم طاقم الطباعة",voiceLabel:"طاقم طباعة"});

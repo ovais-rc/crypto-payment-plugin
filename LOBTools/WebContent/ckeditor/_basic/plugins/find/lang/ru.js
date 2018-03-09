@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("find","ru",{find:"Поиск",findOptions:"Найти опции",findWhat:"Найти:",matchCase:"С учетом регистра",matchCyclic:"Циклическое совпадение",matchWord:"Слово целиком",notFoundMsg:"Указанный текст не найден.",replace:"Заменить",replaceAll:"Заменить все",replaceSuccessMsg:"Заменено вхождений: %1.",replaceWith:"Заменить на:",title:"Найти и заменить"});

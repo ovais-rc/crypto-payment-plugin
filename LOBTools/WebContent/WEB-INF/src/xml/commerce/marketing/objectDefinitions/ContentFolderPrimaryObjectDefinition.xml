@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		This definition defines the base object from which ContentFolder and InheritedContentFolderare derived.
+		A Content folder is an object used to organize Contents so that they can be found easily.
+		Content can be in multiple folders at the same time which is why this class uses a collection reference object
+		definition to define the relationship between folders and Content.
+		E-Marketing folders use the Folder noun from the file wc-infrastructure-clientobjects.xml
+		which contains information on how the parameters in the services
+		are mapped to create the appropriate BOD for the Web services.
+	-->
+	<PrimaryObjectDefinition definitionName="cmc/marketing/BaseContentFolderPrimaryObjectDefinition" displayName="${marketingResources.ContentFolderObjectName}" displayNameProperty="identifier" idProperty="folderId" isBaseDefinition="true" newDisplayName="${marketingResources.ContentFolder_newContentFolderDisplayName}" newObjectMenuItemText="${marketingResources.contextMenuNewContentFolder}" objectGroups="ContentFolderGroup" propertiesDefinition="cmc/marketing/ContentFolderProperties" writeUsage="IBM_ManageMarketingTool">
+		<dependency localName="marketingResources" moduleName="cmc/marketing/MarketingResources"/>
+		<!--- This service retrieves all the child folders.  -->
+		<GetChildrenService objectTypes="ContentFolderReference,InheritedContentFolderReference" url="/cmc/GetChildFolders">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="folderObjectType" value="ContentFolder"/>
+		</GetChildrenService>
+		<!--- This service retrieves all the folder items that belong to this folder. -->
+		<GetChildrenService objectTypes="ContentFolderItemReference,ContentFolderInheritedItemReference,InheritedContentFolderInheritedItemReference" url="/cmc/GetMarketingFolderItems">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="defaultLanguageId"/>
+		</GetChildrenService>
+		<ObjectTypeFilter filterType="utilitiesViewFilter" objectTypes="ContentFolderReference,InheritedContentFolderReference,ContentFolderItemReference,ContentFolderInheritedItemReference,InheritedContentFolderInheritedItemReference"/>
+		<!--- Update service to update a folder. -->
+		<UpdateService url="/cmc/UpdateFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="parentFolderId" optional="true" parameterName="parentFolderId" parentProperty="true" propertyName="folderId"/>
+		</UpdateService>
+		<!---
+			Retrieves the cmc/marketing/BaseContentFolderPrimaryObjectDefinition object that is the parent to this object.
+		-->
+		<GetReferencesService url="/cmc/GetParentFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="parentFolderId" propertyName="parentFolderId"/>
+			<ServiceParam name="folderObjectType" value="ContentFolder"/>
+		</GetReferencesService>
+		<!-- Refresh Service to reload the properties of the folder -->
+		<RefreshService url="/cmc/GetFolderById">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+			<ServiceParam name="folderObjectType" value="ContentFolder"/>
+		</RefreshService>
+		<!--- This is the folder_id defined in the FOLDER table, which indicates the primary key of this folder. -->
+		<PropertyDefinition copyProtected="true" propertyName="folderId"/>
+		<!--- This is the identifier of the folder. -->
+		<PropertyDefinition displayName="${marketingResources.ContentFolder_name}" maximumSize="256" propertyName="identifier" required="true" trim="true"/>
+		<!--- This is the description of the folder. -->
+		<PropertyDefinition displayName="${marketingResources.ContentFolder_description}" maximumSize="256" propertyName="description" type="string"/>
+		<Xml name="template">
+			<folderType>IBM_ContentFolder</folderType>
+		</Xml>
+		<!--- Reference to the parent of the folder. -->
+		<ParentReferenceObjectDefinition baseDefinition="cmc/marketing/ContentFolderReferenceObjectDefinition" cascadeDelete="true"/>
+		<!--- Navigation list definition for navigating from the folder item to the Content. -->
+		<NavigationListDefinition baseDefinition="cmc/marketing/ContentFolderItemGridChildList" isDefault="true"/>
+		<!--- Navigation list definition for navigating from the folder to its child items. -->
+		<NavigationListDefinition baseDefinition="cmc/marketing/ContentFolderGridChildList" toolbarIcon="folderListToolbarIcon"/>
+	</PrimaryObjectDefinition>
+
+	<!--
+		Defines the object to be used to represent folders owned by the local store.
+	-->
+	<PrimaryObjectDefinition baseDefinition="cmc/marketing/BaseContentFolderPrimaryObjectDefinition" creatable="true" definitionName="cmc/marketing/ContentFolder" headerIcon="GenericFolderHeaderIcon" icon="GenericFolderIcon" objectType="ContentFolder">
+		<!--- Create service to create a folder and its relationship to a parent folder.. -->
+		<CreateService url="/cmc/CreateFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="parentFolderId" optional="false" parameterName="parentFolderId" parentProperty="true" propertyName="folderId">
+				<EnablementCondition conditionId="enableParentFolderId" enablementValue="" negate="true" parentProperty="true" propertyName="identifier"/>
+			</ServiceParam>
+		</CreateService>
+		<!--- Delete service to delete a folder. -->
+		<DeleteService url="/cmc/DeleteFolder">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderId" propertyName="folderId"/>
+		</DeleteService>
+		<TrueEnablementCondition/>
+		<!--- Reference to the items that belong to the folder and are owned by the local store. -->
+		<CollectionReferenceObjectDefinition baseDefinition="cmc/marketing/ContentFolderItemReferenceObjectDefinition"/>
+		<!--- Reference to the items that belong to the folder and are owned by the asset store. -->
+		<CollectionReferenceObjectDefinition baseDefinition="cmc/marketing/ContentFolderInheritedItemReferenceObjectDefinition"/>
+	</PrimaryObjectDefinition>
+
+	<!--
+		Defines the object to be used to represent folders owned by the asset store.
+	-->
+	<PrimaryObjectDefinition baseDefinition="cmc/marketing/BaseContentFolderPrimaryObjectDefinition" compatibleObjectTypes="ContentFolder" creatable="false" definitionName="cmc/marketing/InheritedContentFolder" headerIcon="InheritedGenericFolderHeaderIcon" icon="InheritedGenericFolderIcon" objectType="InheritedContentFolder">
+		<!--- Reference to the parent of the folder. -->
+		<ParentReferenceObjectDefinition baseDefinition="cmc/marketing/InheritedContentFolderReferenceObjectDefinition"/>
+		<!--- Reference to the items that belong to the folder and are owned by the asset store. -->
+		<CollectionReferenceObjectDefinition baseDefinition="cmc/marketing/InheritedContentFolderInheritedItemReferenceObjectDefinition"/>
+	</PrimaryObjectDefinition>
+
+	<!-- The relationship between this folder and its local parent -->
+	<ParentReferenceObjectDefinition cascadeDelete="true" definitionName="cmc/marketing/ContentFolderReferenceObjectDefinition" derivedId="true" idProperty="folderReferenceId" objectGroups="ContentFolderReferenceGroup" objectType="ContentFolderReference" referencedType="ContentFolder"/>
+
+	<!-- The relationship between this folder and its asset store parent -->
+	<ParentReferenceObjectDefinition cascadeDelete="true" definitionName="cmc/marketing/InheritedContentFolderReferenceObjectDefinition" derivedId="true" idProperty="folderReferenceId" objectGroups="ContentFolderReferenceGroup" objectType="InheritedContentFolderReference" referencedType="InheritedContentFolder"/>
+
+	<!-- The relationship between a folder and local Content in this folder. -->
+	<CollectionReferenceObjectDefinition allowDuplicates="false" baseDefinition="cmc/marketing/BaseContentFolderItemReferenceObjectDefinition" definitionName="cmc/marketing/ContentFolderItemReferenceObjectDefinition" initializeObjectStoreId="true" objectGroups="ContentFolderItemReferenceGroup" objectType="ContentFolderItemReference" referencedTypes="MarketingContent">
+		<TrueEnablementCondition conditionType="childObjectCondition"/>
+	</CollectionReferenceObjectDefinition>
+
+	<!-- The relationship between this folder and asset store Content in this folder. -->
+	<CollectionReferenceObjectDefinition allowDuplicates="false" baseDefinition="cmc/marketing/BaseContentFolderItemReferenceObjectDefinition" definitionName="cmc/marketing/ContentFolderInheritedItemReferenceObjectDefinition" initializeObjectStoreId="true" objectGroups="ContentFolderItemReferenceGroup" objectType="ContentFolderInheritedItemReference" referencedTypes="InheritedMarketingContent">
+		<TrueEnablementCondition conditionType="childObjectCondition"/>
+	</CollectionReferenceObjectDefinition>
+
+	<!-- The relationship between an inherited folder and an inherited Content in this folder. -->
+	<CollectionReferenceObjectDefinition allowDuplicates="false" baseDefinition="cmc/marketing/BaseContentFolderItemReferenceObjectDefinition" definitionName="cmc/marketing/InheritedContentFolderInheritedItemReferenceObjectDefinition" objectGroups="ContentFolderItemReferenceGroup" objectType="InheritedContentFolderInheritedItemReference" referencedTypes="InheritedMarketingContent">
+		<TrueEnablementCondition conditionType="childObjectCondition"/>
+	</CollectionReferenceObjectDefinition>
+
+	<!-- The class to represent relationships between folders and Content. These relationships are called folder items. -->
+	<CollectionReferenceObjectDefinition alwaysAllowMove="false" definitionName="cmc/marketing/BaseContentFolderItemReferenceObjectDefinition" idProperty="folderItemID" isBaseDefinition="true">
+		<!--- Create service to create the relationship between the parent folder and folder item reference. -->
+		<CreateService url="/cmc/CreateFolderItemReference">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="objectStoreId" parentProperty="true" propertyName="objectStoreId"/>
+			<ServiceParam name="folderItemStoreId" objectPath="MarketingContentGroup" parameterName="folderItemStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" parentProperty="true" propertyName="folderId"/>
+			<ServiceParam name="folderItemReferenceId" objectPath="MarketingContentGroup" propertyName="uniqueId"/>
+		</CreateService>
+		<!--- Delete service to delete the relationship between the parent folder and folder item reference. -->
+		<DeleteService url="/cmc/DeleteFolderItemReference">
+			<ServiceParam name="storeId"/>
+			<ServiceParam name="folderItemStoreId" objectPath="MarketingContentGroup" parameterName="folderItemStoreId" propertyName="objectStoreId"/>
+			<ServiceParam name="folderId" parentProperty="true" propertyName="folderId"/>
+			<ServiceParam name="folderItemReferenceId" objectPath="MarketingContentGroup" propertyName="uniqueId"/>
+			<ServiceParam name="folderItemType" propertyName="folderItemType"/>
+		</DeleteService>
+		<TrueEnablementCondition conditionId="objectTypeFolderCondition" conditionType="childObjectCondition"/>
+		<Xml name="template">
+			<folderItemType>MarketingContentType</folderItemType>
+		</Xml>
+	</CollectionReferenceObjectDefinition>
+</Definitions>

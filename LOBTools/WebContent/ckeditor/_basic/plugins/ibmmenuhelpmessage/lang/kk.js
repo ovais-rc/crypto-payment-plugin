@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","kk",{keystrokeForContextMenu:"Қосымша опциялар үшін Ctrl және тінтуірдің оң жақ түймешігін басыңыз",keystrokeForContextMenuMac:"Қосымша опциялар үшін Cmd + және тінтуірдің оң жақ түймешігін басыңыз"});

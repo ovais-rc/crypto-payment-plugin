@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("justify","fi",{block:"Tasaa molemmat reunat:",center:"Tasaus keskelle",left:"Tasaus vasemmalle",right:"Tasaus oikealle"});

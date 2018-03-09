@@ -1,0 +1,138 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2000, 2013 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<script type="text/javascript">
+
+var requestProperties = new Array();
+
+<%
+	TypedProperty reqProperties = (TypedProperty) request.getAttribute(ECConstants.EC_REQUESTPROPERTIES);
+	if (reqProperties != null) {
+		for (Enumeration properties = reqProperties.keys(); properties.hasMoreElements();) {
+			String key = (String) properties.nextElement();
+			Object obj = reqProperties.get(key, null);
+			String value = null;
+
+			if (key.equals(ECToolsConstants.EC_XMLOBJECT) || 
+			    key.equals(ECToolsConstants.EC_XML) || 
+			    key.equals(ECToolsConstants.EC_XMLSTRING) || 
+			    key.equals(ECToolsConstants.EC_XMLFILEOBJECT)) {
+				continue;
+			}
+                                
+			if (obj instanceof String[]) {
+				String s[] = (String[])obj;
+				value = UIUtil.toJavaScript(s[0]);
+			}
+			else if ( obj instanceof String) {
+				value = UIUtil.toJavaScript((String)obj);
+			}
+
+			if (value != null) {
+				out.println("requestProperties[\"" + UIUtil.toJavaScript(key) + "\"] = '" + value + "';");
+			}
+		}
+	}
+%>
+
+function getRequestProperties() {
+	return requestProperties;
+}
+
+
+function createDynamicButtons(type) {
+<%
+	Vector buttonList = Util.convertToVector(UIProperties.getXMLObject("button"));
+
+	if (buttonList != null) {
+		for(Enumeration buttons = buttonList.elements(); buttons.hasMoreElements();) {
+			Hashtable singleButton = (Hashtable)buttons.nextElement();
+			String component = (String)singleButton.get("component");
+
+			if (component == null || (component != null && ToolsConfiguration.isComponentEnabled(component))) {
+				out.println("\tdocument.writeln('<td align=\"center\">');");
+                out.println("\tdocument.writeln('<button name=\"" + (String)singleButton.get("name") + "Button\" id=\"' + type + '\" onclick =\"" + (String)singleButton.get("name") + "Action()\">" + UIUtil.toJavaScript(UIProperties.getResourceString((String)singleButton.get("name"))) + "</button>');");
+                out.println("\tdocument.writeln('</td>');");
+			}
+		}
+	}
+%>
+}
+
+<%
+	if (buttonList != null) {
+		for(Enumeration buttons = buttonList.elements(); buttons.hasMoreElements();) {
+          Hashtable singleButton = (Hashtable)buttons.nextElement();
+          String component = (String)singleButton.get("component");
+          
+			if (component == null || (component != null && ToolsConfiguration.isComponentEnabled(component))) {
+				out.println("function " + (String)singleButton.get("name") + "Action() {");
+				out.println("	parent." + (String)singleButton.get("action"));
+				out.println("}\n");
+			}
+		}
+	}
+%>
+
+function handleFinish() {
+	var submitErrorMessage = requestProperties['<%= UIProperties.SUBMIT_ERROR_MESSAGE %>'];
+	var submitErrorStatus = requestProperties['<%= UIProperties.SUBMIT_ERROR_STATUS %>'];
+	var submitFinishMessage = requestProperties['<%= UIProperties.SUBMIT_FINISH_MESSAGE %>'];
+	
+	parent.setContentFrameLoaded(true);
+	parent.finishClicked = false;
+
+	if (submitErrorStatus != null && submitErrorStatus != 'null' && submitErrorStatus != '') {
+		if (parent.submitErrorHandler) {
+			parent.submitErrorHandler(submitErrorMessage, submitErrorStatus);
+		}
+		else {
+			alertDialog(submitErrorMessage);
+		}
+	}
+	else {
+         if (submitFinishMessage == null) {
+            parent.submitFinishHandler(parent.getFinishConfirmation());
+         }
+         else {
+   			parent.submitFinishHandler(submitFinishMessage);
+   		}
+	}			
+}
+
+function addURLParameter(pname, value) {
+	var input = document.createElement("INPUT");
+	input.setAttribute("type", "hidden");
+	input.setAttribute("name", pname);
+	input.setAttribute("value", value);
+	document.submitForm.appendChild(input);
+}
+
+function removeURLParameter(pname) {
+	var form1 = document.submitForm;
+	if (form1.hasChildNodes()) {
+		for (i = form1.childNodes.length - 1; i >= 0 ; i--) {
+			if (form1.childNodes[i].name == pname) {
+				form1.removeChild(form1.childNodes[i]);
+			}
+		}
+	}
+}
+
+window.onload = function () {
+	if (parent.navigationOnLoad) {
+		parent.navigationOnLoad();
+	}
+}
+    
+</script>

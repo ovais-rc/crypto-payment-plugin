@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("removeformat","ko",{toolbar:"형식 제거"});

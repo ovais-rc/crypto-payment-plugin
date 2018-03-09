@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","he",{bulletedlist:"רשימה עם תבליטים",numberedlist:"רשימה ממוספרת",ibm:{numberedTitle:"רשימה ממוספרת",bulletedTitle:"רשימה עם תבליטים",description:"ההגדרות יוכלו על רמת הרשימה הנוכחית",fontsize:"גודל גופן:"}});

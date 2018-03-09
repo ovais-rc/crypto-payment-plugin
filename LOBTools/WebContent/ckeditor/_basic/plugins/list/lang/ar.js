@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","ar",{bulletedlist:"كشف نقطي",numberedlist:"‏كشف مرقم‏",ibm:{numberedTitle:"‏كشف مرقم‏",bulletedTitle:"كشف نقطي",description:"سيتم تطبيق المحددات على مستوى الكشف الحالي",fontsize:"حجم الخط:"}});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","el",{bulletedlist:"Λίστα με κουκίδες",numberedlist:"Αριθμημένη λίστα",ibm:{numberedTitle:"Αριθμημένη λίστα",bulletedTitle:"Λίστα με κουκίδες",description:"Οι ρυθμίσεις θα εφαρμοστούν στο τρέχον επίπεδο λίστας",fontsize:"Μέγεθος γραμματοσειράς:"}});

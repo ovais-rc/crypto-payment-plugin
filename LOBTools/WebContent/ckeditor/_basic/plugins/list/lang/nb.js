@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","nb",{bulletedlist:"Punktliste",numberedlist:"Nummerert liste",ibm:{numberedTitle:"Nummerert liste",bulletedTitle:"Punktliste",description:"Innstillingene vil bli brukt på det gjeldende listenivået",fontsize:"Skriftstørrelse:"}});

@@ -1,0 +1,677 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!---
+		@keywords private
+		This class cmc/foundation/AdvancedSearchDialog implements an advanced search dialog by extending {@link cmc/foundation/Dialog}.
+	-->
+	<Dialog classDefinition="true" contentPaddingLeftSize="0" contentPaddingRightSize="0" definitionName="cmc/foundation/AdvancedSearchDialog" title="${foundationResources.Singleton.advancedSearchDialogTitle.string}">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<dependency localName="AdvancedSearchTabs" moduleName="cmc/foundation/AdvancedSearchTabs"/>
+		<dependency localName="KeyUtil" moduleName="cmc/foundation/KeyUtil"/>
+		<!---
+			Reference to the Business object editor where this advanced search dialog is launched.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			Search widget that launched this advanced search dialog.
+		-->
+		<variable name="searchWidget"/>
+		<!---
+			Array of advanced search definitions.
+		-->
+		<variable name="searchDefinitions" value="${null}"/>
+		<!---
+			Indicates that the shortcut keys have been registered for this widget.
+		-->
+		<variable name="shortcutsRegistered" type="boolean" value="false"/>
+
+		<!---
+			Activate the advanced search request.
+		-->
+		<method name="doSearch">
+			<![CDATA[
+			this.searchWidget.doSearch(this.searchOptionsArea.searchOptions.searchDefinition, this.searchOptionsArea.searchOptions.getSearchOptions());
+			this.closeWindow();
+			]]>
+		</method>
+		
+		<!---
+			Open the advanced search dialog.
+		-->
+		<method name="openWindow">
+			<![CDATA[
+			this.inherited(arguments);
+			if (!this.searchOptionsArea.searchOptions && this.searchDefinitions != null) {
+				var v = new AdvancedSearchTabs.Class(this.searchOptionsArea, {
+					name: "searchOptions",
+					searchDefinitions: this.searchDefinitions,
+					oEditor: this.oEditor,
+					advancedSearchDialog: this
+				});
+				this.moveToNextTabDel = new EventHandler.Class(v, "moveToNextTab");
+				this.moveToPreviousTabDel = new EventHandler.Class(v, "moveToPreviousTab");
+			}
+			this.registerShortcutKeys();
+			EventUtil.trigger(this, "onopen");
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (this.searchOptionsArea.searchOptions.activeTab != null) {
+				FocusUtil.setFocus(this.searchOptionsArea.searchOptions.activeTab, false);
+			}
+			else {
+				this.inherited(arguments);
+			}
+			]]>
+		</method>
+		
+		<!---
+			Close the advanced search dialog.
+		-->
+        <method name="closeWindow">
+			<![CDATA[
+			this.unregisterShortcutKeys();
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.moveToNextTabDel) {
+				this.moveToNextTabDel.disconnectAll();
+				delete this.moveToNextTabDel;
+			}
+			if (this.moveToPreviousTabDel) {
+				this.moveToPreviousTabDel.disconnectAll();
+				delete this.moveToPreviousTabDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+
+		<!---
+			Registers the shortcut keys for this widget.
+		-->
+		<method name="registerShortcutKeys">
+			<![CDATA[
+			if (this.shortcutsRegistered) {
+				return;
+			}
+			KeyUtil.callOnKeyCombo(this.moveToNextTabDel, ["Control", "Pagedown"]);
+			KeyUtil.callOnKeyCombo(this.moveToPreviousTabDel, ["Control", "Pageup"]);
+			this.shortcutsRegistered = true;
+			]]>
+		</method>
+		
+		<!---
+			Unregisters the shortcut keys for this widget.
+		-->
+		<method name="unregisterShortcutKeys">
+			<![CDATA[
+			KeyUtil.removeKeyComboCall(this.moveToNextTabDel, ["Control", "Pagedown"]);
+			KeyUtil.removeKeyComboCall(this.moveToPreviousTabDel, ["Control", "Pageup"]);
+			this.shortcutsRegistered = false;
+			]]>
+		</method>
+
+		<handler name="onsearchDefinitions">
+			<![CDATA[
+			if (this.searchOptionsArea && this.searchOptionsArea.searchOptions) {
+				this.searchOptionsArea.searchOptions.setVariable("searchDefinitions", this.searchDefinitions);
+			}
+			]]>
+		</handler>
+
+		<AxisLayout spacing="8"/>
+		<Component name="searchOptionsArea"/>
+		<Component name="buttonArea" placement="footer">
+			<AxisLayout axis="x" spacing="10"/>
+			<Button text="${foundationResources.Singleton.advancedSearchDialogCancel.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<Button isdefault="true" text="${foundationResources.Singleton.advancedSearchDialogSearch.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.classroot.doSearch();
+					]]>
+				</handler>
+			</Button>
+		</Component>
+ 	</Dialog>
+ 	
+ 	<!---
+		@keywords private
+ 		Advanced search tabs. This class is used when there are multiple advanced search content panels.
+ 	-->
+ 	<Component classDefinition="true" definitionName="cmc/foundation/AdvancedSearchTabs">
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="AdvancedSearchTab" moduleName="cmc/foundation/AdvancedSearchTab"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+ 		<!---
+			Reference to the Business object editor where advanced search dialog is launched.
+		-->
+		<variable name="oEditor" value="${null}"/>
+ 		<!---
+ 			Array of advanced search definitions.
+ 		-->
+ 		<variable name="searchDefinitions"/>
+		<!---
+			Current search definition within this advanced search dialog.
+		-->
+		<variable name="searchDefinition" value="${null}"/>
+		<!---
+			The current active tab.
+		-->
+		<variable name="activeTab" value="${null}"/>
+		<!---
+			Advanced search tabs.
+		-->
+		<variable name="tabs" value="${[]}"/>
+		<!---
+			Reference to Advanced Search Dialog.
+		-->
+		<variable name="advancedSearchDialog" value="${null}"/>
+
+		<!---
+			Left Margin for the content area
+		-->	
+		<variable name="contentLeftMargin" type="number" value="18"/>
+
+		<!---
+			Right Margin for the content area
+		-->	
+		<variable name="contentRightMargin" type="number" value="18"/>
+
+		<!---
+			Move to the next tab.
+		-->
+		<method args="e" name="moveToNextTab">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				var currentIndex = this.searchDefinitions.indexOf(this.searchDefinition);
+				var nextIndex = (currentIndex + 1) % this.searchDefinitions.length;
+				EventUtil.trigger(this.header.tabs[this.searchDefinitions[nextIndex].searchType], "onclick");
+			}
+			]]>
+		</method>
+
+		<!---
+			Move to the previous tab.
+		-->
+		<method args="e" name="moveToPreviousTab">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (ViewUtil.Singleton.containedInModalView(this)) {
+				var currentIndex = this.searchDefinitions.indexOf(this.searchDefinition);
+				var nextIndex = ((currentIndex - 1) + this.searchDefinitions.length) % this.searchDefinitions.length;
+				EventUtil.trigger(this.header.tabs[this.searchDefinitions[nextIndex].searchType], "onclick");
+			}
+			]]>
+		</method>
+ 		
+		<!--- @keywords private -->
+ 		<method name="init">
+			<![CDATA[
+			this.checkContentSizeDel = new EventHandler.Class(this, "checkContentSize");
+			this.updateTabsDel = new EventHandler.Class(this, "updateTabs");
+			this.updateTabs();
+			this.inherited(arguments);
+			]]>
+		</method>
+ 		
+		<!--- @keywords private -->
+ 		<method name="destroy">
+			<![CDATA[
+			this.checkContentSizeDel.disconnectAll();
+			delete this.checkContentSizeDel;
+			]]>
+		</method>
+
+		<!---
+			Update the tabs to match the current list of search definitions.
+		-->
+		<method name="updateTabs">
+			<![CDATA[
+			this.updateTabsDel.disconnectAll();
+			var defaultTab = null;
+			for (var i = 0; i < this.tabs.length; i++) {
+				this.tabs[i].setVariable("visible", false);
+			}
+			for (var i = 0; i < this.searchDefinitions.length; i++) {
+				var def = this.searchDefinitions[i];
+				if (def.advancedSearchContentClass == null) {
+					this.updateTabsDel.connect(def, "onadvancedSearchContentClass");
+					def.loadDeferredVariable("advancedSearchContentClass");
+				}
+				else {
+					if (!this.header.tabs[def.searchType]) {
+						var tab = new AdvancedSearchTab.Class(this.header.tabs, {
+							name: def.searchType,
+							tabs: this,
+							searchDefinition: def,
+							advancedSearchDialog: this.advancedSearchDialog
+						});
+						this.tabs.push(tab);
+						var tabContent = new def.advancedSearchContentClass.Class(this.container.content, {
+							oEditor: this.oEditor,
+							advancedSearchDialog: this.advancedSearchDialog
+						});
+						tab.tabContent = tabContent;
+						this.checkContentSizeDel.connect(tab, "onwidth");
+						this.checkContentSizeDel.connect(tabContent, "onwidth");
+						this.checkContentSizeDel.connect(tabContent, "onheight");
+					}
+					else {
+						this.header.tabs[def.searchType].setVariable("visible", true);
+					}
+					if (def.isDefault) {
+						defaultTab = this.header.tabs[def.searchType];
+					}
+				}
+			}
+			if (defaultTab == null) {
+				defaultTab = this.header.tabs[this.searchDefinitions[0].searchType];
+			}
+			if (this.activeTab == null || !this.activeTab.visible) {
+				this.setActiveTab(defaultTab);
+				FocusUtil.setFocus(defaultTab, false);
+			}
+			]]>
+		</method>
+
+ 		
+ 		<!---
+ 			Check the size of the content area.
+ 		-->
+ 		<method args="e" name="checkContentSize">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			var contentWidth = 0;
+			var contentHeight = 0;
+			var tabsWidth = 0;
+			for (var i = 0; i < this.tabs.length; i++) {
+				var tabContent = this.tabs[i].tabContent;
+				if (tabContent.width > contentWidth) {
+					contentWidth = tabContent.width;
+				}
+				if (tabContent.height > contentHeight) {
+					contentHeight = tabContent.height;
+				}
+				tabsWidth += this.tabs[i].width;
+			}
+			if (contentWidth < tabsWidth) {
+				contentWidth = tabsWidth;
+			}
+			if (contentWidth != this.container.content.width) {
+				this.container.content.setVariable("width", contentWidth);
+			}
+			if (contentHeight != this.container.content.height) {
+				this.container.content.setVariable("height", contentHeight);
+			}
+			]]>
+		</method>
+ 		
+ 		<!---
+ 			Activate the specified tab.
+ 			@param cmc/foundation/AdvancedSearchTab tab: the advanced search tab
+		-->
+		<method args="tab" name="setActiveTab">
+			<![CDATA[
+			if (typeof (this.activeTab) == "undefined" || this.activeTab != tab) {
+				if (this.activeTab != null) {
+					this.activeTab.setVariable("active", false);
+				}
+				this.activeTab = tab;
+				if (tab) {
+					tab.setVariable("active", true);
+					this.searchDefinition = tab.searchDefinition;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			Return the search options for the search request.
+			@return object: map of search request parameters
+		-->
+		<method name="getSearchOptions">
+			<![CDATA[
+			return this.activeTab.tabContent.getSearchOptions();
+			]]>
+		</method>
+		
+		<handler name="onsearchDefinitions">
+			<![CDATA[
+			this.updateTabs();
+			]]>
+		</handler>
+
+		<AxisLayout/>
+		<Component name="header">
+			<AxisLayout axis="x" spacing="0"/>
+			<Component imageSet="/images/commerce/foundation/restricted/resources/tab_inactive.png" name="headerLeftSpacing" stretches="width" width="${this.classroot.contentLeftMargin}" x="0"/>
+			<Component name="tabs">
+				<AxisLayout axis="x"/>
+			</Component>		
+			<Component imageSet="/images/commerce/foundation/restricted/resources/tab_inactive.png" name="headerRightSpacing" stretches="width" width="${Math.max(0, this.classroot.container.width - this.parent.tabs.width - this.classroot.contentLeftMargin) - 2}" x="${this.parent.tabs.width}"/>
+		</Component>
+		<Component name="container">
+			<AxisLayout axis="x" spacing="0"/>
+			<Component height="${this.classroot.container.content.height}" name="containerLeftSpacing" width="${this.classroot.contentLeftMargin}"/>
+			<Component name="content"/>
+			<Component height="${this.classroot.container.content.height}" name="containerRightSpacing" width="${this.classroot.contentRightMargin}"/>
+		</Component>
+		<!--- @keywords private -->
+ 		<method args="activeTab" name="set_activeTab">
+			<![CDATA[
+			this.setActiveTab(activeTab);
+			]]>
+		</method>
+	</Component>
+ 	
+ 	<!---
+		@keywords private
+ 		Advanced search tab.
+ 	-->
+	<FocusableComponent classDefinition="true" definitionName="cmc/foundation/AdvancedSearchTab">
+		<dependency localName="FocusIndicator" moduleName="cmc/foundation/FocusIndicator"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			Reference to the advanced search tabs instance.
+		-->
+		<variable name="tabs"/>
+		<!---
+			The search content pane for this tab.
+		-->
+		<variable name="tabContent"/>
+		<!---
+			Indicates that this tab is active.
+		-->
+		<variable name="active" type="boolean" value="false"/>
+		<!---
+			Indicates that this tab can accept focus.
+		-->
+		<variable name="focusable" value="true"/>
+		<!---
+			Tab margin.
+		-->
+		<variable name="margin" type="number" value="20"/>
+		<!---
+			Tab width.
+		-->
+		<variable name="width" value="${this.txt.width + this.margin * 2}"/>
+		<!---
+			Advanced search definition.
+		-->
+		<variable name="searchDefinition"/>
+		<!---
+			Text for this search tab.
+		-->
+		<variable name="text" type="string" value="${this.searchDefinition.displayName}"/>
+		<!---
+			Reference to Advanced Search Dialog.
+		-->
+		<variable name="advancedSearchDialog" value="${null}"/>
+		
+		<method name="activateTab">
+			<![CDATA[
+			if (FocusUtil.getFocus() == this) {
+				EventUtil.trigger(this, "onclick");
+			}
+			]]>
+		</method>
+
+		<!--- @keywords private -->
+		<handler name="onactive">
+			<![CDATA[
+			if (this.active) {
+				this.tabContent.setVariable("visible", true);
+				this.tabContent.bringToFront();
+				this.txt.setVariable("fgcolor", "#4178be");
+			}
+			else {
+				this.tabContent.setVariable("visible", false);
+				this.txt.setVariable("fgcolor", "#464646");
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onclick">
+			<![CDATA[
+			this.tabs.setActiveTab(this);
+			FocusUtil.setFocus(this);
+			]]>
+		</handler>
+		
+		<!---
+			Handle key down events. If the tab has focus, then spacebar
+			will cause this tab to be activated.
+		-->
+		<handler args="k" name="onkeydown">
+			<![CDATA[
+			if (k == 32) {
+				this.tabs.setActiveTab(this);
+			}
+			]]>
+		</handler>
+
+		<!--- @keywords private -->
+		<handler name="onfocus">
+			<![CDATA[
+			if (!this.indicator) {
+				new FocusIndicator.Class(this, {
+					name: "indicator",
+					focusableView: this,
+					indicatorView: this.txt
+				});
+			}
+			]]>
+		</handler>			
+		
+		<Component width="${this.parent.width}" imageSet="${this.parent.active ? 'toolTabActive' : 'toolTabInactive'}" stretches="width"/>
+		<TextComponent name="txt" resize="true" text="${this.classroot.text}" x="${this.parent.margin}" y="14" valign="middle"/>
+	</FocusableComponent>
+ 	
+ 	<!---
+ 		@keywords abstract
+ 		
+ 		This class is an advanced search content base class. Search definitions that declare {@link cmc/foundation/SearchDefinition#advancedSearchContentClass}
+ 		can only specify a class that extends this abstract class.
+ 		
+ 		<p>Advanced search content class is a free form view that is used to capture all user input for performing an advanced search.It is also possible to
+ 		use widgets such as {@link cmc/foundation/BaseCheckbox}, {@link cmc/foundation/BaseRadioGroup}, {@link cmc/foundation/BaseComboBox}, and many more if you prefer
+ 		to pick up the Management Center styling of widgets.
+ 		
+ 		<p>All instances of this class must implement the setSearchOptions method which is in charge of creating the
+ 		searchOptions map. The searchOptions map is used to determine the name/value pairs that gets passed to the search service
+ 		request URL. For example, a searchOptions map of <code>{"param1" : "a", "param2" : "true"}</code> results in the following
+ 		parameters being passed to the service request URL <code>searchURL?param1=a&param2=true</code>
+ 		
+ 		<p>This class triggers an <code>onload</code> event whenever the advanced search dialog is opened by the business user.
+ 		
+ 		<p>This class is an abstract class and should not be used directly nor should instances of it be created. Instead, create
+ 		an extension class and use the class as the {@link cmc/foundation/SearchDefinition#advancedSearchContentClass} attribute of a
+ 		{@link cmc/foundation/SearchDefinition}.
+ 	-->
+	<Component classDefinition="true" definitionName="cmc/foundation/AdvancedSearchContent" visible="false">
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="EventUtil" moduleName="cmc/foundation/EventUtil"/>
+		<!---
+			Reference to the business object editor where this search content is currently being shown.
+			@type cmc/foundation/BusinessObjectEditor
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			The search options map for this search content panel that holds all the parameters that will be passed to the
+			{@link cmc/foundation/SearchService} URL defined in the {@link cmc/foundation/SearchDefinition}.
+			@type Map
+		-->
+		<variable name="searchOptions" value="${{}}"/>
+		<!---
+			The search definition that corresponds to this search panel.
+			@type cmc/foundation/SearchDefinition
+		-->
+		<variable name="searchDefinition"/>
+		<!---
+			@keywords private
+			Reference to Advanced Search Dialog.
+		-->
+		<variable name="advancedSearchDialog" value="${null}"/>
+		
+		<!---
+			This <code>onload</code> is triggered whenever the advanced search dialog is opened by the business user.
+		-->
+		
+		
+		<!--- @keywords private -->
+ 		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.dialogOpenDel = new EventHandler.Class(this, "open", this.advancedSearchDialog, "onopen");
+			]]>
+		</method>
+ 		
+ 		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.dialogOpenDel) {
+				this.dialogOpenDel.disconnectAll();
+				delete this.dialogOpenDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+		
+ 		<!---
+ 			@keywords private
+ 			@event onload
+ 		-->
+ 		<method args="e" name="open">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			EventUtil.trigger(this, "onload");
+			]]>
+		</method>
+ 		
+ 		<!---
+			Construct the search options map for the search request. The implementing class has full control of the contents
+			of this map. The contents of the map will determine the name/value pairs that are placed in the service request URL.
+			
+			<p>This method is called when the OK button is clicked in the advanced search dialog. Its job is to collect all the
+			input from the content pane and placed them into the local searchOptions map attribute. The map should be build in
+			such a way that it contains the parameters that are expected by the search service request. Once this method is
+			completed its execution, then the search service request will be called.
+			
+			<p>The default implementation does nothing.
+		-->
+		<method name="setSearchOptions">
+			<![CDATA[
+
+			]]>
+		</method>
+		
+		<!---
+			Return the search options map that is used for creating the URL parameters for the search request.
+			@return object: map of search request parameters
+		-->
+		<method name="getSearchOptions">
+			<![CDATA[
+			this.setSearchOptions();
+			return this.searchOptions;
+			]]>
+		</method>
+	</Component>
+	
+	<!---
+		@keywords private
+		Advanced search action definition. This class is used by the search widget as
+		the advanced search action.
+	-->
+	<Node classDefinition="true" definitionName="cmc/foundation/AdvancedSearchActionDefinition">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="AdvancedSearchDialog" moduleName="cmc/foundation/AdvancedSearchDialog"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			Reference to the Business object editor.
+		-->
+		<variable name="oEditor" value="${null}"/>
+		<!---
+			Advanced search dialog.
+		-->
+		<variable name="dialog" value="${null}"/>
+		<!---
+			An array of advanced search definitions.
+		-->
+		<variable name="searchDefinitions" value="${null}"/>
+		<!---
+			Display name for the advanced search action. This value is set to title of the advanced search dialog.
+		-->
+		<variable name="displayName" type="string" value="${foundationResources.Singleton.advancedSearchDialogTitle.string}"/>
+		<!---
+			Declares whether this action can be selected to stay as a current default selection.
+		-->
+		<variable name="selectableAsDefaultDefinition" type="boolean" value="false"/>
+		
+		<!--- @keywords private -->
+		<method name="init">
+			<![CDATA[
+			this.inherited(arguments);
+			this.dialog = new AdvancedSearchDialog.Class(RootComponent.Singleton, {
+				searchWidget: this.parent,
+				searchDefinitions: this.searchDefinitions,
+				oEditor: this.oEditor
+			});
+			]]>
+		</method>
+		
+		<!--- @keywords private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.dialog != null) {
+				this.dialog.destroy();
+				this.dialog = null;
+			}
+			]]>
+		</method>
+		
+		<!---
+			Update the list of search definitions.
+		-->
+		<handler name="onsearchDefinitions">
+			<![CDATA[
+			if (this.searchDefinitions != null && this.dialog != null) {
+				this.dialog.setVariable("searchDefinitions", this.searchDefinitions);
+			}
+			]]>
+		</handler>
+	</Node>
+</Definitions>

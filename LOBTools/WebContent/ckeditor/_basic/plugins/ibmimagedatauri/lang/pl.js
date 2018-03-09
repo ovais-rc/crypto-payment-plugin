@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmimagedatauri","pl",{error:"Wklejanie obrazów nie jest obecnie obsługiwane. Zamiast tego użyj opcji paska narzędzi Wstaw obraz."});

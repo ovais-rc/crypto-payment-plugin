@@ -1,0 +1,125 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2011, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<c:choose>
+<c:when test="${hasInventory}">
+<script>
+	InventoryStatusJS_${productId} = new InventoryStatusJS(${storeParams}, ${catEntryParams}, [${physicalStores}], '${productId}');
+	dojo.topic.subscribe('DefiningAttributes_Resolved_${productId}', function(catEntryId, productId){
+		eval("InventoryStatusJS_${productId}.setCatEntry(catEntryId, productId)");
+	});
+		
+	dojo.topic.subscribe('DefiningAttributes_Changed_${productId}', function(catEntryId, productId){
+		eval("InventoryStatusJS_${productId}.restoreDefaultState(catEntryId, productId)");});
+		
+	//Declare a service for retrieving inventory status for an item...
+	wc.service.declare({
+		id: "getInventoryStatus_${productId}",
+		actionId: "getInventoryStatus",
+		url: getAbsoluteURL() + appendWcCommonRequestParameters("GetInventoryStatusByIDView"),
+		formId: ""
+
+		,successHandler: function(serviceResponse, ioArgs) {
+			InventoryStatusJS_${productId}.populateInvDetails(serviceResponse, ioArgs);
+		}
+
+		,failureHandler: function(serviceResponse, ioArgs) {
+			MessageHelper.displayErrorMessage(storeNLS["INV_STATUS_RETRIEVAL_ERROR"]);
+			cursor_clear();
+
+			// hiding the show availability link
+			dojo.style("InventoryStatus_ShowLink_Section_${productId}","display","block");
+		}
+	});
+
+	//Delcare a service for retrieving physical store details...
+	wc.service.declare({
+		id: "getPhysicalStoreDetails_${productId}",
+		actionId: "getPhysicalStoreDetails",
+		url: getAbsoluteURL() + appendWcCommonRequestParameters("GetStoreDetailsByIDView"),
+		formId: ""
+
+		,successHandler: function(serviceResponse, ioArgs) {
+			InventoryStatusJS_${productId}.populateStoreDetails(serviceResponse, ioArgs);
+		}
+
+		,failureHandler: function(serviceResponse, ioArgs) {
+			MessageHelper.displayErrorMessage(storeNLS["INV_STATUS_RETRIEVAL_ERROR"]);
+			cursor_clear();
+		}
+	});	
+</script>
+
+<div class="left" id="progressbar_${productId}"></div>
+<div id="InventoryStatus_Availability_Section_${productId}" class="left available" <c:if test="${!showAvailability}">style="display:none;"</c:if>>
+	<div class="header"><wcst:message key="INV_STORE_AVAILABILITY" bundle="${widgetText}"/></div>
+	
+	<div class="onlineAvailability header subHeading col4"><wcst:message key="AVAILABLE_ONLINE" bundle="${widgetText}"/></div>
+	<div class="sublist col6">
+		<span>
+			<img id="InventoryStatus_OnlineStatus_Img_${productId}" src="${jspStoreImgDir}${env_vfileColor}widget_product_info/<wcst:message key="IMG_NAME_${onlineInventoryStatus}" bundle="${widgetText}"/>" 
+				alt="" border="0" />
+		</span>
+		<c:choose>
+			<c:when test="${onlineInventoryStatus == 'Available'}">
+				<c:set var="richSnippetContent" value="in_stock"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="richSnippetContent" value="out_of_stock"/>
+			</c:otherwise>
+		</c:choose>
+		<span id="InventoryStatus_OnlineStatus_${productId}" class="text" itemprop="availability" content="${richSnippetContent}"><wcst:message key="INV_STATUS_${onlineInventoryStatus}" bundle="${widgetText}"/></span>
+	</div>
+	<div class="item_spacer_7px"></div>
+	
+	<flow:ifEnabled feature="StoreLocator">
+		<div class="clear_float availabilityBorder"></div>
+		<div id="InventoryStatus_InStore_Heading_${productId}" class="nearStoresLabel header subHeading col4"><wcst:message key="AVAILABLE_INSTORE" bundle="${widgetText}"/></div>
+		
+		<%-- Display physical store inventory status section only if at least one physical store inventory status is available --%>
+		<c:if test="${storeCounter ne 0}">
+			<div id="InventoryStatus_InStore_Section_${productId}" class="sublist col6">
+				<c:forEach var="inStoreInventoryName" items="${inStoreInventoryNameMap}" varStatus="status">
+				
+					<a id="WC_InventoryStatus_Link_${productId}_store_${status.count}" href="javascript:InventoryStatusJS_${productId}.fetchStoreDetails('${inStoreInventoryName.key}');" class="store_name">${inStoreInventoryName.value}</a>
+					<div class="clear_float"></div>
+					<span>
+						<img src="${jspStoreImgDir}${env_vfileColor}widget_product_info/<wcst:message key="IMG_NAME_${inStoreInventoryStatusMap[inStoreInventoryName.key]}" bundle="${widgetText}"/>" 
+							alt="" bundle="${widgetText}"/>
+					</span>
+					<span id="instore_inventory_status_${productId}_store_${status.count}" class="text"><wcst:message key="INV_STATUS_${inStoreInventoryStatusMap[inStoreInventoryName.key]}" bundle="${widgetText}"/></span>
+					<div class="clear_float"></div>
+					<div class="item_spacer_10px"></div>
+					
+				</c:forEach>
+			</div>
+		</c:if>
+		<div class="item_spacer_10px"></div>
+		<a id="InventoryStatus_SelectStoreLink_${productId}" href="javascript:InventoryStatusJS_${productId}.loadStoreLocator('${StoreLocatorView}','${bundleId}');" class="check_stores">${invStatusCheckStores}</a>
+	</flow:ifEnabled>
+</div>
+
+<div id="InventoryStatus_ShowLink_Section_${productId}" class="left available" <c:if test="${!showAvailabilityLink}">style="display:none;"</c:if>>
+	<span class="text"><wcst:message key="INV_SELECT_ATTRIBUTES_TO_SEE_AVAILABILITY" bundle="${widgetText}"/></span>
+</div>
+<div class="clear_float"></div>
+
+<%@ include file="/Widgets_701/Common/InventoryAvailability/StoreDetailsPopup.jspf" %>
+
+</c:when>
+<c:otherwise>
+	<script>
+		InventoryStatusJS_${productId} = false;
+	</script>
+</c:otherwise>
+</c:choose>

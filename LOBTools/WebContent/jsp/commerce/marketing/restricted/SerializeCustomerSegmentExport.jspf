@@ -1,0 +1,106 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2014 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+
+<%@page import="java.net.URLDecoder"%>
+<fmt:setLocale value="${param.locale}" />
+<fmt:setBundle
+	basename="com.ibm.commerce.marketing.client.lobtools.properties.MarketingLOB"
+	var="resources" />
+
+<c:set var="inherited" value="" />
+<c:set var="deletable" value="deletable=\"true\"" />
+<c:if
+	test="${customerSegmentExport.storeIdentifier.uniqueID != param.storeId}">
+	<c:set var="inherited" value="Inherited" />
+	<c:set var="deletable" value="deletable=\"false\"" />
+</c:if>
+
+<c:choose>
+	<c:when test="${customerSegmentExport.processFile[0].status == 'Processing'}">
+		<c:set var="deletable" value="deletable=\"false\"" />
+		<c:set var="summary">
+			<fmt:message key="customerSegmentExport_processing" bundle="${resources}" />
+		</c:set>			
+	</c:when>
+	<c:when test="${customerSegmentExport.processFile[0].status == 'Failed'}">
+		<c:set var="summary">
+			<fmt:message key="customerSegmentExport_failed" bundle="${resources}">
+				<fmt:param value="${customerSegmentExport.processFile[0].processInfo}"/>
+			</fmt:message>
+		</c:set>			
+	</c:when>
+	<c:when test="${customerSegmentExport.processFile[0].status == 'Cancelled'}">
+		<c:set var="summary">
+			<fmt:message key="customerSegmentExport_cancelled" bundle="${resources}">
+				<fmt:param value="${customerSegmentExport.processFile[0].processInfo}"/>
+			</fmt:message>
+		</c:set>				
+	</c:when>	
+	<c:when test="${customerSegmentExport.processFile[0].status == 'Complete'}">
+		<c:set var="summary">
+			<fmt:message key="customerSegmentExport_success" bundle="${resources}" />
+		</c:set>					
+	</c:when>
+</c:choose>
+
+<c:set var="exportName">
+	<wcf:cdata data="${customerSegmentExport.uploadFile.fileInfo.fileName}" />
+</c:set>
+
+<c:set var="exportName">
+	<%= URLDecoder.decode((String) pageContext.getAttribute("exportName"), "UTF8") %>
+</c:set>
+
+<object objectType="${inherited}CustomerSegmentExport" readonly="true" ${deletable}>
+	<objectStoreId readonly="true">${customerSegmentExport.storeIdentifier.uniqueID}</objectStoreId>
+	<customerSegmentExportId readonly="true">${customerSegmentExport.fileUploadJobIdentifier.uniqueID}</customerSegmentExportId>
+	<customerSegmentExportName readonly="true">${exportName}</customerSegmentExportName>
+	<uniqueId>${customerSegmentExport.uploadFile.objectId}</uniqueId> 
+	<c:forEach
+		var="property" items="${customerSegmentExport.uploadFile.properties}">
+		<c:if test="${property.key == 'customerSegmentName'}">
+			<customerSegmentName readonly="true"><wcf:cdata data="${property.value}"/></customerSegmentName>
+		</c:if>
+		<c:if test="${property.key == 'downloadable'}">
+			<downloadable readonly="true">${property.value}</downloadable>
+		</c:if>
+		<c:if test="${property.key == 'customerSegmentExportIncludeCustomerNames'}">
+			<customerSegmentExportIncludeCustomerNames readonly="true"><wcf:cdata data="${property.value}"/></customerSegmentExportIncludeCustomerNames>
+		</c:if>
+		<c:if test="${property.key == 'customerSegmentExportIncludeLogonId'}">
+			<customerSegmentExportIncludeLogonId readonly="true"><wcf:cdata data="${property.value}"/></customerSegmentExportIncludeLogonId>
+		</c:if>
+		<c:if test="${property.key == 'customerSegmentExportIncludeEmailsOptOutCustomers'}">
+			<customerSegmentExportIncludeEmailsOptOutCustomers readonly="true"><wcf:cdata data="${property.value}"/></customerSegmentExportIncludeEmailsOptOutCustomers>
+		</c:if>
+	</c:forEach> 
+
+	<numOfRecords readonly="true"><wcf:cdata data="${customerSegmentExport.uploadFile.fileInfo.fileSize}" /></numOfRecords> 
+	<startTime readonly="true">${customerSegmentExport.processFile[0].startTime}</startTime>
+	<endTime readonly="true">${customerSegmentExport.processFile[0].endTime}</endTime>
+	<summary readonly="true"><wcf:cdata data="${summary}"/></summary> 
+	<status readonly="true">${customerSegmentExport.processFile[0].status}</status>
+
+	<c:if test="${customerSegmentExport.processFile[0].status == 'Complete'}">
+		<c:set var="downloadHistorylist"
+			value="${fn:split(customerSegmentExport.processFile[0].processInfo, '#')}" />
+		<c:forEach var="downloadHistory" items="${downloadHistorylist}">
+			<c:set var="userDetails" value="${fn:split(downloadHistory, ';')}" />
+			<object objectType="CustomerSegmentExportDownloadHistory" readonly="true"> 
+				<userIdentifier readonly="true"><wcf:cdata data="${userDetails[0]}"/></userIdentifier>
+				<downloadTime readonly="true">${userDetails[1]}</downloadTime> 
+			</object>
+		</c:forEach>
+	</c:if> 
+</object>

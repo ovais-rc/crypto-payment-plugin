@@ -1,0 +1,799 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015, 2016 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>	
+	<!---
+		@keyword private
+		This class defines the dialog used for Find and Replace. It contains the views for the dialog, 
+		as well as the logic to search and replace the content of {@link cmc/foundation/GridColumn#findable findable} grid columns. 
+	-->
+	<Dialog definitionName="cmc/foundation/FindAndReplaceDialog" hideCloseButton="false" modal="false" singletonDefinition="true" title="${foundationResources.Singleton.findAndReplaceDialogTitle.string}" x="25" y="2">
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="RichTextEditorUtil" moduleName="cmc/foundation/RichTextEditorUtil"/>
+		<dependency localName="ViewUtil" moduleName="cmc/foundation/ViewUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="FocusUtil" moduleName="cmc/foundation/FocusUtil"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		
+		<!---
+			@keywords private
+			The {@link cmc/foundation/ObjectGrid} that is currently in the list view.
+		-->
+		<variable name="objectGrid"/>
+		<!---
+			@keywords private
+			The current {@link cmc/foundation/Model}.
+		-->
+		<variable name="model"/>
+		
+		<!---
+			@keywords private
+			The last {@link cmc/foundation/ModelObject object} in which a match was found.
+		-->
+		<variable name="lastObjectFound" value="${null}"/>
+		<!---
+			@keywords private
+			The last {@link cmc/foundation/GridColumn column} in which a match was found.
+		-->
+		<variable name="lastColFound" value="${null}"/>
+		<!---
+			@keywords private
+			The index into the property text at which the match was found.
+		-->
+		<variable name="lastTextIndexFound" type="number" value="0"/>
+		<!---
+			@keywords private
+			The start index into the formatted property text at which the match was found. This is only used by cells in a column
+			where {@link cmc/foundation/GridColumn#tagsRemoved tagsRemoved} is true.
+		-->
+		<variable name="lastFormattedTextStartIndexFound" type="number" value="0"/>
+		<!---
+			@keywords private
+			The end index into the formatted property text at which the match was found.  This is only used by cells in a column
+			where {@link cmc/foundation/GridColumn#tagsRemoved tagsRemoved} is true.
+		-->
+		<variable name="lastFormattedTextEndIndexFound" type="number" value="0"/>
+		<!---
+			@keywords private
+			A boolean flag indicating whether the Find button should be enabled in the dialog. This flag will be updated
+			automatically by {@link cmc/foundation/FindAndReplaceDialog#updateFindEnabled}.
+		-->
+		<variable name="findEnabled" type="boolean" value="false"/>
+		<!---
+			@keywords private
+			A boolean flag indicating whether there is text in the Find input box. This flag will be updated
+			automatically by {@link cmc/foundation/FindAndReplaceDialog#updateSearchTextExists}.
+		-->
+		<variable name="searchTextExists" type="boolean" value="false"/>
+		<!---			
+			A boolean flag that indicates whether the search should wrap when it hits the bottom of the Grid. The
+			default value is true. 
+		-->
+		<variable name="wrapSearch" type="boolean" value="${this.contentArea.inputArea.findOptions.wrap.value}"/>
+		<!---			
+			A boolean flag that indicates whether the search should match the case of the text being searched for. The
+			default value is false. 
+		-->
+		<variable name="matchCase" type="boolean" value="${this.contentArea.inputArea.findOptions.matchCase.value}"/>				
+		<!--- 
+			@keywords private 
+			This method will open the find and replace dialog. 
+			@param cmc/foundation/Model model The current model. 
+			@param cmc/foundation/BusinessObjectEditor editor The editor that is currently in focus. 
+		-->
+		<method args="model, editor" name="openFindDialog">
+			<![CDATA[
+			this.openWindow();
+			this.setVariable("model", model);
+			this.setVariable("objectGrid", this.model.activeSelectionView);
+			if (this.updateFindEnabledDel == null) {
+				this.updateFindEnabledDel = new EventHandler.Class(this, "updateFindEnabled");
+			}
+			this.updateFindEnabledDel.connect(editor, "onfindEnabled");
+			this.updateFindEnabled(editor.findEnabled);
+			if (this.updateSearchTextExistsDel == null) {
+				this.updateSearchTextExistsDel = new EventHandler.Class(this, "updateSearchTextExists");
+				this.updateSearchTextExistsDel.connect(this.contentArea.inputArea.searchText, "ontext");
+			}
+			this.updateSearchTextExists("");
+			if (this.resetSearchDel == null) {
+				this.resetSearchDel = new EventHandler.Class(this, "resetSearch");
+			}
+			this.resetSearchDel.connect(this.model, "onactiveSelectionView");
+			if (this.updateFocusDel == null) {
+				this.updateFocusDel = new EventHandler.Class(this, "updateFocus");
+			}
+			this.updateFocusDel.connect(FocusUtil, "onfocus");
+			if (this.changeToolDel == null) {
+				this.changeToolDel = new EventHandler.Class(this, "changeTool");
+			}
+			this.changeToolDel.connect(this.model.oEditor, "onactive");
+			if (this.resetWindowPositionDel == null) {
+				this.resetWindowPositionDel = new EventHandler.Class(this, "resetWindowPosition");
+				this.resetWindowPositionDel.connect(this.immediateParent, "onwidth");
+				this.resetWindowPositionDel.connect(this.immediateParent, "onheight");
+			}
+			]]>
+		</method>
+		<!---
+			@keywords private
+		-->
+		<method args="e" name="setInitialFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			FocusUtil.setFocus(this.contentArea.inputArea.searchText);
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method will reset the position of the window to its starting position. 
+		 -->
+		<method args="e" name="resetWindowPosition">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			this.setVariable("x", 25);
+			this.setVariable("y", 2);
+			]]>
+		</method>
+		<!---
+			@keywords private
+			This method will update the {@link cmc/foundation/FindAndReplaceDialog#findEnabled findEnabled} flag based on the 
+			value of the {@link cmc/foundation/BusinessObjectEditor editor's} {@link cmc/foundation/BusinessObjectEditor#findEnabled findEnabled} flag.
+			@param boolean fe The value of the {@link cmc/foundation/BusinessObjectEditor editor's} {@link cmc/foundation/BusinessObjectEditor#findEnabled findEnabled} flag.
+		 -->
+		<method args="fe" name="updateFindEnabled">
+			<![CDATA[
+			if (fe != this.findEnabled) {
+				this.setVariable("findEnabled", fe);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the current tool is closed or taken out of focus. It will close the find
+			and replace dialog. 
+			@param boolean active This parameter will be true if this tool was put into focus, and false otherwise. 
+		 -->
+		<method args="active" name="changeTool">
+			<![CDATA[
+			if (this.isOpen && active == false) {
+				this.closeWindow();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will update the {@link cmc/foundation/FindAndReplaceDialog#searchTextExists searchTextExists} flag as the 
+			text in the Find input box changes. 
+			@param string txt The text in the Find input field.
+		 -->
+		<method args="txt" name="updateSearchTextExists">
+			<![CDATA[
+			var doesSearchTextExist = (this.contentArea.inputArea.searchText.getText().length > 0);
+			if (doesSearchTextExist != this.searchTextExists) {
+				this.setVariable("searchTextExists", doesSearchTextExist);
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method performs the "find" and the "replace" in the grid.
+			
+			The search starts from the cell which is currently in focus, or from the top of the grid if no cell is in focus. When a match is found, 
+			the method calls {@link cmc/foundation/FindAndReplace#highlightWord} to	highlight the found word (first unhighlighting the last "found" instance if one exists), 
+			and will update the values of {@link cmc/foundation/FindAndReplace#lastColFound lastColFound} and {@link cmc/foundation/FindAndReplace#lastObjectFound lastObjectFound}.
+			The method is also responsible for displaying the appropriate status messages to the user in the {@link cmc/foundation/MessageLogger}. 
+			
+			When the the replace argument is passed in with a value of true, then the method will first replace the previously found text, if it exists, with the 
+			new string before it performs the next search.
+			
+			@params boolean replace A flag indicating whether the method should replace the previously found text (if it exists) before performing a search. The value is false by default.
+		-->
+		<method args="replace" name="findAndReplace">
+			<![CDATA[
+			if (typeof(replace) == "undefined") replace = false;
+			MessageLogger.Singleton.clearStatusMessage();
+			var searchString = this.contentArea.inputArea.searchText.getText();
+			if (searchString == null || searchString == "") {
+				return;
+			}
+			var replaceText = this.contentArea.inputArea.replaceText.getText();
+			var replaceFailed = false;
+			if (this.lastFoundObjectDestroyedDel == null) {
+				this.lastFoundObjectDestroyedDel = new EventHandler.Class(this, "lastFoundObjectDestroyed");
+			}
+			if (!this.matchCase) {
+				searchString = searchString.toLowerCase();
+			}
+			var escapedSearchString = RichTextEditorUtil.Singleton.escapeString(searchString);
+			var filteredObjects = this.objectGrid.oList.filteredObjects;
+			var startRowObjIndex = 0;
+			var startColIndex = 0;
+			var startTextIndex = 0;
+			var startFormattedTextIndex = 0;
+			if (this.lastObjectFound != null) {
+				var found = false;
+				var foundInEscaped = false;
+				var o = null;
+				var propertyName = null;
+				var value = null;
+				if (this.lastColFound.visible) {
+					for (var i = 0; i < filteredObjects.length; i++) {
+						if (this.lastObjectFound == filteredObjects[i]) {
+							o = this.lastColFound.getObject(this.lastObjectFound);
+							propertyName = this.lastColFound.getPropertyName(o);
+							value = o.getPropertyValue(propertyName);
+							if (!this.matchCase) {
+								value = value.toLowerCase();
+							}
+							if (this.lastColFound.tagsRemoved) {
+								value = RichTextEditorUtil.Singleton.removeTags(value);
+								if (RichTextEditorUtil.Singleton.containsEscapedChar(value)) {
+									foundInEscaped = true;
+								}
+							}
+							var index = -1;
+							if (foundInEscaped) {
+								index = value.indexOf(escapedSearchString, this.lastTextIndexFound);
+							}
+							else {
+								index = value.indexOf(searchString, this.lastTextIndexFound);
+							}
+							if (index == this.lastTextIndexFound) {
+								found = true;
+								startRowObjIndex = i;
+								startColIndex = this.objectGrid.getColumnPosition(this.lastColFound);
+								if (foundInEscaped) {
+									startTextIndex = this.lastTextIndexFound + escapedSearchString.length;
+								}
+								else {
+									startTextIndex = this.lastTextIndexFound + searchString.length;
+								}
+								if (this.lastColFound.tagsRemoved) {
+									startFormattedTextIndex = this.lastFormattedTextEndIndexFound + 1;
+									value = o.getPropertyValue(propertyName);
+									if (!this.matchCase) {
+										value = value.toLowerCase();
+									}
+									var indexes = null;
+									if (foundInEscaped) {
+										indexes = this.findInFormattedString(value, escapedSearchString, this.lastFormattedTextStartIndexFound);
+									}
+									else {
+										indexes = this.findInFormattedString(value, searchString, this.lastFormattedTextStartIndexFound);
+									}
+									if (this.lastFormattedTextStartIndexFound != indexes[0] || this.lastFormattedTextEndIndexFound != indexes[1]) {
+										found = false;
+									}
+								}
+							}
+							break;
+						}
+					}
+				}
+				if (!found) {
+					this.unhighlightCell(this.lastObjectFound, this.lastColFound);
+					this.lastFoundObjectDestroyedDel.disconnectAll();
+					this.lastObjectFound = null;
+					this.lastColFound = null;
+					this.lastTextIndex = 0;
+					this.lastFormattedTextStartIndexFound = 0;
+					this.lastFormattedTextEndIndexFound = 0;
+				}
+				else if (replace && replaceText != null && o != null) {
+					var readOnly = o.getPropertyReadOnly(propertyName);
+					if (!readOnly) {
+						value = o.getPropertyValue(propertyName);
+						var searchStringLength = searchString.length;
+						if (this.lastColFound.tagsRemoved) {
+							searchStringLength = escapedSearchString.length;
+							replaceText = RichTextEditorUtil.Singleton.escapeString(replaceText);
+						}
+						if (this.lastColFound.tagsRemoved && !foundInEscaped) {
+							value = RichTextEditorUtil.Singleton.escapeString(value);
+							var compareVal = value;
+							if (!this.matchCase) {
+								compareVal = value.toLowerCase();
+							}
+							indexes = this.findInFormattedString(compareVal, escapedSearchString, this.lastFormattedTextStartIndexFound);
+							this.lastFormattedTextStartIndexFound = indexes[0];
+							this.lastFormattedTextEndIndexFound = indexes[1];
+						}
+						if (this.lastColFound.tagsRemoved && this.lastFormattedTextEndIndexFound - this.lastFormattedTextStartIndexFound + 1 != searchStringLength) {
+							MessageLogger.Singleton.updateMessageLinkDisplayText("STATUS", foundationResources.Singleton.findAndReplaceMessageReplaceFormatted.string);
+							replaceFailed = true;
+						}
+						else {
+							var replaceIndex = this.lastTextIndexFound;
+							if (this.lastColFound.tagsRemoved) {
+								replaceIndex = this.lastFormattedTextStartIndexFound;
+							}
+							var newValue = value.substring(0, replaceIndex) + replaceText + value.substring(replaceIndex + searchStringLength);
+							o.setPropertyValue(propertyName, null, newValue);
+							startFormattedTextIndex = this.lastFormattedTextStartIndexFound + replaceText.length;
+							startTextIndex = this.lastTextIndexFound + replaceText.length;
+						}
+					}
+					else {
+						MessageLogger.Singleton.updateMessageLinkDisplayText("STATUS", foundationResources.Singleton.findAndReplaceMessageReplaceReadOnly.string);
+						replaceFailed = true;
+					}
+				}
+			}
+			if (replaceFailed) {
+				return;
+			}
+			if (this.lastObjectFound == null && this.objectGrid.currentCell != null) {
+				startRowObjIndex = this.objectGrid.currentCell.row._objectIndex;
+				startColIndex = this.objectGrid.getColumnPosition(this.objectGrid.currentCell.column);
+			}
+			else if (this.lastObjectFound != null) {
+				this.unhighlightCell(this.lastObjectFound, this.lastColFound);
+			}
+			var found = false;
+			var curObjIndex = startRowObjIndex;
+			var curColIndex = startColIndex;
+			var curTextIndex = startTextIndex;
+			var curFormattedTextIndex = startFormattedTextIndex;
+			var done = false;
+			var first = true;
+			while (true) {
+				var curRowObj = this.objectGrid.oList.filteredObjects[curObjIndex];
+				while (curColIndex < this.objectGrid.columns.length) {
+					var column = this.objectGrid.columns[curColIndex];
+					if (column.visible && column.editable && column.findable) {
+						var o = column.getObject(curRowObj);
+						var propertyName = column.getPropertyName(o);
+						var value = o.getPropertyValue(propertyName);
+						if (!this.matchCase) {
+							value = value.toLowerCase();
+						}
+						var index = -1;
+						var foundInEscaped = false;
+						if (column.tagsRemoved) {
+							value = RichTextEditorUtil.Singleton.removeTags(value);
+							if (RichTextEditorUtil.Singleton.containsEscapedChar(value)) {
+								foundInEscaped = true;
+							}
+						}
+						var index = value.indexOf(searchString, curTextIndex);
+						if (foundInEscaped) {
+							index = value.indexOf(escapedSearchString, curTextIndex);
+						}
+						if (index != -1) {
+							found = this.lastObjectFound != curRowObj || this.lastColFound != column || this.lastTextIndexFound != index;
+							this.lastFoundObjectDestroyedDel.connect(curRowObj, "beingDestroyed");
+							this.lastObjectFound = curRowObj;
+							this.lastColFound = column;
+							this.lastTextIndexFound = index;
+							if (column.tagsRemoved) {
+								value = o.getPropertyValue(propertyName);
+								if (!this.matchCase) {
+									value = value.toLowerCase();
+								}
+								var indexes = null;
+								if (foundInEscaped) {
+									indexes = this.findInFormattedString(value, escapedSearchString, curFormattedTextIndex);
+								}
+								else {
+									indexes = this.findInFormattedString(value, searchString, curFormattedTextIndex);
+								}
+								this.lastFormattedTextStartIndexFound = indexes[0];
+								this.lastFormattedTextEndIndexFound = indexes[1];
+							}
+							else {
+								this.lastFormattedTextStartIndexFound = 0;
+								this.lastFormattedTextEndIndexFound = 0;
+							}
+							if (foundInEscaped) {
+								this.highlightWord(curRowObj, column, index, escapedSearchString.length);
+							}
+							else {
+								this.highlightWord(curRowObj, column, index, searchString.length);
+							}
+							done = true;
+							break;
+						}
+					}
+					if (!first && curObjIndex == startRowObjIndex && curColIndex == startColIndex) {
+						done = true;
+						break;
+					}
+					curColIndex++;
+					curTextIndex = 0;
+					curFormattedTextIndex = 0;
+				}
+				if (done) {
+					break;
+				}
+				curObjIndex++;
+				curColIndex = 0;
+				if (curObjIndex >= filteredObjects.length) {
+					if (this.wrapSearch) {
+						curObjIndex = 0;
+					}
+					else {
+						break;
+					}
+				}
+				first = false;
+			}
+			if (!found) {
+				if (this.wrapSearch && this.lastColFound != null && this.lastObjectFound != null) {
+					MessageLogger.Singleton.updateMessageLinkDisplayText("STATUS", foundationResources.Singleton.findAndReplaceMessageOneMatch.string);
+				}
+				else {
+					MessageLogger.Singleton.updateMessageLinkDisplayText("STATUS", foundationResources.Singleton.replaceValues("findAndReplaceMessageNoMatch", [this.contentArea.inputArea.searchText.getText()]));
+					this.objectGrid.currentCell = null;
+					this.lastFoundObjectDestroyedDel.disconnectAll();
+					this.lastObjectFound = null;
+					this.lastColFound = null;
+					this.lastTextIndex = 0;
+					this.lastFormattedTextStartIndexFound = 0;
+					this.lastFormattedTextEndIndexFound = 0;
+				}
+			}
+			]]>
+		</method>
+		
+		<!---
+			This method will look for a string in an HTML formatted string. It will return the start and end indexes of the match in the 
+			formatted string. If no match is found, this method will return null. 
+			
+			@param string value The property value including any HTML tags. 
+			@param string searchString The value that is being searched for in the property. 
+			@param number startOfSearchIndex The index from where to being the search. 
+			@return Array 	An array containing two numbers. The first is the starting index of the found string in the formatted property value. The second is the 
+							ending index of the found string in the formatted property value. If no match is found, this method will return null.
+		-->
+		<method args="value, searchString, startOfSearchIndex" name="findInFormattedString">
+			<![CDATA[
+			var indexIntoSearchString = 0;
+			var startIndex = 0;
+			var endIndex = 0;
+			for (var curIndex = startOfSearchIndex; curIndex < value.length; curIndex++) {
+				var c = value.charAt(curIndex);
+				if (c == "<") {
+					curIndex = value.indexOf(">", curIndex);
+				}
+				else if (c == searchString.charAt(indexIntoSearchString)) {
+					if (indexIntoSearchString == 0) {
+						startIndex = curIndex;
+					}
+					indexIntoSearchString++;
+					if (indexIntoSearchString == searchString.length) {
+						endIndex = curIndex;
+						return [startIndex, endIndex];
+					}
+				}
+				else if (indexIntoSearchString > 0) {
+					indexIntoSearchString = 0;
+					curIndex = startIndex;
+				}
+			}
+			return null;
+			]]>
+		</method>
+		
+		<!---
+			This method find all occurances of a specified string in the grid and replaces it with another
+			string specified by the user.
+		-->
+		<method name="replaceAll">
+			<![CDATA[
+			MessageLogger.Singleton.clearStatusMessage();
+			if (this.lastObjectFound != null) {
+				this.unhighlightCell(this.lastObjectFound, this.lastColFound);
+			}
+			var searchString = this.contentArea.inputArea.searchText.getText();
+			if (searchString == null || searchString == "") {
+				return;
+			}
+			if (!this.matchCase) {
+				searchString = searchString.toLowerCase();
+			}
+			var escapedSearchString = RichTextEditorUtil.Singleton.escapeString(searchString);
+			var replaceText = this.contentArea.inputArea.replaceText.getText();
+			var escapedReplaceText = RichTextEditorUtil.Singleton.escapeString(replaceText);
+			var filteredObjects = this.objectGrid.oList.filteredObjects;
+			var numReplaced = 0;
+			for (var curObjIndex = 0; curObjIndex < filteredObjects.length; curObjIndex++) {
+				var curRowObj = filteredObjects[curObjIndex];
+				for (var curColIndex = 0; curColIndex < this.objectGrid.columns.length; curColIndex++) {
+					var column = this.objectGrid.columns[curColIndex];
+					if (column.visible && column.editable && column.findable) {
+						var o = column.getObject(curRowObj);
+						var propertyName = column.getPropertyName(o);
+						var readOnly = o.getPropertyReadOnly(propertyName);
+						if (!readOnly) {
+							var value = o.getPropertyValue(propertyName);
+							if (!this.matchCase) {
+								value = value.toLowerCase();
+							}
+							if (column.tagsRemoved) {
+								var curTextIndex = 0;
+								var isEscaped = RichTextEditorUtil.Singleton.containsEscapedChar(value);
+								var indexes = null;
+								if (!isEscaped) {
+									value = RichTextEditorUtil.Singleton.escapeString(value);
+								}
+								indexes = this.findInFormattedString(value, escapedSearchString, curTextIndex);
+								while (indexes != null) {
+									var startIndex = indexes[0];
+									var endIndex = indexes[1];
+									if (endIndex - startIndex + 1 == escapedSearchString.length) {
+										value = o.getPropertyValue(propertyName);
+										var newValue = null;
+										if (!isEscaped) {
+											value = RichTextEditorUtil.Singleton.escapeString(value);
+											isEscaped = true;
+										}
+										newValue = value.substring(0, startIndex) + escapedReplaceText + value.substring(startIndex + escapedSearchString.length);
+										o.setPropertyValue(propertyName, null, newValue);
+										curTextIndex = startIndex + escapedReplaceText.length;
+										value = newValue;
+										if (!this.matchCase) {
+											value = value.toLowerCase();
+										}
+										numReplaced++;
+									}
+									else {
+										curTextIndex = endIndex + 1;
+									}
+									indexes = this.findInFormattedString(value, escapedSearchString, curTextIndex);
+								}
+							}
+							else {
+								var curTextIndex = 0;
+								var index = value.indexOf(searchString, curTextIndex);
+								while (index != -1) {
+									value = o.getPropertyValue(propertyName);
+									var newValue = value.substring(0, index) + replaceText + value.substring(index + searchString.length);
+									o.setPropertyValue(propertyName, null, newValue);
+									curTextIndex = index + replaceText.length;
+									value = newValue;
+									if (!this.matchCase) {
+										value = value.toLowerCase();
+									}
+									index = value.indexOf(searchString, curTextIndex);
+									numReplaced++;
+								}
+							}
+						}
+					}
+				}
+			}
+			MessageLogger.Singleton.updateMessageLinkDisplayText("STATUS", foundationResources.Singleton.replaceValues("findAndReplaceMessageReplaceAll", [numReplaced]));
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method is called when the last object found is released. It will reset the find and
+			replace dialog.
+		-->
+		<method args="e" name="lastFoundObjectDestroyed">
+			<![CDATA[
+			this.lastObjectFound = null;
+			this.resetSearch();
+			]]>
+		</method>
+		
+		
+		<!---
+			@keywords private
+			This method is called when the find and replace dialog is closed. If there is currently a match highlighted in the cell then focus will go 
+			to that cell. 
+		-->
+		<method name="closeWindow">
+			<![CDATA[
+			this.updateFocusDel.disconnectAll();
+			this.inherited(arguments);
+			if (this.lastObjectFound != null) {
+				var o = this.lastColFound.getObject(this.lastObjectFound);
+				var cells = this.objectGrid.locateRow(this.lastObjectFound).cells;
+				for (var i = 0; i < cells.length; ++i) {
+					var cell = cells[i];
+					if (cell.column == this.lastColFound && cell.editor) {
+						FocusUtil.setFocus(cell.editor);
+						break;
+					}
+				}
+			}
+			this.resetSearch();
+			this.setVariable("objectGrid", null);
+			this.setVariable("model", null);
+			this.contentArea.inputArea.searchText.setText("");
+			this.contentArea.inputArea.replaceText.setText("");
+			this.changeToolDel.disconnectAll();
+			this.resetSearchDel.disconnectAll();
+			this.updateFindEnabledDel.disconnectAll();
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method resets the search when focus has been taken from the dialog.  
+		-->
+		<method args="e" name="updateFocus">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (!ViewUtil.Singleton.containsView(this, FocusUtil.getFocus())) {
+				this.resetSearch();
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private
+			This method will reset the search so that next time the find begins it starts from the current location and does not 
+			have recollection of previous searches. 
+		-->
+		<method args="e" name="resetSearch">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (this.lastObjectFound != null) {
+				this.unhighlightCell(this.lastObjectFound, this.lastColFound);
+			}
+			if (this.model != null && this.model.activeSelectionView != null && this.model.activeSelectionView.isFindEnabled != null && this.model.activeSelectionView.isFindEnabled(null)) {
+				this.setVariable("objectGrid", this.model.activeSelectionView);
+			}
+			else {
+				this.setVariable("objectGrid", null);
+			}
+			this.setVariable("lastColFound", null);
+			this.setVariable("lastObjectFound", null);
+			this.setVariable("lastTextIndexFound", 0);
+			this.setVariable("lastFormattedTextStartIndexFound", 0);
+			this.setVariable("lastFormattedTextEndIndexFound", 0);
+			if (this.lastFoundObjectDestroyedDel) {
+				this.lastFoundObjectDestroyedDel.disconnectAll();
+			}
+			MessageLogger.Singleton.clearStatusMessage();
+			]]>
+		</method>
+		
+		<!--- 
+			@keywords private
+			Highlight the matched text in the grid cell. This method delegates the job of formatting the text to the
+			{@link cmc/foundation/GridColumn#highlightWordInCell} method. 
+			@param cmc/foundation/ModelObject rowObject The object of the {@link cmc/foundation/GridRow row} that contains the next match. 
+			@param cmc/foundation/GridColumn column The column that contains the match.  
+			@param number index The position of the match to highlight. 
+			@param number wordSize The length of the match to highlight.
+		-->
+		<method args="rowObject, column, index, wordSize" name="highlightWord">
+			<![CDATA[
+			this.objectGrid.showObjectInView(rowObject);
+			column.show();
+			var cell = this.objectGrid.locateRow(rowObject).getCell(column);
+			this.objectGrid.currentCell = cell;
+			column.highlightWordInCell(cell, index, wordSize);
+			]]>
+		</method>	
+			
+		<!--- 
+			@keywords private
+			Removes the formatting from a cell. 
+			@param cmc/foundation/ModelObject rowObject The object of the {@link cmc/foundation/GridRow row} that needs to be unformatted. 
+			@param cmc/foundation/GridColumn column The column that needs to be unformatted. 
+		-->
+		<method args="rowObject, column" name="unhighlightCell">
+			<![CDATA[
+			var row = this.objectGrid.locateRow(rowObject);
+			if (row) {
+				var cell = row.getCell(column);
+				column.unhighlightCell(cell);
+			}
+			]]>
+		</method>
+		
+		<!--- @keyword private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.updateFindEnabledDel != null) {
+				this.updateFindEnabledDel.disconnectAll();
+				delete this.updateFindEnabledDel;
+			}
+			if (this.updateSearchTextExistsDel != null) {
+				this.updateSearchTextExistsDel.disconnectAll();
+				delete this.updateSearchTextExistsDel;
+			}
+			if (this.resetSearchDel != null) {
+				this.resetSearchDel.disconnectAll();
+				delete this.resetSearchDel;
+			}
+			if (this.changeToolDel != null) {
+				this.changeToolDel.disconnectAll();
+				delete this.changeToolDel;
+			}
+			if (this.resetWindowPositionDel != null) {
+				this.resetWindowPositionDel.disconnectAll();
+				delete this.resetWindowPositionDel;
+			}
+			if (this.lastFoundObjectDestroyedDel != null) {
+				this.lastFoundObjectDestroyedDel.disconnectAll();
+				delete this.lastFoundObjectDestroyedDel;
+			}
+			if (this.updateFocusDel != null) {
+				this.updateFocusDel.disconnectAll();
+				delete this.updateFocusDel;
+			}
+			this.inherited(arguments);
+			]]>
+		</method>
+	
+		<Component name="contentArea" placement="content">
+			<Component name="labels">				
+				<TextComponent text="${foundationResources.Singleton.findAndReplaceFindLabel.string}"/>				
+				<TextComponent text="${foundationResources.Singleton.findAndReplaceReplaceLabel.string}"/>				
+				<AxisLayout axis="y" inset="5.5" spacing="21"/>
+			</Component>
+			<Component name="inputArea">
+				<InputText name="searchText">				
+					<handler name="ontext">
+						<![CDATA[
+						this.parent.parent.parent.resetSearch();
+						]]>
+					</handler>
+				</InputText>
+				<InputText name="replaceText"/>	
+				<Component name="findOptions">
+					<AxisLayout axis="x" spacing="10"/>
+					<BaseCheckbox name="matchCase" text="${foundationResources.Singleton.findAndReplaceMatchCaseLabel.string}" value="false"/>
+					<BaseCheckbox name="wrap" text="${foundationResources.Singleton.findAndReplaceWrapLabel.string}" value="true"/>
+				</Component>
+				<AxisLayout axis="y" spacing="10"/>
+			</Component>
+			<AxisLayout axis="x" spacing="5"/>
+		</Component>
+		
+		<Component name="viewButtons" placement="footer">
+			<AxisLayout axis="x" spacing="10"/>
+			<Button name="frClose" text="${foundationResources.Singleton.closeButtonText.string}" primary="false">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.closeWindow();
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.parent.parent.findEnabled &amp;&amp; this.parent.parent.searchTextExists}" isdefault="true" name="frFindButton" text="${foundationResources.Singleton.findAndReplaceFindButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.findAndReplace(false);
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.parent.parent.findEnabled &amp;&amp; this.parent.parent.searchTextExists}" name="frReplaceButton" text="${foundationResources.Singleton.findAndReplaceReplaceButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.findAndReplace(true);
+					]]>
+				</handler>
+			</Button>
+			<Button enabled="${this.parent.parent.findEnabled &amp;&amp; this.parent.parent.searchTextExists}" name="frReplaceAllButton" text="${foundationResources.Singleton.findAndReplaceReplaceAllButton.string}">
+				<handler name="onclick">
+					<![CDATA[
+					this.parent.parent.replaceAll();
+					]]>
+				</handler>
+			</Button>
+		</Component>
+	
+	</Dialog>
+</Definitions>

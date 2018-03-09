@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("iframe","ja",{border:"フレームの境界線の表示",noUrl:"iFrame の URL を入力してください。",scrolling:"スクロール・バーを使用可能にする",title:"IFrame プロパティー",toolbar:"IFrame の挿入",ibm:{title:"IFrame"}});

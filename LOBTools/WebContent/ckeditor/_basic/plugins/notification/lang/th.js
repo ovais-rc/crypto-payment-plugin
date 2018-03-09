@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("notification","th",{closed:"ปิดการแจ้งเตือนแล้ว"});

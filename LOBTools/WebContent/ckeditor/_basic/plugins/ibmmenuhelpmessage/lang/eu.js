@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("ibmmenuhelpmessage","eu",{keystrokeForContextMenu:"Egin Ktrl + eskuin-klika aukera gehiago ikusi nahi badituzu.",keystrokeForContextMenuMac:"Egin Cmd + eskuin-klika aukera gehiago ikusi nahi badituzu."});

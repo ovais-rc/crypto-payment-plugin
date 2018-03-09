@@ -1,0 +1,145 @@
+<%--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2010, 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+--%>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core"      prefix="c"   %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt"       prefix="fmt" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"  %>
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- Calculate and set the current date in the format the Atom Syndication Format requires.
+     You can change the value, but do not change the format. --%>
+
+<%@page import="java.util.Calendar" %>
+<%@page import="java.text.SimpleDateFormat" %>
+<%@page import="java.util.Date" %>
+<%@page import="com.ibm.commerce.foundation.internal.server.services.search.util.StoreHelper" %>
+<%@page import="java.util.List" %>
+<%
+	// SimpleDateFormat handles time zone in RFC 822 format
+	// However, Atom Feed requires time zone in RFC 3339 format
+	
+	Calendar cal = Calendar.getInstance();
+	Date date = cal.getTime();
+	String DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss";
+	String TZ_FORMAT = "Z";
+	String GMT1 = "-0000";
+	String GMT2 = "+0000";
+	String Zulu = "Z";
+	String separator = ":";
+	
+	SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT);
+	SimpleDateFormat tzf = new SimpleDateFormat(TZ_FORMAT);
+	
+	String currentDate = sdf.format(date);
+	String currentTZ = tzf.format(date);
+	
+	if (GMT1.equals(currentTZ) || GMT2.equals(currentTZ)) {
+		currentTZ = Zulu;
+	} else {
+		currentTZ = currentTZ.substring(0,3) + separator + currentTZ.substring(3,5);
+	} 
+	
+	pageContext.setAttribute("currentDate", currentDate+currentTZ);
+	
+	String storeId = (String)request.getAttribute("storeId");
+	List<String> list = StoreHelper.getRemoteWebHost(storeId);
+	//list : [localhost, 8080, 8443, /wcs/shop, /webapp/remote/preview/servlet, /wcsstore]
+	pageContext.setAttribute("webHostName", list.get(0));
+	pageContext.setAttribute("webNonSSLPort", list.get(1));
+	pageContext.setAttribute("webSSLPort", list.get(2));
+	pageContext.setAttribute("webContextPath", list.get(3));
+	pageContext.setAttribute("previewContextPath", list.get(4));
+	pageContext.setAttribute("webAlias", list.get(5));
+%>
+<%-- Set up values used throughout the different feed types. --%>
+
+<c:set var="storeId"                   value="${WCParam.storeId}"/>
+<c:set var="catalogId"                 value="${WCParam.catalogId}"/>
+<c:set var="locale"                    value="${WCParam.locale}"/>
+<c:set var="langId"                    value="${WCParam.langId}"/>
+
+<%-- Feed request URI --%>
+<c:set var="requestUri"                value="${WCParam.requestUri}"/>
+<%--
+	Host prefix including the protocol and port.
+	For example,
+		- http://hostname:80
+		- https://hostname:443
+--%>
+<c:set var="hostPrefix" value=""/>
+<c:choose>
+	<c:when test="${WCParam.preview == 'true'}">
+		<c:set var="hostPrefix" value="https://${WCParam.previewHost}"/>
+	</c:when>
+	<c:when test="${fn:startsWith(requestUri, 'https') == true}">
+		<c:choose>
+			<c:when test="${!(empty WCParam.remoteWebServerHostName) && !(empty WCParam.remoteWebServerSSLPort)}">
+				<c:set var="hostPrefix" value="https://${pageContext.request.serverName}:${WCParam.remoteWebServerSSLPort}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="hostPrefix" value="https://${pageContext.request.serverName}:${WCParam.webServerSSLPort}"/>
+			</c:otherwise>
+		</c:choose>
+	</c:when>
+	<c:otherwise>
+		<c:choose>
+			<c:when test="${!(empty WCParam.remoteWebServerHostName) && !(empty WCParam.remoteWebServerSSLPort)}">
+				<c:set var="hostPrefix" value="http://${WCParam.remoteWebServerHostName}:${WCParam.remoteWebServerPort}"/>
+			</c:when>
+			<c:otherwise>
+				<c:set var="hostPrefix" value="http://${WCParam.webServerHostName}:${WCParam.webServerPort}"/>
+			</c:otherwise>
+		</c:choose>
+	</c:otherwise>
+</c:choose>
+
+<c:set var="staticContextPath" value=""/>
+<c:set var="dynamicContextPath" value=""/>
+<c:choose>
+	<c:when test="${WCParam.preview == 'true'}">
+		<c:set var="staticContextPath" value="${WCParam.previewPath}"/>
+		<c:set var="dynamicContextPath" value="${WCParam.previewPath}"/>
+	</c:when>
+	<c:otherwise>
+		<c:set var="staticContextPath" value="${webAlias}"/>
+		<c:set var="dynamicContextPath" value="${webContextPath}"/>
+	</c:otherwise>
+</c:choose>
+
+<%-- Full context root for static content. eg: http://hostname:80/webapp/wcs/stores --%>
+<c:set var="staticAssetContextRoot"    value="${hostPrefix}${staticContextPath}"/>
+<%-- Full context root for dynamic content. eg: http://hostname:80/webapp/wcs/stores/servlet --%>
+<c:set var="dynamicContextRoot"        value="${hostPrefix}${dynamicContextPath}"/>
+
+<%-- Store home page --%>
+<c:set var="storeLink"                 value="${dynamicContextRoot}/TopCategoriesDisplay?storeId=${storeId}&catalogId=${catalogId}&langId=${langId}"/>
+
+<%-- Default commands --%>
+<%-- These are the commands used for click info, product and category display.
+     If you rename the default commands, or create your own, you need to modify these values. --%>
+<c:set var="ProductDisplayCommand"     value="${dynamicContextRoot}/ProductDisplay"/>
+<c:set var="CategoryDisplayCommand"    value="${dynamicContextRoot}/CategoryDisplay"/>
+<c:set var="ClickInfoCommand"          value="${dynamicContextRoot}/ClickInfo"/>
+<c:set var="WishListDisplayCommand"    value="${dynamicContextRoot}/SharedWishListView"/>
+<c:set var="GiftRegistryDisplayCommand"    value="${dynamicContextRoot}/GiftRegistryGiftGiverView"/>
+
+<%-- Configure whether click info is enabled. 
+     Values are: 
+     false - click info is disabled. 
+     true - click info is enabled. --%>
+<c:set var="clickInfoEnabled"          value="${false}"/>
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>
+<%-- The locale is required for all uses of the JavaServer Pages Standard Tag Library (JSTL) fmt. --%>
+<fmt:setLocale value="${locale}" />
+
+<%-- ------------------------------------------------------------------------------------------------------------- --%>

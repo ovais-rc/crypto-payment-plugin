@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("colordialog","ja",{clear:"クリア",highlight:"強調表示",options:"色のオプション",selected:"選択された色",title:"色の選択",ibm:{currentColor:"現在の色"}});

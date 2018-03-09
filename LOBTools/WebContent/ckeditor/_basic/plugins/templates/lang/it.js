@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("templates","it",{button:"Modelli",emptyListMsg:"(Nessun modello definito)",insertOption:"Sostituisci contenuto effettivo",options:"Opzioni modello",selectPromptMsg:"Selezionare il modello da aprire nell'editor",title:"Modelli di contenuto"});

@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("list","ru",{bulletedlist:"Ненумерованный список",numberedlist:"Нумерованный список",ibm:{numberedTitle:"Нумерованный список",bulletedTitle:"Ненумерованный список",description:"Параметры будут применены к текущему уровню списка",fontsize:"Размер шрифта:"}});

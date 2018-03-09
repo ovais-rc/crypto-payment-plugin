@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("pagebreak","ko",{alt:"페이지 구분",toolbar:"페이지 구분 삽입"});

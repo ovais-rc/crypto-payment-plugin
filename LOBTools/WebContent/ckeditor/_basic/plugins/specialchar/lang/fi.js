@@ -1,0 +1,1 @@
+﻿CKEDITOR.plugins.setLang("specialchar","fi",{options:"Erikoismerkkien asetukset",title:"Erikoismerkki",toolbar:"Lisää erikoismerkki"});

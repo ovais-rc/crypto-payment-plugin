@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ =================================================================
+  Licensed Materials - Property of IBM
+
+  WebSphere Commerce
+
+  (C) Copyright IBM Corp. 2015 All Rights Reserved.
+
+  US Government Users Restricted Rights - Use, duplication or
+  disclosure restricted by GSA ADP Schedule Contract with
+  IBM Corp.
+ =================================================================
+-->
+<Definitions>
+	<!--- 
+		@keywords private
+		Automation utilities.
+	  -->
+	<Node definitionName="cmc/automation/AutomationUtil" singletonDefinition="true">
+		<dependency localName="ServiceTransactionUtil" moduleName="cmc/foundation/ServiceTransactionUtil"/>
+		<dependency localName="XMLUtil" moduleName="cmc/foundation/XMLUtil"/>
+		<dependency localName="CallbackUtil" moduleName="cmc/foundation/CallbackUtil"/>
+		<dependency localName="EventHandler" moduleName="cmc/foundation/EventHandler"/>
+		<dependency localName="Timer" moduleName="cmc/foundation/Timer"/>
+		<dependency localName="Logger" moduleName="cmc/shell/Logger"/>
+		<dependency localName="MessageLogger" moduleName="cmc/shell/MessageLogger"/>
+		<dependency localName="AutomationUtil" moduleName="cmc/automation/AutomationUtil"/>
+		<dependency localName="foundationResources" moduleName="cmc/foundation/FoundationResources"/>
+		<dependency localName="ConfigProperties" moduleName="cmc/shell/ConfigProperties"/>
+		<dependency localName="ContextUtil" moduleName="cmc/foundation/ContextUtil"/>
+		<dependency localName="ServiceUtil" moduleName="cmc/foundation/ServiceUtil"/>
+		<dependency localName="RootComponent" moduleName="cmc/RootComponent"/>
+		<!---
+			@keywords private
+			Array of pending actions.
+		-->
+		<variable name="actions" value="${[]}"/>
+		<!---
+			@keywords private
+			A map of named values that can be used by actions.
+		 -->
+		<variable name="values" value="${{}}"/>
+		<!---
+			@keywords private
+			A map of named objects that can be used by actions.
+		 -->
+		<variable name="objects" value="${{}}"/>
+		<!---
+			@keywords private
+			Indicates that automation is active.
+		-->
+		<variable name="active" type="boolean" value="false"/>
+		
+		<!---
+			@keywords private
+			Indicates whether current action being executed should abort when error happens.
+		-->
+		<variable name="abortOnError" type="boolean" value="true"/>
+		<!---
+			@keywords private
+			The active tool being processed by the automation framework.
+		-->
+		<variable name="activeTool" value="${null}"/>
+		
+		<!--- keyword private -->
+		<method name="destroy">
+			<![CDATA[
+			if (this.doNextActionDel) {
+				this.doNextActionDel.unregisterAll();
+				delete this.doNextActionDel;
+			}
+			if (this.objectDestroyedDel) {
+				this.objectDestroyedDel.disconnectAll();
+				delete this.objectDestroyedDel;
+			}
+			]]>
+		</method>
+
+		<!--- keyword private -->
+		<method args="url" name="run">
+			<![CDATA[
+			MessageLogger.Singleton.logStatus(foundationResources.Singleton.automationInitiated.string);
+			setAutomationStatusMsg("initiated");
+			this.active = true;
+			Logger.Singleton.componentsLevel["com.ibm.commerce.lobtools.foundation.auto"] = 700;
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "INFO", "cmc/automation/AutomationUtil", "run", foundationResources.Singleton.automationInitiated.string);
+			var actionXML = '<action name="cmc/automation/AutoRunTestCaseAction"><param name="url" /></action>';
+			var downloadAction = XMLUtil.parseXML(actionXML);
+			downloadAction.firstChild.setAttribute("value", url);
+			this.insertAction(downloadAction);
+			if (ContextUtil.Singleton.findContextValue(null, "workspacesEnabled").value == "true") {
+				require(["cmc/shell/WorkspaceUtil"], function(WorkspaceUtil) {
+					WorkspaceUtil.Singleton.workOnBase();
+				});
+				if (ConfigProperties.Singleton.readOnlyOnApprovedContent) {
+					ContextUtil.Singleton.findContextValue(null, "readOnlyMode").setVariable("value", "false");
+				}
+				this.setValue("workspacesEnabled", "true");
+			}
+			this.executeNext();
+			]]>
+		</method>
+
+		<!--- 
+			@keywords private
+			This method inserts the specified action at the first action in the list of pending actions.
+		-->
+		<method args="action" name="insertAction">
+			<![CDATA[
+			if (action) {
+				this.actions.unshift(action);
+			}
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method args="e" name="executeNext">
+			<![CDATA[
+			if (typeof(e) == "undefined") e = null;
+			if (typeof (this.executeNextDel) == "undefined") {
+				this.executeNextDel = new EventHandler.Class(this, "executeNext");
+			}
+			if (!this.isActionInProgress()) {
+				if (this.actions.length > 0) {
+					var action = this.actions.shift();
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "INFO", "cmc/automation/AutomationUtil", "executeNext", "Executing action " + this.getLogString(action));
+					setAutomationLastAction(this.getLogString(action));
+					var actionName = action.getAttribute("name");
+					var automationUtil = this;
+					this.loadingModule = true;
+					require([actionName], function(actionModule) {
+						automationUtil.loadingModule = false;
+						if (actionModule.Singleton) {
+							automationUtil.abortOnError = true;
+							actionModule.Singleton.execute(action);
+						}
+						else {
+							Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/foundation/AutomationUtil", "executeNext", "Undefined action " + actionName);
+							AutomationUtil.Singleton.abort();
+						}
+					});
+					Timer.resetTimer(this.executeNextDel, 50);
+				}
+				else if (this.active) {
+					this.active = false;
+					this.releaseObjects();
+					this.values = {};
+					this.activeTool = null;
+					Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "INFO", "cmc/automation/AutomationUtil", "executeNext", "Automation complete.");
+					Logger.Singleton.flush();
+					MessageLogger.Singleton.logStatus(foundationResources.Singleton.automationComplete.string);
+					setAutomationStatusMsg("complete");
+				}
+				else {
+					Logger.Singleton.flush();
+				}
+			}
+			else {
+				Timer.resetTimer(this.executeNextDel, 50);
+			}
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method name="abort">
+			<![CDATA[
+			this.active = false;
+			this.releaseObjects();
+			this.values = {};
+			this.activeTool = null;
+			this.actions = [];
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", "SEVERE", "cmc/automation/AutomationUtil", "abort", "Automation aborted.");
+			Logger.Singleton.flush();
+			MessageLogger.Singleton.logException(null, foundationResources.Singleton.automationAborted.string);
+			setAutomationStatusMsg("aborted");
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method name="isActionInProgress">
+			<![CDATA[
+			return this.loadingModule || this.hasActiveTransaction() || this.hasActiveDataset() || CallbackUtil.Singleton.deferredCallbacks.length > 0 || (RootComponent.Singleton.__cmcEventAgents && RootComponent.Singleton.__cmcEventAgents.oncallbackvalue && RootComponent.Singleton.__cmcEventAgents.oncallbackvalue.length > 0);
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method name="hasActiveDataset">
+			<![CDATA[
+			var activeDataset = false;
+			for (var i = 0; i < ServiceUtil.Singleton.serviceDatasets.length; i++) {
+				if (ServiceUtil.Singleton.serviceDatasets[i].submitted) {
+					activeDataset = true;
+					break;
+				}
+			}
+			return activeDataset;
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method name="hasActiveTransaction">
+			<![CDATA[
+			var activeDataset = false;
+			for (var i = 0; i < ServiceTransactionUtil.Singleton.activeTransactions.length; i++) {
+				if (ServiceTransactionUtil.Singleton.activeTransactions[i].serviceDataset.submitted) {
+					activeDataset = true;
+					break;
+				}
+			}
+			return activeDataset;
+			]]>
+		</method>
+		
+		<!---@keywords private -->
+		<method args="key" name="getValue">
+			<![CDATA[
+			var value = this.values[key];
+			if (typeof (value) == "undefined") {
+				value = cmcConfig["testdata." + key];
+				if (typeof (value) == "undefined") {
+					value = null;
+				}
+			}
+			return value;
+			]]>
+		</method>
+		
+		<!---@keywords private -->
+		<method args="key, value" name="setValue">
+			<![CDATA[
+			this.values[key] = value;
+			]]>
+		</method>
+		
+		<!---@keywords private -->
+		<method args="key" name="getObject">
+			<![CDATA[
+			var o = key ? this.objects[key] : null;
+			if (o != null && this.activeTool != null && (o.model != this.activeTool.model || o.modelInitializationIdentifier != o.model.initializationIdentifier)) {
+				o = null;
+			}
+			return o;
+			]]>
+		</method>
+		
+		<!---@keywords private -->
+		<method args="key, object" name="setObject">
+			<![CDATA[
+			if (this.objects[key]) {
+				if (this.objects[key].openGroupObject != null) {
+					this.objects[key].openGroupObject.decrementReferenceCount();
+				}
+				delete this.objects[key];
+			}
+			if (object) {
+				if (object.openGroupObject != null) {
+					object.openGroupObject.incrementReferenceCount();
+					if (object.openGroupObject.objectDefinition.primary) {
+						object.openGroupObject.hasReleasableChildren = false;
+					}
+					else {
+						var primaryObject = object.getParentPrimaryObject();
+						if (primaryObject != null) {
+							primaryObject.hasReleasableChildren = false;
+						}
+					}
+				}
+				if (!this.objectDestroyedDel) {
+					this.objectDestroyedDel = new EventHandler.Class(this, "objectDestroyed");
+				}
+				this.objectDestroyedDel.connect(object, "beingDestroyed");
+				this.objects[key] = object;
+			}
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method args="o" name="objectDestroyed">
+			<![CDATA[
+			var keys = [];
+			for (var key in this.objects) {
+				if (this.objects[key] == o) {
+					keys.push(key);
+				}
+			}
+			for (var i = 0; i < keys.length; i++) {
+				delete this.objects[keys[i]];
+			}
+			this.objectDestroyedDel.disconnectAll();
+			for (var key in this.objects) {
+				this.objectDestroyedDel.connect(this.objects[key], "beingDestroyed");
+			}
+			]]>
+		</method>
+		
+		<!--- keyword private -->
+		<method name="releaseObjects">
+			<![CDATA[
+			if (this.objectDestroyedDel) {
+				this.objectDestroyedDel.disconnectAll();
+			}
+			var keys = [];
+			for (var key in this.objects) {
+				keys.push(key);
+			}
+			for (var i = 0; i < keys.length; i++) {
+				var o = this.objects[keys[i]];
+				if (o.openGroupObject != null) {
+					o.openGroupObject.decrementReferenceCount();
+				}
+				delete this.objects[keys[i]];
+			}
+			]]>
+		</method>
+		
+		<!---
+			@keywords private  
+			Use this method to parse a parameter map {name:value}. 
+		-->
+		<method args="action" name="parseParameters">
+			<![CDATA[
+			var params = {};
+			if (action) {
+				var paramNodes = action.childNodes;
+				for (var i = 0; i < paramNodes.length; i++) {
+					if (paramNodes[i].getAttribute("name") && paramNodes[i].getAttribute("value")) {
+						params[paramNodes[i].getAttribute("name")] = paramNodes[i].getAttribute("value");
+					}
+				}
+			}
+			this.abortOnError = params.abortOnError != "false";
+			return params;
+			]]>
+		</method>
+		
+		<!---
+			@keywords private  
+			Constructs a log string for the specified action.
+		-->
+		<method args="action" name="getLogString">
+			<![CDATA[
+			var logString = action.getAttribute("name");
+			if (action) {
+				var paramNodes = action.childNodes;
+				for (var i = 0; i < paramNodes.length; i++) {
+					logString += " " + paramNodes[i].getAttribute("name") + "=" + paramNodes[i].getAttribute("value");
+				}
+			}
+			return logString;
+			]]>
+		</method>
+
+		<!---
+			@keywords private
+			Log a message using the automation component.
+			@param string messageText: The message text.
+			@param string level: The message level. Valid values are "SEVERE", "WARNING", "INFO". The default is "INFO".
+		-->
+		<method args="messageText, level" name="logMessage">
+			<![CDATA[
+			if (typeof(level) == "undefined") level = 'INFO';
+			Logger.Singleton.log("com.ibm.commerce.lobtools.foundation.auto", level, "cmc/automation/AutomationUtil", "logMessage", messageText);
+			]]>
+		</method>
+	</Node>
+</Definitions>
