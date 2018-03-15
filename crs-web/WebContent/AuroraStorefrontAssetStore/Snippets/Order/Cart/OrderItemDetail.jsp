@@ -548,7 +548,70 @@
 							<%@ include file="B2BContractSelectExt.jspf" %>
 						</c:if>
 						<br/>
-
+							<%-- Start giftWrapper customization --%>
+							
+				
+							
+							<!--call rest service to get the catentry id of the gift wrap -->
+								<c:if test="${giftwrapCantentryId == null}">
+								
+									  <c:set var="partNumber" value="RedGiftWrap_SKU"/>
+									  <wcf:rest var="productBean"
+									    url="${searchHostNamePath}${searchContextPath}/store/${WCParam.storeId}/productview/${partNumber}">
+									    <wcf:param name="responseFormat" value="json" />
+									    <wcf:param name="catalogId" value="${sdb.masterCatalog.catalogId}" />
+									  </wcf:rest>
+									 
+									  <c:forEach var="giftwrapItem" items="${productBean.catalogEntryView}">
+									    <c:set var="giftwrapCantentryId" value="${giftwrapItem.uniqueID }"/>
+									   
+									  </c:forEach>
+									  
+								 </c:if>
+								 
+								 <!--find current order item's extended attribute -->
+								<!--if attributeName=='wrapper_orderitem_id', this item is a wrapped gift-->
+								<!--if attributeName=='gift_orderitem_id', this product is gift wrap, its quantity can not be updated -->
+								
+								 <c:forEach var="extAttr" items="${orderItem.orderItemExtendAttribute}">
+									  <c:if test="${extAttr.attributeName == 'wrapper_orderitem_id'}">
+									    <c:set var="wrapperId" value="${extAttr.attributeValue}"/>     
+									  </c:if>
+									  <c:if test="${extAttr.attributeName == 'gift_orderitem_id'}">
+									    <c:set var="isWrapper" value="true"/>
+									  </c:if>
+									</c:forEach>
+								<c:out value='${wrapperId}'/>
+								 	
+									<%--if current item can be gift wrapped, add wrapper radio button--%>
+									<%--if current item is already wrapped, the var "wrapperId" is not null, radio button 
+									default select "wrap it as gift" --%>
+									<%--when shopper select "do not wrap it", onchange event
+									method(CheckoutHelperJS.deleteFromCart) is called, its gift wrap item will be removed from
+									cart --%>
+									<%--if current item is not wrapped yet, the var "wrapperId" is null, radio button default
+									select "do not wrap it" --%>
+									<%--when shopper select "wrap it as gift", onchange event method(sendOrderItemAddPost) is
+									called, gift wrap item will be added into cart --%>
+									
+								<c:if test="${catEntry.UserData[0].field5 != null}">
+								  <%out.flush();%>
+									  <div style="display:block" class='wrapoptiondiv${wrapperId}'>
+									    <input type="radio" name="giftwrap${orderItem.orderItemId}" 
+									    <c:out value='${wrapperId!=null?"checked=true":""}'/> value="true"
+									    onchange="CheckoutHelperJS.sendOrderItemAddPost('<c:out value='${pagorder.orderId}'/>', '<c:out value='${orderItem.orderItemId}'/>', 
+									    '<c:out value='${orderItem.quantity}'/>', '<c:out value='${giftwrapCantentryId}'/>')"/>wrap it as gift &nbsp;
+									    <input type="radio" name="giftwrap${orderItem.orderItemId}" 
+									    <c:out value='${wrapperId!=null?"checked=true":""}'/> value="false" 
+									    onchange="CheckoutHelperJS.deleteFromCart1('<c:out value='${wrapperId}'/>')"/>do not wrap it
+									    <br/>
+									  </div>
+								</c:if>                                                           
+								<c:remove var="wrapperId"/>
+							<!-- End giftWrapper customization -->
+							
+							
+							
 							<%-- displays move to wish list link if user is a registered shopper --%>
 							<flow:ifEnabled feature="SOAWishlist">
 								<%out.flush();%>
@@ -600,17 +663,24 @@
 			</td>
 			<td id="WC_OrderItemDetailsf_td_2_<c:out value='${status.count}'/>" class="<c:out value="${nobottom}"/> QTY" headers="shoppingCart_tableCell_quantity shoppingCart_rowHeader_product<c:out value='${status.count}'/>">
 				<p class="item-quantity">
+				
 					<c:choose>
-						<c:when test="${orderItem.freeGift}">
-							<%-- This is a free item..can't change the qty --%>
-							<input type="hidden" value="-1" id='freeGift_qty_<c:out value="${status.count}"/>' name='qty_<c:out value="${status.count}"/>'/><span><c:out value="${quickCartOrderItemQuantity}"/></span>
-						</c:when>
+						<c:when test="${orderItem.freeGift || isWrapper}">
+						     <%-- This is a free item..can't change the qty --%>
+							 <input type="hidden" value="-1" id='freeGift_qty_<c:out value="${status.count}"/>' name='qty_<c:out value="${status.count}"/>'/>
+							 <span>
+							  <c:out value="${quickCartOrderItemQuantity}"/>
+							 </span>
+					  	</c:when>
+
+						
 						<c:otherwise>
 							<span class="spanacce" id="Quantity_ACCE_Message"><fmt:message bundle="${storeText}" key='ACCE_Quantity_Update_Message' /></span>
 							<label for='qty_<c:out value="${status.count}"/>' style='display:none'><fmt:message bundle="${storeText}" key="QUANTITY1" /></label>
 							<input id='qty_<c:out value="${status.count}"/>' name='qty_<c:out value="${status.count}"/>' type="tel" aria-labelledby="Quantity_ACCE_Message" size="1" style="width:25px;" value='<c:out value="${quickCartOrderItemQuantity}"/>' onkeydown="JavaScript:setCurrentId('qty_<c:out value='${status.count}'/>'); CheckoutHelperJS.updateCartWait(this, '<c:out value='${orderItem.orderItemId}'/>',event)" />
 						</c:otherwise>
 					</c:choose>
+					<c:remove var="isWrapper"/>
 				</p>
 			</td>
 			<td id="WC_OrderItemDetailsf_td_3_<c:out value='${status.count}'/>" class="<c:out value="${nobottom}"/> each" headers="shoppingCart_tableCell_each shoppingCart_rowHeader_product<c:out value='${status.count}'/>">
@@ -626,12 +696,13 @@
 			</td>
 			<td id="WC_OrderItemDetailsf_td_4_<c:out value='${status.count}'/>" class="<c:out value="${nobottom}"/> total" headers="shoppingCart_tableCell_total shoppingCart_rowHeader_product<c:out value='${status.count}'/>">
 				<c:choose>
-					<c:when test="${orderItem.freeGift}">
-						<%-- the OrderItem is a freebie --%>
-						<span class="details">
-							<fmt:message bundle="${storeText}" key="OrderSummary_SHOPCART_FREE" />
-						</span>
-					</c:when>
+					<c:when test="${orderItem.freeGift || isWrapper}">
+						     <%-- This is a free item..can't change the qty --%>
+							 <input type="hidden" value="-1" id='freeGift_qty_<c:out value="${status.count}"/>' name='qty_<c:out value="${status.count}"/>'/>
+							 <span>
+							  <c:out value="${quickCartOrderItemQuantity}"/>
+							 </span>
+					  	</c:when>
 					<c:otherwise>
 						<span class="price">
 							<fmt:formatNumber var="totalFormattedProductPrice" value="${orderItem.orderItemPrice}" type="currency" maxFractionDigits="${env_currencyDecimal}" currencySymbol="${env_CurrencySymbolToFormat}"/>
@@ -640,6 +711,7 @@
 						</span>
 					</c:otherwise>
 				</c:choose>
+				<c:remove var="isWrapper"/>
 			</td>
 		</tr>
 		<c:remove var="nobottom"/>

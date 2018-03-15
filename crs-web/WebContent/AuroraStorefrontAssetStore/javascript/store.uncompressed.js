@@ -67338,6 +67338,20 @@ CheckoutHelperJS = {
         this.tempEmailAddresses = addressListForMailNotification;
         this.tempIsQuote = isQuote;
     },
+    
+    sendOrderItemAddPost: function(orderId,orderItemId,quantity,giftwrapCantentryId ) 
+    {
+      var params = [];
+      params.storeId = this.storeId;
+      params.catalogId = this.catalogId;
+      params.langId = this.langId;
+      params.orderId= orderId;
+      params.catEntryId = giftwrapCantentryId;
+      params.quantity = quantity;
+      params.giftwrap = orderItemId;             
+
+      wcService.invoke("AjaxAddOrderItem", params);
+    },
 
     /**
      * Sets some internal variables needed for verifying order totals.
